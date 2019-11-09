@@ -69,90 +69,107 @@ class RtpStream(object):
 	def __calculateThread(self):
 		print "__calculateThread started with id: ",self.__streamID
 
-		prevTimestamp=0
-		prevRtpSequenceNo=0
-		totalDataReceivedPerInterval=0
+		prevTimestamp=datetime.datetime.now()
+		prevRtpPacket=rtpData(0,0,datetime.datetime.now())
 		timestampOfLastGlitch=datetime.datetime.now()
-		secondTimer=0
-		totalPacketsPerInterval=0
-		totalDataReceivedPerInterval=0
+		loopCounter=0
+		totalPacketsPerSecond=0
+		totalDataReceivedPerSecond=0
+		totalDataReceived=0
+		totalPacketsReceived=0
+		secondsElapsed=0
+
+		POLL_INTERVAL=0.1	# Loop will execute every 100mS
+
+		# Calculate the no of loops equating to a second
+		loopsPerSecond=1/POLL_INTERVAL
 
 		while True:
 			# Lock the access mutex
 			self.__accessRtpDataMutex.acquire()
 			# Copy the contents of self.rtpStreamData into a temporary list so the accessRtpDataMutex can be released
-			rtpStreamDataCopy=list(self.rtpStreamData)
+			rtpStream=list(self.rtpStreamData)
 			# Now we have a working copy of rtpStreamData[] we can clear the original source list
 			del self.rtpStreamData[:]
 			# Release the mutex
 			self.__accessRtpDataMutex.release()
 			# Test for new data
-			if(len(rtpStreamDataCopy)>0):
+			if(len(rtpStream)>0):
 				# Get number of packets received (from list length)
-				totalPacketsPerInterval+=len(rtpStreamDataCopy)
+				# Per second counter
+				totalPacketsPerSecond+=len(rtpStream)
+				# Total aggregate
+				totalPacketsReceived+=len(rtpStream)
 
-				# Calculate received data rate by iterating and summing over rtpStreamDataCopy.payloadSize
-				for x in rtpStreamDataCopy:
-					totalDataReceivedPerInterval+=x.payloadSize
-
+				# Iterate over rtpStream to get total count of data received in this batch of data, no. of packets and also calculate rx time deltas
+				# Get timestamp of final packet of prev data set
+				prevTimestamp=prevRtpPacket.timestamp
+				for x in rtpStream:
+					# Per second counter
+					totalDataReceivedPerSecond+=x.payloadSize
+					# Total aggregate
+					totalDataReceived+=x.payloadSize
+					# Calculate and write time delta into rtpData object
+					x.timeDelta=x.timestamp-prevTimestamp
+					# Update prevTimestamp for next time around loop
+					prevTimestamp=x.timestamp
 				
-
-				
-
-				# print "__calculateThread: Latest Sequence no: ",rtpStreamDataCopy[-1].rtpSequenceNo," Packets per sec",packetsPerSecond,"Rx rate",dataRatePerSecond
-				# print "__calculateThread: Latest payloadSize",rtpStreamDataCopy[-1].payloadSize
-				
-				# Test for out of sequence packet by comparing last recieved sequence no with that of first rtpObject in new list of data in rtpStreamDataCopy[]
- 				if(prevRtpSequenceNo!= (rtpStreamDataCopy[0].rtpSequenceNo-1)):
- 					print timeNow," Out of sequence packet received (prev list). Expected sequence no",(prevRtpSequenceNo+1)," but received ",rtpStreamDataCopy[0].rtpSequenceNo
+				# Test for out of sequence packet by comparing last recieved sequence no with that of first rtpObject in new list of data in rtpStream[]
+ 				if(prevRtpPacket.rtpSequenceNo!= (rtpStream[0].rtpSequenceNo-1)):
+ 					print timeNow," Out of sequence packet received between data sets. Expected sequence no",(prevRtpPacket.rtpSequenceNo+1)," but received ",rtpStream[0].rtpSequenceNo
  					# Take timestamp of most recent glitch 
  					timestampOfLastGlitch=datetime.datetime.now()
+
  				# Now test for sequence errors within current data set
- 				
  				# Get sequence no of first item in the list
- 				prevSeq=rtpStreamDataCopy[0].rtpSequenceNo
+ 				prevSeq=rtpStream[0].rtpSequenceNo
  				# Iterate over the the remainder of the list (starting at index 1 to the end '-1')
  				# print prevSeq,":",
- 				for x in rtpStreamDataCopy[1:]:
+ 				for x in rtpStream[1:]:
  					# Test seqeuence no of current packet against previous packet
- 					# print x.rtpSequenceNo,
  					if (x.rtpSequenceNo!=(prevSeq+1)):
- 						print timeNow," Out of sequence packet received (within list). Expected sequence no",(rtpStreamDataCopy[x-1].rtpSequenceNo+1)," but received ",rtpStreamDataCopy[x].rtpSequenceNo
+ 						print timeNow," Out of sequence packet received (within list). Expected sequence no",(rtpStream[x-1].rtpSequenceNo+1)," but received ",rtpStream[x].rtpSequenceNo
 						# Take timestamp of most recent glitch 
  						timestampOfLastGlitch=datetime.datetime.now()
 					# store current seq no for the next iteration around the loop
  					prevSeq=x.rtpSequenceNo
 				
-				# Capture most recent sequence no for next time around loop
-				prevRtpSequenceNo=rtpStreamDataCopy[-1].rtpSequenceNo
+				# Capture most recent packet (last item of current data set) for next time around loop
+				prevRtpPacket=rtpStream[-1]
  				
  				
 			# Time elapsed since last glitch
  			timeElapsedSinceLastGlitch=datetime.datetime.now()-timestampOfLastGlitch
 
- 			# 1 second timer (assumes 100mS delay)
- 			if(secondTimer>10):
- 				print "1 second elapsed"
- 				# Reset seconds timer
- 				secondTimer=0
+ 			# Print time deltas
+ 			for x in rtpStream:
+ 				print x.timeDelta,",",
+ 			print
 
- 				print "__calculateThread: Latest Sequence no: ",prevRtpSequenceNo," Packets per sec",totalPacketsPerInterval,"Rx rate",totalDataReceivedPerInterval
+
+ 			# 1 second timer 
+ 			if(loopCounter>loopsPerSecond):
+ 				# Reset loopCounter timer
+ 				loopCounter=0
+ 				# Increment seconds elapsed
+ 				secondsElapsed+=1
+ 				print "__calculateThread: [",secondsElapsed,":",prevSeq,"] Packets/s",totalPacketsPerSecond,"Rx/s",totalDataReceivedPerSecond,'Total packets',totalPacketsReceived,"Total data received",totalDataReceived
  				#Now clear totalDataReceivedPerInterval for the next time around the loop
-				totalDataReceivedPerInterval=0
-				totalPacketsPerInterval=0
+				totalDataReceivedPerSecond=0
+				totalPacketsPerSecond=0
 			
 
- 			# Increment second counter
- 			secondTimer+=1
+ 			# Increment loop counter
+ 			loopCounter+=1
 
-			time.sleep(0.100)	# 100mS delay		
+			time.sleep(POLL_INTERVAL)			
 
 	# Define a private display method that will run autonomously as a thread
 	def __displayThread(self):
 		print "__displayThread started with id: ",self.__streamID
 		x=0
 		while True:
-			print "__displayThread running...", x
+			# print "__displayThread running...", x
 			x+=1
 			time.sleep(1)		
 
