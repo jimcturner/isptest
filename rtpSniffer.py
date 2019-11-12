@@ -15,13 +15,23 @@ import threading
 import random
 import string
 
+import platform
 
-UDP_RX_IP = "192.168.56.1"
-UDP_RX_PORT = 5004
-
-# # Define global vars
-# noOfPacketsReceived=0
-# totalBytesReceived=0
+if platform.system() == "Windows":
+	import msvcrt
+	def getch():
+		return msvcrt.getch()
+else:
+	import tty, termios, sys
+	def getch():
+		fd = sys.stdin.fileno()
+		old_settings = termios.tcgetattr(fd)
+		try:
+			tty.setraw(sys.stdin.fileno())
+			ch = sys.stdin.read(1)
+		finally:
+			termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+		return ch
 
 # Define an obkect to hold data about an individual received rtp packet
 class rtpData(object):
@@ -243,6 +253,10 @@ def __rtpGenerator():
 
 # Main prog starts here
 def main():
+
+	UDP_RX_IP = "192.168.56.1"
+	UDP_RX_PORT = 5004
+	
 	sock = socket.socket(socket.AF_INET, # Internet
 	                  socket.SOCK_DGRAM) # UDP
 	sock.bind((UDP_RX_IP, UDP_RX_PORT))
