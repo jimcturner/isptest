@@ -2,6 +2,8 @@
 #
 # Python packet sniffer
 #
+# 
+
 import socket
 import os
 #import binascii
@@ -12,6 +14,7 @@ import datetime
 import threading
 import random
 import string
+
 
 UDP_RX_IP = "192.168.56.1"
 UDP_RX_PORT = 5004
@@ -115,18 +118,13 @@ class RtpStream(object):
 					# print x.timestamp,prevTimestamp,x.timeDelta,x.timeDelta.microseconds
 					# Update prevTimestamp for next time around loop
 					prevTimestamp=x.timestamp
-
-				# Print time deltas
- 				# for x in rtpStream:
- 				# 	# print x.timeDelta.microseconds//1000,",",
- 				# 	print "delta",x.timeDelta.microseconds,",",
- 				# print
 				
 				# Test for out of sequence packet by comparing last recieved sequence no with that of first rtpObject in new list of data in rtpStream[]
  				if(prevRtpPacket.rtpSequenceNo!= (rtpStream[0].rtpSequenceNo-1)):
- 					print timeNow," Out of sequence packet received between data sets. Expected sequence no",(prevRtpPacket.rtpSequenceNo+1)," but received ",rtpStream[0].rtpSequenceNo
  					# Take timestamp of most recent glitch 
  					timestampOfLastGlitch=datetime.datetime.now()
+ 					print timestampOfLastGlitch," Out of sequence packet received between data sets. Expected sequence no",(prevRtpPacket.rtpSequenceNo+1)," but received ",rtpStream[0].rtpSequenceNo
+ 					
 
  				# Now test for sequence errors within current data set
  				# Get sequence no of first item in the list
@@ -136,9 +134,10 @@ class RtpStream(object):
  				for x in rtpStream[1:]:
  					# Test seqeuence no of current packet against previous packet
  					if (x.rtpSequenceNo!=(prevSeq+1)):
- 						print timeNow," Out of sequence packet received (within list). Expected sequence no",(rtpStream[x-1].rtpSequenceNo+1)," but received ",rtpStream[x].rtpSequenceNo
-						# Take timestamp of most recent glitch 
+ 						# Take timestamp of most recent glitch 
  						timestampOfLastGlitch=datetime.datetime.now()
+ 						print timestampOfLastGlitch," Out of sequence packet received (within list). Expected sequence no",(rtpStream[x-1].rtpSequenceNo+1)," but received ",rtpStream[x].rtpSequenceNo
+						
 					# store current seq no for the next iteration around the loop
  					prevSeq=x.rtpSequenceNo
 				
@@ -212,7 +211,7 @@ def __rtpGenerator():
 	UDP__DEST_PORT = 5004
 	
 	# Generate random string 
-	# Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496
+	# Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496 available bytes
 	stringLength=496
 	# Create string containing all uppercase and lowercase letters
 	letters=string.ascii_letters
@@ -237,92 +236,97 @@ def __rtpGenerator():
 		MESSAGE=txRtpHeader+payload
 		txSock.sendto(MESSAGE, (UDP_DEST_IP, UDP__DEST_PORT))
 		rtpSequenceNo+=1
-		time.sleep(.005)
+		# time.sleep(.005)
+		time.sleep(.01)
 
 ####################################################################################
+
 # Main prog starts here
-sock = socket.socket(socket.AF_INET, # Internet
-                  socket.SOCK_DGRAM) # UDP
-sock.bind((UDP_RX_IP, UDP_RX_PORT))
-prevRtpSequenceNo=0
+def main():
+	sock = socket.socket(socket.AF_INET, # Internet
+	                  socket.SOCK_DGRAM) # UDP
+	sock.bind((UDP_RX_IP, UDP_RX_PORT))
+	prevRtpSequenceNo=0
 
 
-# epoch = datetime(1970, 1, 1, tzinfo=timezone.utc) # use POSIX epoch
+	# epoch = datetime(1970, 1, 1, tzinfo=timezone.utc) # use POSIX epoch
 
-#Init timestamp 
-prevTimestamp=timeNow = datetime.datetime.now()
-timestampOfLastGlitch=datetime.datetime.now()
+	#Init timestamp 
+	prevTimestamp=timeNow = datetime.datetime.now()
+	timestampOfLastGlitch=datetime.datetime.now()
 
-runOnce=True
+	runOnce=True
 
-# Start traffic generator thread
-rtpGenerator=threading.Thread(target=__rtpGenerator, args=())
-rtpGenerator.daemon=True	# Thread will auto shutdown when the prog ends
-rtpGenerator.start()
+	# Start traffic generator thread
+	rtpGenerator=threading.Thread(target=__rtpGenerator, args=())
+	rtpGenerator.daemon=True	# Thread will auto shutdown when the prog ends
+	rtpGenerator.start()
 
-while True:
-	#recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
-	data, addr = sock.recvfrom(4096) # buffer size is 4096 bytes
-	# print addr
-	
- 	
- 	timeNow = datetime.datetime.now()
-	
- 	
- 	srcAddress=addr[0]
- 	srcPort=addr[1]
-
-
- 	
-	try: 
- 		# Split rtp header into an array of values
-	 	#hexData=binascii.hexlify(data)
-	 	# print "received message:", hexData
-	 	# RTP header is 12 bytes long. Unpack it as an array. 
-	 	# !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
- 		RTP_HEADER_SIZE=12
- 		rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
-
-
-	 	# Calculate the data payload size
-	 	payloadSize=len(data)-RTP_HEADER_SIZE
-	 	# print"Total data",len(data),"RTP Header size:",RTP_HEADER_SIZE," Payload size",payloadSize,
-
-		# 	sequence no=rtpHeader[2]
-	 	#	timestamp=rtpHeader[3]
-	 	# 	sync-source identifier =rtpHeader[4]
-	 	rtpSequenceNo=rtpHeader[2]
-	 	rtpSyncSourceIdentifier=rtpHeader[4]
+	while True:
+		#recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
+		data, addr = sock.recvfrom(4096) # buffer size is 4096 bytes
+		# print addr
+		
 	 	
-	 	if(runOnce==True):
-	 		# Create a new rtpStream object (but only once)
-	 		s=RtpStream(rtpSyncSourceIdentifier,srcAddress,srcPort)
-	 		runOnce=False
-
-	 	# Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp
-	 	s.addData(rtpSequenceNo,payloadSize,timeNow)
-
-	 	# # Time elapsed since last glitch
-	 	# timeElapsedSinceLastGlitch=timeNow-timestampOfLastGlitch
-
-	 	# # print srcAddress,":",srcPort,": ",rtpSyncSourceIdentifier,prevRtpSequenceNo,":",rtpSequenceNo,":",timeBetweenRxPacketsInMS, timeElapsedSinceLastGlitch.seconds
-	 	# # Test for out of sequence packet
-	 	# if(prevRtpSequenceNo!= (rtpSequenceNo-1)):
-	 	# 	# print timeNow," Out of sequence packet received. Expected sequence no ",(prevRtpSequenceNo+1)," but received ",rtpSequenceNo
-
-	 	# 	# Take timestamp of most recent glitch 
-	 	# 	timestampOfLastGlitch=timeNow
-
-	 	# # Store current sequence no
-	 	# prevRtpSequenceNo=rtpSequenceNo
-
-	 	# # Store current timestamp
-	 	# prevTimestamp=timeNow
+	 	timeNow = datetime.datetime.now()
+		
 	 	
-	 	# for x in rtpHeader:
-	 	# 	print x,', ',
-	 	# print " "
-	 	# print "sequence no: ",rtp_sequenceNo
- 	except Exception as e:
- 		print str(e),"Length:",len(data),"bytes received"
+	 	srcAddress=addr[0]
+	 	srcPort=addr[1]
 
+
+	 	
+		try: 
+	 		# Split rtp header into an array of values
+		 	#hexData=binascii.hexlify(data)
+		 	# print "received message:", hexData
+		 	# RTP header is 12 bytes long. Unpack it as an array. 
+		 	# !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
+	 		RTP_HEADER_SIZE=12
+	 		rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
+
+
+		 	# Calculate the data payload size
+		 	payloadSize=len(data)-RTP_HEADER_SIZE
+		 	# print"Total data",len(data),"RTP Header size:",RTP_HEADER_SIZE," Payload size",payloadSize,
+
+			# 	sequence no=rtpHeader[2]
+		 	#	timestamp=rtpHeader[3]
+		 	# 	sync-source identifier =rtpHeader[4]
+		 	rtpSequenceNo=rtpHeader[2]
+		 	rtpSyncSourceIdentifier=rtpHeader[4]
+		 	
+		 	if(runOnce==True):
+		 		# Create a new rtpStream object (but only once)
+		 		s=RtpStream(rtpSyncSourceIdentifier,srcAddress,srcPort)
+		 		runOnce=False
+
+		 	# Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp
+		 	s.addData(rtpSequenceNo,payloadSize,timeNow)
+
+		 	# # Time elapsed since last glitch
+		 	# timeElapsedSinceLastGlitch=timeNow-timestampOfLastGlitch
+
+		 	# # print srcAddress,":",srcPort,": ",rtpSyncSourceIdentifier,prevRtpSequenceNo,":",rtpSequenceNo,":",timeBetweenRxPacketsInMS, timeElapsedSinceLastGlitch.seconds
+		 	# # Test for out of sequence packet
+		 	# if(prevRtpSequenceNo!= (rtpSequenceNo-1)):
+		 	# 	# print timeNow," Out of sequence packet received. Expected sequence no ",(prevRtpSequenceNo+1)," but received ",rtpSequenceNo
+
+		 	# 	# Take timestamp of most recent glitch 
+		 	# 	timestampOfLastGlitch=timeNow
+
+		 	# # Store current sequence no
+		 	# prevRtpSequenceNo=rtpSequenceNo
+
+		 	# # Store current timestamp
+		 	# prevTimestamp=timeNow
+		 	
+		 	# for x in rtpHeader:
+		 	# 	print x,', ',
+		 	# print " "
+		 	# print "sequence no: ",rtp_sequenceNo
+	 	except Exception as e:
+			print str(e),"Length:",len(data),"bytes received"
+
+if __name__== "__main__":
+  main()
