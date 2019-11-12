@@ -10,14 +10,15 @@ import struct
 import time
 import datetime
 import threading
-
+import random
+import string
 
 UDP_RX_IP = "192.168.56.1"
 UDP_RX_PORT = 5004
 
-# Define global vars
-noOfPacketsReceived=0
-totalBytesReceived=0
+# # Define global vars
+# noOfPacketsReceived=0
+# totalBytesReceived=0
 
 # Define an obkect to hold data about an individual received rtp packet
 class rtpData(object):
@@ -111,8 +112,15 @@ class RtpStream(object):
 					totalDataReceived+=x.payloadSize
 					# Calculate and write time delta into rtpData object
 					x.timeDelta=x.timestamp-prevTimestamp
+					# print x.timestamp,prevTimestamp,x.timeDelta,x.timeDelta.microseconds
 					# Update prevTimestamp for next time around loop
 					prevTimestamp=x.timestamp
+
+				# Print time deltas
+ 				# for x in rtpStream:
+ 				# 	# print x.timeDelta.microseconds//1000,",",
+ 				# 	print "delta",x.timeDelta.microseconds,",",
+ 				# print
 				
 				# Test for out of sequence packet by comparing last recieved sequence no with that of first rtpObject in new list of data in rtpStream[]
  				if(prevRtpPacket.rtpSequenceNo!= (rtpStream[0].rtpSequenceNo-1)):
@@ -141,12 +149,6 @@ class RtpStream(object):
 			# Time elapsed since last glitch
  			timeElapsedSinceLastGlitch=datetime.datetime.now()-timestampOfLastGlitch
 
- 			# Print time deltas
- 			for x in rtpStream:
- 				print x.timeDelta,",",
- 			print
-
-
  			# 1 second timer 
  			if(loopCounter>loopsPerSecond):
  				# Reset loopCounter timer
@@ -162,6 +164,8 @@ class RtpStream(object):
  			# Increment loop counter
  			loopCounter+=1
 
+ 			# Empty the rtpStream list 
+ 			del rtpStream
 			time.sleep(POLL_INTERVAL)			
 
 	# Define a private display method that will run autonomously as a thread
@@ -200,6 +204,43 @@ class RtpStream(object):
 		del newData
 
 
+
+
+# define a traffic generator thread
+def __rtpGenerator():
+	UDP_DEST_IP = "192.168.56.1"
+	UDP__DEST_PORT = 5004
+	
+	# Generate random string 
+	# Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496
+	stringLength=496
+	# Create string containing all uppercase and lowercase letters
+	letters=string.ascii_letters
+	# iterate over stringLength picking random letters from 
+	payload=''.join(random.choice(letters) for i in range(stringLength))
+	
+	txSock = socket.socket(socket.AF_INET, # Internet
+             socket.SOCK_DGRAM) # UDP
+	print "Traffic Generator thread started"
+
+	rtpParams=0b01000000
+	rtpPayloadType=0b00000000
+	rtpSequenceNo=0
+	# Create a 32 bit timestamp (needs truncating to 32 bits before passing to struct.pack)
+	# 0xFFFFFFFF is 32 '1's, so the '&' operation will throw away MSBs larger than this
+	rtpTimestamp=int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
+	rtpSyncSourceIdentifier=12345678
+	
+	while True:
+		
+		txRtpHeader=struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo,rtpTimestamp,rtpSyncSourceIdentifier)
+		MESSAGE=txRtpHeader+payload
+		txSock.sendto(MESSAGE, (UDP_DEST_IP, UDP__DEST_PORT))
+		rtpSequenceNo+=1
+		time.sleep(.005)
+
+####################################################################################
+# Main prog starts here
 sock = socket.socket(socket.AF_INET, # Internet
                   socket.SOCK_DGRAM) # UDP
 sock.bind((UDP_RX_IP, UDP_RX_PORT))
@@ -214,6 +255,11 @@ timestampOfLastGlitch=datetime.datetime.now()
 
 runOnce=True
 
+# Start traffic generator thread
+rtpGenerator=threading.Thread(target=__rtpGenerator, args=())
+rtpGenerator.daemon=True	# Thread will auto shutdown when the prog ends
+rtpGenerator.start()
+
 while True:
 	#recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
 	data, addr = sock.recvfrom(4096) # buffer size is 4096 bytes
@@ -222,8 +268,7 @@ while True:
  	
  	timeNow = datetime.datetime.now()
 	
- 	# Increment packet received counter
- 	noOfPacketsReceived+=1
+ 	
  	srcAddress=addr[0]
  	srcPort=addr[1]
 
@@ -248,9 +293,6 @@ while True:
 	 	# 	sync-source identifier =rtpHeader[4]
 	 	rtpSequenceNo=rtpHeader[2]
 	 	rtpSyncSourceIdentifier=rtpHeader[4]
-	 	timeBetweenRxPackets=timeNow-prevTimestamp
-	 	timeBetweenRxPacketsInMS=(timeBetweenRxPackets.microseconds//1000)
-
 	 	
 	 	if(runOnce==True):
 	 		# Create a new rtpStream object (but only once)
