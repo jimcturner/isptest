@@ -254,9 +254,13 @@ def __rtpGenerator():
 # Main prog starts here
 def main():
 
+	ch=getch()
+	print ch
+	exit()
+
 	UDP_RX_IP = "192.168.56.1"
 	UDP_RX_PORT = 5004
-	
+
 	sock = socket.socket(socket.AF_INET, # Internet
 	                  socket.SOCK_DGRAM) # UDP
 	sock.bind((UDP_RX_IP, UDP_RX_PORT))
