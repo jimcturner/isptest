@@ -14,13 +14,20 @@ import datetime
 import threading
 import random
 import string
-
 import platform
 
+
+####################################################################################
+# Utility Functions
+# #################
+
+# Define a getch() function to catch keystrokes (for control of the RTP Generator thread)
+# This code has been lifted from https://gist.github.com/jfktrey/8928865
 if platform.system() == "Windows":
 	import msvcrt
 	def getch():
 		return msvcrt.getch()
+# Otherwise assume Linux or MacOS
 else:
 	import tty, termios, sys
 	def getch():
@@ -32,8 +39,9 @@ else:
 		finally:
 			termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
 		return ch
+####################################################################################
 
-# Define an obkect to hold data about an individual received rtp packet
+# Define an object to hold data about an individual received rtp packet
 class rtpData(object):
 	# Constructor method
 	def __init__(self,rtpSequenceNo,payloadSize,timestamp):
@@ -44,6 +52,13 @@ class rtpData(object):
 		# timeDelta will store the timestamp diff between this and the previous packet
 		self.timeDelta=0
 
+# Define an object that represent a glitch
+# This will be in the form of the packets either side of the 'hole' in received data
+class event(object):
+	# Constructor
+	def __init__(self,lastReceivedPacketBeforeGap,firstPackedReceivedAfterGap):
+		self.startOfGap=lastReceivedPacketBeforeGap
+		self.endOfGap=firstPackedReceivedAfterGap
 
 # Define a class to represent a flow of received rtp packets (and associated stats)
 class RtpStream(object):
@@ -93,6 +108,9 @@ class RtpStream(object):
 		totalPacketsReceived=0
 		secondsElapsed=0
 
+		# Declare empty list of 'event' objects. This will contain a list of the interruptions in sequence errors caused by packet loss
+		eventList=[]
+
 		POLL_INTERVAL=0.1	# Loop will execute every 100mS
 
 		# Calculate the no of loops equating to a second
@@ -125,7 +143,7 @@ class RtpStream(object):
 					totalDataReceived+=x.payloadSize
 					# Calculate and write time delta into rtpData object
 					x.timeDelta=x.timestamp-prevTimestamp
-					# print x.timestamp,prevTimestamp,x.timeDelta,x.timeDelta.microseconds
+					# print "[",x.rtpSequenceNo,"]",x.timestamp,prevTimestamp,x.timeDelta,x.timeDelta.microseconds,"\r"
 					# Update prevTimestamp for next time around loop
 					prevTimestamp=x.timestamp
 				
@@ -133,23 +151,28 @@ class RtpStream(object):
  				if(prevRtpPacket.rtpSequenceNo!= (rtpStream[0].rtpSequenceNo-1)):
  					# Take timestamp of most recent glitch 
  					timestampOfLastGlitch=datetime.datetime.now()
- 					print timestampOfLastGlitch," Out of sequence packet received between data sets. Expected sequence no",(prevRtpPacket.rtpSequenceNo+1)," but received ",rtpStream[0].rtpSequenceNo
+ 					print timestampOfLastGlitch," Out of sequence packet received between data sets. Expected sequence no",(prevRtpPacket.rtpSequenceNo+1)," but received ",rtpStream[0].rtpSequenceNo,"\r"
  					
 
  				# Now test for sequence errors within current data set
- 				# Get sequence no of first item in the list
- 				prevSeq=rtpStream[0].rtpSequenceNo
+ 				# Take a copy of the first item in the list
+ 				prevRtpPacket=rtpStream[0]
  				# Iterate over the the remainder of the list (starting at index 1 to the end '-1')
  				# print prevSeq,":",
- 				for x in rtpStream[1:]:
+ 				for rtpPacket in rtpStream[1:]:
  					# Test seqeuence no of current packet against previous packet
- 					if (x.rtpSequenceNo!=(prevSeq+1)):
+ 					if (rtpPacket.rtpSequenceNo!=(prevRtpPacket.rtpSequenceNo+1)):
  						# Take timestamp of most recent glitch 
  						timestampOfLastGlitch=datetime.datetime.now()
- 						print timestampOfLastGlitch," Out of sequence packet received (within list). Expected sequence no",(rtpStream[x-1].rtpSequenceNo+1)," but received ",rtpStream[x].rtpSequenceNo
+						print timestampOfLastGlitch," Out of sequence packet received (within current data set). Expected sequence no",(prevRtpPacket.rtpSequenceNo+1)," but received ",rtpPacket.rtpSequenceNo,"\r"
 						
-					# store current seq no for the next iteration around the loop
- 					prevSeq=x.rtpSequenceNo
+						# Capture packets either side of the 'hole' and store them in the event list
+ 						# Create an object representing the glitch
+ 						glitch=event(prevRtpPacket,rtpPacket)
+	 					# Add the glitch to the evenList[]
+	 					eventList.append(glitch)
+ 					# Store current rtp packet for the next iteration around the loop
+ 					prevRtpPacket=rtpPacket
 				
 				# Capture most recent packet (last item of current data set) for next time around loop
 				prevRtpPacket=rtpStream[-1]
@@ -164,7 +187,8 @@ class RtpStream(object):
  				loopCounter=0
  				# Increment seconds elapsed
  				secondsElapsed+=1
- 				print "__calculateThread: [",secondsElapsed,":",prevSeq,"] Packets/s",totalPacketsPerSecond,"Rx/s",totalDataReceivedPerSecond,'Total packets',totalPacketsReceived,"Total data received",totalDataReceived
+ 				print "__calculateThread: [",secondsElapsed,":",rtpStream[-1].rtpSequenceNo,"] Packets/s",totalPacketsPerSecond,"Rx bytes/s",totalDataReceivedPerSecond,'Total packets', \
+ 					totalPacketsReceived,"Total bytes received",totalDataReceived,"glitch count",len(eventList),"\r"
  				#Now clear totalDataReceivedPerInterval for the next time around the loop
 				totalDataReceivedPerSecond=0
 				totalPacketsPerSecond=0
@@ -212,11 +236,16 @@ class RtpStream(object):
 		# Now we've added the newData object to the list rtpStreamData[] we cab delete the newData object
 		del newData
 
-
-
+# Define a thread that will trap keys pressed
+def __catchKeyboardPresses(keyPressed):
+	print "Starting __catchKeyboardPresses thread"
+	while True:
+		ch=getch()
+		keyPressed[0]=ch
+		time.sleep (0.2)
 
 # define a traffic generator thread
-def __rtpGenerator():
+def __rtpGenerator(keyPressed):
 	UDP_DEST_IP = "192.168.56.1"
 	UDP__DEST_PORT = 5004
 	
@@ -244,19 +273,34 @@ def __rtpGenerator():
 		
 		txRtpHeader=struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo,rtpTimestamp,rtpSyncSourceIdentifier)
 		MESSAGE=txRtpHeader+payload
-		txSock.sendto(MESSAGE, (UDP_DEST_IP, UDP__DEST_PORT))
+		
+		# If spacebar is NOT held down, transmit a new RTP packet
+		if(keyPressed[0]!=' '):
+			txSock.sendto(MESSAGE, (UDP_DEST_IP, UDP__DEST_PORT))
+		else:
+			keyPressed[0]=''
+			print "spacebar pressed. Inhibit rtp transmission"
+
+		# if(inhibitPacketGeneration==False):
+		# 	txSock.sendto(MESSAGE, (UDP_DEST_IP, UDP__DEST_PORT))
+		# else:
+		# 	# Clear down inhibitPacketGeneration now it has been acknowledged
+		# 	inhibitPacketGeneration=False
 		rtpSequenceNo+=1
 		# time.sleep(.005)
 		time.sleep(.01)
 
+
 ####################################################################################
 
+
 # Main prog starts here
+# #####################
 def main():
 
-	ch=getch()
-	print ch
-	exit()
+	# ch=getch()
+	# print ch
+	# exit()
 
 	UDP_RX_IP = "192.168.56.1"
 	UDP_RX_PORT = 5004
@@ -264,19 +308,28 @@ def main():
 	sock = socket.socket(socket.AF_INET, # Internet
 	                  socket.SOCK_DGRAM) # UDP
 	sock.bind((UDP_RX_IP, UDP_RX_PORT))
-	prevRtpSequenceNo=0
+	# prevRtpSequenceNo=0
 
 
 	# epoch = datetime(1970, 1, 1, tzinfo=timezone.utc) # use POSIX epoch
 
-	#Init timestamp 
-	prevTimestamp=timeNow = datetime.datetime.now()
-	timestampOfLastGlitch=datetime.datetime.now()
 
 	runOnce=True
 
+	# Create dummy list to allow 'pass by reference' (i.e a 'pointer')
+	# The first (and only) item of this 'list' will be our pointer
+	keyPressed=['']
+	
+
+
+	# Start keyboard monitoring thread
+	catchKeyboardPresses=threading.Thread(target=__catchKeyboardPresses, args=(keyPressed,))
+	catchKeyboardPresses.daemon=True	# Thread will auto shutdown when the prog ends
+	catchKeyboardPresses.start()
+
+
 	# Start traffic generator thread
-	rtpGenerator=threading.Thread(target=__rtpGenerator, args=())
+	rtpGenerator=threading.Thread(target=__rtpGenerator, args=(keyPressed,))
 	rtpGenerator.daemon=True	# Thread will auto shutdown when the prog ends
 	rtpGenerator.start()
 
@@ -292,11 +345,12 @@ def main():
 	 	srcAddress=addr[0]
 	 	srcPort=addr[1]
 
-
+	 	# if (keyPressed[0]!=''):
+	 	# 	print "keyPressed",keyPressed[0]
+	 	# 	keyPressed[0]=''
 	 	
 		try: 
 	 		# Split rtp header into an array of values
-		 	#hexData=binascii.hexlify(data)
 		 	# print "received message:", hexData
 		 	# RTP header is 12 bytes long. Unpack it as an array. 
 		 	# !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
@@ -322,27 +376,7 @@ def main():
 		 	# Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp
 		 	s.addData(rtpSequenceNo,payloadSize,timeNow)
 
-		 	# # Time elapsed since last glitch
-		 	# timeElapsedSinceLastGlitch=timeNow-timestampOfLastGlitch
-
-		 	# # print srcAddress,":",srcPort,": ",rtpSyncSourceIdentifier,prevRtpSequenceNo,":",rtpSequenceNo,":",timeBetweenRxPacketsInMS, timeElapsedSinceLastGlitch.seconds
-		 	# # Test for out of sequence packet
-		 	# if(prevRtpSequenceNo!= (rtpSequenceNo-1)):
-		 	# 	# print timeNow," Out of sequence packet received. Expected sequence no ",(prevRtpSequenceNo+1)," but received ",rtpSequenceNo
-
-		 	# 	# Take timestamp of most recent glitch 
-		 	# 	timestampOfLastGlitch=timeNow
-
-		 	# # Store current sequence no
-		 	# prevRtpSequenceNo=rtpSequenceNo
-
-		 	# # Store current timestamp
-		 	# prevTimestamp=timeNow
 		 	
-		 	# for x in rtpHeader:
-		 	# 	print x,', ',
-		 	# print " "
-		 	# print "sequence no: ",rtp_sequenceNo
 	 	except Exception as e:
 			print str(e),"Length:",len(data),"bytes received"
 
