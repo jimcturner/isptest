@@ -53,12 +53,28 @@ class rtpData(object):
 		self.timeDelta=0
 
 # Define an object that represent a glitch
-# This will be in the form of the packets either side of the 'hole' in received data
-class event(object):
+# This will be in the form of the packets (rtpData objects) either side of the 'hole' in received data
+class Event(object):
+	# Define class variables
+	totalPacketsLost=0
+	totalGlitches=0
+	# define timedelta object to store an aggregate of all the 'holes' in data reception
+	totalGlitchLength=datetime.timedelta()
+
 	# Constructor
 	def __init__(self,lastReceivedPacketBeforeGap,firstPackedReceivedAfterGap):
 		self.startOfGap=lastReceivedPacketBeforeGap
 		self.endOfGap=firstPackedReceivedAfterGap
+		# Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
+		self.packetsLost=firstPackedReceivedAfterGap.rtpSequenceNo-lastReceivedPacketBeforeGap.rtpSequenceNo
+		# Update class 'static, if this were Java' variable for the total no. of packets lost in this rtpStream
+		Event.totalPacketsLost+=self.packetsLost
+		# Calculate length of this glitch
+		self.glitchLength=firstPackedReceivedAfterGap.timestamp-lastReceivedPacketBeforeGap.timestamp
+		# Update class var for aggregate of all the glitch times
+		Event.totalGlitchLength+=self.glitchLength
+		# increment class var for total no of glitches
+		Event.totalGlitches+=1
 
 # Define a class to represent a flow of received rtp packets (and associated stats)
 class RtpStream(object):
@@ -73,7 +89,7 @@ class RtpStream(object):
 
 		# Define a flag to signal when new data is available (to be processed by the calulateThread)
 		self.dataAvailableFlag=False
-		print "creating RtpStream with id:",self.__streamID
+		print "creating RtpStream with id:",self.__streamID,"\r"
 
 		# Create a mutex lock to be used by the a thread
 		# To set the lock use: __accessRtpDataMutex.acquire(), To release use: __accessRtpDataMutex.release()
@@ -96,17 +112,26 @@ class RtpStream(object):
 	# Define a private calculation method that will run autonomously as a thread
 	# This thread will
 	def __calculateThread(self):
-		print "__calculateThread started with id: ",self.__streamID
+		print "__calculateThread started with id: ",self.__streamID,"\r"
 
-		prevTimestamp=datetime.datetime.now()
-		prevRtpPacket=rtpData(0,0,datetime.datetime.now())
-		timestampOfLastGlitch=datetime.datetime.now()
+		# prevTimestamp=datetime.datetime.now()
+		# Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
+		prevTimestamp=datetime.timedelta()
+		# prevRtpPacket=rtpData(0,0,datetime.datetime.now())
+		prevRtpPacket=rtpData(0,0,datetime.timedelta())
+
+		# timestampOfLastGlitch=datetime.datetime.now()
+
+		timestampOfLastGlitch=datetime.timedelta()
+
+		# Counters
 		loopCounter=0
 		totalPacketsPerSecond=0
 		totalDataReceivedPerSecond=0
 		totalDataReceived=0
 		totalPacketsReceived=0
 		secondsElapsed=0
+
 
 		# Declare empty list of 'event' objects. This will contain a list of the interruptions in sequence errors caused by packet loss
 		eventList=[]
@@ -127,11 +152,6 @@ class RtpStream(object):
 			self.__accessRtpDataMutex.release()
 			# Test for new data
 			if(len(rtpStream)>0):
-				# Get number of packets received (from list length)
-				# Per second counter
-				totalPacketsPerSecond+=len(rtpStream)
-				# Total aggregate
-				totalPacketsReceived+=len(rtpStream)
 
 				# Iterate over rtpStream to get total count of data received in this batch of data, no. of packets and also calculate rx time deltas
 				# Get timestamp of final packet of prev data set
@@ -148,11 +168,16 @@ class RtpStream(object):
 					prevTimestamp=x.timestamp
 				
 				# Test for out of sequence packet by comparing last recieved sequence no with that of first rtpObject in new list of data in rtpStream[]
- 				if(prevRtpPacket.rtpSequenceNo!= (rtpStream[0].rtpSequenceNo-1)):
+				# This musn't run the first time around the loop (because there's nothing to compare the first packet to)
+ 				if(prevRtpPacket.rtpSequenceNo!= (rtpStream[0].rtpSequenceNo-1)) and (totalPacketsReceived>0):
  					# Take timestamp of most recent glitch 
  					timestampOfLastGlitch=datetime.datetime.now()
  					print timestampOfLastGlitch," Out of sequence packet received between data sets. Expected sequence no",(prevRtpPacket.rtpSequenceNo+1)," but received ",rtpStream[0].rtpSequenceNo,"\r"
- 					
+ 					# Capture packets either side of the 'hole' and store them in the event list
+					# Create an object representing the glitch
+					glitch=Event(prevRtpPacket,rtpStream[0])
+ 					# Add the glitch to the evenList[]
+ 					eventList.append(glitch)
 
  				# Now test for sequence errors within current data set
  				# Take a copy of the first item in the list
@@ -168,7 +193,7 @@ class RtpStream(object):
 						
 						# Capture packets either side of the 'hole' and store them in the event list
  						# Create an object representing the glitch
- 						glitch=event(prevRtpPacket,rtpPacket)
+ 						glitch=Event(prevRtpPacket,rtpPacket)
 	 					# Add the glitch to the evenList[]
 	 					eventList.append(glitch)
  					# Store current rtp packet for the next iteration around the loop
@@ -176,7 +201,12 @@ class RtpStream(object):
 				
 				# Capture most recent packet (last item of current data set) for next time around loop
 				prevRtpPacket=rtpStream[-1]
- 				
+
+ 				# Get number of packets received (from list length)
+				# Per second counter
+				totalPacketsPerSecond+=len(rtpStream)
+				# Total aggregate
+				totalPacketsReceived+=len(rtpStream)
  				
 			# Time elapsed since last glitch
  			timeElapsedSinceLastGlitch=datetime.datetime.now()-timestampOfLastGlitch
@@ -189,6 +219,7 @@ class RtpStream(object):
  				secondsElapsed+=1
  				print "__calculateThread: [",secondsElapsed,":",rtpStream[-1].rtpSequenceNo,"] Packets/s",totalPacketsPerSecond,"Rx bytes/s",totalDataReceivedPerSecond,'Total packets', \
  					totalPacketsReceived,"Total bytes received",totalDataReceived,"glitch count",len(eventList),"\r"
+ 				print "totalPacketsLost:",Event.totalPacketsLost,"totalGlitches:",Event.totalGlitches,"totalGlitchLength:",Event.totalGlitchLength,"\r"
  				#Now clear totalDataReceivedPerInterval for the next time around the loop
 				totalDataReceivedPerSecond=0
 				totalPacketsPerSecond=0
@@ -203,7 +234,7 @@ class RtpStream(object):
 
 	# Define a private display method that will run autonomously as a thread
 	def __displayThread(self):
-		print "__displayThread started with id: ",self.__streamID
+		print "__displayThread started with id: ",self.__streamID,"\r"
 		x=0
 		while True:
 			# print "__displayThread running...", x
@@ -238,7 +269,7 @@ class RtpStream(object):
 
 # Define a thread that will trap keys pressed
 def __catchKeyboardPresses(keyPressed):
-	print "Starting __catchKeyboardPresses thread"
+	print "Starting __catchKeyboardPresses thread","\r"
 	while True:
 		ch=getch()
 		keyPressed[0]=ch
@@ -298,21 +329,13 @@ def __rtpGenerator(keyPressed):
 # #####################
 def main():
 
-	# ch=getch()
-	# print ch
-	# exit()
-
 	UDP_RX_IP = "192.168.56.1"
 	UDP_RX_PORT = 5004
 
 	sock = socket.socket(socket.AF_INET, # Internet
 	                  socket.SOCK_DGRAM) # UDP
 	sock.bind((UDP_RX_IP, UDP_RX_PORT))
-	# prevRtpSequenceNo=0
-
-
-	# epoch = datetime(1970, 1, 1, tzinfo=timezone.utc) # use POSIX epoch
-
+	
 
 	runOnce=True
 
@@ -338,10 +361,9 @@ def main():
 		data, addr = sock.recvfrom(4096) # buffer size is 4096 bytes
 		# print addr
 		
-	 	
+	 	# Get timestamp at the point the packet was received
 	 	timeNow = datetime.datetime.now()
-		
-	 	
+			 	
 	 	srcAddress=addr[0]
 	 	srcPort=addr[1]
 
@@ -380,5 +402,6 @@ def main():
 	 	except Exception as e:
 			print str(e),"Length:",len(data),"bytes received"
 
+# Invoke main() method (entry point for Python script)
 if __name__== "__main__":
   main()
