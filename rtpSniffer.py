@@ -117,12 +117,9 @@ class RtpStream(object):
 		# prevTimestamp=datetime.datetime.now()
 		# Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
 		prevTimestamp=datetime.timedelta()
-		# prevRtpPacket=rtpData(0,0,datetime.datetime.now())
 		prevRtpPacket=rtpData(0,0,datetime.timedelta())
-
-		# timestampOfLastGlitch=datetime.datetime.now()
-
 		timestampOfLastGlitch=datetime.timedelta()
+		firstPacketReceivedAtTimestamp=datetime.timedelta()
 
 		# Counters
 		loopCounter=0
@@ -152,6 +149,10 @@ class RtpStream(object):
 			self.__accessRtpDataMutex.release()
 			# Test for new data
 			if(len(rtpStream)>0):
+
+				# Take timestamp of the very first packet received of this rtpStream
+				if(totalPacketsReceived<1):
+					firstPacketReceivedAtTimestamp=rtpStream[0].timestamp
 
 				# Iterate over rtpStream to get total count of data received in this batch of data, no. of packets and also calculate rx time deltas
 				# Get timestamp of final packet of prev data set
@@ -217,9 +218,12 @@ class RtpStream(object):
  				loopCounter=0
  				# Increment seconds elapsed
  				secondsElapsed+=1
- 				print "__calculateThread: [",secondsElapsed,":",rtpStream[-1].rtpSequenceNo,"] Packets/s",totalPacketsPerSecond,"Rx bytes/s",totalDataReceivedPerSecond,'Total packets', \
- 					totalPacketsReceived,"Total bytes received",totalDataReceived,"glitch count",len(eventList),"\r"
+ 				if(len(rtpStream)>0):
+ 					print "__calculateThread: [",secondsElapsed,":",rtpStream[-1].rtpSequenceNo,"] Packets/s",totalPacketsPerSecond,"Rx bytes/s",totalDataReceivedPerSecond,'Total packets', \
+ 						totalPacketsReceived,"Total bytes received",totalDataReceived,"glitch count",len(eventList),"\r"
  				print "totalPacketsLost:",Event.totalPacketsLost,"totalGlitches:",Event.totalGlitches,"totalGlitchLength:",Event.totalGlitchLength,"\r"
+ 				print "firstPacketReceivedAtTimestamp:",firstPacketReceivedAtTimestamp,"\r"
+ 				
  				#Now clear totalDataReceivedPerInterval for the next time around the loop
 				totalDataReceivedPerSecond=0
 				totalPacketsPerSecond=0
@@ -300,23 +304,38 @@ def __rtpGenerator(keyPressed):
 	rtpTimestamp=int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
 	rtpSyncSourceIdentifier=12345678
 	
+	enablePacketGeneration=True
+
 	while True:
 		
 		txRtpHeader=struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo,rtpTimestamp,rtpSyncSourceIdentifier)
 		MESSAGE=txRtpHeader+payload
 		
-		# If spacebar is NOT held down, transmit a new RTP packet
-		if(keyPressed[0]!=' '):
-			txSock.sendto(MESSAGE, (UDP_DEST_IP, UDP__DEST_PORT))
-		else:
-			keyPressed[0]=''
-			print "spacebar pressed. Inhibit rtp transmission"
+		# If 'z' pressed, toggle packet generation on/off
+		if (keyPressed[0]=='z'):
+			if(enablePacketGeneration==True):
+				# Empty keyboard buffer
+				keyPressed[0]=''
+				# Clear enable flag
+				enablePacketGeneration=False
+				print " 'z' Inhibiting packet generator"
+			else:
+				# Empty keyboard buffer
+				keyPressed[0]=''
+				# Set enable flag
+				enablePacketGeneration=True
 
-		# if(inhibitPacketGeneration==False):
-		# 	txSock.sendto(MESSAGE, (UDP_DEST_IP, UDP__DEST_PORT))
-		# else:
-		# 	# Clear down inhibitPacketGeneration now it has been acknowledged
-		# 	inhibitPacketGeneration=False
+		# # If spacebar is held down, inhibit RTP packet
+		# if(keyPressed[0]==' '):
+		# 	# Empty keyboard buffer
+		# 	keyPressed[0]=''
+		# 	inhibitPacketGeneration=True
+		# 	print "spacebar pressed. Inhibit rtp transmission","\r"
+
+		if(enablePacketGeneration==True):
+			txSock.sendto(MESSAGE, (UDP_DEST_IP, UDP__DEST_PORT))
+
+		
 		rtpSequenceNo+=1
 		# time.sleep(.005)
 		time.sleep(.01)
