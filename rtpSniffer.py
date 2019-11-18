@@ -256,9 +256,10 @@ class RtpStream(object):
 	def __displayThread(self):
 		print "__displayThread started with id: ", self.__streamID, "\r"
 		x = 0
+		x=Glitch.rtpSyncSource
 		while True:
-			# print "__displayThread running...", x
-			x += 1
+			print "__displayThread running...", x
+			# x += 1
 			time.sleep(1)
 
 	# Define getter methods
