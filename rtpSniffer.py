@@ -83,7 +83,7 @@ class Glitch(object):
 		# increment class var for total no of glitches
 		Glitch.totalGlitches += 1
 		rtpSyncSource=streamID
-		print"rtpSyncSource",rtpSyncSource"\r"
+		print"rtpSyncSource",rtpSyncSource,"\r"
 
 
 # Define a class to represent a flow of received rtp packets (and associated stats)
