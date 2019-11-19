@@ -60,15 +60,14 @@ class rtpData(object):
 # Define an object that represent a glitch
 # This will be in the form of the packets (rtpData objects) either side of the 'hole' in received data
 class Glitch(object):
-	# Define class variables
-	totalPacketsLost = 0
-	totalGlitches = 0
-	# define timedelta object to store an aggregate of all the 'holes' in data reception
-	totalGlitchLength = datetime.timedelta()
-
+	# Define descriptive names. These might be useful later
+	type="Glitch"
+	description=""
 
 	# Constructor
 	def __init__(self, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap):
+		# Create timestamp of event
+		self.timeCreated=datetime.datetime.now()
 		# Update instance variables
 		self.startOfGap = lastReceivedPacketBeforeGap
 		self.endOfGap = firstPackedReceivedAfterGap
@@ -232,8 +231,8 @@ class RtpStream(object):
 
 			# Calculate % packet loss
 			if totalPacketsReceived>0:
-				totalExpectedPackets = totalPacketsReceived+Glitch.totalPacketsLost
-				totalPercentPacketsLost = Glitch.totalPacketsLost*100/totalExpectedPackets
+				totalExpectedPackets = totalPacketsReceived+totalPacketsLost
+				totalPercentPacketsLost = totalPacketsLost*100/totalExpectedPackets
 
 			# 1 second timer
 			if (loopCounter > loopsPerSecond):
@@ -246,12 +245,11 @@ class RtpStream(object):
 						-1].rtpSequenceNo, "] Packets/s", totalPacketsPerSecond, ", Rx bytes/s", totalDataReceivedPerSecond, ', Total packets', \
 						totalPacketsReceived, ", Total bytes received", totalDataReceived, ", event count", len(
 						eventList), "\r"
-				# print "totalPacketsLost:", Glitch.totalPacketsLost, ",", ", %loss:",totalPercentPacketsLost,", totalEvents:", Glitch.totalGlitches, \
-				# 	", totalGlitchLength:", Glitch.totalGlitchLength, "\r"
-				print "totalPacketsLost:", totalPacketsLost, ",", ", %loss:", totalPercentPacketsLost, ", totalGlitches:", totalGlitches, \
+				print "totalPacketsLost:", totalPacketsLost, ", %loss:", totalPercentPacketsLost, ", totalGlitches:", totalGlitches, \
 					", totalGlitchLength:", totalGlitchLength, "\r"
 				# print "firstPacketReceivedAtTimestamp:", firstPacketReceivedAtTimestamp, "\r"
 				print "--------------", "\r"
+
 				# Now clear totalDataReceivedPerInterval for the next time around the loop
 				totalDataReceivedPerSecond = 0
 				totalPacketsPerSecond = 0
