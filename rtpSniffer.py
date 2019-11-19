@@ -78,13 +78,7 @@ class Glitch(object):
 		# Calculate length of this glitch
 		self.glitchLength = firstPackedReceivedAfterGap.timestamp - lastReceivedPacketBeforeGap.timestamp
 
-		# Update class variables
-		# Update class 'static, if this were Java' variable for the total no. of packets lost in this rtpStream
-		Glitch.totalPacketsLost += self.packetsLost
-		# Update class var for aggregate of all the glitch times
-		Glitch.totalGlitchLength += self.glitchLength
-		# increment class var for total no of glitches
-		Glitch.totalGlitches += 1
+
 
 # Define a class to represent a flow of received rtp packets (and associated stats)
 class RtpStream(object):
@@ -254,7 +248,7 @@ class RtpStream(object):
 						eventList), "\r"
 				# print "totalPacketsLost:", Glitch.totalPacketsLost, ",", ", %loss:",totalPercentPacketsLost,", totalEvents:", Glitch.totalGlitches, \
 				# 	", totalGlitchLength:", Glitch.totalGlitchLength, "\r"
-				print "totalPacketsLost:", totalPacketsLost, ",", ", %loss:", totalPercentPacketsLost, ", totalEvents:", totalGlitches, \
+				print "totalPacketsLost:", totalPacketsLost, ",", ", %loss:", totalPercentPacketsLost, ", totalGlitches:", totalGlitches, \
 					", totalGlitchLength:", totalGlitchLength, "\r"
 				# print "firstPacketReceivedAtTimestamp:", firstPacketReceivedAtTimestamp, "\r"
 				print "--------------", "\r"
