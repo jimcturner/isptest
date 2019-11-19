@@ -65,26 +65,26 @@ class Glitch(object):
 	totalGlitches = 0
 	# define timedelta object to store an aggregate of all the 'holes' in data reception
 	totalGlitchLength = datetime.timedelta()
-	rtpSyncSource=0
+
 
 	# Constructor
-	def __init__(self, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap,streamID):
+	def __init__(self, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap):
+		# Update instance variables
 		self.startOfGap = lastReceivedPacketBeforeGap
 		self.endOfGap = firstPackedReceivedAfterGap
 		# Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
 		# The '-1' is because it's fences and fenceposts
 		self.packetsLost = firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo - 1
-		# Update class 'static, if this were Java' variable for the total no. of packets lost in this rtpStream
-		Glitch.totalPacketsLost += self.packetsLost
 		# Calculate length of this glitch
 		self.glitchLength = firstPackedReceivedAfterGap.timestamp - lastReceivedPacketBeforeGap.timestamp
+
+		# Update class variables
+		# Update class 'static, if this were Java' variable for the total no. of packets lost in this rtpStream
+		Glitch.totalPacketsLost += self.packetsLost
 		# Update class var for aggregate of all the glitch times
 		Glitch.totalGlitchLength += self.glitchLength
 		# increment class var for total no of glitches
 		Glitch.totalGlitches += 1
-		rtpSyncSource=streamID
-		print"rtpSyncSource",rtpSyncSource,"\r"
-
 
 # Define a class to represent a flow of received rtp packets (and associated stats)
 class RtpStream(object):
@@ -185,7 +185,7 @@ class RtpStream(object):
 							prevRtpPacket.rtpSequenceNo + 1), " but received ", rtpStream[0].rtpSequenceNo, "\r"
 					# Capture packets either side of the 'hole' and store them in the event list
 					# Create an object representing the glitch
-					glitch = Glitch(prevRtpPacket, rtpStream[0],self.__streamID)
+					glitch = Glitch(prevRtpPacket, rtpStream[0])
 					# Add the glitch to the evenList[]
 					eventList.append(glitch)
 
@@ -204,7 +204,7 @@ class RtpStream(object):
 
 						# Capture packets either side of the 'hole' and store them in the event list
 						# Create an object representing the glitch
-						glitch = Glitch(prevRtpPacket, rtpPacket,self.__streamID)
+						glitch = Glitch(prevRtpPacket, rtpPacket)
 						# Add the glitch to the evenList[]
 						eventList.append(glitch)
 					# Store current rtp packet for the next iteration around the loop
@@ -256,10 +256,10 @@ class RtpStream(object):
 	def __displayThread(self):
 		print "__displayThread started with id: ", self.__streamID, "\r"
 		x = 0
-		x=Glitch.rtpSyncSource
+
 		while True:
-			print "__displayThread running...", x
-			# x += 1
+			# print "__displayThread running..."
+
 			time.sleep(1)
 
 	# Define getter methods
