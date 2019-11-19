@@ -56,8 +56,19 @@ class rtpData(object):
 		# timeDelta will store the timestamp diff between this and the previous packet
 		self.timeDelta = 0
 
+# Define an object that represents a start of signal
+class StreamStarted(object):
+	# Define descriptive names. These might be useful later
+	type = "startOfStream"
+	description = ""
 
-# Define an object that represent a glitch
+	# Constructor
+	def __init__(self, firstPackedReceived):
+		# Create timestamp of event
+		self.timeCreated = datetime.datetime.now()
+		self.firstPackedReceived=firstPackedReceived
+
+# Define an event that represent a glitch
 # This will be in the form of the packets (rtpData objects) either side of the 'hole' in received data
 class Glitch(object):
 	# Define descriptive names. These might be useful later
@@ -248,6 +259,9 @@ class RtpStream(object):
 				print "totalPacketsLost:", totalPacketsLost, ", %loss:", totalPercentPacketsLost, ", totalGlitches:", totalGlitches, \
 					", totalGlitchLength:", totalGlitchLength, "\r"
 				# print "firstPacketReceivedAtTimestamp:", firstPacketReceivedAtTimestamp, "\r"
+				print "Events--------------", "\r"
+				for event in eventList:
+					print event.type, event.timeCreated, "\r"
 				print "--------------", "\r"
 
 				# Now clear totalDataReceivedPerInterval for the next time around the loop
