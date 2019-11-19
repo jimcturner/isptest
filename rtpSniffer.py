@@ -129,16 +129,22 @@ class RtpStream(object):
 		timestampOfLastGlitch = datetime.timedelta()
 		firstPacketReceivedAtTimestamp = datetime.timedelta()
 
-		# Counters
+		# General Counters
 		loopCounter = 0
 		totalPacketsPerSecond = 0
 		totalDataReceivedPerSecond = 0
 		totalDataReceived = 0
 		totalPacketsReceived = 0
 		secondsElapsed = 0
-		totalPercentPacketsLost = 0
 
-		# Declare empty list of 'event' objects. This will contain a list of the interruptions in sequence errors caused by packet loss
+		# Glitch counters
+		totalPercentPacketsLost = 0
+		totalPacketsLost = 0
+		totalGlitches = 0
+		# define timedelta object to store an aggregate of all the 'holes' in data reception
+		totalGlitchLength = datetime.timedelta()
+
+		# Declare empty list of 'event' objects. This will contain a list of the disruptions relating to this rtpStream object
 		eventList = []
 
 		POLL_INTERVAL = 0.1  # Loop will execute every 100mS
@@ -176,6 +182,7 @@ class RtpStream(object):
 					# Update prevTimestamp for next time around loop
 					prevTimestamp = x.timestamp
 
+				# Glitch Detection ###############################################################
 				# Test for out of sequence packet by comparing last recieved sequence no with that of first rtpObject in new list of data in rtpStream[]
 				# This musn't run the first time around the loop (because there's nothing to compare the first packet to)
 				if (prevRtpPacket.rtpSequenceNo != (rtpStream[0].rtpSequenceNo - 1)) and (totalPacketsReceived > 0):
@@ -186,16 +193,19 @@ class RtpStream(object):
 					# Capture packets either side of the 'hole' and store them in the event list
 					# Create an object representing the glitch
 					glitch = Glitch(prevRtpPacket, rtpStream[0])
-					# Add the glitch to the evenList[]
+					# Add the latest glitch to the evenList[]
 					eventList.append(glitch)
+					# Now update aggregate glitch stats
+					totalPacketsLost+=glitch.packetsLost
+					totalGlitchLength+=glitch.glitchLength
+					totalGlitches+=1
 
 				# Now test for sequence errors within current data set
 				# Take a copy of the first item in the list
 				prevRtpPacket = rtpStream[0]
 				# Iterate over the the remainder of the list (starting at index 1 to the end '-1')
-				# print prevSeq,":",
 				for rtpPacket in rtpStream[1:]:
-					# Test seqeuence no of current packet against previous packet
+					# Test sequence no of current packet against previous packet
 					if rtpPacket.rtpSequenceNo != (prevRtpPacket.rtpSequenceNo + 1):
 						# Take timestamp of most recent glitch
 						timestampOfLastGlitch = datetime.datetime.now()
@@ -207,6 +217,10 @@ class RtpStream(object):
 						glitch = Glitch(prevRtpPacket, rtpPacket)
 						# Add the glitch to the evenList[]
 						eventList.append(glitch)
+						# Now update aggregate glitch stats
+						totalPacketsLost += glitch.packetsLost
+						totalGlitchLength += glitch.glitchLength
+						totalGlitches += 1
 					# Store current rtp packet for the next iteration around the loop
 					prevRtpPacket = rtpPacket
 
@@ -236,9 +250,12 @@ class RtpStream(object):
 				if (len(rtpStream) > 0):
 					print "__calculateThread: [", secondsElapsed, ":", rtpStream[
 						-1].rtpSequenceNo, "] Packets/s", totalPacketsPerSecond, ", Rx bytes/s", totalDataReceivedPerSecond, ', Total packets', \
-						totalPacketsReceived, ", Total bytes received", totalDataReceived, ", glitch count", len(
+						totalPacketsReceived, ", Total bytes received", totalDataReceived, ", event count", len(
 						eventList), "\r"
-				print "totalPacketsLost:", Glitch.totalPacketsLost, ",", ", %loss:",totalPercentPacketsLost,", totalEvents:", Glitch.totalGlitches, ", totalGlitchLength:", Glitch.totalGlitchLength, "\r"
+				# print "totalPacketsLost:", Glitch.totalPacketsLost, ",", ", %loss:",totalPercentPacketsLost,", totalEvents:", Glitch.totalGlitches, \
+				# 	", totalGlitchLength:", Glitch.totalGlitchLength, "\r"
+				print "totalPacketsLost:", totalPacketsLost, ",", ", %loss:", totalPercentPacketsLost, ", totalEvents:", totalGlitches, \
+					", totalGlitchLength:", totalGlitchLength, "\r"
 				# print "firstPacketReceivedAtTimestamp:", firstPacketReceivedAtTimestamp, "\r"
 				print "--------------", "\r"
 				# Now clear totalDataReceivedPerInterval for the next time around the loop
