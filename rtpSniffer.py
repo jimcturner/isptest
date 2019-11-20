@@ -156,8 +156,16 @@ class RtpStream(object):
 		totalPercentPacketsLost = 0
 		totalPacketsLost = 0
 		totalGlitches = 0
-		# define timedelta object to store an aggregate of all the 'holes' in data reception
+		# define timedelta object to store an aggregate of of Glitch length
 		totalGlitchLength = datetime.timedelta()
+		timestampOfLastGlitch=datetime.timedelta()
+		timeElapsedSinceLastGlitch=datetime.timedelta()
+
+		# Jitter counters
+		minJitter=0
+		maxJitter=0
+		averageJitter=0
+		averageRtpPacketArrivalPeriod=datetime.timedelta()
 
 		# Declare flags
 		lossOfStreamFlag = True
