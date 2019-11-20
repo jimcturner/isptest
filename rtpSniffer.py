@@ -59,14 +59,26 @@ class rtpData(object):
 # Define an object that represents a start of signal
 class StreamStarted(object):
 	# Define descriptive names. These might be useful later
-	type = "startOfStream"
+	type = "StreamStarted"
 	description = ""
 
 	# Constructor
-	def __init__(self, firstPackedReceived):
+	def __init__(self, firstPacketReceived):
 		# Create timestamp of event
 		self.timeCreated = datetime.datetime.now()
-		self.firstPackedReceived=firstPackedReceived
+		self.firstPacketdReceived=firstPacketReceived
+
+# Define an event that represents a loss of rtpStream
+class StreamLost(object):
+	# Define descriptive names. These might be useful later
+	type = "StreamLost"
+	description = ""
+
+	# Constructor
+	def __init__(self, lastPacketReceived):
+		# Create timestamp of event
+		self.timeCreated = datetime.datetime.now()
+		self.lastPacketReceived = lastPacketReceived
 
 # Define an event that represent a glitch
 # This will be in the form of the packets (rtpData objects) either side of the 'hole' in received data
@@ -128,8 +140,7 @@ class RtpStream(object):
 		print "__calculateThread started with id: ", self.__streamID, "\r"
 
 		# Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
-		prevTimestamp = datetime.timedelta()
-		prevRtpPacket = rtpData(0, 0, datetime.timedelta())
+		lastReceivedRtpPacket=rtpData(0, 0, datetime.timedelta())
 		timestampOfLastGlitch = datetime.timedelta()
 		firstPacketReceivedAtTimestamp = datetime.timedelta()
 
@@ -148,6 +159,9 @@ class RtpStream(object):
 		# define timedelta object to store an aggregate of all the 'holes' in data reception
 		totalGlitchLength = datetime.timedelta()
 
+		# Declare flags
+		lossOfStreamFlag = True
+
 		# Declare empty list of 'event' objects. This will contain a list of the disruptions relating to this rtpStream object
 		eventList = []
 
@@ -160,21 +174,30 @@ class RtpStream(object):
 			# Lock the access mutex
 			self.__accessRtpDataMutex.acquire()
 			# Copy the contents of self.rtpStreamData into a temporary list so the accessRtpDataMutex can be released
-			rtpStream = list(self.rtpStreamData)
+			rtpStream =list(self.rtpStreamData)
+
 			# Now we have a working copy of rtpStreamData[] we can clear the original source list
 			del self.rtpStreamData[:]
 			# Release the mutex
 			self.__accessRtpDataMutex.release()
+
 			# Test for new data
 			if (len(rtpStream) > 0):
 
 				# Take timestamp of the very first packet received of this rtpStream
 				if totalPacketsReceived < 1:
 					firstPacketReceivedAtTimestamp = rtpStream[0].timestamp
+					# Add a StreamStarted event to the event list
+					eventList.append(StreamStarted(rtpStream[0]))
+					# Stream now being received so clear flag
+
+				if lossOfStreamFlag==True:
+					# We're now receiving a stream, so clear alarm flag
+					lossOfStreamFlag=False
 
 				# Iterate over rtpStream to get total count of data received in this batch of data, no. of packets and also calculate rx time deltas
 				# Get timestamp of final packet of prev data set
-				prevTimestamp = prevRtpPacket.timestamp
+				prevTimestamp = lastReceivedRtpPacket.timestamp
 				for x in rtpStream:
 					# Per second counter
 					totalDataReceivedPerSecond += x.payloadSize
@@ -189,7 +212,7 @@ class RtpStream(object):
 				# Glitch Detection ###############################################################
 				# Test for out of sequence packet by comparing last recieved sequence no with that of first rtpObject in new list of data in rtpStream[]
 				# This musn't run the first time around the loop (because there's nothing to compare the first packet to)
-				if (prevRtpPacket.rtpSequenceNo != (rtpStream[0].rtpSequenceNo - 1)) and (totalPacketsReceived > 0):
+				if (lastReceivedRtpPacket.rtpSequenceNo != (rtpStream[0].rtpSequenceNo - 1)) and (totalPacketsReceived > 0):
 					# Take timestamp of most recent glitch
 					timestampOfLastGlitch = datetime.datetime.now()
 					print timestampOfLastGlitch, " Out of sequence packet received between data sets. Expected sequence no", (
@@ -228,14 +251,24 @@ class RtpStream(object):
 					# Store current rtp packet for the next iteration around the loop
 					prevRtpPacket = rtpPacket
 
+
 				# Capture most recent packet (last item of current data set) for next time around loop
-				prevRtpPacket = rtpStream[-1]
+				lastReceivedRtpPacket=rtpStream[-1]
 
 				# Get number of packets received (from list length)
 				# Per second counter
 				totalPacketsPerSecond += len(rtpStream)
 				# Total aggregate
 				totalPacketsReceived += len(rtpStream)
+
+			else:
+				# No data, so set lossOfStreamFlag (unless it's already been set)
+				# Check for changes and that we also have an active stream. If so, set the flag and add an event to the eventlist
+				if lossOfStreamFlag==False and totalPacketsReceived>0:
+					# Set flag
+					lossOfStreamFlag=True
+					# Add event to the list (but only do this once)
+					eventList.append(StreamLost(lastReceivedRtpPacket))
 
 			# Time elapsed since last glitch
 			timeElapsedSinceLastGlitch = datetime.datetime.now() - timestampOfLastGlitch
