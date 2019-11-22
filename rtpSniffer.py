@@ -217,6 +217,12 @@ class RtpStream(object):
 					# Update prevTimestamp for next time around loop
 					prevTimestamp = x.timestamp
 
+				# Calculate jitter
+				# Find the mean value of the microsecond portion of the timeDelta values in rtpStream
+				for x in rtpStream:
+					sumOfTimeDelta+=x.timeDelta.microsecond
+				meanOfTime=DeltasumOfTimeDelta/len(rtpStream)
+				print "sumOfTimeDelta",sumOfTimeDelta,"\r"
 				# Glitch Detection ###############################################################
 				# Test for out of sequence packet by comparing last recieved sequence no with that of first rtpObject in new list of data in rtpStream[]
 				# This musn't run the first time around the loop (because there's nothing to compare the first packet to)
