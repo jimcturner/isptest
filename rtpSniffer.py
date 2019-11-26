@@ -164,8 +164,12 @@ class RtpStream(object):
 		# Jitter counters
 		minJitter=0
 		maxJitter=0
-		averageJitter=0
+		rangeOfJitter=0
+		meanJitter=0
+		meanJitter_1s=0
+		sumOfJitter_1s=0
 		averageRtpPacketArrivalPeriod=datetime.timedelta()
+		sumOfDiffBetweenTimeDeltas = 0
 
 		# Declare flags
 		lossOfStreamFlag = True
@@ -203,28 +207,61 @@ class RtpStream(object):
 					# We're now receiving a stream, so clear alarm flag
 					lossOfStreamFlag=False
 
-				# Iterate over rtpStream to get total count of data received in this batch of data, no. of packets and also calculate rx time deltas
+
 				# Get timestamp of final packet of prev data set
-				prevTimestamp = lastReceivedRtpPacket.timestamp
+				if(totalPacketsReceived<1):
+					# For the very first packet, take the prev packet to be that of the first packet received (to give a
+					# delta of zero, otherwise the delta will be the diff between 0 and today's date!
+					prevX=rtpStream[0]
+				else:
+					# Get copy of final packet of prev data set
+					prevX=lastReceivedRtpPacket
+				# Iterate over rtpStream to get total count of data received in this batch of data, no. of packets and also calculate
+				# rx time deltas and jitter
+				sumOfInterPacketJitter = 0
 				for x in rtpStream:
 					# Per second counter
 					totalDataReceivedPerSecond += x.payloadSize
 					# Total aggregate
 					totalDataReceived += x.payloadSize
 					# Calculate and write time delta into rtpData object
-					x.timeDelta = x.timestamp - prevTimestamp
-					# print "[",x.rtpSequenceNo,"]",x.timestamp,prevTimestamp,x.timeDelta,x.timeDelta.microseconds,"\r"
+					x.timeDelta = x.timestamp - prevX.timestamp
+					# Now calculate the diff (jitter) between consequtive timeDelta values (should be in order of mS)
+					# It should be simple. Just take mean of interPacketJitter
+					interPacketJitter=abs(x.timeDelta.microseconds-prevX.timeDelta.microseconds)
+					# print interPacketJitter,"\r"
+					# Calculate minimum jitter
+					if minJitter==0:
+						# Set initial value
+						minJitter=interPacketJitter
+					if interPacketJitter < minJitter:
+						minJitter=interPacketJitter
+					# Calculate maximum jitter
+					if maxJitter==0:
+						# Set initial value
+						maxJitter = interPacketJitter
+					if interPacketJitter>maxJitter:
+						maxJitter=interPacketJitter
+
+					# print "interPacketJitter",interPacketJitter,"\r"
+					# Sum the interPacketJitter values  for the subsequent jitter calculation
+					# For 'instantaneous' jitter value
+					sumOfInterPacketJitter += interPacketJitter
+					# For 1 second jitter value
+					sumOfJitter_1s += sumOfInterPacketJitter
 					# Update prevTimestamp for next time around loop
-					prevTimestamp = x.timestamp
+					prevX=x
 
 				# Calculate jitter
 				# Find the mean value of the microsecond portion of the timeDelta values in rtpStream
-				for x in rtpStream:
-					sumOfTimeDelta+=x.timeDelta.microsecond
-				meanOfTime=DeltasumOfTimeDelta/len(rtpStream)
-				print "sumOfTimeDelta",sumOfTimeDelta,"\r"
+				meanOfTimeDelta=0
+				if len(rtpStream)>1:
+					meanJitter=sumOfInterPacketJitter/(len(rtpStream)-1)
+
+				# print 	"minJitter",minJitter,", maxJitter",maxJitter,", meanJitter",meanJitter,"\r"
+
 				# Glitch Detection ###############################################################
-				# Test for out of sequence packet by comparing last recieved sequence no with that of first rtpObject in new list of data in rtpStream[]
+				# Test for out of sequence packet by comparing last received sequence no with that of first rtpObject in new list of data in rtpStream[]
 				# This musn't run the first time around the loop (because there's nothing to compare the first packet to)
 				if (lastReceivedRtpPacket.rtpSequenceNo != (rtpStream[0].rtpSequenceNo - 1)) and (totalPacketsReceived > 0):
 					# Take timestamp of most recent glitch
@@ -298,13 +335,18 @@ class RtpStream(object):
 				loopCounter = 0
 				# Increment seconds elapsed
 				secondsElapsed += 1
+
+				# Calculate 1 second jitter
+				meanJitter_1s=sumOfJitter_1s/totalPacketsPerSecond
+				# Reset sumOfJitter_1s
+				sumOfJitter_1s=0
 				if (len(rtpStream) > 0):
 					print "__calculateThread: [", secondsElapsed, ":", rtpStream[
 						-1].rtpSequenceNo, "] Packets/s", totalPacketsPerSecond, ", Rx bytes/s", totalDataReceivedPerSecond, ', Total packets', \
 						totalPacketsReceived, ", Total bytes received", totalDataReceived, ", event count", len(
 						eventList), "\r"
 				print "totalPacketsLost:", totalPacketsLost, ", %loss:", totalPercentPacketsLost, ", totalGlitches:", totalGlitches, \
-					", totalGlitchLength:", totalGlitchLength, "\r"
+					", totalGlitchLength:", totalGlitchLength, ", meanJitter_1s(mS)",(meanJitter_1s/1000), "\r"
 				# print "firstPacketReceivedAtTimestamp:", firstPacketReceivedAtTimestamp, "\r"
 				print "Events--------------", "\r"
 				for event in eventList:
@@ -369,7 +411,8 @@ def __catchKeyboardPresses(keyPressed):
 
 # define a traffic generator thread
 def __rtpGenerator(keyPressed):
-	UDP_DEST_IP = "192.168.56.1"
+	# UDP_DEST_IP = "192.168.56.1"
+	UDP_DEST_IP = "127.0.0.1"
 	UDP__DEST_PORT = 5004
 
 	# Generate random string
@@ -393,6 +436,11 @@ def __rtpGenerator(keyPressed):
 	rtpSyncSourceIdentifier = 12345678
 
 	enablePacketGeneration = True
+	enableJitter = False
+
+	txPeriod = 0.01
+	jitterPerecentage = 50
+	maxDeviation = txPeriod * jitterPerecentage / 100
 
 	while True:
 
@@ -427,10 +475,27 @@ def __rtpGenerator(keyPressed):
 		if enablePacketGeneration == True and temporaryInhibit == False:
 			txSock.sendto(MESSAGE, (UDP_DEST_IP, UDP__DEST_PORT))
 
+		if(keyPressed[0]=='j'):
+			# Turn jitter on/off by pressing 'j'
+			# Clear keyboard buffer
+			keyPressed[0] = ''
+			if enableJitter==False:
+				enableJitter=True
+				print "[j] jitter enabled","\r"
+			else:
+				enableJitter=False
+				print "[j] jitter disabled", "\r"
+
+
 		# Increment rtp sequence number for next iteration of the loop
 		rtpSequenceNo += 1
-		# time.sleep(.005)
-		time.sleep(.01)
+		# If flag set, generate random delay centred around txPeriod (0.01 = 10mS period)
+		if enableJitter==True:
+			jitter=random.uniform(-1*maxDeviation,maxDeviation)
+		else:
+			jitter=0
+		# print "txPeriod",txPeriod+jitter,"\r"
+		time.sleep(txPeriod+jitter)
 
 
 ####################################################################################
@@ -439,7 +504,8 @@ def __rtpGenerator(keyPressed):
 # Main prog starts here
 # #####################
 def main():
-	UDP_RX_IP = "192.168.56.1"
+	# UDP_RX_IP = "192.168.56.1"
+	UDP_RX_IP = "127.0.0.1"
 	UDP_RX_PORT = 5004
 
 	sock = socket.socket(socket.AF_INET,  # Internet
