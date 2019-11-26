@@ -80,6 +80,20 @@ class StreamLost(object):
 		self.timeCreated = datetime.datetime.now()
 		self.lastPacketReceived = lastPacketReceived
 
+# Define an event object that represents a excessive jitter event
+class ExcessiveJitter(object):
+	# Define descriptive names. These might be useful later
+	type = "ExcessiveJitter"
+	description = ""
+	def __init__(self, lastPacketReceived,instantaneousJitter, meanJitter_1s, meanJitter_10s):
+		self.timeCreated = datetime.datetime.now()
+		self.lastPacketReceived = lastPacketReceived
+		self.instantaneousJitter=instantaneousJitter
+		self.meanJitter_1s=meanJitter_1s
+		self.meanJitter_10s=meanJitter_10s
+
+
+
 # Define an event that represent a glitch
 # This will be in the form of the packets (rtpData objects) either side of the 'hole' in received data
 class Glitch(object):
