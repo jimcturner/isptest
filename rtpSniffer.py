@@ -287,6 +287,7 @@ class RtpStream(object):
 				if meanJitter_10s >0:
 					if instantaneousJitter > (5* meanJitter_10s):
 						print "*******Excessive jitter","\r"
+						eventList.append(ExcessiveJitter(rtpStream[-1],instantaneousJitter,meanJitter_1s,meanJitter_10s))
 
 
 				# Glitch Detection ###############################################################
