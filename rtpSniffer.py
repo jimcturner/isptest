@@ -183,12 +183,12 @@ class RtpStream(object):
 		meanJitter_1s=0
 		sumOfJitter_1s=0
 		averageRtpPacketArrivalPeriod=datetime.timedelta()
-		# sumOfDiffBetweenTimeDeltas = 0
 		historicJitter = []
 		meanJitter_10s=0
-		sumOfJitter_10s=0
 		# Declare flags
 		lossOfStreamFlag = True
+		lossOfStreamTimer=0
+		lossOfStreamAlarmThreshold=2
 
 		# Declare empty list of 'event' objects. This will contain a list of the disruptions relating to this rtpStream object
 		eventList = []
@@ -222,6 +222,8 @@ class RtpStream(object):
 				if lossOfStreamFlag==True:
 					# We're now receiving a stream, so clear alarm flag
 					lossOfStreamFlag=False
+					# Reset loss of stream timer
+					lossOfStreamTimer=0
 
 
 				# Get timestamp of final packet of prev data set
@@ -232,9 +234,6 @@ class RtpStream(object):
 				else:
 					# Get copy of final packet of prev data set
 					prevX=lastReceivedRtpPacket
-				######### insert counters here
-
-				#########
 
 				# Iterate over rtpStream to get total count of data received in this batch of data, no. of packets and also calculate
 				# rx time deltas and jitter
@@ -345,7 +344,9 @@ class RtpStream(object):
 			else:
 				# No data, so set lossOfStreamFlag (unless it's already been set)
 				# Check for changes and that we also have an active stream. If so, set the flag and add an event to the eventlist
-				if lossOfStreamFlag==False and totalPacketsReceived>0:
+				lossOfStreamTimer +=1
+				if lossOfStreamTimer > (lossOfStreamAlarmThreshold * loopsPerSecond)\
+					and lossOfStreamFlag==False and totalPacketsReceived>0:
 					# Set flag
 					lossOfStreamFlag=True
 					# Add event to the list (but only do this once)
