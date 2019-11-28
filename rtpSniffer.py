@@ -94,7 +94,12 @@ class ExcessiveJitter(object):
 		self.meanJitter_1s=meanJitter_1s
 		self.meanJitter_10s=meanJitter_10s
 
-
+# Define an event object that represents a excessive jitter event
+class ExcessiveJitter(object):
+	# Define descriptive names. These might be useful later
+	type = "ExcessiveJitter"
+	description = ""
+	def __init__(self, lastPacketReceived,instantaneousJitter, meanJitter_1s, meanJitter_10s):
 
 # Define an event that represent a glitch
 # This will be in the form of the packets (RtpData objects) either side of the 'hole' in received data
@@ -192,6 +197,10 @@ class RtpStream(object):
 		lossOfStreamTimer=0
 		lossOfStreamAlarmThreshold=2
 
+		# datetime object to allow calculation of processing time (to guard against processor overload)
+		calculationStartTime=datetime.timedelta()
+		calculationEndTime=datetime.timedelta()
+
 		# Declare empty list of 'event' objects. This will contain a list of the disruptions relating to this rtpStream object
 		__stats["eventList"] = []
 
@@ -213,6 +222,7 @@ class RtpStream(object):
 
 			# Test for new data
 			if (len(rtpStream) > 0):
+				calculationStartTime=datetime.datetime.now()
 
 				# Take timestamp of the very first packet received of this rtpStream
 				if __stats["totalPacketsReceived"] < 1:
@@ -418,6 +428,18 @@ class RtpStream(object):
 				__stats["totalDataReceivedPerSecond"] = 0
 				__stats["totalPacketsPerSecond"] = 0
 
+			# Calculate how long it has taken for the stats analysis to have been performed
+			calculationEndTime = datetime.datetime.now()
+			try:
+				# Take the calculation time in microseconds and combine with the period between
+				# packets arriving to work out how much processor headroom there is
+				# If the processor can't keep up, generate an event
+				__stats["calculationDuration"] = (calculationEndTime-calculationStartTime).microseconds
+				__stats["processorUtilisationPercent"]=__stats["calculationDuration"] * 100 / __stats["meanRxPeriod"]
+			except Exception as e:
+				pass
+
+
 			# Copy contents of private _stats dictionary into the public dictionary
 			self.stats=__stats.copy()
 
@@ -426,6 +448,8 @@ class RtpStream(object):
 
 			# Empty the rtpStream list
 			del rtpStream
+
+
 			time.sleep(__stats["POLL_INTERVAL"])
 
 	# Define getter methods
@@ -504,7 +528,7 @@ def __rtpGenerator(keyPressed):
 	enablePacketGeneration = True
 	enableJitter = False
 
-	txPeriod = 0.01
+	txPeriod = 0.001
 	jitterPerecentage = 50
 	maxDeviation = txPeriod * jitterPerecentage / 100
 
