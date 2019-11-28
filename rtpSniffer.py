@@ -193,7 +193,7 @@ class RtpStream(object):
 		lossOfStreamAlarmThreshold=2
 
 		# Declare empty list of 'event' objects. This will contain a list of the disruptions relating to this rtpStream object
-		eventList = []
+		__stats["eventList"] = []
 
 		__stats["POLL_INTERVAL"] = 0.1  # Loop will execute every 100mS
 
@@ -218,7 +218,7 @@ class RtpStream(object):
 				if __stats["totalPacketsReceived"] < 1:
 					__stats["firstPacketReceivedAtTimestamp"] = rtpStream[0].timestamp
 					# Add a StreamStarted event to the event list
-					eventList.append(StreamStarted(rtpStream[0]))
+					__stats["eventList"].append(StreamStarted(rtpStream[0]))
 					# Stream now being received so clear flag
 
 				if lossOfStreamFlag==True:
@@ -295,7 +295,7 @@ class RtpStream(object):
 				if __stats["meanJitter_10s"] >0:
 					if __stats["instantaneousJitter"] > (5* __stats["meanJitter_10s"]):
 						print "*******Excessive jitter","\r"
-						eventList.append(ExcessiveJitter(rtpStream[-1],__stats["instantaneousJitter"],__stats["meanJitter_1s"],__stats["meanJitter_10s"]))
+						__stats["eventList"].append(ExcessiveJitter(rtpStream[-1],__stats["instantaneousJitter"],__stats["meanJitter_1s"],__stats["meanJitter_10s"]))
 
 
 				# Glitch Detection ###############################################################
@@ -310,7 +310,7 @@ class RtpStream(object):
 					# Create an object representing the glitch
 					glitch = Glitch(prevRtpPacket, rtpStream[0])
 					# Add the latest glitch to the evenList[]
-					eventList.append(glitch)
+					__stats["eventList"].append(glitch)
 					# Now update aggregate glitch stats
 					__stats["totalPacketsLost"]+=glitch.packetsLost
 					totalGlitchLength+=glitch.glitchLength
@@ -332,7 +332,7 @@ class RtpStream(object):
 						# Create an object representing the glitch
 						glitch = Glitch(prevRtpPacket, rtpPacket)
 						# Add the glitch to the evenList[]
-						eventList.append(glitch)
+						__stats["eventList"].append(glitch)
 						# Now update aggregate glitch stats
 						__stats["totalPacketsLost"] += glitch.packetsLost
 						totalGlitchLength += glitch.glitchLength
@@ -359,7 +359,7 @@ class RtpStream(object):
 					# Set flag
 					lossOfStreamFlag=True
 					# Add event to the list (but only do this once)
-					eventList.append(StreamLost(lastReceivedRtpPacket))
+					__stats["eventList"].append(StreamLost(lastReceivedRtpPacket))
 
 			# Calculate elapsed since last glitch
 			# But only if there has actually been a glitch
@@ -386,7 +386,7 @@ class RtpStream(object):
 				# 	print "__calculateThread: [", secondsElapsed, ":", rtpStream[
 				# 		-1].rtpSequenceNo, "] Packets/s", __stats["totalPacketsPerSecond"], ", Rx bytes/s", __stats["totalDataReceivedPerSecond"], ', Total packets', \
 				# 		__stats["totalPacketsReceived"], ", Total bytes received", __stats["totalDataReceived"], ", event count", len(
-				# 		eventList), "\r"
+				# 		__stats["eventList"]), "\r"
 				# print "totalPacketsLost:", __stats["totalPacketsLost"], ", %loss:", __stats["totalPercentPacketsLost"], ", totalGlitches:", __stats["totalGlitches"], \
 				# 	", totalGlitchLength:", totalGlitchLength, ", meanJitter_1s",__stats["meanJitter_1s"], "\r"
 				# print "minJitter",__stats["minJitter"],", maxJitter ",__stats["maxJitter"], ", rangeOfJitter",__stats["rangeOfJitter"],"\r"
@@ -461,6 +461,9 @@ def __displayThread(rtpStream):
 		for x, y in rtpStream.stats.items():
 			print x, y, "\r"
 
+		for event in rtpStream.stats["eventList"]:
+			print event.type, event.timeCreated, "\r"
+		print "--------------", "\r"
 		time.sleep(1)
 
 # Define a thread that will trap keys pressed
