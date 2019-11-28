@@ -382,19 +382,19 @@ class RtpStream(object):
 
 				# Reset sumOfJitter_1s
 				sumOfJitter_1s=0
-				if (len(rtpStream) > 0):
-					print "__calculateThread: [", secondsElapsed, ":", rtpStream[
-						-1].rtpSequenceNo, "] Packets/s", __stats["totalPacketsPerSecond"], ", Rx bytes/s", __stats["totalDataReceivedPerSecond"], ', Total packets', \
-						__stats["totalPacketsReceived"], ", Total bytes received", __stats["totalDataReceived"], ", event count", len(
-						eventList), "\r"
-				print "totalPacketsLost:", __stats["totalPacketsLost"], ", %loss:", __stats["totalPercentPacketsLost"], ", totalGlitches:", __stats["totalGlitches"], \
-					", totalGlitchLength:", totalGlitchLength, ", meanJitter_1s",__stats["meanJitter_1s"], "\r"
-				print "minJitter",__stats["minJitter"],", maxJitter ",__stats["maxJitter"], ", rangeOfJitter",__stats["rangeOfJitter"],"\r"
-				# print "__stats["firstPacketReceivedAtTimestamp"]:", __stats["firstPacketReceivedAtTimestamp"], "\r"
-				print "Events--------------", "\r"
-				for event in eventList:
-					print event.type, event.timeCreated, "\r"
-				print "--------------", "\r"
+				# if (len(rtpStream) > 0):
+				# 	print "__calculateThread: [", secondsElapsed, ":", rtpStream[
+				# 		-1].rtpSequenceNo, "] Packets/s", __stats["totalPacketsPerSecond"], ", Rx bytes/s", __stats["totalDataReceivedPerSecond"], ', Total packets', \
+				# 		__stats["totalPacketsReceived"], ", Total bytes received", __stats["totalDataReceived"], ", event count", len(
+				# 		eventList), "\r"
+				# print "totalPacketsLost:", __stats["totalPacketsLost"], ", %loss:", __stats["totalPercentPacketsLost"], ", totalGlitches:", __stats["totalGlitches"], \
+				# 	", totalGlitchLength:", totalGlitchLength, ", meanJitter_1s",__stats["meanJitter_1s"], "\r"
+				# print "minJitter",__stats["minJitter"],", maxJitter ",__stats["maxJitter"], ", rangeOfJitter",__stats["rangeOfJitter"],"\r"
+				# # print "__stats["firstPacketReceivedAtTimestamp"]:", __stats["firstPacketReceivedAtTimestamp"], "\r"
+				# print "Events--------------", "\r"
+				# for event in eventList:
+				# 	print event.type, event.timeCreated, "\r"
+				# print "--------------", "\r"
 
 				# 10 second timer to calculate 10s jitter moving average
 				# if secondsElapsed % 10 > (10-2):
@@ -410,9 +410,7 @@ class RtpStream(object):
 					for x in historicJitter:
 						sumOfJitter_10s += x
 					__stats["meanJitter_10s"]=sumOfJitter_10s/len(historicJitter)
-				print "instantaneousJitter",__stats["instantaneousJitter"],", meanJitter_1s",__stats["meanJitter_1s"],", meanJitter_10s",__stats["meanJitter_10s"],"\r"
-				print "--------------", "\r"
-				print "--------------", "\r"
+				# print "instantaneousJitter",__stats["instantaneousJitter"],", meanJitter_1s",__stats["meanJitter_1s"],", meanJitter_10s",__stats["meanJitter_10s"],"\r"
 				# for x,y in __stats.items():
 				# 	print x,y,"\r"
 
@@ -420,23 +418,15 @@ class RtpStream(object):
 				__stats["totalDataReceivedPerSecond"] = 0
 				__stats["totalPacketsPerSecond"] = 0
 
+			# Copy contents of private _stats dictionary into the public dictionary
+			self.stats=__stats.copy()
+
 			# Increment loop counter
 			loopCounter += 1
 
 			# Empty the rtpStream list
 			del rtpStream
 			time.sleep(__stats["POLL_INTERVAL"])
-
-	# Define a private display method that will run autonomously as a thread
-	def __displayThread(self,rtpStream):
-		print "__displayThread started with id: ", self.__streamID, "\r"
-
-
-		while True:
-			for x, y in s.__stats.items():
-				print x, y, "\r"
-
-			time.sleep(1)
 
 	# Define getter methods
 	def getRTPStreamID(self):
@@ -463,6 +453,15 @@ class RtpStream(object):
 		# Now we've added the newData object to the list rtpStreamData[] we cab delete the newData object
 		del newData
 
+# Define a display thread that will run autonomously
+def __displayThread(rtpStream):
+	print "__displayThread started with id: ", rtpStream.getRTPStreamID(), "\r"
+
+	while True:
+		for x, y in rtpStream.stats.items():
+			print x, y, "\r"
+
+		time.sleep(1)
 
 # Define a thread that will trap keys pressed
 def __catchKeyboardPresses(keyPressed):
@@ -632,9 +631,9 @@ def main():
 				s = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort)
 
 				# Create a __displayThread. Pass the RtpStream object (s) to it
-				self.displayThread = threading.Thread(target=self.__displayThread, args=(s,))
-				self.displayThread.daemon = True  # Thread will auto shutdown when the prog ends
-				self.displayThread.start()
+				displayThread = threading.Thread(target=__displayThread, args=(s,))
+				displayThread.daemon = True  # Thread will auto shutdown when the prog ends
+				displayThread.start()
 
 				runOnce = False
 
