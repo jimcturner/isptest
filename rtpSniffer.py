@@ -141,11 +141,6 @@ class RtpStream(object):
 		# Create empty dictionary to hold publicly accessible stats for this RtpStream object
 		self.stats= {}
 
-		# Create a __displayThread
-		self.displayThread = threading.Thread(target=self.__displayThread, args=())
-		self.displayThread.daemon = True  # Thread will auto shutdown when the prog ends
-		self.displayThread.start()
-
 		# Create a __calculateThread
 		self.calculateThread = threading.Thread(target=self.__calculateThread, args=())
 		self.calculateThread.daemon = True  # Thread will auto shutdown when the prog ends
@@ -418,8 +413,8 @@ class RtpStream(object):
 				print "instantaneousJitter",__stats["instantaneousJitter"],", meanJitter_1s",__stats["meanJitter_1s"],", meanJitter_10s",__stats["meanJitter_10s"],"\r"
 				print "--------------", "\r"
 				print "--------------", "\r"
-				for x,y in __stats.items():
-					print x,y,"\r"
+				# for x,y in __stats.items():
+				# 	print x,y,"\r"
 
 				# Now clear totalDataReceivedPerInterval for the next time around the loop
 				__stats["totalDataReceivedPerSecond"] = 0
@@ -433,12 +428,13 @@ class RtpStream(object):
 			time.sleep(__stats["POLL_INTERVAL"])
 
 	# Define a private display method that will run autonomously as a thread
-	def __displayThread(self):
+	def __displayThread(self,rtpStream):
 		print "__displayThread started with id: ", self.__streamID, "\r"
-		x = 0
+
 
 		while True:
-			# print "__displayThread running..."
+			for x, y in s.__stats.items():
+				print x, y, "\r"
 
 			time.sleep(1)
 
@@ -596,6 +592,8 @@ def main():
 	rtpGenerator.daemon = True  # Thread will auto shutdown when the prog ends
 	rtpGenerator.start()
 
+
+
 	while True:
 		# recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
 		data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
@@ -632,6 +630,12 @@ def main():
 			if (runOnce == True):
 				# Create a new rtpStream object (but only once)
 				s = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort)
+
+				# Create a __displayThread. Pass the RtpStream object (s) to it
+				self.displayThread = threading.Thread(target=self.__displayThread, args=(s,))
+				self.displayThread.daemon = True  # Thread will auto shutdown when the prog ends
+				self.displayThread.start()
+
 				runOnce = False
 
 			# Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp
