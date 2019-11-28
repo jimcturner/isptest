@@ -94,12 +94,15 @@ class ExcessiveJitter(object):
 		self.meanJitter_1s=meanJitter_1s
 		self.meanJitter_10s=meanJitter_10s
 
-# Define an event object that represents a excessive jitter event
-class ExcessiveJitter(object):
+# Define an event object that represents a procesor overload. This might happen if the calculateThread can't process
+# incoming packets fast enough
+class ProcessorOverload(object):
 	# Define descriptive names. These might be useful later
-	type = "ExcessiveJitter"
+	type = "ProcessorOverload"
 	description = ""
-	def __init__(self, lastPacketReceived,instantaneousJitter, meanJitter_1s, meanJitter_10s):
+	def __init__(self, lastPacketReceived):
+		self.timeCreated = datetime.datetime.now()
+		self.lastPacketReceived = lastPacketReceived
 
 # Define an event that represent a glitch
 # This will be in the form of the packets (RtpData objects) either side of the 'hole' in received data
@@ -436,6 +439,10 @@ class RtpStream(object):
 				# If the processor can't keep up, generate an event
 				__stats["calculationDuration"] = (calculationEndTime-calculationStartTime).microseconds
 				__stats["processorUtilisationPercent"]=__stats["calculationDuration"] * 100 / __stats["meanRxPeriod"]
+
+				# If the CPU is >99% utilised, add event to the list (but only do this once)
+				if __stats["processorUtilisationPercent"] > 99:
+					__stats["eventList"].append(ProcessorOverload(lastReceivedRtpPacket))
 			except Exception as e:
 				pass
 
