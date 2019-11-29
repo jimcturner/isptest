@@ -142,12 +142,17 @@ class RtpStream(object):
 		# Create a mutex lock to be used by the a thread
 		# To set the lock use: __accessRtpDataMutex.acquire(), To release use: __accessRtpDataMutex.release()
 		self.__accessRtpDataMutex = threading.Lock()
+		self.__accessRtpStreamStatsMutex=threading.Lock()
+		self.__accessRtpStreamEventListMutex=threading.Lock()
 
 		# Create empty list to hold rtp stream data as it is received by the socket
 		self.rtpStreamData = []
 
-		# Create empty dictionary to hold publicly accessible stats for this RtpStream object
-		self.stats= {}
+		# Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
+		self.__stats = {}
+
+		# Create private empty list to hold Events for this RtpStream object. Accessible via a getter method
+		self.__eventList = []
 
 		# Create a __calculateThread
 		self.calculateThread = threading.Thread(target=self.__calculateThread, args=())
@@ -159,58 +164,47 @@ class RtpStream(object):
 	# This thread will
 	def __calculateThread(self):
 		print "__calculateThread started with id: ", self.__streamID, "\r"
-		# Create a dictionary to contain all calculated stats
-		# This dictionary is private but will be copied to the public stats{} dictionary by the getter method
-		__stats = {}
 
 		# Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
 		lastReceivedRtpPacket=RtpData(0, 0, datetime.timedelta())
-		__stats["firstPacketReceivedAtTimestamp"] = datetime.timedelta()
-
+		self.__stats["firstPacketReceivedAtTimestamp"] = datetime.timedelta()
 
 		# General Counters
 		loopCounter = 0
-		__stats["totalPacketsPerSecond"]= 0
-		__stats["totalDataReceivedPerSecond"] = 0
-		__stats["totalDataReceived"] = 0
-		__stats["totalPacketsReceived"] = 0
+		self.__stats["totalPacketsPerSecond"]= 0
+		self.__stats["totalDataReceivedPerSecond"] = 0
+		self.__stats["totalDataReceived"] = 0
+		self.__stats["totalPacketsReceived"] = 0
 		secondsElapsed = 0
 
 		# Glitch counters
-		__stats["totalPercentPacketsLost"] = 0
-		__stats["totalPacketsLost"] = 0
-		__stats["totalGlitches"] = 0
+		self.__stats["totalPercentPacketsLost"] = 0
+		self.__stats["totalPacketsLost"] = 0
+		self.__stats["totalGlitches"] = 0
 		# define timedelta object to store an aggregate of of Glitch length
 		totalGlitchLength = datetime.timedelta()
-		__stats["timestampOfLastGlitch"]=datetime.timedelta()
-		__stats["timeElapsedSinceLastGlitch"]=datetime.timedelta()
+		self.__stats["timestampOfLastGlitch"]=datetime.timedelta()
+		self.__stats["timeElapsedSinceLastGlitch"]=datetime.timedelta()
 
 		# Jitter counters
-		__stats["minJitter"]=0
-		__stats["maxJitter"]=0
-		__stats["rangeOfJitter"]=0
-		__stats["instantaneousJitter"]=0
-		__stats["meanJitter_1s"]=0
+		self.__stats["minJitter"]=0
+		self.__stats["maxJitter"]=0
+		self.__stats["rangeOfJitter"]=0
+		self.__stats["instantaneousJitter"]=0
+		self.__stats["meanJitter_1s"]=0
 		sumOfJitter_1s=0
 		averageRtpPacketArrivalPeriod=datetime.timedelta()
 		historicJitter = []
-		__stats["meanJitter_10s"]=0
+		self.__stats["meanJitter_10s"]=0
 		# Declare flags
 		lossOfStreamFlag = True
 		lossOfStreamTimer=0
 		lossOfStreamAlarmThreshold=2
 
-		# datetime object to allow calculation of processing time (to guard against processor overload)
-		calculationStartTime=datetime.timedelta()
-		calculationEndTime=datetime.timedelta()
-
-		# Declare empty list of 'event' objects. This will contain a list of the disruptions relating to this rtpStream object
-		__eventList= []
-
-		__stats["POLL_INTERVAL"] = 0.1  # Loop will execute every 100mS
+		self.__stats["POLL_INTERVAL"] = 0.1  # Loop will execute every 100mS
 
 		# Calculate the no of loops equating to a second
-		loopsPerSecond = 1 / __stats["POLL_INTERVAL"]
+		loopsPerSecond = 1 / self.__stats["POLL_INTERVAL"]
 
 		while True:
 			# Lock the access mutex
@@ -225,14 +219,17 @@ class RtpStream(object):
 
 			# Take a timestamp in order to calculate the processor time required for packet analysis
 			calculationStartTime = datetime.datetime.now()
+			# Lock self.__stats and self.__eventList mutexes
+			self.__accessRtpStreamStatsMutex.acquire()
+			self.__accessRtpStreamEventListMutex.acquire()
 			# Test for new data
 			if (len(rtpStream) > 0):
 
 				# Take timestamp of the very first packet received of this rtpStream
-				if __stats["totalPacketsReceived"] < 1:
-					__stats["firstPacketReceivedAtTimestamp"] = rtpStream[0].timestamp
+				if self.__stats["totalPacketsReceived"] < 1:
+					self.__stats["firstPacketReceivedAtTimestamp"] = rtpStream[0].timestamp
 					# Add a StreamStarted event to the event list
-					__eventList.append(StreamStarted(rtpStream[0]))
+					self.__eventList.append(StreamStarted(rtpStream[0]))
 					# Stream now being received so clear flag
 
 				if lossOfStreamFlag==True:
@@ -243,7 +240,7 @@ class RtpStream(object):
 
 
 				# Get timestamp of final packet of prev data set
-				if(__stats["totalPacketsReceived"]<1):
+				if(self.__stats["totalPacketsReceived"]<1):
 					# For the very first packet, take the prev packet to be that of the first packet received (to give a
 					# delta of zero, otherwise the delta will be the diff between 0 and today's date!
 					prevX=rtpStream[0]
@@ -257,9 +254,9 @@ class RtpStream(object):
 				sumOfTimeDeltas =0
 				for x in rtpStream:
 					# Per second counter
-					__stats["totalDataReceivedPerSecond"] += x.payloadSize
+					self.__stats["totalDataReceivedPerSecond"] += x.payloadSize
 					# Total aggregate
-					__stats["totalDataReceived"] += x.payloadSize
+					self.__stats["totalDataReceived"] += x.payloadSize
 					# Calculate and write time delta into RtpData object
 					x.timeDelta = x.timestamp - prevX.timestamp
 
@@ -271,18 +268,18 @@ class RtpStream(object):
 					# Calculate minimum and maximum jitter
 					# But wait until 'steady' state reached by testing for loopCounter>1
 					if loopCounter>1:
-						if __stats["minJitter"] == 0:
+						if self.__stats["minJitter"] == 0:
 							# Set initial value
-							__stats["minJitter"] =x.jitter
-						if x.jitter < __stats["minJitter"]:
-							__stats["minJitter"] = x.jitter
+							self.__stats["minJitter"] =x.jitter
+						if x.jitter < self.__stats["minJitter"]:
+							self.__stats["minJitter"] = x.jitter
 						# Calculate maximum jitter
-						if __stats["maxJitter"] == 0:
+						if self.__stats["maxJitter"] == 0:
 							# Set initial value
-							__stats["maxJitter"] = x.jitter
-						if x.jitter > __stats["maxJitter"]:
-							__stats["maxJitter"] = x.jitter
-						__stats["rangeOfJitter"]=__stats["maxJitter"]-__stats["minJitter"]
+							self.__stats["maxJitter"] = x.jitter
+						if x.jitter > self.__stats["maxJitter"]:
+							self.__stats["maxJitter"] = x.jitter
+						self.__stats["rangeOfJitter"]=self.__stats["maxJitter"]-self.__stats["minJitter"]
 
 					# Sum the abs interPacketJitter values  for the subsequent jitter calculation
 					# For 'instantaneous' jitter value
@@ -300,35 +297,35 @@ class RtpStream(object):
 				# and also the mean time period between packets arriving (should, on average match the rtp
 				# generator period)
 				if len(rtpStream)>1:
-					__stats["instantaneousJitter"]=sumOfInterPacketJitter/(len(rtpStream)-1)
-					__stats["meanRxPeriod"]=sumOfTimeDeltas/(len(rtpStream)-1)
+					self.__stats["instantaneousJitter"]=sumOfInterPacketJitter/(len(rtpStream)-1)
+					self.__stats["meanRxPeriod"]=sumOfTimeDeltas/(len(rtpStream)-1)
 
-				# print 	"minJitter",__stats["minJitter"],", maxJitter",__stats["maxJitter"],", instantaneousJitter",__stats["instantaneousJitter"],"\r"
+				# print 	"minJitter",self.__stats["minJitter"],", maxJitter",self.__stats["maxJitter"],", instantaneousJitter",self.__stats["instantaneousJitter"],"\r"
 				# Now attempt to detect excessive jitter by comparing the instantaneous value with the 10s averaged value
 				# Check that 10s value has actually been calculated
-				if __stats["meanJitter_10s"] >0:
-					if __stats["instantaneousJitter"] > (5* __stats["meanJitter_10s"]):
+				if self.__stats["meanJitter_10s"] >0:
+					if self.__stats["instantaneousJitter"] > (5* self.__stats["meanJitter_10s"]):
 						print "*******Excessive jitter","\r"
-						__eventList.append(ExcessiveJitter(rtpStream[-1],__stats["instantaneousJitter"],__stats["meanJitter_1s"],__stats["meanJitter_10s"]))
+						self.__eventList.append(ExcessiveJitter(rtpStream[-1],self.__stats["instantaneousJitter"],self.__stats["meanJitter_1s"],self.__stats["meanJitter_10s"]))
 
 
 				# Glitch Detection ###############################################################
 				# Test for out of sequence packet by comparing last received sequence no with that of first rtpObject in new list of data in rtpStream[]
 				# This musn't run the first time around the loop (because there's nothing to compare the first packet to)
-				if (lastReceivedRtpPacket.rtpSequenceNo != (rtpStream[0].rtpSequenceNo - 1)) and (__stats["totalPacketsReceived"] > 0):
+				if (lastReceivedRtpPacket.rtpSequenceNo != (rtpStream[0].rtpSequenceNo - 1)) and (self.__stats["totalPacketsReceived"] > 0):
 					# Take timestamp of most recent glitch
-					__stats["timestampOfLastGlitch"] = datetime.datetime.now()
-					print __stats["timestampOfLastGlitch"], " Out of sequence packet received between data sets. Expected sequence no", (
+					self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
+					print self.__stats["timestampOfLastGlitch"], " Out of sequence packet received between data sets. Expected sequence no", (
 							prevRtpPacket.rtpSequenceNo + 1), " but received ", rtpStream[0].rtpSequenceNo, "\r"
 					# Capture packets either side of the 'hole' and store them in the event list
 					# Create an object representing the glitch
 					glitch = Glitch(prevRtpPacket, rtpStream[0])
 					# Add the latest glitch to the evenList[]
-					__eventList.append(glitch)
+					self.__eventList.append(glitch)
 					# Now update aggregate glitch stats
-					__stats["totalPacketsLost"]+=glitch.packetsLost
+					self.__stats["totalPacketsLost"]+=glitch.packetsLost
 					totalGlitchLength+=glitch.glitchLength
-					__stats["totalGlitches"]+=1
+					self.__stats["totalGlitches"]+=1
 
 				# Now test for sequence errors within current data set
 				# Take a copy of the first item in the list
@@ -338,19 +335,19 @@ class RtpStream(object):
 					# Test sequence no of current packet against previous packet
 					if rtpPacket.rtpSequenceNo != (prevRtpPacket.rtpSequenceNo + 1):
 						# Take timestamp of most recent glitch
-						__stats["timestampOfLastGlitch"] = datetime.datetime.now()
-						print __stats["timestampOfLastGlitch"], " Out of sequence packet received (within current data set). Expected sequence no", (
+						self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
+						print self.__stats["timestampOfLastGlitch"], " Out of sequence packet received (within current data set). Expected sequence no", (
 								prevRtpPacket.rtpSequenceNo + 1), " but received ", rtpPacket.rtpSequenceNo, "\r"
 
 						# Capture packets either side of the 'hole' and store them in the event list
 						# Create an object representing the glitch
 						glitch = Glitch(prevRtpPacket, rtpPacket)
 						# Add the glitch to the evenList[]
-						__eventList.append(glitch)
+						self.__eventList.append(glitch)
 						# Now update aggregate glitch stats
-						__stats["totalPacketsLost"] += glitch.packetsLost
+						self.__stats["totalPacketsLost"] += glitch.packetsLost
 						totalGlitchLength += glitch.glitchLength
-						__stats["totalGlitches"] += 1
+						self.__stats["totalGlitches"] += 1
 					# Store current rtp packet for the next iteration around the loop
 					prevRtpPacket = rtpPacket
 
@@ -360,30 +357,30 @@ class RtpStream(object):
 
 				# Get number of packets received (from list length)
 				# Per second counter
-				__stats["totalPacketsPerSecond"] += len(rtpStream)
+				self.__stats["totalPacketsPerSecond"] += len(rtpStream)
 				# Total aggregate
-				__stats["totalPacketsReceived"] += len(rtpStream)
+				self.__stats["totalPacketsReceived"] += len(rtpStream)
 
 			else:
 				# No data, so set lossOfStreamFlag (unless it's already been set)
 				# Check for changes and that we also have an active stream. If so, set the flag and add an event to the eventlist
 				lossOfStreamTimer +=1
 				if lossOfStreamTimer > (lossOfStreamAlarmThreshold * loopsPerSecond)\
-					and lossOfStreamFlag==False and __stats["totalPacketsReceived"]>0:
+					and lossOfStreamFlag==False and self.__stats["totalPacketsReceived"]>0:
 					# Set flag
 					lossOfStreamFlag=True
 					# Add event to the list (but only do this once)
-					__eventList.append(StreamLost(lastReceivedRtpPacket))
+					self.__eventList.append(StreamLost(lastReceivedRtpPacket))
 
 			# Calculate elapsed since last glitch
 			# But only if there has actually been a glitch
-			if __stats["totalGlitches"] >0:
-				__stats["timeElapsedSinceLastGlitch"] = datetime.datetime.now() - __stats["timestampOfLastGlitch"]
+			if self.__stats["totalGlitches"] >0:
+				self.__stats["timeElapsedSinceLastGlitch"] = datetime.datetime.now() - self.__stats["timestampOfLastGlitch"]
 
 			# Calculate % packet loss
-			if __stats["totalPacketsReceived"]>0:
-				totalExpectedPackets = __stats["totalPacketsReceived"]+__stats["totalPacketsLost"]
-				__stats["totalPercentPacketsLost"] = __stats["totalPacketsLost"]*100/totalExpectedPackets
+			if self.__stats["totalPacketsReceived"]>0:
+				totalExpectedPackets = self.__stats["totalPacketsReceived"]+self.__stats["totalPacketsLost"]
+				self.__stats["totalPercentPacketsLost"] = self.__stats["totalPacketsLost"]*100/totalExpectedPackets
 
 			# 1 second timer
 			# Take modulus of loopcounter to give a one-second timer
@@ -391,20 +388,20 @@ class RtpStream(object):
 				# Increment seconds elapsed
 				secondsElapsed += 1
 				# Calculate 1 second jitter
-				if __stats["totalPacketsPerSecond"]>0:
-					__stats["meanJitter_1s"]=sumOfJitter_1s/__stats["totalPacketsPerSecond"]
+				if self.__stats["totalPacketsPerSecond"]>0:
+					self.__stats["meanJitter_1s"]=sumOfJitter_1s/self.__stats["totalPacketsPerSecond"]
 
 				# Reset sumOfJitter_1s
 				sumOfJitter_1s=0
 				# if (len(rtpStream) > 0):
 				# 	print "__calculateThread: [", secondsElapsed, ":", rtpStream[
-				# 		-1].rtpSequenceNo, "] Packets/s", __stats["totalPacketsPerSecond"], ", Rx bytes/s", __stats["totalDataReceivedPerSecond"], ', Total packets', \
-				# 		__stats["totalPacketsReceived"], ", Total bytes received", __stats["totalDataReceived"], ", event count", len(
-				# 		__eventList), "\r"
-				# print "totalPacketsLost:", __stats["totalPacketsLost"], ", %loss:", __stats["totalPercentPacketsLost"], ", totalGlitches:", __stats["totalGlitches"], \
-				# 	", totalGlitchLength:", totalGlitchLength, ", meanJitter_1s",__stats["meanJitter_1s"], "\r"
-				# print "minJitter",__stats["minJitter"],", maxJitter ",__stats["maxJitter"], ", rangeOfJitter",__stats["rangeOfJitter"],"\r"
-				# # print "__stats["firstPacketReceivedAtTimestamp"]:", __stats["firstPacketReceivedAtTimestamp"], "\r"
+				# 		-1].rtpSequenceNo, "] Packets/s", self.__stats["totalPacketsPerSecond"], ", Rx bytes/s", self.__stats["totalDataReceivedPerSecond"], ', Total packets', \
+				# 		self.__stats["totalPacketsReceived"], ", Total bytes received", self.__stats["totalDataReceived"], ", event count", len(
+				# 		self.__eventList), "\r"
+				# print "totalPacketsLost:", self.__stats["totalPacketsLost"], ", %loss:", self.__stats["totalPercentPacketsLost"], ", totalGlitches:", self.__stats["totalGlitches"], \
+				# 	", totalGlitchLength:", totalGlitchLength, ", meanJitter_1s",self.__stats["meanJitter_1s"], "\r"
+				# print "minJitter",self.__stats["minJitter"],", maxJitter ",self.__stats["maxJitter"], ", rangeOfJitter",self.__stats["rangeOfJitter"],"\r"
+				# # print "self.__stats["firstPacketReceivedAtTimestamp"]:", self.__stats["firstPacketReceivedAtTimestamp"], "\r"
 				# print "Events--------------", "\r"
 				# for event in eventList:
 				# 	print event.type, event.timeCreated, "\r"
@@ -413,7 +410,7 @@ class RtpStream(object):
 				# 10 second timer to calculate 10s jitter moving average
 				# if secondsElapsed % 10 > (10-2):
 				# Add the latest 1s jitter value to the moving 10s jitter results array
-				historicJitter.append(__stats["meanJitter_1s"])
+				historicJitter.append(self.__stats["meanJitter_1s"])
 				# Check that we have enough results (10s worth) to calculate the 10s value
 				if len(historicJitter)>10:
 					# Remove the oldest value
@@ -423,14 +420,14 @@ class RtpStream(object):
 					# Calculate mean of previous 10 1s jitter values
 					for x in historicJitter:
 						sumOfJitter_10s += x
-					__stats["meanJitter_10s"]=sumOfJitter_10s/len(historicJitter)
-				# print "instantaneousJitter",__stats["instantaneousJitter"],", meanJitter_1s",__stats["meanJitter_1s"],", meanJitter_10s",__stats["meanJitter_10s"],"\r"
-				# for x,y in __stats.items():
+					self.__stats["meanJitter_10s"]=sumOfJitter_10s/len(historicJitter)
+				# print "instantaneousJitter",self.__stats["instantaneousJitter"],", meanJitter_1s",self.__stats["meanJitter_1s"],", meanJitter_10s",self.__stats["meanJitter_10s"],"\r"
+				# for x,y in self.__stats.items():
 				# 	print x,y,"\r"
 
 				# Now clear totalDataReceivedPerInterval for the next time around the loop
-				__stats["totalDataReceivedPerSecond"] = 0
-				__stats["totalPacketsPerSecond"] = 0
+				self.__stats["totalDataReceivedPerSecond"] = 0
+				self.__stats["totalPacketsPerSecond"] = 0
 
 			# Calculate how long it has taken for the stats analysis to have been performed
 			calculationEndTime = datetime.datetime.now()
@@ -438,21 +435,18 @@ class RtpStream(object):
 				# Take the calculation time in microseconds and combine with the period between
 				# packets arriving to work out how much processor headroom there is
 				# If the processor can't keep up, generate an event
-				__stats["calculationDuration"] = (calculationEndTime-calculationStartTime).microseconds
-				__stats["processorUtilisationPercent"]=__stats["calculationDuration"] * 100 / __stats["meanRxPeriod"]
+				self.__stats["calculationDuration"] = (calculationEndTime-calculationStartTime).microseconds
+				self.__stats["processorUtilisationPercent"]=self.__stats["calculationDuration"] * 100 / self.__stats["meanRxPeriod"]
 
 				# If the CPU is >99% utilised, add event to the list (but only do this once)
-				if __stats["processorUtilisationPercent"] > 99:
-					__eventList.append(ProcessorOverload(lastReceivedRtpPacket))
+				if self.__stats["processorUtilisationPercent"] > 99:
+					self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket))
 			except Exception as e:
 				pass
 
-
-			# Copy contents of private _stats dictionary into the public dictionary
-			self.stats=__stats.copy()
-
-			# Copy eventList into a publicly accessible list
-			self.eventList=list(__eventList)
+			# Unlock  self.__stats and self.__eventList mutexes
+			self.__accessRtpStreamStatsMutex.release()
+			self.__accessRtpStreamEventListMutex.release()
 
 			# Increment loop counter
 			loopCounter += 1
@@ -460,12 +454,26 @@ class RtpStream(object):
 			# Empty the rtpStream list
 			del rtpStream
 
-
-			time.sleep(__stats["POLL_INTERVAL"])
+			time.sleep(self.__stats["POLL_INTERVAL"])
 
 	# Define getter methods
 	def getRTPStreamID(self):
 		return self.__streamID
+
+	# Thread-safe method for accessing realtime RtpStream stats
+	def getRtpStreamStats(self):
+		self.__accessRtpStreamStatsMutex.acquire()
+		stats = self.__stats.copy()
+		self.__accessRtpStreamStatsMutex.release()
+		return stats
+
+	# Thread-safe method for accessing realtime RtpStream eventList
+	def getRTPStreamEventList(self):
+		self.__accessRtpStreamEventListMutex.acquire()
+		eventList=list(self.__eventList)
+		self.__accessRtpStreamEventListMutex.release()
+		return eventList
+
 
 	# Define setter methods
 	def addData(self, rtpSequenceNo, payloadSize, timestamp):
@@ -493,10 +501,10 @@ def __displayThread(rtpStream):
 	print "__displayThread started with id: ", rtpStream.getRTPStreamID(), "\r"
 
 	while True:
-		for x, y in rtpStream.stats.items():
+		for x, y in rtpStream.getRtpStreamStats().items():
 			print x, y, "\r"
 
-		for event in rtpStream.eventList:
+		for event in rtpStream.getRTPStreamEventList():
 			print event.type, event.timeCreated, "\r"
 		print "--------------", "\r"
 		time.sleep(1)
