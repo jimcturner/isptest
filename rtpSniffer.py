@@ -201,7 +201,7 @@ class RtpStream(object):
 		lossOfStreamTimer=0
 		lossOfStreamAlarmThreshold=2
 
-		self.__stats["POLL_INTERVAL"] = 0.1  # Loop will execute every 100mS
+		self.__stats["POLL_INTERVAL"] = 0.01  # Loop will execute every 10mS
 
 		# Calculate the no of loops equating to a second
 		loopsPerSecond = 1 / self.__stats["POLL_INTERVAL"]
@@ -304,7 +304,7 @@ class RtpStream(object):
 				# Now attempt to detect excessive jitter by comparing the instantaneous value with the 10s averaged value
 				# Check that 10s value has actually been calculated
 				if self.__stats["meanJitter_10s"] >0:
-					if self.__stats["instantaneousJitter"] > (5* self.__stats["meanJitter_10s"]):
+					if self.__stats["instantaneousJitter"] > (10* self.__stats["meanJitter_10s"]):
 						print "*******Excessive jitter","\r"
 						self.__eventList.append(ExcessiveJitter(rtpStream[-1],self.__stats["instantaneousJitter"],self.__stats["meanJitter_1s"],self.__stats["meanJitter_10s"]))
 
@@ -547,14 +547,13 @@ def __rtpGenerator(keyPressed):
 	enablePacketGeneration = True
 	enableJitter = False
 
-	txPeriod = 0.001
+	txPeriod = 0.10
 	jitterPerecentage = 50
 	maxDeviation = txPeriod * jitterPerecentage / 100
 
 	while True:
 
-		txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
-								  rtpSyncSourceIdentifier)
+		txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,rtpSyncSourceIdentifier)
 		MESSAGE = txRtpHeader + payload
 
 		# If 'z' pressed, toggle packet generation on/off
@@ -598,6 +597,7 @@ def __rtpGenerator(keyPressed):
 
 		# Increment rtp sequence number for next iteration of the loop
 		rtpSequenceNo += 1
+		# print "rtpSequenceNo",rtpSequenceNo,"\r"
 		# If flag set, generate random delay centred around txPeriod (0.01 = 10mS period)
 		if enableJitter==True:
 			jitter=random.uniform(-1*maxDeviation,maxDeviation)
