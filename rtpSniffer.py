@@ -286,6 +286,9 @@ class RtpStream(object):
         loopCounter = 0
         # Start the loop timer (used to provide a 1sec interval)
         loopTimerStart = datetime.datetime.now()
+        # Timer used to detect loss of streams against an alarm threshold
+        lossOfStreamTimerStart=datetime.timedelta()
+
         runningTotalPacketsPerSecond = 0
         runningTotalDataReceivedPerSecond = 0
 
@@ -316,7 +319,7 @@ class RtpStream(object):
         self.__stats["meanJitter_10s"] = 0
         # Declare flags
         lossOfStreamFlag = True
-        lossOfStreamTimer = 0
+        possibleLossOfStreamFlag = False
         lossOfStreamAlarmThreshold = 2
 
         self.__stats["POLL_INTERVAL"] = 0.1  # Loop will execute every 10mS
@@ -343,7 +346,7 @@ class RtpStream(object):
             self.__accessRtpStreamEventListMutex.acquire()
             # Test for new data
             if len(self.rtpStream) > 0:
-
+                # Data is present
                 # Take timestamp of the very first packet received of this rtpStream
                 if self.__stats["totalPacketsReceived"] < 1:
                     self.__stats["firstPacketReceivedAtTimestamp"] = self.rtpStream[0].timestamp
@@ -354,8 +357,9 @@ class RtpStream(object):
                 if lossOfStreamFlag == True:
                     # We're now receiving a stream, so clear alarm flag
                     lossOfStreamFlag = False
-                    # Reset loss of stream timer
-                    lossOfStreamTimer = 0
+
+                if possibleLossOfStreamFlag == True:
+                    possibleLossOfStreamFlag = False
 
                 # Get copy of final packet of prev data set
                 if (self.__stats["totalPacketsReceived"] < 1):
@@ -389,8 +393,15 @@ class RtpStream(object):
             else:
                 # No data, so set lossOfStreamFlag (unless it's already been set)
                 # Check for changes and that we also have an active stream. If so, set the flag and add an event to the eventlist
-                lossOfStreamTimer += 1
-                if lossOfStreamTimer > (lossOfStreamAlarmThreshold * loopsPerSecond) \
+                #lossOfStreamTimer += 1
+
+                if possibleLossOfStreamFlag == False:
+                    # Set the flag
+                    possibleLossOfStreamFlag = True
+                    # And start the lossOfStream Timer
+                    lossOfStreamTimerStart=datetime.datetime.now()
+
+                if (datetime.datetime.now()-lossOfStreamTimerStart).seconds >= lossOfStreamAlarmThreshold \
                         and lossOfStreamFlag == False and self.__stats["totalPacketsReceived"] > 0:
                     # Set flag
                     lossOfStreamFlag = True
