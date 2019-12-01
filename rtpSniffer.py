@@ -162,7 +162,7 @@ class RtpStream(object):
 		self.calculateThread.daemon = True  # Thread will auto shutdown when the prog ends
 		self.calculateThread.start()
 
-	def __calculateJitter(self,prevRtpPacket,loopCounter):
+	def __calculateJitter(self,prevRtpPacket):
 		# Iterate over self.rtpStream to get total count of data received in this batch of data, no. of packets and also calculate
 		# rx time deltas and jitter
 		sumOfInterPacketJitter = 0
@@ -177,8 +177,8 @@ class RtpStream(object):
 			x.jitter = x.timeDelta.microseconds - prevRtpPacket.timeDelta.microseconds
 			# print x.timestamp,x.timeDelta,x.jitter,"\r"
 			# Calculate minimum and maximum jitter
-			# But wait until 'steady' state reached by testing for loopCounter>1
-			if loopCounter > 1:
+			# But wait until 'steady' state reached by testing for totalPacketsReceived>10
+			if self.__stats["totalPacketsReceived"] > 10:
 				if self.__stats["minJitter"] == 0:
 					# Set initial value
 					self.__stats["minJitter"] = x.jitter
@@ -222,6 +222,51 @@ class RtpStream(object):
 				self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats["instantaneousJitter"],
 														self.__stats["meanJitter_1s"], self.__stats["meanJitter_10s"]))
 
+	def __detectGlitches(self,lastReceivedRtpPacket):
+		# Test for out of sequence packet by comparing last received sequence no with that of first rtpObject in new list of data in self.rtpStream[]
+		# This musn't run the first time around the loop (because there's nothing to compare the first packet to)
+		if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and (
+				self.__stats["totalPacketsReceived"] > 0):
+			# Take timestamp of most recent glitch
+			self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
+			print self.__stats[
+				"timestampOfLastGlitch"], " Out of sequence packet received between data sets. Expected sequence no", (
+					lastReceivedRtpPacket.rtpSequenceNo + 1), " but received ", self.rtpStream[0].rtpSequenceNo, "\r"
+			# Capture packets either side of the 'hole' and store them in the event list
+			# Create an object representing the glitch
+			glitch = Glitch(lastReceivedRtpPacket, self.rtpStream[0])
+			# Add the latest glitch to the evenList[]
+			self.__eventList.append(glitch)
+			# Now update aggregate glitch stats
+			self.__stats["totalPacketsLost"] += glitch.packetsLost
+			self.__stats["totalGlitchLength"] += glitch.glitchLength
+			self.__stats["totalGlitches"] += 1
+
+		# Now test for sequence errors within current data set
+		# Take a copy of the first item in the list
+		prevRtpPacket = self.rtpStream[0]
+		# Iterate over the the remainder of the list (starting at index 1 to the end '-1')
+		for rtpPacket in self.rtpStream[1:]:
+			# Test sequence no of current packet against previous packet
+			if rtpPacket.rtpSequenceNo != (prevRtpPacket.rtpSequenceNo + 1):
+				# Take timestamp of most recent glitch
+				self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
+				print self.__stats[
+					"timestampOfLastGlitch"], " Out of sequence packet received (within current data set). Expected sequence no", (
+						prevRtpPacket.rtpSequenceNo + 1), " but received ", rtpPacket.rtpSequenceNo, "\r"
+
+				# Capture packets either side of the 'hole' and store them in the event list
+				# Create an object representing the glitch
+				glitch = Glitch(prevRtpPacket, rtpPacket)
+				# Add the glitch to the evenList[]
+				self.__eventList.append(glitch)
+				# Now update aggregate glitch stats
+				self.__stats["totalPacketsLost"] += glitch.packetsLost
+				self.__stats["totalGlitchLength"] += glitch.glitchLength
+				self.__stats["totalGlitches"] += 1
+			# Store current rtp packet for the next iteration around the loop
+			prevRtpPacket = rtpPacket
+
 	# Define a private calculation method that will run autonomously as a thread
 	# This thread will
 	def __calculateThread(self):
@@ -244,7 +289,7 @@ class RtpStream(object):
 		self.__stats["totalPacketsLost"] = 0
 		self.__stats["totalGlitches"] = 0
 		# define timedelta object to store an aggregate of of Glitch length
-		totalGlitchLength = datetime.timedelta()
+		self.__stats["totalGlitchLength"] = datetime.timedelta()
 		self.__stats["timestampOfLastGlitch"]=datetime.timedelta()
 		self.__stats["timeElapsedSinceLastGlitch"]=datetime.timedelta()
 
@@ -305,10 +350,8 @@ class RtpStream(object):
 				if(self.__stats["totalPacketsReceived"]<1):
 					# For the very first packet, take the prev packet to be that of the first packet received (to give a
 					# delta of zero, otherwise the delta will be the diff between 0 and today's date!
-					prevRtpPacket=self.rtpStream[0]
-				else:
-					# Get copy of final packet of prev data set
-					prevRtpPacket=lastReceivedRtpPacket
+					# prevRtpPacket=self.rtpStream[0]
+					lastReceivedRtpPacket=self.rtpStream[0]
 
 				# Calculate and update aggregate data and packet counters
 				for x in self.rtpStream:
@@ -317,51 +360,11 @@ class RtpStream(object):
 					# Total aggregate
 					self.__stats["totalDataReceived"] += x.payloadSize
 
-				# Calculate jitter
-				self.__calculateJitter(prevRtpPacket,loopCounter)
+				# Calculate jitter ###############################################################
+				self.__calculateJitter(lastReceivedRtpPacket)
 
 				# Glitch Detection ###############################################################
-				# Test for out of sequence packet by comparing last received sequence no with that of first rtpObject in new list of data in self.rtpStream[]
-				# This musn't run the first time around the loop (because there's nothing to compare the first packet to)
-				if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and (self.__stats["totalPacketsReceived"] > 0):
-					# Take timestamp of most recent glitch
-					self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
-					print self.__stats["timestampOfLastGlitch"], " Out of sequence packet received between data sets. Expected sequence no", (
-							prevRtpPacket.rtpSequenceNo + 1), " but received ", self.rtpStream[0].rtpSequenceNo, "\r"
-					# Capture packets either side of the 'hole' and store them in the event list
-					# Create an object representing the glitch
-					glitch = Glitch(prevRtpPacket, self.rtpStream[0])
-					# Add the latest glitch to the evenList[]
-					self.__eventList.append(glitch)
-					# Now update aggregate glitch stats
-					self.__stats["totalPacketsLost"]+=glitch.packetsLost
-					totalGlitchLength+=glitch.glitchLength
-					self.__stats["totalGlitches"]+=1
-
-				# Now test for sequence errors within current data set
-				# Take a copy of the first item in the list
-				prevRtpPacket = self.rtpStream[0]
-				# Iterate over the the remainder of the list (starting at index 1 to the end '-1')
-				for rtpPacket in self.rtpStream[1:]:
-					# Test sequence no of current packet against previous packet
-					if rtpPacket.rtpSequenceNo != (prevRtpPacket.rtpSequenceNo + 1):
-						# Take timestamp of most recent glitch
-						self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
-						print self.__stats["timestampOfLastGlitch"], " Out of sequence packet received (within current data set). Expected sequence no", (
-								prevRtpPacket.rtpSequenceNo + 1), " but received ", rtpPacket.rtpSequenceNo, "\r"
-
-						# Capture packets either side of the 'hole' and store them in the event list
-						# Create an object representing the glitch
-						glitch = Glitch(prevRtpPacket, rtpPacket)
-						# Add the glitch to the evenList[]
-						self.__eventList.append(glitch)
-						# Now update aggregate glitch stats
-						self.__stats["totalPacketsLost"] += glitch.packetsLost
-						totalGlitchLength += glitch.glitchLength
-						self.__stats["totalGlitches"] += 1
-					# Store current rtp packet for the next iteration around the loop
-					prevRtpPacket = rtpPacket
-
+				self.__detectGlitches(lastReceivedRtpPacket)
 
 				# Capture most recent packet (last item of current data set) for next time around loop
 				lastReceivedRtpPacket=self.rtpStream[-1]
