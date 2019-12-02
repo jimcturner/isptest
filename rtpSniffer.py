@@ -340,7 +340,7 @@ class RtpStream(object):
         possibleLossOfStreamFlag = False
         lossOfStreamAlarmThreshold = 2
 
-        self.__stats["POLL_INTERVAL"] = 0.001  # Loop will execute every 10mS
+        self.__stats["POLL_INTERVAL"] = 0.01  # Loop will execute every 10mS
 
         # Calculate the no of loops equating to a second
         loopsPerSecond = 1 / self.__stats["POLL_INTERVAL"]
