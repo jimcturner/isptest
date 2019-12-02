@@ -231,9 +231,16 @@ class RtpStream(object):
         # Check that 10s value has actually been calculated
         if self.__stats["meanJitter_10s"] > 0:
             if self.__stats["instantaneousJitter"] > (10 * self.__stats["meanJitter_10s"]):
-                print "*******Excessive jitter", "\r"
+                print "*******Excessive jitter", self.__stats["instantaneousJitter"], self.__stats["meanJitter_10s"],"\r"
                 self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats["instantaneousJitter"],
                                                         self.__stats["meanJitter_1s"], self.__stats["meanJitter_10s"]))
+        # Dynamically modify POLL_INTERVAL based on a value of 10 times the Rx packet rate
+        # try:
+        #     if self.__stats["meanRxPeriod"].microseconds > 0 and self.__stats["secondsElapsed"] > 5:
+        #         self.__stats["POLL_INTERVAL"]=self.__stats["meanRxPeriod"].microseconds/1000000*10
+        # except Exception as e:
+        #     print str(e),"\r"
+        #     # pass
 
     def __detectGlitches(self, lastReceivedRtpPacket):
         # Test for out of sequence packet by comparing last received sequence no with that of first rtpObject in new list of data in self.rtpStream[]
@@ -340,7 +347,7 @@ class RtpStream(object):
         possibleLossOfStreamFlag = False
         lossOfStreamAlarmThreshold = 2
 
-        self.__stats["POLL_INTERVAL"] = 0.01  # Loop will execute every 10mS
+        self.__stats["POLL_INTERVAL"] = 0.1  # Loop will execute every 10mS
 
         # Calculate the no of loops equating to a second
         loopsPerSecond = 1 / self.__stats["POLL_INTERVAL"]
@@ -425,6 +432,10 @@ class RtpStream(object):
                     lossOfStreamFlag = True
                     # Add event to the list (but only do this once)
                     self.__eventList.append(StreamLost(lastReceivedRtpPacket))
+                    # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
+                    self.__stats["minJitter"] = 0
+                    self.__stats["maxJitter"] = 0
+                    self.__stats["rangeOfJitter"] = 0
 
             # Calculate elapsed since last glitch
             # But only if there has actually been a glitch
