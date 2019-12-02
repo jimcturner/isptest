@@ -173,41 +173,45 @@ class RtpStream(object):
         # rx time deltas and jitter
         sumOfInterPacketJitter = 0
         sumOfTimeDeltas = 0
-        for x in self.rtpStream:
+
+        # Keep prevRtpPacket value safe for later (because we'll be overwriting it as we iterate over self.rtpStream[])
+        z=prevRtpPacket
+
+        for y in self.rtpStream:
             # Calculate and write time delta into RtpData object
-            x.timeDelta = x.timestamp - prevRtpPacket.timestamp
+            y.timeDelta = y.timestamp - prevRtpPacket.timestamp
 
             # Now calculate the diff (jitter) between consecutive timeDelta values (should be in order of mS)
             # It should be simple. Just take mean of interPacketJitter
             # interPacketJitter=abs(x.timeDelta.microseconds-prevRtpPacket.timeDelta.microseconds)
-            x.jitter = x.timeDelta.microseconds - prevRtpPacket.timeDelta.microseconds
-            # print x.timestamp,x.timeDelta,x.jitter,"\r"
+            y.jitter = y.timeDelta.microseconds - prevRtpPacket.timeDelta.microseconds
+            # print y.timestamp,y.timeDelta,y.jitter,"\r"
             # Calculate minimum and maximum jitter
             # But wait until 'steady' state reached by testing for totalPacketsReceived>10
             if self.__stats["totalPacketsReceived"] > 10:
                 if self.__stats["minJitter"] == 0:
                     # Set initial value
-                    self.__stats["minJitter"] = x.jitter
-                if x.jitter < self.__stats["minJitter"]:
-                    self.__stats["minJitter"] = x.jitter
+                    self.__stats["minJitter"] = y.jitter
+                if y.jitter < self.__stats["minJitter"]:
+                    self.__stats["minJitter"] = y.jitter
                 # Calculate maximum jitter
                 if self.__stats["maxJitter"] == 0:
                     # Set initial value
-                    self.__stats["maxJitter"] = x.jitter
-                if x.jitter > self.__stats["maxJitter"]:
-                    self.__stats["maxJitter"] = x.jitter
+                    self.__stats["maxJitter"] = y.jitter
+                if y.jitter > self.__stats["maxJitter"]:
+                    self.__stats["maxJitter"] = y.jitter
                 self.__stats["rangeOfJitter"] = self.__stats["maxJitter"] - self.__stats["minJitter"]
 
             # Sum the abs interPacketJitter values  for the subsequent jitter calculation
             # For 'instantaneous' jitter value
-            sumOfInterPacketJitter += abs(x.jitter)
+            sumOfInterPacketJitter += abs(y.jitter)
             # For 1 second jitter value
-            self.sumOfJitter_1s += abs(x.jitter)
+            self.sumOfJitter_1s += abs(y.jitter)
 
             # Sum the timeDeltas to calculate the average time between packets arriving
-            sumOfTimeDeltas += x.timeDelta.microseconds
+            sumOfTimeDeltas += y.timeDelta.microseconds
             # Update prevTimestamp for next time around loop
-            prevRtpPacket = x
+            prevRtpPacket = y
 
         # Calculate jitter
         # Find the mean value of the microsecond portion of the jitter values in self.rtpStream
@@ -217,9 +221,12 @@ class RtpStream(object):
             self.__stats["instantaneousJitter"] = sumOfInterPacketJitter / (len(self.rtpStream) - 1)
             self.__stats["meanRxPeriod"] = sumOfTimeDeltas / (len(self.rtpStream) - 1)
         else:
-            # print "len(self.rtpStream)", len(self.rtpStream), "\r"
-            pass
-        # print 	"minJitter",self.__stats["minJitter"],", maxJitter",self.__stats["maxJitter"],", instantaneousJitter",self.__stats["instantaneousJitter"],"\r"
+            # This batch of data only contains a single packet.
+            # as this requires at least two packets worth of data (the difference of a difference!)
+            # The meanRxPeriod is possible to deduce by comparing this new single packet with the last received
+            self.__stats["instantaneousJitter"]=self.rtpStream[-1].jitter - z.jitter
+            self.__stats["meanRxPeriod"]=self.rtpStream[-1].timeDelta
+
         # Now attempt to detect excessive jitter by comparing the instantaneous value with the 10s averaged value
         # Check that 10s value has actually been calculated
         if self.__stats["meanJitter_10s"] > 0:
@@ -314,7 +321,8 @@ class RtpStream(object):
         self.__stats["instantaneousJitter"] = 0
         self.__stats["meanJitter_1s"] = 0
 
-        averageRtpPacketArrivalPeriod = datetime.timedelta()
+        # averageRtpPacketArrivalPeriod = datetime.timedelta()
+        self.__stats["processorUtilisationPercent"] = 0
         historicJitter = []
         self.__stats["meanJitter_10s"] = 0
         # Declare flags
@@ -463,13 +471,14 @@ class RtpStream(object):
                 # packets arriving to work out how much processor headroom there is
                 # If the processor can't keep up, generate an event
                 self.__stats["calculationDuration"] = (calculationEndTime - calculationStartTime).microseconds
-                self.__stats["processorUtilisationPercent"] = self.__stats["calculationDuration"] * 100 / self.__stats[
-                    "meanRxPeriod"]
+                self.__stats["processorUtilisationPercent"] = \
+                    self.__stats["calculationDuration"] * 100 / self.__stats["meanRxPeriod"]
 
                 # If the CPU is >99% utilised, add event to the list (but only do this once)
                 if self.__stats["processorUtilisationPercent"] > 99:
                     self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket))
             except Exception as e:
+                # print str(e),"\r"
                 pass
 
             # Unlock  self.__stats and self.__eventList mutexes
@@ -578,7 +587,7 @@ def __rtpGenerator(keyPressed):
     enablePacketGeneration = True
     enableJitter = False
 
-    txPeriod = 0.01
+    txPeriod = 0.1
     jitterPerecentage = 50
     maxDeviation = txPeriod * jitterPerecentage / 100
 
