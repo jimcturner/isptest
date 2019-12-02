@@ -255,6 +255,11 @@ class RtpStream(object):
             self.__stats["totalGlitchLength"] += glitch.glitchLength
             self.__stats["totalGlitches"] += 1
 
+            #Finally, reset min/max/range jitter values as they're corrupted by a glitch
+            self.__stats["minJitter"] = 0
+            self.__stats["maxJitter"] = 0
+            self.__stats["rangeOfJitter"] = 0
+
         # Now test for sequence errors within current data set
         # Take a copy of the first item in the list
         prevRtpPacket = self.rtpStream[0]
@@ -277,6 +282,11 @@ class RtpStream(object):
                 self.__stats["totalPacketsLost"] += glitch.packetsLost
                 self.__stats["totalGlitchLength"] += glitch.glitchLength
                 self.__stats["totalGlitches"] += 1
+
+                # Finally, reset min/max/range jitter values as they're corrupted by a glitch
+                self.__stats["minJitter"] = 0
+                self.__stats["maxJitter"] = 0
+                self.__stats["rangeOfJitter"] = 0
             # Store current rtp packet for the next iteration around the loop
             prevRtpPacket = rtpPacket
 
