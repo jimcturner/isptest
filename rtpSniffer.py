@@ -330,7 +330,7 @@ class RtpStream(object):
         possibleLossOfStreamFlag = False
         lossOfStreamAlarmThreshold = 2
 
-        self.__stats["POLL_INTERVAL"] = 0.1  # Loop will execute every 10mS
+        self.__stats["POLL_INTERVAL"] = 0.001  # Loop will execute every 10mS
 
         # Calculate the no of loops equating to a second
         loopsPerSecond = 1 / self.__stats["POLL_INTERVAL"]
@@ -587,7 +587,7 @@ def __rtpGenerator(keyPressed):
     enablePacketGeneration = True
     enableJitter = False
 
-    txPeriod = 0.1
+    txPeriod = 0.001
     jitterPerecentage = 50
     maxDeviation = txPeriod * jitterPerecentage / 100
 
