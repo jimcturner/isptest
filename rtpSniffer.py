@@ -225,22 +225,17 @@ class RtpStream(object):
             # as this requires at least two packets worth of data (the difference of a difference!)
             # The meanRxPeriod is possible to deduce by comparing this new single packet with the last received
             self.__stats["instantaneousJitter"]=self.rtpStream[-1].jitter - z.jitter
-            self.__stats["meanRxPeriod"]=self.rtpStream[-1].timeDelta
+            self.__stats["meanRxPeriod"]=self.rtpStream[-1].timeDelta.microseconds
 
         # Now attempt to detect excessive jitter by comparing the instantaneous value with the 10s averaged value
         # Check that 10s value has actually been calculated
         if self.__stats["meanJitter_10s"] > 0:
-            if self.__stats["instantaneousJitter"] > (10 * self.__stats["meanJitter_10s"]):
+            if self.__stats["meanJitter_1s"] > (10 * self.__stats["meanJitter_10s"]):
                 print "*******Excessive jitter", self.__stats["instantaneousJitter"], self.__stats["meanJitter_10s"],"\r"
                 self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats["instantaneousJitter"],
                                                         self.__stats["meanJitter_1s"], self.__stats["meanJitter_10s"]))
-        # Dynamically modify POLL_INTERVAL based on a value of 10 times the Rx packet rate
-        # try:
-        #     if self.__stats["meanRxPeriod"].microseconds > 0 and self.__stats["secondsElapsed"] > 5:
-        #         self.__stats["POLL_INTERVAL"]=self.__stats["meanRxPeriod"].microseconds/1000000*10
-        # except Exception as e:
-        #     print str(e),"\r"
-        #     # pass
+
+
 
     def __detectGlitches(self, lastReceivedRtpPacket):
         # Test for out of sequence packet by comparing last received sequence no with that of first rtpObject in new list of data in self.rtpStream[]
@@ -481,9 +476,17 @@ class RtpStream(object):
                         sumOfJitter_10s += x
                     self.__stats["meanJitter_10s"] = sumOfJitter_10s / len(historicJitter)
 
-                # Now clear totalDataReceivedPerInterval for the next time around the loop
-                # self.__stats["totalDataReceivedPerSecond"] = 0
-                # self.__stats["totalPacketsPerSecond"] = 0
+                # Dynamically modify POLL_INTERVAL based on a value of 10 times the Rx packet rate
+                # This will ensure that self.rtpStream[] length never gets too large.
+                # Otherwise, for high packet receieve rates, the calculation time will become excessive
+                if self.__stats["meanRxPeriod"] > 0 and self.__stats["secondsElapsed"] > 5:
+                    self.__stats["POLL_INTERVAL"] = 10.0 * self.__stats["meanRxPeriod"] / 1000000.0
+
+                    # bounds chek the result
+                    # if self.__stats["POLL_INTERVAL"] > 0.1:
+                    #     self.__stats["POLL_INTERVAL"] = 0.1
+                    # if self.__stats["POLL_INTERVAL"] < 0.001:
+                    #     self.__stats["POLL_INTERVAL"] = 0.001
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = datetime.datetime.now()
@@ -497,7 +500,8 @@ class RtpStream(object):
 
                 # If the CPU is >99% utilised, add event to the list (but only do this once)
                 if self.__stats["processorUtilisationPercent"] > 99:
-                    self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket))
+                    # self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket))
+                    pass
             except Exception as e:
                 # print str(e),"\r"
                 pass
@@ -560,7 +564,23 @@ def __displayThread(rtpStream):
 
     while True:
         for x, y in rtpStream.getRtpStreamStats().items():
-            print x, y, "\r"
+            if x == "totalDataReceivedPerSecond":
+                # Convert received rate from bytes/sec to bits/sec
+                rxRate=y*8
+                friendlyValue=0
+                if rxRate < 1024:
+                    suffix="bps"
+                elif rxRate <=1048576:
+                    suffix="kbps"
+                    friendlyValue =rxRate/1024.0
+                else:
+                    suffix="Mbps"
+                    friendlyValue = rxRate / 1048576.0
+                # print x,friendlyValue,suffix,": (",y,")","\r"
+                print x,round(friendlyValue,2),suffix,"\r"
+
+            else:
+                print x, y, "\r"
             # pass
         print "--------------------", "\r"
         for event in rtpStream.getRTPStreamEventList():
@@ -599,7 +619,7 @@ def __rtpGenerator(keyPressed):
 
     rtpParams = 0b01000000
     rtpPayloadType = 0b00000000
-    rtpSequenceNo = 0
+    rtpSequenceNo = 65535
     # Create a 32 bit timestamp (needs truncating to 32 bits before passing to struct.pack)
     # 0xFFFFFFFF is 32 '1's, so the '&' operation will throw away MSBs larger than this
     rtpTimestamp = int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
@@ -658,6 +678,9 @@ def __rtpGenerator(keyPressed):
 
         # Increment rtp sequence number for next iteration of the loop
         rtpSequenceNo += 1
+        # Seq no is only a 16 bit value, so reset at max value (65535)
+        if rtpSequenceNo > 65535:
+            rtpSequenceNo=0
         # print "rtpSequenceNo",rtpSequenceNo,"\r"
         # If flag set, generate random delay centred around txPeriod (0.01 = 10mS period)
         if enableJitter == True:
