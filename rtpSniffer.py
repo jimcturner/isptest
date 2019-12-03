@@ -127,7 +127,8 @@ class Glitch(object):
         self.endOfGap = firstPackedReceivedAfterGap
         # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
         # The '-1' is because it's fences and fenceposts
-        self.packetsLost = firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo - 1
+        self.packetsLost = abs(firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo) - 1
+        print firstPackedReceivedAfterGap.rtpSequenceNo,lastReceivedPacketBeforeGap.rtpSequenceNo,"\r"
         # Calculate length of this glitch
         self.glitchLength = firstPackedReceivedAfterGap.timestamp - lastReceivedPacketBeforeGap.timestamp
 
@@ -240,6 +241,10 @@ class RtpStream(object):
     def __detectGlitches(self, lastReceivedRtpPacket):
         # Test for out of sequence packet by comparing last received sequence no with that of first rtpObject in new list of data in self.rtpStream[]
         # Inhibit this for the first second (because there's nothing to compare the first packet to)
+        # When the seq no hits 65535 it will wrap around to zero giving a false diff. Musn't interpret this as a glitch
+        if lastReceivedRtpPacket.rtpSequenceNo == 65535:
+            lastReceivedRtpPacket.rtpSequenceNo=-1
+
         if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and self.__stats["secondsElapsed"] > 0:
             print "self.__stats[totalPacketsReceived]",self.__stats["totalPacketsReceived"],"\r"
             # Take timestamp of most recent glitch
