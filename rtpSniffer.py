@@ -241,7 +241,7 @@ class RtpStream(object):
     def __detectGlitches(self, lastReceivedRtpPacket):
         # Test for out of sequence packet by comparing last received sequence no with that of first rtpObject in new list of data in self.rtpStream[]
         # Inhibit this for the first second (because there's nothing to compare the first packet to)
-        # When the seq no hits 65535 it will wrap around to zero giving a false diff. Musn't interpret this as a glitch
+        # Also, when the seq no hits 65535 it will wrap around to zero giving a false diff. Musn't interpret this as a glitch
         if lastReceivedRtpPacket.rtpSequenceNo == 65535:
             lastReceivedRtpPacket.rtpSequenceNo=-1
 
@@ -270,8 +270,17 @@ class RtpStream(object):
         # Now test for sequence errors within current data set
         # Take a copy of the first item in the list
         prevRtpPacket = self.rtpStream[0]
+
+        # Test if the seq no hits 65535 it will wrap around to zero giving a false diff. Musn't interpret this as a glitch
+        if prevRtpPacket.rtpSequenceNo == 65535:
+            prevRtpPacket.rtpSequenceNo = -1
+
         # Iterate over the the remainder of the list (starting at index 1 to the end '-1')
         for rtpPacket in self.rtpStream[1:]:
+            # Test if the seq no hits 65535 it will wrap around to zero giving a false diff. Musn't interpret this as a glitch
+            if prevRtpPacket.rtpSequenceNo == 65535:
+                prevRtpPacket.rtpSequenceNo = -1
+
             # Test sequence no of current packet against previous packet
             if rtpPacket.rtpSequenceNo != (prevRtpPacket.rtpSequenceNo + 1):
                 # Take timestamp of most recent glitch
@@ -418,7 +427,6 @@ class RtpStream(object):
             else:
                 # No data, so set lossOfStreamFlag (unless it's already been set)
                 # Check for changes and that we also have an active stream. If so, set the flag and add an event to the eventlist
-                #lossOfStreamTimer += 1
 
                 if possibleLossOfStreamFlag == False:
                     # Set the flag
@@ -484,7 +492,8 @@ class RtpStream(object):
                 # Dynamically modify POLL_INTERVAL based on a value of 10 times the Rx packet rate
                 # This will ensure that self.rtpStream[] length never gets too large.
                 # Otherwise, for high packet receieve rates, the calculation time will become excessive
-                if self.__stats["meanRxPeriod"] > 0 and self.__stats["secondsElapsed"] > 5:
+                # Wait a second, in order to know we're in a steady state
+                if self.__stats["meanRxPeriod"] > 0 and self.__stats["secondsElapsed"] > 1:
                     self.__stats["POLL_INTERVAL"] = 10.0 * self.__stats["meanRxPeriod"] / 1000000.0
 
                     # bounds chek the result
@@ -497,15 +506,19 @@ class RtpStream(object):
             calculationEndTime = datetime.datetime.now()
             try:
                 # Take the calculation time in microseconds and combine with the period between
-                # packets arriving to work out how much processor headroom there is
-                # If the processor can't keep up, generate an event
+                # packets arriving multiplied by the no of packets in this batch of rtpStream
+                # to work out how much processor headroom there is (as a ratio of times).
+                # If the total calculation time for rtpStream[] is > than the gap between packets
+                # arriving then the the processor can't keep up, so generate an event
+                # This is to guard against false-postives
                 self.__stats["calculationDuration"] = (calculationEndTime - calculationStartTime).microseconds
+
                 self.__stats["processorUtilisationPercent"] = \
-                    self.__stats["calculationDuration"] * 100 / self.__stats["meanRxPeriod"]
+                    self.__stats["calculationDuration"] * 100 / (self.__stats["meanRxPeriod"] * len(self.rtpStream))
 
                 # If the CPU is >99% utilised, add event to the list (but only do this once)
                 if self.__stats["processorUtilisationPercent"] > 99:
-                    # self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket))
+                    self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket))
                     pass
             except Exception as e:
                 # print str(e),"\r"
@@ -633,7 +646,7 @@ def __rtpGenerator(keyPressed):
     enablePacketGeneration = True
     enableJitter = False
 
-    txPeriod = 0.001
+    txPeriod = 0.00001
     jitterPerecentage = 50
     maxDeviation = txPeriod * jitterPerecentage / 100
 
