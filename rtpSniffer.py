@@ -328,6 +328,7 @@ class RtpStream(object):
         self.__stats["totalPacketsPerSecond"] = 0
         self.__stats["totalDataReceivedPerSecond"] = 0
         self.__stats["totalDataReceived"] = 0
+        self.__stats["averagePayloadSizePerSecond"]=0
         self.__stats["totalPacketsReceived"] = 0
         self.__stats["secondsElapsed"] = 0
 
@@ -465,6 +466,11 @@ class RtpStream(object):
                 # Take snapshots of running totals
                 self.__stats["totalPacketsPerSecond"] = runningTotalPacketsPerSecond
                 self.__stats["totalDataReceivedPerSecond"] = runningTotalDataReceivedPerSecond
+
+                # Calculate self.__stats["averagePayloadSizePerSecond"]
+                if self.__stats["totalPacketsPerSecond"] >0:
+                    self.__stats["averagePayloadSizePerSecond"] =\
+                        self.__stats["totalDataReceivedPerSecond"]/self.__stats["totalPacketsPerSecond"]
                 # Clear running totals
                 runningTotalPacketsPerSecond = 0
                 runningTotalDataReceivedPerSecond = 0
@@ -496,11 +502,6 @@ class RtpStream(object):
                 if self.__stats["meanRxPeriod"] > 0 and self.__stats["secondsElapsed"] > 1:
                     self.__stats["POLL_INTERVAL"] = 10.0 * self.__stats["meanRxPeriod"] / 1000000.0
 
-                    # bounds chek the result
-                    # if self.__stats["POLL_INTERVAL"] > 0.1:
-                    #     self.__stats["POLL_INTERVAL"] = 0.1
-                    # if self.__stats["POLL_INTERVAL"] < 0.001:
-                    #     self.__stats["POLL_INTERVAL"] = 0.001
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = datetime.datetime.now()
@@ -716,8 +717,10 @@ def __rtpGenerator(keyPressed):
 # #####################
 def main():
     # UDP_RX_IP = "192.168.56.1"
-    UDP_RX_IP = "127.0.0.1"
-    UDP_RX_PORT = 5004
+    # UDP_RX_IP = "127.0.0.1"
+    UDP_RX_IP = "172.26.203.1"
+    # UDP_RX_PORT = 5004
+    UDP_RX_PORT = 6100
 
     sock = socket.socket(socket.AF_INET,  # Internet
                          socket.SOCK_DGRAM)  # UDP
@@ -735,9 +738,9 @@ def main():
     catchKeyboardPresses.start()
 
     # Start traffic generator thread
-    rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed,))
-    rtpGenerator.daemon = True  # Thread will auto shutdown when the prog ends
-    rtpGenerator.start()
+    # rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed,))
+    # rtpGenerator.daemon = True  # Thread will auto shutdown when the prog ends
+    # rtpGenerator.start()
 
     while True:
         # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
