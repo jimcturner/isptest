@@ -15,6 +15,7 @@ import threading
 import random
 import string
 import platform
+import getopt # Used to parse command line arguments
 
 ####################################################################################
 # Utility Functions
@@ -715,7 +716,38 @@ def __rtpGenerator(keyPressed):
 
 # Main prog starts here
 # #####################
-def main():
+def main(argv):
+    MODE=""
+
+    #print 'Argument List:', str(argv)
+    try:
+        # options are:
+        # h: help
+        # l: loopback mode
+        # t: transmit mode
+        # r: receive mode
+
+        address=""
+        opts, args = getopt.getopt(argv, "hlt:r:")
+
+        # Iterate over opts array and test opt. Then retrieve the corresponding arg
+        for opt, arg in opts:
+            if opt=='-h':
+                print "help"
+            elif opt =='-l':
+                MODE="LOOPBACK"
+                print MODE
+            elif opt in ("-t"):
+                MODE = "TRANSMIT"
+                print MODE, arg
+            elif opt in ("-r"):
+                MODE= "RECEIVE"
+                print MODE, arg
+
+    except getopt.GetoptError:
+        print 'invalid options'
+        exit()
+
     # UDP_RX_IP = "192.168.56.1"
     # UDP_RX_IP = "127.0.0.1"
     UDP_RX_IP = "172.26.203.1"
@@ -796,4 +828,5 @@ def main():
 
 # Invoke main() method (entry point for Python script)
 if __name__ == "__main__":
-    main()
+    # Call main and pass command line args to it (but ignore the first argument)
+    main(sys.argv[1:])
