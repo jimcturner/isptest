@@ -648,7 +648,7 @@ def __rtpGenerator(keyPressed):
     enablePacketGeneration = True
     enableJitter = False
 
-    txPeriod = 0.00001
+    txPeriod = 0.0001
     jitterPerecentage = 50
     maxDeviation = txPeriod * jitterPerecentage / 100
 
@@ -749,10 +749,13 @@ def main(argv):
         exit()
 
     # UDP_RX_IP = "192.168.56.1"
-    # UDP_RX_IP = "127.0.0.1"
-    UDP_RX_IP = "172.26.203.1"
-    # UDP_RX_PORT = 5004
-    UDP_RX_PORT = 6100
+    if MODE=='LOOPBACK':
+        UDP_RX_IP = "127.0.0.1"
+        UDP_RX_PORT = 5004
+
+    else:
+        UDP_RX_PORT = 6100
+        UDP_RX_IP = "172.26.203.1"
 
     sock = socket.socket(socket.AF_INET,  # Internet
                          socket.SOCK_DGRAM)  # UDP
@@ -769,10 +772,11 @@ def main(argv):
     catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
     catchKeyboardPresses.start()
 
-    # Start traffic generator thread
-    # rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed,))
-    # rtpGenerator.daemon = True  # Thread will auto shutdown when the prog ends
-    # rtpGenerator.start()
+    if MODE=='LOOPBACK':
+        # Start traffic generator thread
+        rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed,))
+        rtpGenerator.daemon = True  # Thread will auto shutdown when the prog ends
+        rtpGenerator.start()
 
     while True:
         # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
