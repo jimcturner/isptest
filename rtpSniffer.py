@@ -129,9 +129,12 @@ class Glitch(object):
         # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
         # The '-1' is because it's fences and fenceposts
         self.packetsLost = abs(firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo) - 1
-        print firstPackedReceivedAfterGap.rtpSequenceNo,lastReceivedPacketBeforeGap.rtpSequenceNo,"\r"
+        # print firstPackedReceivedAfterGap.rtpSequenceNo,lastReceivedPacketBeforeGap.rtpSequenceNo,"\r"
         # Calculate length of this glitch
         self.glitchLength = firstPackedReceivedAfterGap.timestamp - lastReceivedPacketBeforeGap.timestamp
+        # Calculate useful values showing expected and actual rtpSequence no
+        self.expectedSequenceNo=self.startOfGap.rtpSequenceNo+1
+        self.actualReceivedSequenceNo=self.endOfGap.rtpSequenceNo
 
 
 # Define a class to represent a flow of received rtp packets (and associated stats)
@@ -247,12 +250,9 @@ class RtpStream(object):
             lastReceivedRtpPacket.rtpSequenceNo=-1
 
         if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and self.__stats["secondsElapsed"] > 0:
-            print "self.__stats[totalPacketsReceived]",self.__stats["totalPacketsReceived"],"\r"
             # Take timestamp of most recent glitch
             self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
-            print self.__stats[
-                "timestampOfLastGlitch"], " Out of sequence packet received between data sets. Expected sequence no", (
-                    lastReceivedRtpPacket.rtpSequenceNo + 1), " but received ", self.rtpStream[0].rtpSequenceNo, "\r"
+
             # Capture packets either side of the 'hole' and store them in the event list
             # Create an object representing the glitch
             glitch = Glitch(lastReceivedRtpPacket, self.rtpStream[0])
@@ -286,9 +286,6 @@ class RtpStream(object):
             if rtpPacket.rtpSequenceNo != (prevRtpPacket.rtpSequenceNo + 1):
                 # Take timestamp of most recent glitch
                 self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
-                print self.__stats[
-                    "timestampOfLastGlitch"], " Out of sequence packet received (within current data set). Expected sequence no", (
-                        prevRtpPacket.rtpSequenceNo + 1), " but received ", rtpPacket.rtpSequenceNo, "\r"
 
                 # Capture packets either side of the 'hole' and store them in the event list
                 # Create an object representing the glitch
@@ -604,7 +601,10 @@ def __displayThread(rtpStream):
             # pass
         print "--------------------", "\r"
         for event in rtpStream.getRTPStreamEventList():
-            print event.type, event.timeCreated, "\r"
+            if event.type=='Glitch':
+                print event.type, event.timeCreated,"Expected:",event.expectedSequenceNo,", Received",event.actualReceivedSequenceNo,"\r"
+            else:
+                print event.type, event.timeCreated, "\r"
         	# pass
         print "------------------------------------------", "\r"
         time.sleep(1)
