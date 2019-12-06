@@ -235,9 +235,17 @@ class RtpStream(object):
         # Now attempt to detect excessive jitter by comparing the instantaneous value with the 10s averaged value
         # Check that 10s value has actually been calculated
         if self.__stats["meanJitter_10s"] > 0:
-            if self.__stats["meanJitter_1s"] > (10 * self.__stats["meanJitter_10s"]):
-                print "*******Excessive jitter", self.__stats["instantaneousJitter"], self.__stats["meanJitter_10s"],"\r"
-                self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats["instantaneousJitter"],
+            if self.__stats["meanJitter_1s"] > (2 * self.__stats["longTermJitter_uS"]):
+                if self.excessiveJitterAlarmInhibit==False:
+                    # If flag not already set, set it
+                    self.excessiveJitterAlarmInhibit=True
+                    self.excessiveJitterTimeoutTimer=datetime.datetime.now()
+
+                # If jitter alarms not inhibited, add a new jitter event
+                if ((datetime.datetime.now()-self.excessiveJitterTimeoutTimer).seconds < self.excessiveJitterThreshold) \
+                        and self.excessiveJitterAlarmInhibit==False:
+                    print "*******Excessive jitter", self.__stats["instantaneousJitter"], self.__stats["meanJitter_10s"],"\r"
+                    self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats["instantaneousJitter"],
                                                         self.__stats["meanJitter_1s"], self.__stats["meanJitter_10s"]))
 
 
@@ -345,11 +353,17 @@ class RtpStream(object):
         self.__stats["rangeOfJitter"] = 0
         self.__stats["instantaneousJitter"] = 0
         self.__stats["meanJitter_1s"] = 0
-
-        # averageRtpPacketArrivalPeriod = datetime.timedelta()
+        self.__stats["meanJitter_10s"] = 0
+        self.__stats["longTermJitter_uS"]=0
         self.__stats["processorUtilisationPercent"] = 0
         historicJitter = []
-        self.__stats["meanJitter_10s"] = 0
+        sumOfJitter_1s = 0
+        # Create a timeout to inhibit excessive quantities of jitter alarm
+        self.excessiveJitterTimeoutTimer=datetime.timedelta()
+        # No of seconds to inhibit an excessive jitter alarm
+        self.excessiveJitterThreshold=2
+        self.excessiveJitterAlarmInhibit=False
+
         # Declare flags
         lossOfStreamFlag = True
         possibleLossOfStreamFlag = False
@@ -482,6 +496,10 @@ class RtpStream(object):
                 # Calculate 10s jitter moving average using a 10 element array of the prev 10 1s values
                 # Add the latest 1s jitter value to the moving 10s jitter results array
                 historicJitter.append(self.__stats["meanJitter_1s"])
+                # Calculate a long-term jitter value by averaging all meanJitter_1s value over time elapsed
+                sumOfJitter_1s += self.__stats["meanJitter_1s"]
+                self.__stats["longTermJitter_uS"] = sumOfJitter_1s/self.__stats["secondsElapsed"]
+                prevMeanJitter_10s = self.__stats["meanJitter_10s"]
                 # Check that we have enough results (10s worth) to calculate the 10s value
                 if len(historicJitter) > 10:
                     # Remove the oldest value
