@@ -724,8 +724,8 @@ def main(argv):
         # options are:
         # h: help
         # l: loopback mode
-        # t: transmit mode
-        # r: receive mode
+        # -t: transmit mode usage: address:port
+        # -r receive mode usage: address:port
 
         address=""
         opts, args = getopt.getopt(argv, "hlt:r:")
@@ -737,26 +737,45 @@ def main(argv):
             elif opt =='-l':
                 MODE="LOOPBACK"
                 print MODE
+                UDP_RX_IP = "127.0.0.1"
+                UDP_RX_PORT = 5004
+
+
             elif opt in ("-t"):
                 MODE = "TRANSMIT"
                 print MODE, arg
             elif opt in ("-r"):
                 MODE= "RECEIVE"
-                print MODE, arg
+                # check for two parameters seperated by a colon
+                if len(arg.split(':'))==2:
+                    print len(arg.split(':'))
+                    UDP_RX_IP = arg.split(':')[0]
+                    UDP_RX_PORT = int(arg.split(':')[1])
+                    # Validate supplied IP address
+                    try:
+                        socket.inet_aton(UDP_RX_IP)
+                    except socket.error:
+                        print "Invalid RECEIVE IP address:port combinbation supplied:",arg
+                        exit()
+                    print MODE, UDP_RX_IP, UDP_RX_PORT
+                    exit()
+                else:
+                    print "Invalid RECEIVE IP address:port combinbation supplied:", arg
+                    exit()
+
 
     except getopt.GetoptError:
         print 'invalid options'
         exit()
 
     # UDP_RX_IP = "192.168.56.1"
-    if MODE=='LOOPBACK':
-        UDP_RX_IP = "127.0.0.1"
-        UDP_RX_PORT = 5004
+    # if MODE=='LOOPBACK':
+    #
+    # elif MODE=='RECEIVE':
+    #     UDP_RX_PORT = 6100
+    #     UDP_RX_IP = "172.26.203.1"
 
-    else:
-        UDP_RX_PORT = 6100
-        UDP_RX_IP = "172.26.203.1"
-
+    exit()
     sock = socket.socket(socket.AF_INET,  # Internet
                          socket.SOCK_DGRAM)  # UDP
     sock.bind((UDP_RX_IP, UDP_RX_PORT))
