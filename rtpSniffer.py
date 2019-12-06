@@ -620,10 +620,9 @@ def __catchKeyboardPresses(keyPressed):
 
 
 # define a traffic generator thread
-def __rtpGenerator(keyPressed):
-    # UDP_DEST_IP = "192.168.56.1"
-    UDP_DEST_IP = "127.0.0.1"
-    UDP__DEST_PORT = 5004
+def __rtpGenerator(keyPressed,UDP_TX_IP,UDP_TX_PORT):
+    # UDP_DEST_IP = "127.0.0.1"
+    # UDP__DEST_PORT = 5004
 
     # Generate random string
     # Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496 available bytes
@@ -635,7 +634,8 @@ def __rtpGenerator(keyPressed):
 
     txSock = socket.socket(socket.AF_INET,  # Internet
                            socket.SOCK_DGRAM)  # UDP
-    print "Traffic Generator thread started"
+    print "Traffic Generator thread started","\r"
+    print "[spacebar] insert single packet loss, [z] Inhibit/Re-enable packet generation, [j] Toggle jitter on/off","\r"
 
     rtpParams = 0b01000000
     rtpPayloadType = 0b00000000
@@ -665,13 +665,13 @@ def __rtpGenerator(keyPressed):
                 keyPressed[0] = ''
                 # Clear enable flag
                 enablePacketGeneration = False
-                print " 'z' Inhibiting packet generator"
+                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')," 'z' Inhibiting packet generator\r"
             else:
                 # Empty keyboard buffer
                 keyPressed[0] = ''
                 # Set enable flag
                 enablePacketGeneration = True
-
+                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), " 'z' Enabling packet generator\r"
         # Spacebar will introduce a single packet loss
         # If temporaryInhibit was set, clear it
         temporaryInhibit = False
@@ -679,11 +679,11 @@ def __rtpGenerator(keyPressed):
             # Clear keyboard buffer
             keyPressed[0] = ''
             temporaryInhibit = True
-            print "[Spacebar] - Inhibit single packet\r"
+            print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),"[Spacebar] - Inhibit single packet\r"
 
         # If all tx flags are set then transmit the rtp packet
         if enablePacketGeneration == True and temporaryInhibit == False:
-            txSock.sendto(MESSAGE, (UDP_DEST_IP, UDP__DEST_PORT))
+            txSock.sendto(MESSAGE, (UDP_TX_IP, UDP_TX_PORT))
 
         if (keyPressed[0] == 'j'):
             # Turn jitter on/off by pressing 'j'
@@ -691,10 +691,10 @@ def __rtpGenerator(keyPressed):
             keyPressed[0] = ''
             if enableJitter == False:
                 enableJitter = True
-                print "[j] jitter enabled", "\r"
+                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),"[j] jitter enabled\r"
             else:
                 enableJitter = False
-                print "[j] jitter disabled", "\r"
+                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),"[j] jitter disabled\r"
 
         # Increment rtp sequence number for next iteration of the loop
         rtpSequenceNo += 1
@@ -728,7 +728,7 @@ def main(argv):
         # -r receive mode usage: address:port
 
         address=""
-        opts, args = getopt.getopt(argv, "hlt:r:")
+        opts, args = getopt.getopt(argv, "hlt:r:i:t:")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
@@ -739,16 +739,31 @@ def main(argv):
                 print MODE
                 UDP_RX_IP = "127.0.0.1"
                 UDP_RX_PORT = 5004
+                UDP_TX_IP = "127.0.0.1"
+                UDP_TX_PORT = 5004
 
 
             elif opt in ("-t"):
                 MODE = "TRANSMIT"
-                print MODE, arg
+                # check for two parameters seperated by a colon
+                if len(arg.split(':')) == 2:
+                    UDP_TX_IP = arg.split(':')[0]
+                    UDP_TX_PORT = int(arg.split(':')[1])
+                    # Validate supplied IP address
+                    try:
+                        socket.inet_aton(UDP_TX_IP)
+                    except socket.error:
+                        print "Invalid TRANSMIT IP address:port combinbation supplied:", arg
+                        exit()
+                    print MODE, UDP_TX_IP, UDP_TX_PORT
+                else:
+                    print "Invalid TRANSMIT IP address:port combinbation supplied:", arg
+                    exit()
+
             elif opt in ("-r"):
                 MODE= "RECEIVE"
                 # check for two parameters seperated by a colon
                 if len(arg.split(':'))==2:
-                    print len(arg.split(':'))
                     UDP_RX_IP = arg.split(':')[0]
                     UDP_RX_PORT = int(arg.split(':')[1])
                     # Validate supplied IP address
@@ -758,14 +773,13 @@ def main(argv):
                         print "Invalid RECEIVE IP address:port combinbation supplied:",arg
                         exit()
                     print MODE, UDP_RX_IP, UDP_RX_PORT
-                    exit()
                 else:
                     print "Invalid RECEIVE IP address:port combinbation supplied:", arg
                     exit()
 
 
     except getopt.GetoptError:
-        print 'invalid options'
+        print 'invalid options supplied', argv
         exit()
 
     # UDP_RX_IP = "192.168.56.1"
@@ -775,10 +789,8 @@ def main(argv):
     #     UDP_RX_PORT = 6100
     #     UDP_RX_IP = "172.26.203.1"
 
-    exit()
-    sock = socket.socket(socket.AF_INET,  # Internet
-                         socket.SOCK_DGRAM)  # UDP
-    sock.bind((UDP_RX_IP, UDP_RX_PORT))
+
+
 
     runOnce = True
 
@@ -791,62 +803,72 @@ def main(argv):
     catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
     catchKeyboardPresses.start()
 
-    if MODE=='LOOPBACK':
+    if MODE=='LOOPBACK' or MODE=='TRANSMIT':
         # Start traffic generator thread
-        rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed,))
+        rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed,UDP_TX_IP,UDP_TX_PORT))
         rtpGenerator.daemon = True  # Thread will auto shutdown when the prog ends
         rtpGenerator.start()
 
+    if MODE=='RECEIVE' or MODE=='LOOPBACK':
+
+        # Create receive UDP socket
+        sock = socket.socket(socket.AF_INET,  # Internet
+                             socket.SOCK_DGRAM)  # UDP
+        sock.bind((UDP_RX_IP, UDP_RX_PORT))
+        while True:
+            # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
+            data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
+            # print addr
+
+            # Get timestamp at the point the packet was received
+            timeNow = datetime.datetime.now()
+
+            srcAddress = addr[0]
+            srcPort = addr[1]
+
+            # if (keyPressed[0]!=''):
+            # 	print "keyPressed",keyPressed[0]
+            # 	keyPressed[0]=''
+
+            try:
+                # Split rtp header into an array of values
+                # print "received message:", hexData
+                # RTP header is 12 bytes long. Unpack it as an array.
+                # !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
+                RTP_HEADER_SIZE = 12
+                rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
+
+                # Calculate the data payload size
+                payloadSize = len(data) - RTP_HEADER_SIZE
+                # print"Total data",len(data),"RTP Header size:",RTP_HEADER_SIZE," Payload size",payloadSize,
+
+                # 	sequence no=rtpHeader[2]
+                #	timestamp=rtpHeader[3]
+                # 	sync-source identifier =rtpHeader[4]
+                rtpSequenceNo = rtpHeader[2]
+                rtpSyncSourceIdentifier = rtpHeader[4]
+
+                if (runOnce == True):
+                    # Create a new rtpStream object (but only once)
+                    s = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort)
+
+                    # Create a __displayThread. Pass the RtpStream object (s) to it
+                    displayThread = threading.Thread(target=__displayThread, args=(s,))
+                    displayThread.daemon = True  # Thread will auto shutdown when the prog ends
+                    displayThread.start()
+
+                    runOnce = False
+
+                # Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp
+                s.addData(rtpSequenceNo, payloadSize, timeNow)
+
+
+            except Exception as e:
+                print str(e), "Length:", len(data), "bytes received"
+
+    # Sit in endless loop
     while True:
-        # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
-        data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
-        # print addr
-
-        # Get timestamp at the point the packet was received
-        timeNow = datetime.datetime.now()
-
-        srcAddress = addr[0]
-        srcPort = addr[1]
-
-        # if (keyPressed[0]!=''):
-        # 	print "keyPressed",keyPressed[0]
-        # 	keyPressed[0]=''
-
-        try:
-            # Split rtp header into an array of values
-            # print "received message:", hexData
-            # RTP header is 12 bytes long. Unpack it as an array.
-            # !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
-            RTP_HEADER_SIZE = 12
-            rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
-
-            # Calculate the data payload size
-            payloadSize = len(data) - RTP_HEADER_SIZE
-            # print"Total data",len(data),"RTP Header size:",RTP_HEADER_SIZE," Payload size",payloadSize,
-
-            # 	sequence no=rtpHeader[2]
-            #	timestamp=rtpHeader[3]
-            # 	sync-source identifier =rtpHeader[4]
-            rtpSequenceNo = rtpHeader[2]
-            rtpSyncSourceIdentifier = rtpHeader[4]
-
-            if (runOnce == True):
-                # Create a new rtpStream object (but only once)
-                s = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort)
-
-                # Create a __displayThread. Pass the RtpStream object (s) to it
-                displayThread = threading.Thread(target=__displayThread, args=(s,))
-                displayThread.daemon = True  # Thread will auto shutdown when the prog ends
-                displayThread.start()
-
-                runOnce = False
-
-            # Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp
-            s.addData(rtpSequenceNo, payloadSize, timeNow)
-
-
-        except Exception as e:
-            print str(e), "Length:", len(data), "bytes received"
+        time.sleep(1)
 
 
 # Invoke main() method (entry point for Python script)
