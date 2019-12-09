@@ -242,27 +242,29 @@ class RtpStream(object):
                 # If jitter alarms not inhibited, add a new jitter event
                 # Take diff between time.now() and the time of the last event
                 if self.__stats["timeElapsedSinceLastExcessJitter"].seconds > \
-                            self.__stats["excessiveJitterAlarmTimeout"]:
-                        self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats["instantaneousJitter"],
-                                                                self.__stats["meanJitter_1s"],
-                                                                self.__stats["meanJitter_10s"]))
+                        self.__stats["excessiveJitterAlarmTimeout"]:
+                    self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats["instantaneousJitter"],
+                                                            self.__stats["meanJitter_1s"],
+                                                            self.__stats["meanJitter_10s"]))
 
                 # Update the event counter for Excess Jitter
                 self.__stats["totalExcessJitterEvents"] += 1
+
+                # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean period between events)
+                self.sumOfTimeElapsedSinceLastExcessJitterEvents += self.__stats["timeElapsedSinceLastExcessJitter"]
+
                 # Take timestamp fo this (the most recent) Excess Jitter event
-                self.__stats["timeofLastExcessJitterEvent"]=datetime.datetime.now()
+                self.__stats["timeofLastExcessJitterEvent"] = datetime.datetime.now()
         # Now update the self.__stats["timeElapsedSinceLastExcessJitter"] timer
-        # and also the running calculation of the mean time betwen jitter events
         if self.__stats["totalExcessJitterEvents"] > 0:
             self.__stats["timeElapsedSinceLastExcessJitter"] = datetime.datetime.now() - \
-                       self.__stats["timeofLastExcessJitterEvent"]
+                                                               self.__stats["timeofLastExcessJitterEvent"]
 
-            # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean period between events)
-            self.sumOfTimeElapsedSinceLastExcessJitterEvents += self.__stats["timeElapsedSinceLastExcessJitter"]
-            # Calculate mean of new and prev value
-            self.__stats["meanTimeBetweenExcessJitterEvents"] = self.sumOfTimeElapsedSinceLastExcessJitterEvents / \
-                    self.__stats["totalExcessJitterEvents"]
-
+        # Calculate meanTimeBetweenExcessJitterEvents (requires at least two jitter events)
+        if self.__stats["totalExcessJitterEvents"] > 1:
+            self.__stats["meanTimeBetweenExcessJitterEvents"] = \
+                (self.sumOfTimeElapsedSinceLastExcessJitterEvents + self.__stats["timeElapsedSinceLastExcessJitter"]) / \
+                self.__stats["totalExcessJitterEvents"]
 
     def __detectGlitches(self, lastReceivedRtpPacket):
         # Test for out of sequence packet by comparing last received sequence no with that of first rtpObject in new list of data in self.rtpStream[]
@@ -273,7 +275,6 @@ class RtpStream(object):
 
         if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and \
                 self.__stats["timeElapsed"].seconds > 0:
-
             # Take timestamp of most recent glitch
             self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
 
@@ -332,17 +333,14 @@ class RtpStream(object):
                 self.__stats["maxJitter"] = 0
                 self.__stats["rangeOfJitter"] = 0
 
-
-
             # Store current rtp packet for the next iteration around the loop
             prevRtpPacket = rtpPacket
 
         if self.__stats["totalGlitches"] > 1:
-
             # Calculate mean of new and prev value
             self.__stats["meanTimeBetweenGlitches"] = \
-                    (self.sumOfTimeElapsedSinceLastGlitch + self.__stats["timeElapsedSinceLastGlitch"])/ \
-                                self.__stats["totalGlitches"]
+                (self.sumOfTimeElapsedSinceLastGlitch + self.__stats["timeElapsedSinceLastGlitch"]) / \
+                self.__stats["totalGlitches"]
 
     # Define a private calculation method that will run autonomously as a thread
     # This thread will
@@ -394,13 +392,13 @@ class RtpStream(object):
         sumOfJitter_1s = 0
 
         # % deviation from longTermJitter_uS that will trigger an excessJitterEvent
-        self.__stats["excessJitterThresholdPercent"]=15
-        self.excessJitterThresholdFactor=1.0+(self.__stats["excessJitterThresholdPercent"]/100.0)
+        self.__stats["excessJitterThresholdPercent"] = 15
+        self.excessJitterThresholdFactor = 1.0 + (self.__stats["excessJitterThresholdPercent"] / 100.0)
 
         # No of seconds to inhibit an excessive jitter alarm
         self.__stats["excessiveJitterAlarmTimeout"] = 2
         self.__stats["timeElapsedSinceLastExcessJitter"] = datetime.timedelta()
-        self.__stats["timeofLastExcessJitterEvent"]=datetime.timedelta()
+        self.__stats["timeofLastExcessJitterEvent"] = datetime.timedelta()
         self.__stats["totalExcessJitterEvents"] = 0
         self.__stats["meanTimeBetweenExcessJitterEvents"] = datetime.timedelta()
         self.sumOfTimeElapsedSinceLastExcessJitterEvents = datetime.timedelta()
@@ -502,7 +500,6 @@ class RtpStream(object):
             # Calculate elapsed since last glitch
             # But only if there has actually been a glitch in the past to measure against
             if self.__stats["totalGlitches"] > 0:
-
                 # Calculate new value
                 self.__stats["timeElapsedSinceLastGlitch"] = datetime.datetime.now() - self.__stats[
                     "timestampOfLastGlitch"]
@@ -639,16 +636,16 @@ class RtpStream(object):
 def __displayThread(rtpStream):
     print "__displayThread started with id: ", rtpStream.getRTPStreamID(), "\r"
 
-    tabCounter =0
-    columns =2
+    tabCounter = 0
+    columns = 2
     while True:
         # Get keys/values from rtpStream
-        items=rtpStream.getRtpStreamStats().items()
+        items = rtpStream.getRtpStreamStats().items()
         # Clear screen and move cursor to origin
         print"\033[2J"
-        #Clear tabCounter
+        # Clear tabCounter
         tabCounter = 0
-        print len(items),"\r"
+        print len(items), "\r"
         for x, y in items:
             if x == "totalDataReceivedPerSecond":
                 # Convert received rate from bytes/sec to bits/sec
@@ -668,9 +665,9 @@ def __displayThread(rtpStream):
             else:
                 print x, y, "\t\t\t\t\t",
             # Increment tab counter
-            tabCounter +=1
+            tabCounter += 1
             # If we've exceeded the number of columbs, print a carriage return
-            if (tabCounter%columns) >= (columns-1):
+            if (tabCounter % columns) >= (columns - 1):
                 print "\r"
         print "\r--------------------", "\r"
         for event in rtpStream.getRTPStreamEventList():
