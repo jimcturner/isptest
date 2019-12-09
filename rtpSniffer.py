@@ -287,11 +287,8 @@ class RtpStream(object):
             self.__stats["totalGlitchLength"] += glitch.glitchLength
             self.__stats["totalGlitches"] += 1
 
-            # # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
-            # self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
-            # # Calculate mean of new and prev value
-            # self.__stats["meanTimeBetweenGlitches"] = self.sumOfTimeElapsedSinceLastGlitch / self.__stats[
-            #     "totalGlitches"]
+            # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
+            self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
 
             # Finally, reset min/max/range jitter values as they're corrupted by a glitch
             self.__stats["minJitter"] = 0
@@ -327,11 +324,8 @@ class RtpStream(object):
                 self.__stats["totalGlitchLength"] += glitch.glitchLength
                 self.__stats["totalGlitches"] += 1
 
-                # # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
-                # self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
-                # # Calculate mean of new and prev value
-                # self.__stats["meanTimeBetweenGlitches"] = self.sumOfTimeElapsedSinceLastGlitch / self.__stats[
-                #     "totalGlitches"]
+                # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
+                self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
 
                 # Finally, reset min/max/range jitter values as they're corrupted by a glitch
                 self.__stats["minJitter"] = 0
@@ -343,12 +337,12 @@ class RtpStream(object):
             # Store current rtp packet for the next iteration around the loop
             prevRtpPacket = rtpPacket
 
-        if self.__stats["totalGlitches"] > 0:
-            # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
-            self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
+        if self.__stats["totalGlitches"] > 1:
+
             # Calculate mean of new and prev value
-            self.__stats["meanTimeBetweenGlitches"] = self.sumOfTimeElapsedSinceLastGlitch / self.__stats[
-                "totalGlitches"]
+            self.__stats["meanTimeBetweenGlitches"] = \
+                    (self.sumOfTimeElapsedSinceLastGlitch + self.__stats["timeElapsedSinceLastGlitch"])/ \
+                                self.__stats["totalGlitches"]
 
     # Define a private calculation method that will run autonomously as a thread
     # This thread will
