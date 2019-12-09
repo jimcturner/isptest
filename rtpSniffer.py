@@ -266,6 +266,7 @@ class RtpStream(object):
 
         if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and self.__stats[
             "secondsElapsed"] > 0:
+
             # Take timestamp of most recent glitch
             self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
 
@@ -278,6 +279,12 @@ class RtpStream(object):
             self.__stats["totalPacketsLost"] += glitch.packetsLost
             self.__stats["totalGlitchLength"] += glitch.glitchLength
             self.__stats["totalGlitches"] += 1
+
+            # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
+            self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
+            # Calculate mean of new and prev value
+            self.__stats["meanTimeBetweenGlitches"] = self.sumOfTimeElapsedSinceLastGlitch / self.__stats[
+                "totalGlitches"]
 
             # Finally, reset min/max/range jitter values as they're corrupted by a glitch
             self.__stats["minJitter"] = 0
@@ -312,6 +319,12 @@ class RtpStream(object):
                 self.__stats["totalPacketsLost"] += glitch.packetsLost
                 self.__stats["totalGlitchLength"] += glitch.glitchLength
                 self.__stats["totalGlitches"] += 1
+
+                # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
+                self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
+                # Calculate mean of new and prev value
+                self.__stats["meanTimeBetweenGlitches"] = self.sumOfTimeElapsedSinceLastGlitch / self.__stats[
+                    "totalGlitches"]
 
                 # Finally, reset min/max/range jitter values as they're corrupted by a glitch
                 self.__stats["minJitter"] = 0
@@ -354,6 +367,8 @@ class RtpStream(object):
         self.__stats["totalGlitchLength"] = datetime.timedelta()
         self.__stats["timestampOfLastGlitch"] = datetime.timedelta()
         self.__stats["timeElapsedSinceLastGlitch"] = datetime.timedelta()
+        self.__stats["meanTimeBetweenGlitches"] = datetime.timedelta()
+        self.sumOfTimeElapsedSinceLastGlitch = datetime.timedelta()
 
         # Jitter counters
         self.__stats["minJitter"] = 0
@@ -376,6 +391,7 @@ class RtpStream(object):
         self.__stats["timeElapsedSinceLastExcessJitter"] = datetime.timedelta()
         self.__stats["timeofLastExcessJitterEvent"]=datetime.timedelta()
         self.__stats["totalExcessJitterEvents"] = 0
+        self.__stats["meanTimeBetweenExcessJitterEvents"] = datetime.timedelta()
 
         # Declare flags
         lossOfStreamFlag = True
@@ -472,8 +488,10 @@ class RtpStream(object):
                     self.__stats["rangeOfJitter"] = 0
 
             # Calculate elapsed since last glitch
-            # But only if there has actually been a glitch
+            # But only if there has actually been a glitch in the past to measure against
             if self.__stats["totalGlitches"] > 0:
+
+                # Calculate new value
                 self.__stats["timeElapsedSinceLastGlitch"] = datetime.datetime.now() - self.__stats[
                     "timestampOfLastGlitch"]
 
