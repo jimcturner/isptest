@@ -252,9 +252,16 @@ class RtpStream(object):
                 # Take timestamp fo this (the most recent) Excess Jitter event
                 self.__stats["timeofLastExcessJitterEvent"]=datetime.datetime.now()
         # Now update the self.__stats["timeElapsedSinceLastExcessJitter"] timer
+        # and also the running calculation of the mean time betwen jitter events
         if self.__stats["totalExcessJitterEvents"] > 0:
             self.__stats["timeElapsedSinceLastExcessJitter"] = datetime.datetime.now() - \
                        self.__stats["timeofLastExcessJitterEvent"]
+
+            # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean period between events)
+            self.sumOfTimeElapsedSinceLastExcessJitterEvents += self.__stats["timeElapsedSinceLastExcessJitter"]
+            # Calculate mean of new and prev value
+            self.__stats["meanTimeBetweenExcessJitterEvents"] = self.sumOfTimeElapsedSinceLastExcessJitterEvents / \
+                    self.__stats["totalExcessJitterEvents"]
 
 
     def __detectGlitches(self, lastReceivedRtpPacket):
@@ -392,6 +399,7 @@ class RtpStream(object):
         self.__stats["timeofLastExcessJitterEvent"]=datetime.timedelta()
         self.__stats["totalExcessJitterEvents"] = 0
         self.__stats["meanTimeBetweenExcessJitterEvents"] = datetime.timedelta()
+        self.sumOfTimeElapsedSinceLastExcessJitterEvents = datetime.timedelta()
 
         # Declare flags
         lossOfStreamFlag = True
