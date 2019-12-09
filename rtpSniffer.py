@@ -612,9 +612,14 @@ def __displayThread(rtpStream):
     tabCounter =0
     columns =2
     while True:
+        # Get keys/values from rtpStream
+        items=rtpStream.getRtpStreamStats().items()
         # Clear screen and move cursor to origin
         print"\033[2J"
-        for x, y in rtpStream.getRtpStreamStats().items():
+        #Clear tabCounter
+        tabCounter = 0
+        print len(items),"\r"
+        for x, y in items:
             if x == "totalDataReceivedPerSecond":
                 # Convert received rate from bytes/sec to bits/sec
                 rxRate = y * 8
@@ -629,7 +634,7 @@ def __displayThread(rtpStream):
                     friendlyValue = rxRate / 1048576.0
                 # print x,friendlyValue,suffix,": (",y,")","\r"
                 print x, round(friendlyValue, 2), suffix, "\t\t\t\t\t",
-                tabCounter += 1
+
             else:
                 print x, y, "\t\t\t\t\t",
             # Increment tab counter
