@@ -15,7 +15,7 @@ import threading
 import random
 import string
 import platform
-import getopt # Used to parse command line arguments
+import getopt  # Used to parse command line arguments
 
 ####################################################################################
 # Utility Functions
@@ -128,13 +128,14 @@ class Glitch(object):
         self.endOfGap = firstPackedReceivedAfterGap
         # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
         # The '-1' is because it's fences and fenceposts
-        self.packetsLost = abs(firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo) - 1
+        self.packetsLost = abs(
+            firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo) - 1
         # print firstPackedReceivedAfterGap.rtpSequenceNo,lastReceivedPacketBeforeGap.rtpSequenceNo,"\r"
         # Calculate length of this glitch
         self.glitchLength = firstPackedReceivedAfterGap.timestamp - lastReceivedPacketBeforeGap.timestamp
         # Calculate useful values showing expected and actual rtpSequence no
-        self.expectedSequenceNo=self.startOfGap.rtpSequenceNo+1
-        self.actualReceivedSequenceNo=self.endOfGap.rtpSequenceNo
+        self.expectedSequenceNo = self.startOfGap.rtpSequenceNo + 1
+        self.actualReceivedSequenceNo = self.endOfGap.rtpSequenceNo
 
 
 # Define a class to represent a flow of received rtp packets (and associated stats)
@@ -180,7 +181,7 @@ class RtpStream(object):
         sumOfTimeDeltas = 0
 
         # Keep prevRtpPacket value safe for later (because we'll be overwriting it as we iterate over self.rtpStream[])
-        z=prevRtpPacket
+        z = prevRtpPacket
 
         for y in self.rtpStream:
             # Calculate and write time delta into RtpData object
@@ -229,25 +230,31 @@ class RtpStream(object):
             # This batch of data only contains a single packet.
             # as this requires at least two packets worth of data (the difference of a difference!)
             # The meanRxPeriod is possible to deduce by comparing this new single packet with the last received
-            self.__stats["instantaneousJitter"]=self.rtpStream[-1].jitter - z.jitter
-            self.__stats["meanRxPeriod"]=self.rtpStream[-1].timeDelta.microseconds
+            self.__stats["instantaneousJitter"] = self.rtpStream[-1].jitter - z.jitter
+            self.__stats["meanRxPeriod"] = self.rtpStream[-1].timeDelta.microseconds
 
-        # Now attempt to detect excessive jitter by comparing the instantaneous value with the 10s averaged value
-        # Check that 10s value has actually been calculated
-        if self.__stats["meanJitter_10s"] > 0:
-            if self.__stats["meanJitter_1s"] > (2 * self.__stats["longTermJitter_uS"]):
-                if self.excessiveJitterAlarmInhibit==False:
-                    # If flag not already set, set it
-                    self.excessiveJitterAlarmInhibit=True
-                    self.excessiveJitterTimeoutTimer=datetime.datetime.now()
+        # Now attempt to detect excessive jitter by comparing the instantaneous value with the long term value
+        # Check that long term value has actually been calculated
+        if self.__stats["longTermJitter_uS"] > 0:
+            if self.__stats["meanJitter_1s"] > \
+                    (self.excessJitterThresholdFactor * self.__stats["longTermJitter_uS"]):
 
                 # If jitter alarms not inhibited, add a new jitter event
-                if ((datetime.datetime.now()-self.excessiveJitterTimeoutTimer).seconds < self.excessiveJitterThreshold) \
-                        and self.excessiveJitterAlarmInhibit==False:
-                    print "*******Excessive jitter", self.__stats["instantaneousJitter"], self.__stats["meanJitter_10s"],"\r"
-                    self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats["instantaneousJitter"],
-                                                        self.__stats["meanJitter_1s"], self.__stats["meanJitter_10s"]))
+                # Take diff between time.now() and the time of the last event
+                if self.__stats["timeElapsedSinceLastExcessJitter"].seconds > \
+                            self.__stats["excessiveJitterAlarmTimeout"]:
+                        self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats["instantaneousJitter"],
+                                                                self.__stats["meanJitter_1s"],
+                                                                self.__stats["meanJitter_10s"]))
 
+                # Update the event counter for Excess Jitter
+                self.__stats["totalExcessJitterEvents"] += 1
+                # Take timestamp fo this (the most recent) Excess Jitter event
+                self.__stats["timeofLastExcessJitterEvent"]=datetime.datetime.now()
+        # Now update the self.__stats["timeElapsedSinceLastExcessJitter"] timer
+        if self.__stats["totalExcessJitterEvents"] > 0:
+            self.__stats["timeElapsedSinceLastExcessJitter"] = datetime.datetime.now() - \
+                       self.__stats["timeofLastExcessJitterEvent"]
 
 
     def __detectGlitches(self, lastReceivedRtpPacket):
@@ -255,9 +262,10 @@ class RtpStream(object):
         # Inhibit this for the first second (because there's nothing to compare the first packet to)
         # Also, when the seq no hits 65535 it will wrap around to zero giving a false diff. Musn't interpret this as a glitch
         if lastReceivedRtpPacket.rtpSequenceNo == 65535:
-            lastReceivedRtpPacket.rtpSequenceNo=-1
+            lastReceivedRtpPacket.rtpSequenceNo = -1
 
-        if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and self.__stats["secondsElapsed"] > 0:
+        if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and self.__stats[
+            "secondsElapsed"] > 0:
             # Take timestamp of most recent glitch
             self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
 
@@ -271,7 +279,7 @@ class RtpStream(object):
             self.__stats["totalGlitchLength"] += glitch.glitchLength
             self.__stats["totalGlitches"] += 1
 
-            #Finally, reset min/max/range jitter values as they're corrupted by a glitch
+            # Finally, reset min/max/range jitter values as they're corrupted by a glitch
             self.__stats["minJitter"] = 0
             self.__stats["maxJitter"] = 0
             self.__stats["rangeOfJitter"] = 0
@@ -326,7 +334,7 @@ class RtpStream(object):
         # Start the loop timer (used to provide a 1sec interval)
         loopTimerStart = datetime.datetime.now()
         # Timer used to detect loss of streams against an alarm threshold
-        lossOfStreamTimerStart=datetime.timedelta()
+        lossOfStreamTimerStart = datetime.timedelta()
 
         runningTotalPacketsPerSecond = 0
         runningTotalDataReceivedPerSecond = 0
@@ -334,7 +342,7 @@ class RtpStream(object):
         self.__stats["totalPacketsPerSecond"] = 0
         self.__stats["totalDataReceivedPerSecond"] = 0
         self.__stats["totalDataReceived"] = 0
-        self.__stats["averagePayloadSizePerSecond"]=0
+        self.__stats["averagePayloadSizePerSecond"] = 0
         self.__stats["totalPacketsReceived"] = 0
         self.__stats["secondsElapsed"] = 0
 
@@ -354,15 +362,20 @@ class RtpStream(object):
         self.__stats["instantaneousJitter"] = 0
         self.__stats["meanJitter_1s"] = 0
         self.__stats["meanJitter_10s"] = 0
-        self.__stats["longTermJitter_uS"]=0
+        self.__stats["longTermJitter_uS"] = 0
         self.__stats["processorUtilisationPercent"] = 0
         historicJitter = []
         sumOfJitter_1s = 0
-        # Create a timeout to inhibit excessive quantities of jitter alarm
-        self.excessiveJitterTimeoutTimer=datetime.timedelta()
+
+        # % deviation from longTermJitter_uS that will trigger an excessJitterEvent
+        self.__stats["excessJitterThresholdPercent"]=15
+        self.excessJitterThresholdFactor=1.0+(self.__stats["excessJitterThresholdPercent"]/100.0)
+
         # No of seconds to inhibit an excessive jitter alarm
-        self.excessiveJitterThreshold=2
-        self.excessiveJitterAlarmInhibit=False
+        self.__stats["excessiveJitterAlarmTimeout"] = 2
+        self.__stats["timeElapsedSinceLastExcessJitter"] = datetime.timedelta()
+        self.__stats["timeofLastExcessJitterEvent"]=datetime.timedelta()
+        self.__stats["totalExcessJitterEvents"] = 0
 
         # Declare flags
         lossOfStreamFlag = True
@@ -445,9 +458,9 @@ class RtpStream(object):
                     # Set the flag
                     possibleLossOfStreamFlag = True
                     # And start the lossOfStream Timer
-                    lossOfStreamTimerStart=datetime.datetime.now()
+                    lossOfStreamTimerStart = datetime.datetime.now()
 
-                if (datetime.datetime.now()-lossOfStreamTimerStart).seconds >= lossOfStreamAlarmThreshold \
+                if (datetime.datetime.now() - lossOfStreamTimerStart).seconds >= lossOfStreamAlarmThreshold \
                         and lossOfStreamFlag == False and self.__stats["totalPacketsReceived"] > 0:
                     # Set flag
                     lossOfStreamFlag = True
@@ -480,9 +493,9 @@ class RtpStream(object):
                 self.__stats["totalDataReceivedPerSecond"] = runningTotalDataReceivedPerSecond
 
                 # Calculate self.__stats["averagePayloadSizePerSecond"]
-                if self.__stats["totalPacketsPerSecond"] >0:
-                    self.__stats["averagePayloadSizePerSecond"] =\
-                        self.__stats["totalDataReceivedPerSecond"]/self.__stats["totalPacketsPerSecond"]
+                if self.__stats["totalPacketsPerSecond"] > 0:
+                    self.__stats["averagePayloadSizePerSecond"] = \
+                        self.__stats["totalDataReceivedPerSecond"] / self.__stats["totalPacketsPerSecond"]
                 # Clear running totals
                 runningTotalPacketsPerSecond = 0
                 runningTotalDataReceivedPerSecond = 0
@@ -498,7 +511,7 @@ class RtpStream(object):
                 historicJitter.append(self.__stats["meanJitter_1s"])
                 # Calculate a long-term jitter value by averaging all meanJitter_1s value over time elapsed
                 sumOfJitter_1s += self.__stats["meanJitter_1s"]
-                self.__stats["longTermJitter_uS"] = sumOfJitter_1s/self.__stats["secondsElapsed"]
+                self.__stats["longTermJitter_uS"] = sumOfJitter_1s / self.__stats["secondsElapsed"]
                 prevMeanJitter_10s = self.__stats["meanJitter_10s"]
                 # Check that we have enough results (10s worth) to calculate the 10s value
                 if len(historicJitter) > 10:
@@ -517,7 +530,6 @@ class RtpStream(object):
                 # Wait a second, in order to know we're in a steady state
                 if self.__stats["meanRxPeriod"] > 0 and self.__stats["secondsElapsed"] > 1:
                     self.__stats["POLL_INTERVAL"] = 10.0 * self.__stats["meanRxPeriod"] / 1000000.0
-
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = datetime.datetime.now()
@@ -597,33 +609,41 @@ class RtpStream(object):
 def __displayThread(rtpStream):
     print "__displayThread started with id: ", rtpStream.getRTPStreamID(), "\r"
 
+    tabCounter =0
+    columns =2
     while True:
+        # Clear screen and move cursor to origin
+        print"\033[2J"
         for x, y in rtpStream.getRtpStreamStats().items():
             if x == "totalDataReceivedPerSecond":
                 # Convert received rate from bytes/sec to bits/sec
-                rxRate=y*8
-                friendlyValue=0
+                rxRate = y * 8
+                friendlyValue = 0
                 if rxRate < 1024:
-                    suffix="bps"
-                elif rxRate <=1048576:
-                    suffix="kbps"
-                    friendlyValue =rxRate/1024.0
+                    suffix = "bps"
+                elif rxRate <= 1048576:
+                    suffix = "kbps"
+                    friendlyValue = rxRate / 1024.0
                 else:
-                    suffix="Mbps"
+                    suffix = "Mbps"
                     friendlyValue = rxRate / 1048576.0
                 # print x,friendlyValue,suffix,": (",y,")","\r"
-                print x,round(friendlyValue,2),suffix,"\r"
-
+                print x, round(friendlyValue, 2), suffix, "\t\t\t\t\t",
+                tabCounter += 1
             else:
-                print x, y, "\r"
-            # pass
-        print "--------------------", "\r"
+                print x, y, "\t\t\t\t\t",
+            # Increment tab counter
+            tabCounter +=1
+            # If we've exceeded the number of columbs, print a carriage return
+            if (tabCounter%columns) >= (columns-1):
+                print "\r"
+        print "\r--------------------", "\r"
         for event in rtpStream.getRTPStreamEventList():
-            if event.type=='Glitch':
-                print event.type, event.timeCreated,"Expected:",event.expectedSequenceNo,", Received",event.actualReceivedSequenceNo,"\r"
+            if event.type == 'Glitch':
+                print event.type, event.timeCreated, "Expected:", event.expectedSequenceNo, ", Received", event.actualReceivedSequenceNo, "\r"
             else:
                 print event.type, event.timeCreated, "\r"
-        	# pass
+            # pass
         print "------------------------------------------", "\r"
         time.sleep(1)
 
@@ -638,7 +658,7 @@ def __catchKeyboardPresses(keyPressed):
 
 
 # define a traffic generator thread
-def __rtpGenerator(keyPressed,UDP_TX_IP,UDP_TX_PORT):
+def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT):
     # UDP_DEST_IP = "127.0.0.1"
     # UDP__DEST_PORT = 5004
 
@@ -652,8 +672,8 @@ def __rtpGenerator(keyPressed,UDP_TX_IP,UDP_TX_PORT):
 
     txSock = socket.socket(socket.AF_INET,  # Internet
                            socket.SOCK_DGRAM)  # UDP
-    print "Traffic Generator thread started","\r"
-    print "[spacebar] insert single packet loss, [z] Inhibit/Re-enable packet generation, [j] Toggle jitter on/off","\r"
+    print "Traffic Generator thread started", "\r"
+    print "[spacebar] insert single packet loss, [z] Inhibit/Re-enable packet generation, [j] Toggle jitter on/off", "\r"
 
     rtpParams = 0b01000000
     rtpPayloadType = 0b00000000
@@ -683,7 +703,7 @@ def __rtpGenerator(keyPressed,UDP_TX_IP,UDP_TX_PORT):
                 keyPressed[0] = ''
                 # Clear enable flag
                 enablePacketGeneration = False
-                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')," 'z' Inhibiting packet generator\r"
+                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), " 'z' Inhibiting packet generator\r"
             else:
                 # Empty keyboard buffer
                 keyPressed[0] = ''
@@ -697,7 +717,7 @@ def __rtpGenerator(keyPressed,UDP_TX_IP,UDP_TX_PORT):
             # Clear keyboard buffer
             keyPressed[0] = ''
             temporaryInhibit = True
-            print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),"[Spacebar] - Inhibit single packet\r"
+            print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "[Spacebar] - Inhibit single packet\r"
 
         # If all tx flags are set then transmit the rtp packet
         if enablePacketGeneration == True and temporaryInhibit == False:
@@ -709,16 +729,16 @@ def __rtpGenerator(keyPressed,UDP_TX_IP,UDP_TX_PORT):
             keyPressed[0] = ''
             if enableJitter == False:
                 enableJitter = True
-                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),"[j] jitter enabled\r"
+                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "[j] jitter enabled\r"
             else:
                 enableJitter = False
-                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),"[j] jitter disabled\r"
+                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "[j] jitter disabled\r"
 
         # Increment rtp sequence number for next iteration of the loop
         rtpSequenceNo += 1
         # Seq no is only a 16 bit value, so reset at max value (65535)
         if rtpSequenceNo > 65535:
-            rtpSequenceNo=0
+            rtpSequenceNo = 0
         # print "rtpSequenceNo",rtpSequenceNo,"\r"
         # If flag set, generate random delay centred around txPeriod (0.01 = 10mS period)
         if enableJitter == True:
@@ -735,9 +755,9 @@ def __rtpGenerator(keyPressed,UDP_TX_IP,UDP_TX_PORT):
 # Main prog starts here
 # #####################
 def main(argv):
-    MODE=""
+    MODE = ""
 
-    #print 'Argument List:', str(argv)
+    # print 'Argument List:', str(argv)
     try:
         # options are:
         # h: help
@@ -745,15 +765,15 @@ def main(argv):
         # -t: transmit mode usage: address:port
         # -r receive mode usage: address:port
 
-        address=""
+        address = ""
         opts, args = getopt.getopt(argv, "hlt:r:i:t:")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
-            if opt=='-h':
+            if opt == '-h':
                 print "help"
-            elif opt =='-l':
-                MODE="LOOPBACK"
+            elif opt == '-l':
+                MODE = "LOOPBACK"
                 print MODE
                 UDP_RX_IP = "127.0.0.1"
                 UDP_RX_PORT = 5004
@@ -779,16 +799,16 @@ def main(argv):
                     exit()
 
             elif opt in ("-r"):
-                MODE= "RECEIVE"
+                MODE = "RECEIVE"
                 # check for two parameters seperated by a colon
-                if len(arg.split(':'))==2:
+                if len(arg.split(':')) == 2:
                     UDP_RX_IP = arg.split(':')[0]
                     UDP_RX_PORT = int(arg.split(':')[1])
                     # Validate supplied IP address
                     try:
                         socket.inet_aton(UDP_RX_IP)
                     except socket.error:
-                        print "Invalid RECEIVE IP address:port combinbation supplied:",arg
+                        print "Invalid RECEIVE IP address:port combinbation supplied:", arg
                         exit()
                     print MODE, UDP_RX_IP, UDP_RX_PORT
                 else:
@@ -807,9 +827,6 @@ def main(argv):
     #     UDP_RX_PORT = 6100
     #     UDP_RX_IP = "172.26.203.1"
 
-
-
-
     runOnce = True
 
     # Create dummy list to allow 'pass by reference' (i.e a 'pointer')
@@ -821,13 +838,13 @@ def main(argv):
     catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
     catchKeyboardPresses.start()
 
-    if MODE=='LOOPBACK' or MODE=='TRANSMIT':
+    if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
-        rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed,UDP_TX_IP,UDP_TX_PORT))
+        rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed, UDP_TX_IP, UDP_TX_PORT))
         rtpGenerator.daemon = True  # Thread will auto shutdown when the prog ends
         rtpGenerator.start()
 
-    if MODE=='RECEIVE' or MODE=='LOOPBACK':
+    if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
         # Create receive UDP socket
         sock = socket.socket(socket.AF_INET,  # Internet
