@@ -271,8 +271,8 @@ class RtpStream(object):
         if lastReceivedRtpPacket.rtpSequenceNo == 65535:
             lastReceivedRtpPacket.rtpSequenceNo = -1
 
-        if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and self.__stats[
-            "secondsElapsed"] > 0:
+        if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and \
+                self.__stats["timeElapsed"].seconds > 0:
 
             # Take timestamp of most recent glitch
             self.__stats["timestampOfLastGlitch"] = datetime.datetime.now()
@@ -287,11 +287,11 @@ class RtpStream(object):
             self.__stats["totalGlitchLength"] += glitch.glitchLength
             self.__stats["totalGlitches"] += 1
 
-            # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
-            self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
-            # Calculate mean of new and prev value
-            self.__stats["meanTimeBetweenGlitches"] = self.sumOfTimeElapsedSinceLastGlitch / self.__stats[
-                "totalGlitches"]
+            # # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
+            # self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
+            # # Calculate mean of new and prev value
+            # self.__stats["meanTimeBetweenGlitches"] = self.sumOfTimeElapsedSinceLastGlitch / self.__stats[
+            #     "totalGlitches"]
 
             # Finally, reset min/max/range jitter values as they're corrupted by a glitch
             self.__stats["minJitter"] = 0
@@ -327,18 +327,28 @@ class RtpStream(object):
                 self.__stats["totalGlitchLength"] += glitch.glitchLength
                 self.__stats["totalGlitches"] += 1
 
-                # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
-                self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
-                # Calculate mean of new and prev value
-                self.__stats["meanTimeBetweenGlitches"] = self.sumOfTimeElapsedSinceLastGlitch / self.__stats[
-                    "totalGlitches"]
+                # # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
+                # self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
+                # # Calculate mean of new and prev value
+                # self.__stats["meanTimeBetweenGlitches"] = self.sumOfTimeElapsedSinceLastGlitch / self.__stats[
+                #     "totalGlitches"]
 
                 # Finally, reset min/max/range jitter values as they're corrupted by a glitch
                 self.__stats["minJitter"] = 0
                 self.__stats["maxJitter"] = 0
                 self.__stats["rangeOfJitter"] = 0
+
+
+
             # Store current rtp packet for the next iteration around the loop
             prevRtpPacket = rtpPacket
+
+        if self.__stats["totalGlitches"] > 0:
+            # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
+            self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
+            # Calculate mean of new and prev value
+            self.__stats["meanTimeBetweenGlitches"] = self.sumOfTimeElapsedSinceLastGlitch / self.__stats[
+                "totalGlitches"]
 
     # Define a private calculation method that will run autonomously as a thread
     # This thread will
@@ -364,7 +374,7 @@ class RtpStream(object):
         self.__stats["totalDataReceived"] = 0
         self.__stats["averagePayloadSizePerSecond"] = 0
         self.__stats["totalPacketsReceived"] = 0
-        self.__stats["secondsElapsed"] = 0
+        self.__stats["timeElapsed"] = datetime.timedelta()
 
         # Glitch counters
         self.__stats["totalPercentPacketsLost"] = 0
@@ -513,7 +523,7 @@ class RtpStream(object):
                 # Reset loop timer starting reference
                 loopTimerStart = datetime.datetime.now()
                 # Increment seconds elapsed
-                self.__stats["secondsElapsed"] += 1
+                self.__stats["timeElapsed"] += datetime.timedelta(seconds=1)
                 # Take snapshots of running totals
                 self.__stats["totalPacketsPerSecond"] = runningTotalPacketsPerSecond
                 self.__stats["totalDataReceivedPerSecond"] = runningTotalDataReceivedPerSecond
@@ -537,7 +547,7 @@ class RtpStream(object):
                 historicJitter.append(self.__stats["meanJitter_1s"])
                 # Calculate a long-term jitter value by averaging all meanJitter_1s value over time elapsed
                 sumOfJitter_1s += self.__stats["meanJitter_1s"]
-                self.__stats["longTermJitter_uS"] = sumOfJitter_1s / self.__stats["secondsElapsed"]
+                self.__stats["longTermJitter_uS"] = sumOfJitter_1s / self.__stats["timeElapsed"].seconds
                 prevMeanJitter_10s = self.__stats["meanJitter_10s"]
                 # Check that we have enough results (10s worth) to calculate the 10s value
                 if len(historicJitter) > 10:
@@ -554,7 +564,7 @@ class RtpStream(object):
                 # This will ensure that self.rtpStream[] length never gets too large.
                 # Otherwise, for high packet receieve rates, the calculation time will become excessive
                 # Wait a second, in order to know we're in a steady state
-                if self.__stats["meanRxPeriod"] > 0 and self.__stats["secondsElapsed"] > 1:
+                if self.__stats["meanRxPeriod"] > 0 and self.__stats["timeElapsed"].seconds > 1:
                     self.__stats["POLL_INTERVAL"] = 10.0 * self.__stats["meanRxPeriod"] / 1000000.0
 
             # Calculate how long it has taken for the stats analysis to have been performed
