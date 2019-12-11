@@ -241,11 +241,13 @@ class RtpStream(object):
 
                 # If jitter alarms not inhibited, add a new jitter event
                 # Take diff between time.now() and the time of the last event
-                if self.__stats["timeElapsedSinceLastExcessJitter"].seconds > \
-                        self.__stats["excessiveJitterAlarmTimeout"]:
+                if self.__stats["timeElapsedSinceLastExcessJitter"].total_seconds() >= \
+                        self.__stats["excessiveJitterAlarmTimeout"] or \
+                        self.__stats["totalExcessJitterEvents"] == 0:
                     self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats["instantaneousJitter"],
                                                             self.__stats["meanJitter_1s"],
                                                             self.__stats["meanJitter_10s"]))
+
 
                 # Update the event counter for Excess Jitter
                 self.__stats["totalExcessJitterEvents"] += 1
@@ -645,7 +647,8 @@ def __displayThread(rtpStream):
         print"\033[2J"
         # Clear tabCounter
         tabCounter = 0
-        print len(items), "\r"
+        # print len(items), "\r"
+        print "\r IBEOO ISP Analyser---------------------------------------------------------------------------------------------------", "\r"
         for x, y in items:
             if x == "totalDataReceivedPerSecond":
                 # Convert received rate from bytes/sec to bits/sec
@@ -659,17 +662,22 @@ def __displayThread(rtpStream):
                 else:
                     suffix = "Mbps"
                     friendlyValue = rxRate / 1048576.0
-                # print x,friendlyValue,suffix,": (",y,")","\r"
-                print x, round(friendlyValue, 2), suffix, "\t\t\t\t\t",
+
+                print " |",x, round(friendlyValue, 2), suffix,
 
             else:
-                print x, y, "\t\t\t\t\t",
+                print " |",x, y,
+            # For alternate fields, return the cursor to the start of line position and then tab across
+            if (tabCounter % 2) >= 1:
+                # If the second field of the line, terminate with a | to complete the box
+                # print "\033[100D", "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t|","\033[100D",
+                print "\033[100D", "\t\t\t\t\t\t\t\t",
             # Increment tab counter
             tabCounter += 1
-            # If we've exceeded the number of columbs, print a carriage return
+            # If we've exceeded the number of columns, print a carriage return
             if (tabCounter % columns) >= (columns - 1):
                 print "\r"
-        print "\r--------------------", "\r"
+        print "\r -----------------------------------------------------------------------------------------------------------------------", "\r"
         for event in rtpStream.getRTPStreamEventList():
             if event.type == 'Glitch':
                 print event.type, event.timeCreated, "Expected:", event.expectedSequenceNo, ", Received", event.actualReceivedSequenceNo, "\r"
