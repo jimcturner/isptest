@@ -15,7 +15,8 @@ import threading
 import random
 import string
 import platform
-import getopt  # Used to parse command line arguments
+import getopt   # Used to parse command line arguments
+import re       # Regex 'regular expression' module
 
 ####################################################################################
 # Utility Functions
@@ -71,7 +72,6 @@ class StreamStarted(object):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
         self.firstPacketdReceived = firstPacketReceived
-
 
 # Define an event that represents a loss of rtpStream
 class StreamLost(object):
@@ -408,7 +408,7 @@ class RtpStream(object):
         # Declare flags
         lossOfStreamFlag = True
         possibleLossOfStreamFlag = False
-        lossOfStreamAlarmThreshold = 2
+        lossOfStreamAlarmThreshold = 1
 
         self.__stats["POLL_INTERVAL"] = 0.1  # Loop will execute every 10mS
 
@@ -488,7 +488,7 @@ class RtpStream(object):
                     # And start the lossOfStream Timer
                     lossOfStreamTimerStart = datetime.datetime.now()
 
-                if (datetime.datetime.now() - lossOfStreamTimerStart).seconds >= lossOfStreamAlarmThreshold \
+                if (datetime.datetime.now() - lossOfStreamTimerStart).total_seconds() >= lossOfStreamAlarmThreshold \
                         and lossOfStreamFlag == False and self.__stats["totalPacketsReceived"] > 0:
                     # Set flag
                     lossOfStreamFlag = True
@@ -596,7 +596,7 @@ class RtpStream(object):
 
     # Define getter methods
     def getRTPStreamID(self):
-        return self.__streamID
+        return self.__streamID, self.srcAddress,self.srcPort
 
     # Thread-safe method for accessing realtime RtpStream stats
     def getRtpStreamStats(self):
@@ -643,12 +643,14 @@ def __displayThread(rtpStream):
     while True:
         # Get keys/values from rtpStream
         items = rtpStream.getRtpStreamStats().items()
+        id,srcAddr,srcPort=rtpStream.getRTPStreamID()
         # Clear screen and move cursor to origin
         print"\033[2J"
         # Clear tabCounter
         tabCounter = 0
         # print len(items), "\r"
         print "\r IBEOO ISP Analyser---------------------------------------------------------------------------------------------------", "\r"
+        print " | Src:",srcAddr,":",srcPort,", Stream ID:",id,"\r"
         for x, y in items:
             if x == "totalDataReceivedPerSecond":
                 # Convert received rate from bytes/sec to bits/sec
@@ -726,7 +728,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT):
     enablePacketGeneration = True
     enableJitter = False
 
-    txPeriod = 0.0001
+    txPeriod = 0.05
     jitterPerecentage = 50
     maxDeviation = txPeriod * jitterPerecentage / 100
 
@@ -804,9 +806,10 @@ def main(argv):
         # l: loopback mode
         # -t: transmit mode usage: address:port
         # -r receive mode usage: address:port
+        # -b bandwidth (append k for kbps, m for mbps eg 1m or 500k)
 
         address = ""
-        opts, args = getopt.getopt(argv, "hlt:r:i:t:")
+        opts, args = getopt.getopt(argv, "hlt:r:i:t:b:")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
@@ -855,6 +858,31 @@ def main(argv):
                     print "Invalid RECEIVE IP address:port combinbation supplied:", arg
                     exit()
 
+            elif opt in ("-b"):
+                # txRate=arg
+                try:
+                    # Use regex to split -b argument into numerical and string parts
+                    splitArg = re.split('(\d+)', arg)
+                    # Extract numerical part
+                    x=int(splitArg[1])
+                    # Extract string part
+                    multiplier=splitArg[2]
+                    print "x",x,"multiplier",multiplier
+                    if multiplier == 'k' or multiplier == 'K':
+                        txRate=x * 1024
+                        print "ffgfg"
+                    elif multiplier == 'm' or multiplier == 'M':
+                        txRate = x * 1024 * 1024
+                    else:
+                        print "Invalid -b bandwidth specfied. Unknown multiplier",multiplier
+                        exit()
+                except:
+                    print "Invalid -b bandwidth specfied. Should be xy wheher x is anumerical value and y is k or m (kbps or mbps).", \
+                            "If no multiplier supplied then assuming x mbps. eg. 500k, 1m, 5m etc"
+                    exit()
+                print "txRate",txRate
+
+        exit()
 
     except getopt.GetoptError:
         print 'invalid options supplied', argv
