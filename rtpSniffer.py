@@ -700,7 +700,7 @@ def __catchKeyboardPresses(keyPressed):
 
 
 # define a traffic generator thread
-def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT):
+def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate):
     # UDP_DEST_IP = "127.0.0.1"
     # UDP__DEST_PORT = 5004
 
@@ -728,12 +728,22 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT):
     enablePacketGeneration = True
     enableJitter = False
 
-    txPeriod = 0.05
+    # Caulculate tx period required to provide supplied txRate for a given stringLength
+    txPeriod = stringLength * 8.0 / txRate
+
+    # For extra txRate accuracy, take into account the calculation time of the rtpGenerator code loop
+    calculationTime = datetime.timedelta()
+    calculationTime_uS=0
+    # However this should be
+    runOnce = True
+
     jitterPerecentage = 50
     maxDeviation = txPeriod * jitterPerecentage / 100
 
-    while True:
 
+    while True:
+        calculationTime=datetime.datetime.now()
+        # Construct 12 byte header
         txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
                                   rtpSyncSourceIdentifier)
         MESSAGE = txRtpHeader + payload
@@ -788,6 +798,13 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT):
         else:
             jitter = 0
         # print "txPeriod",txPeriod+jitter,"\r"
+        # Calculate calculation time for this loop, but only once
+        if runOnce==True:
+            calculationTime_uS= (datetime.datetime.now()-calculationTime).microseconds
+            # Clear flag so that this won't run again
+            runOnce=True
+            print calculationTime_uS,"\r"
+
         time.sleep(txPeriod + jitter)
 
 
@@ -870,7 +887,6 @@ def main(argv):
                     print "x",x,"multiplier",multiplier
                     if multiplier == 'k' or multiplier == 'K':
                         txRate=x * 1024
-                        print "ffgfg"
                     elif multiplier == 'm' or multiplier == 'M':
                         txRate = x * 1024 * 1024
                     else:
@@ -882,7 +898,7 @@ def main(argv):
                     exit()
                 print "txRate",txRate
 
-        exit()
+
 
     except getopt.GetoptError:
         print 'invalid options supplied', argv
@@ -908,7 +924,7 @@ def main(argv):
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
-        rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed, UDP_TX_IP, UDP_TX_PORT))
+        rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate))
         rtpGenerator.daemon = True  # Thread will auto shutdown when the prog ends
         rtpGenerator.start()
 
