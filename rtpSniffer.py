@@ -707,6 +707,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate):
     # Generate random string
     # Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496 available bytes
     stringLength = 496
+    # stringLength = 1400
     # Create string containing all uppercase and lowercase letters
     letters = string.ascii_letters
     # iterate over stringLength picking random letters from
@@ -740,6 +741,8 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate):
     jitterPerecentage = 50
     maxDeviation = txPeriod * jitterPerecentage / 100
 
+    minCalcTime=0
+    maxCalcTime=0
 
     while True:
         calculationTime=datetime.datetime.now()
@@ -799,13 +802,25 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate):
             jitter = 0
         # print "txPeriod",txPeriod+jitter,"\r"
         # Calculate calculation time for this loop, but only once
-        if runOnce==True:
-            calculationTime_uS= (datetime.datetime.now()-calculationTime).microseconds
-            # Clear flag so that this won't run again
-            runOnce=True
-            print calculationTime_uS,"\r"
-
-        time.sleep(txPeriod + jitter)
+        calculationTime_uS = (datetime.datetime.now() - calculationTime).microseconds
+        calculationTime_S = calculationTime_uS / 1000000.0
+        # if runOnce==True:
+        #
+        #     if minCalcTime==0:
+        #         minCalcTime=calculationTime_uS
+        #     elif calculationTime_uS < minCalcTime:
+        #         minCalcTime = calculationTime_uS
+        #
+        #     if maxCalcTime == 0:
+        #         maxCalcTime = calculationTime_uS
+        #     elif calculationTime_uS > maxCalcTime:
+        #         maxCalcTime = calculationTime_uS
+        #     # Clear flag so that this won't run again
+        #     runOnce=True
+        #
+        #     print calculationTime_uS,calculationTime_mS,minCalcTime,maxCalcTime,"\r"
+        # print calculationTime_S,"\r"
+        time.sleep(txPeriod + jitter-calculationTime_S)
 
 
 ####################################################################################
@@ -815,6 +830,8 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate):
 # #####################
 def main(argv):
     MODE = ""
+    # Specify a default txRate of 1Mbps if no rate specified
+    txRate = 1 * 1024 * 1024
 
     # print 'Argument List:', str(argv)
     try:
@@ -876,7 +893,6 @@ def main(argv):
                     exit()
 
             elif opt in ("-b"):
-                # txRate=arg
                 try:
                     # Use regex to split -b argument into numerical and string parts
                     splitArg = re.split('(\d+)', arg)
