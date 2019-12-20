@@ -357,7 +357,7 @@ class RtpStream(object):
         # General Counters
         loopCounter = 0
         # Start the loop timer (used to provide a 1sec interval)
-        loopTimerStart = datetime.datetime.now()
+        loopTimerStart = timer()
         # Timer used to detect loss of streams against an alarm threshold
         lossOfStreamTimerStart = datetime.timedelta()
 
@@ -513,9 +513,9 @@ class RtpStream(object):
                 self.__stats["totalPercentPacketsLost"] = self.__stats["totalPacketsLost"] * 100 / totalExpectedPackets
 
             # 1 second timer
-            if (datetime.datetime.now() - loopTimerStart).seconds >= 1:
+            if (timer() - loopTimerStart) >= 1:
                 # Reset loop timer starting reference
-                loopTimerStart = datetime.datetime.now()
+                loopTimerStart = timer()
                 # Increment seconds elapsed
                 self.__stats["timeElapsed"] += datetime.timedelta(seconds=1)
                 # Take snapshots of running totals
@@ -821,7 +821,8 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
                 # Modify txPeriod to compensate for error
                 txPeriod -= txPeriod*errorFactor
                 # txPeriod -= txPeriodError
-                print "Compensating for timing error","Desired:",txRate, "Actual:", txBps_1s,"\r"
+                print "Compensating for timing error - Data rate too low","Desired tx rate:",txRate, "Actual tx rate:", txBps_1s,"\r"
+
             # Clear counter
             txBps_1s=0
         # The calculation time will be deductced from the sleep time, which should make the generator
