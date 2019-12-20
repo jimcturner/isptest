@@ -17,6 +17,7 @@ import string
 import platform
 import getopt   # Used to parse command line arguments
 import re       # Regex 'regular expression' module
+from timeit import default_timer as timer   # Used to calculate elapsed time
 
 ####################################################################################
 # Utility Functions
@@ -703,15 +704,14 @@ def __catchKeyboardPresses(keyPressed):
 def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
     # UDP_DEST_IP = "127.0.0.1"
     # UDP__DEST_PORT = 5004
-
+    txBps_1s=0
     # Generate random string
     # Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496 available bytes
-    stringLength = payloadLength
-    # stringLength = 1400
+    # stringLength = payloadLength
     # Create string containing all uppercase and lowercase letters
     letters = string.ascii_letters
     # iterate over stringLength picking random letters from
-    payload = ''.join(random.choice(letters) for i in range(stringLength))
+    payload = ''.join(random.choice(letters) for i in range(payloadLength))
 
     txSock = socket.socket(socket.AF_INET,  # Internet
                            socket.SOCK_DGRAM)  # UDP
@@ -730,16 +730,22 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
     enableJitter = False
 
     # Caulculate tx period required to provide supplied txRate for a given stringLength
-    txPeriod = stringLength * 8.0 / txRate
+    # Note: This is an estimate because time.sleep() is inherently unreliable so we have
+    # to recalculate once the generator is running by averaging over a 1 sec period
+    txPeriod = payloadLength * 8.0 / txRate
     print "txPeriod",txPeriod,"\r"
 
     jitterPerecentage = 50
     maxDeviation = txPeriod * jitterPerecentage / 100
 
-    minCalcTime=0
-    maxCalcTime=0
+    # start elapsed timer
+    startTime = timer()
 
     while True:
+        # Start an execution timer (if we know the time required to construct the packet we can deduct this from the
+        # txPeriod sleep time which should, in theory, reduce the jitter of the generator
+        calculationStartTime=timer()
+
         # Construct 12 byte header
         txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
                                   rtpSyncSourceIdentifier)
@@ -772,6 +778,8 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
         if enablePacketGeneration == True and temporaryInhibit == False:
             try:
                 txSock.sendto(MESSAGE, (UDP_TX_IP, UDP_TX_PORT))
+                # Update tx data counter
+                txBps_1s += len(payload)*8
             except Exception as e:
                 print "__rtpGenerator()",str(e),"\r"
                 exit()
@@ -799,8 +807,35 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
         else:
             jitter = 0
 
-        time.sleep(txPeriod + jitter)
+        # Calculate mean tx rate (bps)
+        # If there is an error between the desired tx speed and the actual tx speed (due to timing inaccuracies of the time.sleep() command)
+        # dynamically modify the txPeriod to actually generate the desired rate
+        if (timer()-startTime) >= 1:
+            # Reset elapsed timer
+            startTime = timer()
+            # print "txBits_1s",txBps_1s,"\r"
+            if txBps_1s < txRate:
+                # Data not being sent fast enough, so reduce txPeriod time
+                txRateError=txRate-txBps_1s
+                errorFactor= txRateError*1.0/txRate
+                # Modify txPeriod to compensate for error
+                txPeriod -= txPeriod*errorFactor
+                # txPeriod -= txPeriodError
+                print "Compensating for timing error","Desired:",txRate, "Actual:", txBps_1s,"\r"
+            # Clear counter
+            txBps_1s=0
+        # The calculation time will be deductced from the sleep time, which should make the generator
+        # output less jittery (because the calculation time is taken into account)
+        calculationPeriod=timer()-calculationStartTime
 
+        compensatedTxPeriod=txPeriod + jitter - calculationPeriod
+        # Have to guard against a negative time value
+        if (compensatedTxPeriod>0):
+            # Sleep between packet transmision
+            time.sleep(compensatedTxPeriod)
+        else:
+            # print "__rtpGenerator() - non-positive compensatedTxPeriod value",compensatedTxPeriod,"\r"
+            pass
 
 ####################################################################################
 
