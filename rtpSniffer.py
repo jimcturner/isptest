@@ -359,7 +359,7 @@ class RtpStream(object):
         # Start the loop timer (used to provide a 1sec interval)
         loopTimerStart = timer()
         # Timer used to detect loss of streams against an alarm threshold
-        lossOfStreamTimerStart = datetime.timedelta()
+        lossOfStreamTimerStart = timer()
 
         runningTotalPacketsPerSecond = 0
         runningTotalDataReceivedPerSecond = 0
@@ -488,9 +488,9 @@ class RtpStream(object):
                     # Set the flag
                     possibleLossOfStreamFlag = True
                     # And start the lossOfStream Timer
-                    lossOfStreamTimerStart = datetime.datetime.now()
+                    lossOfStreamTimerStart = timer()
 
-                if (datetime.datetime.now() - lossOfStreamTimerStart).total_seconds() >= lossOfStreamAlarmThreshold \
+                if (timer() - lossOfStreamTimerStart) >= lossOfStreamAlarmThreshold \
                         and lossOfStreamFlag == False and self.__stats["totalPacketsReceived"] > 0:
                     # Set flag
                     lossOfStreamFlag = True
