@@ -700,13 +700,13 @@ def __catchKeyboardPresses(keyPressed):
 
 
 # define a traffic generator thread
-def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate):
+def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
     # UDP_DEST_IP = "127.0.0.1"
     # UDP__DEST_PORT = 5004
 
     # Generate random string
     # Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496 available bytes
-    stringLength = 496
+    stringLength = payloadLength
     # stringLength = 1400
     # Create string containing all uppercase and lowercase letters
     letters = string.ascii_letters
@@ -715,7 +715,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate):
 
     txSock = socket.socket(socket.AF_INET,  # Internet
                            socket.SOCK_DGRAM)  # UDP
-    print "Traffic Generator thread started", "\r"
+    print "Traffic Generator thread started. Sending to ",UDP_TX_IP,":",UDP_TX_PORT,", txRate:",txRate,"bps, payloadLength:",payloadLength,"\r"
     print "[spacebar] insert single packet loss, [z] Inhibit/Re-enable packet generation, [j] Toggle jitter on/off", "\r"
 
     rtpParams = 0b01000000
@@ -731,6 +731,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate):
 
     # Caulculate tx period required to provide supplied txRate for a given stringLength
     txPeriod = stringLength * 8.0 / txRate
+    print "txPeriod",txPeriod,"\r"
 
     jitterPerecentage = 50
     maxDeviation = txPeriod * jitterPerecentage / 100
@@ -769,7 +770,11 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate):
 
         # If all tx flags are set then transmit the rtp packet
         if enablePacketGeneration == True and temporaryInhibit == False:
-            txSock.sendto(MESSAGE, (UDP_TX_IP, UDP_TX_PORT))
+            try:
+                txSock.sendto(MESSAGE, (UDP_TX_IP, UDP_TX_PORT))
+            except Exception as e:
+                print "__rtpGenerator()",str(e),"\r"
+                exit()
 
         if (keyPressed[0] == 'j'):
             # Turn jitter on/off by pressing 'j'
@@ -807,22 +812,35 @@ def main(argv):
     # Specify a default txRate of 1Mbps if no rate specified
     txRate = 1 * 1024 * 1024
 
+    # Specify a default packet size for the tx stream (if none supplied)
+    payloadLength=496
+
     # print 'Argument List:', str(argv)
     try:
         # options are:
-        # h: help
-        # l: loopback mode
+        # -h: help
+        # -l: loopback mode
         # -t: transmit mode usage: address:port
         # -r receive mode usage: address:port
-        # -b bandwidth (append k for kbps, m for mbps eg 1m or 500k)
+        # -b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps
+        # -d udp packet size
 
         address = ""
-        opts, args = getopt.getopt(argv, "hlt:r:i:t:b:")
+        opts, args = getopt.getopt(argv, "hlt:r:i:t:b:d:")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
             if opt == '-h':
-                print "help"
+                print "Version 0.5\r"
+                print "options are:\r"
+                print "-h: help (this message)\r"
+                print "-l: loopback mode\r"
+                print "-t: transmit mode usage: address:port\r"
+                print "-r receive mode usage: address:port\r"
+                print "-b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps\r"
+                print "-d rtp payload size (bytes)\r"
+                exit()
+
             elif opt == '-l':
                 MODE = "LOOPBACK"
                 print MODE
@@ -888,6 +906,17 @@ def main(argv):
                     exit()
                 print "txRate",txRate
 
+            elif opt in ("-d"):
+                # Maximum Ethernet frame size is 1500 bytes (minus 12 bytes for the RTP header)
+                MAX_PAYLOAD_SIZE_bytes=1500-12
+                MIN_PAYLOAD_SIZE_bytes=20
+                if int(arg) > MAX_PAYLOAD_SIZE_bytes:
+                    print  "requested payload size (",arg,") exceeds maximum Ethernet frame size (1488 bytes with 12 byte RTP header), "
+                    payloadLength=MAX_PAYLOAD_SIZE_bytes
+                elif int(arg) <MIN_PAYLOAD_SIZE_bytes:
+                    print  "requested payload size (", arg, ") less than minimum permitted (",MIN_PAYLOAD_SIZE_bytes,")"
+                else:
+                    payloadLength=int(arg)
 
 
     except getopt.GetoptError:
@@ -914,7 +943,7 @@ def main(argv):
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
-        rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate))
+        rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength))
         rtpGenerator.daemon = True  # Thread will auto shutdown when the prog ends
         rtpGenerator.start()
 
