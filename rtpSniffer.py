@@ -770,6 +770,8 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
                 # Set enable flag
                 enablePacketGeneration = True
                 print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), " 'z' Enabling packet generator\r"
+                # Restart the 1 second timer used for txData averaging
+                startTime=timer()
         # Spacebar will introduce a single packet loss
         # If temporaryInhibit was set, clear it
         temporaryInhibit = False
@@ -783,8 +785,9 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
         if enablePacketGeneration == True and temporaryInhibit == False:
             try:
                 txSock.sendto(MESSAGE, (UDP_TX_IP, UDP_TX_PORT))
-                # Update tx data counter
+                # Update tx data counter (*8 converts bytes to bits)
                 txBps_1s += len(payload)*8
+                print rtpSequenceNo,txPeriod,txBps_1s,"\r"
             except Exception as e:
                 print "__rtpGenerator()",str(e),"\r"
                 exit()
@@ -812,24 +815,27 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
         else:
             jitter = 0
 
-        # Calculate mean tx rate (bps)
+        # Calculate (inevitable) error in tx rate (bps)
         # If there is an error between the desired tx speed and the actual tx speed (due to timing inaccuracies of the time.sleep() command)
         # dynamically modify the txPeriod to actually generate the desired rate
-        if (timer()-startTime) >= 1:
+        # 1 second timer
+
+        # Has 1 second elapsed?
+        if (timer()-startTime) >= 1 and enablePacketGeneration == True:
             # Reset elapsed timer
             startTime = timer()
-            # print "txBits_1s",txBps_1s,"\r"
-            if txBps_1s < txRate:
+            # Test actual tx rate (averaged over a second) against desired tx rate
+            if (txBps_1s < txRate):
                 # Data not being sent fast enough, so reduce txPeriod time
                 txRateError=txRate-txBps_1s
                 errorFactor= txRateError*1.0/txRate
                 # Modify txPeriod to compensate for error
                 txPeriod -= txPeriod*errorFactor
-                # txPeriod -= txPeriodError
-                print "Compensating for timing error - Data rate too low","Desired tx rate:",txRate, "Actual tx rate:", txBps_1s,"\r"
+                print "Compensating for timing error - Actual txData rate too low","Desired tx rate:",txRate, "Actual tx rate:", txBps_1s,"\r"
 
             # Clear counter
             txBps_1s=0
+
         # The calculation time will be deductced from the sleep time, which should make the generator
         # output less jittery (because the calculation time is taken into account)
         calculationPeriod=timer()-calculationStartTime
