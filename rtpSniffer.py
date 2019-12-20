@@ -429,7 +429,8 @@ class RtpStream(object):
             self.__accessRtpDataMutex.release()
 
             # Take a timestamp in order to calculate the processor time required for packet analysis
-            calculationStartTime = datetime.datetime.now()
+            #calculationStartTime = datetime.datetime.now()
+            calculationStartTime = timer()
             # Lock self.__stats and self.__eventList mutexes
             self.__accessRtpStreamStatsMutex.acquire()
             self.__accessRtpStreamEventListMutex.acquire()
@@ -562,7 +563,8 @@ class RtpStream(object):
                     self.__stats["POLL_INTERVAL"] = 10.0 * self.__stats["meanRxPeriod"] / 1000000.0
 
             # Calculate how long it has taken for the stats analysis to have been performed
-            calculationEndTime = datetime.datetime.now()
+            # calculationEndTime = datetime.datetime.now()
+            calculationEndTime = timer()
             try:
                 # Take the calculation time in microseconds and combine with the period between
                 # packets arriving multiplied by the no of packets in this batch of rtpStream
@@ -570,10 +572,13 @@ class RtpStream(object):
                 # If the total calculation time for rtpStream[] is > than the gap between packets
                 # arriving then the the processor can't keep up, so generate an event
                 # This is to guard against false-postives
-                self.__stats["calculationDuration"] = (calculationEndTime - calculationStartTime).microseconds
+                # Calculate calculationDuration (in uS)
+                #   the %1 throws away the whole number part, *1000000 converts from s to uS
+                self.__stats["calculationDuration"] = ((calculationEndTime - calculationStartTime)%1)*1000000
 
+                # Calculate processorUtilisationPercent. All time values in uS
                 self.__stats["processorUtilisationPercent"] = \
-                    self.__stats["calculationDuration"] * 100 / (self.__stats["meanRxPeriod"] * len(self.rtpStream))
+                    self.__stats["calculationDuration"] * 100.0 / (self.__stats["meanRxPeriod"] * len(self.rtpStream))
 
                 # If the CPU is >99% utilised, add event to the list (but only do this once)
                 if self.__stats["processorUtilisationPercent"] > 99:
