@@ -787,7 +787,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
                 txSock.sendto(MESSAGE, (UDP_TX_IP, UDP_TX_PORT))
                 # Update tx data counter (*8 converts bytes to bits)
                 txBps_1s += len(payload)*8
-                print rtpSequenceNo,txPeriod,txBps_1s,"\r"
+                # print rtpSequenceNo,txPeriod,txBps_1s,"\r"
             except Exception as e:
                 print "__rtpGenerator()",str(e),"\r"
                 exit()
