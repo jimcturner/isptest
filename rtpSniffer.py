@@ -196,18 +196,18 @@ class RtpStream(object):
             # Calculate minimum and maximum jitter
             # But wait until 'steady' state reached by testing for totalPacketsReceived>10
             if self.__stats["totalPacketsReceived"] > 10:
-                if self.__stats["minJitter"] == 0:
+                if self.__stats["minJitter_uS"] == 0:
                     # Set initial value
-                    self.__stats["minJitter"] = y.jitter
-                if y.jitter < self.__stats["minJitter"]:
-                    self.__stats["minJitter"] = y.jitter
+                    self.__stats["minJitter_uS"] = y.jitter
+                if y.jitter < self.__stats["minJitter_uS"]:
+                    self.__stats["minJitter_uS"] = y.jitter
                 # Calculate maximum jitter
                 if self.__stats["maxJitter"] == 0:
                     # Set initial value
                     self.__stats["maxJitter"] = y.jitter
                 if y.jitter > self.__stats["maxJitter"]:
                     self.__stats["maxJitter"] = y.jitter
-                self.__stats["rangeOfJitter"] = self.__stats["maxJitter"] - self.__stats["minJitter"]
+                self.__stats["rangeOfJitter"] = self.__stats["maxJitter"] - self.__stats["minJitter_uS"]
 
             # Sum the abs interPacketJitter values  for the subsequent jitter calculation
             # For 'instantaneous' jitter value
@@ -295,7 +295,7 @@ class RtpStream(object):
             self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
 
             # Finally, reset min/max/range jitter values as they're corrupted by a glitch
-            self.__stats["minJitter"] = 0
+            self.__stats["minJitter_uS"] = 0
             self.__stats["maxJitter"] = 0
             self.__stats["rangeOfJitter"] = 0
 
@@ -332,7 +332,7 @@ class RtpStream(object):
                 self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
 
                 # Finally, reset min/max/range jitter values as they're corrupted by a glitch
-                self.__stats["minJitter"] = 0
+                self.__stats["minJitter_uS"] = 0
                 self.__stats["maxJitter"] = 0
                 self.__stats["rangeOfJitter"] = 0
 
@@ -383,7 +383,7 @@ class RtpStream(object):
         self.sumOfTimeElapsedSinceLastGlitch = datetime.timedelta()
 
         # Jitter counters
-        self.__stats["minJitter"] = 0
+        self.__stats["minJitter_uS"] = 0
         self.__stats["maxJitter"] = 0
         self.__stats["rangeOfJitter"] = 0
         self.__stats["instantaneousJitter"] = 0
@@ -497,7 +497,7 @@ class RtpStream(object):
                     # Add event to the list (but only do this once)
                     self.__eventList.append(StreamLost(lastReceivedRtpPacket))
                     # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
-                    self.__stats["minJitter"] = 0
+                    self.__stats["minJitter_uS"] = 0
                     self.__stats["maxJitter"] = 0
                     self.__stats["rangeOfJitter"] = 0
 
@@ -825,7 +825,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
             # Reset elapsed timer
             startTime = timer()
             # Test actual tx rate (averaged over a second) against 99% of desired tx rate
-            if (txBps_1s < txRate):
+            if (txBps_1s < (0.99*txRate)):
                 # Data not being sent fast enough, so reduce txPeriod time
                 # Measure difference between desired bps tx rate and actual bps tx rate
                 txRateError=txRate-txBps_1s
