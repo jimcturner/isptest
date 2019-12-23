@@ -81,11 +81,12 @@ class StreamLost(object):
     description = ""
 
     # Constructor
-    def __init__(self, lastPacketReceived):
+    def __init__(self, lastPacketReceived, stats):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
         self.lastPacketReceived = lastPacketReceived
-
+        # Take local copy of stats dictionary
+        self.stats = stats
 
 # Define an event object that represents a excessive jitter event
 class ExcessiveJitter(object):
@@ -93,13 +94,12 @@ class ExcessiveJitter(object):
     type = "ExcessiveJitter"
     description = ""
 
-    def __init__(self, lastPacketReceived, instantaneousJitter, meanJitter_1s, meanJitter_10s):
+    def __init__(self, lastPacketReceived, stats):
         self.timeCreated = datetime.datetime.now()
         self.lastPacketReceived = lastPacketReceived
-        self.instantaneousJitter = instantaneousJitter
-        self.meanJitter_1s = meanJitter_1s
-        self.meanJitter_10s = meanJitter_10s
-
+        self.instantaneousJitter = stats["jitter_instantaneous"]
+        self.meanJitter_1s = stats["jitter_mean_1S_uS"]
+        self.meanJitter_10s = stats["jitter_mean_10S_uS"]
 
 # Define an event object that represents a procesor overload. This might happen if the calculateThread can't process
 # incoming packets fast enough
@@ -108,10 +108,11 @@ class ProcessorOverload(object):
     type = "ProcessorOverload"
     description = ""
 
-    def __init__(self, lastPacketReceived):
+    def __init__(self, lastPacketReceived, stats):
         self.timeCreated = datetime.datetime.now()
         self.lastPacketReceived = lastPacketReceived
-
+        # Take local copy of stats dictionary
+        self.stats = stats
 
 # Define an event that represent a glitch
 # This will be in the form of the packets (RtpData objects) either side of the 'hole' in received data
@@ -121,12 +122,14 @@ class Glitch(object):
     description = ""
 
     # Constructor
-    def __init__(self, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap):
+    def __init__(self, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap, stats):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
         # Update instance variables
         self.startOfGap = lastReceivedPacketBeforeGap
         self.endOfGap = firstPackedReceivedAfterGap
+        # Take local copy of stats dictionary
+        self.stats=stats
         # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
         # The '-1' is because it's fences and fenceposts
         self.packetsLost = abs(
@@ -245,10 +248,8 @@ class RtpStream(object):
                 if self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >= \
                         self.__stats["jitter_alarm_event_timeout_S"] or \
                         self.__stats["jitter_excess_jitter_events_total"] == 0:
-                    self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats["jitter_instantaneous"],
-                                                            self.__stats["jitter_mean_1S_uS"],
-                                                            self.__stats["jitter_mean_10S_uS"]))
 
+                    self.__eventList.append(ExcessiveJitter(self.rtpStream[-1],self.__stats))
 
                 # Update the event counter for Excess Jitter
                 self.__stats["jitter_excess_jitter_events_total"] += 1
@@ -283,7 +284,7 @@ class RtpStream(object):
 
             # Capture packets either side of the 'hole' and store them in the event list
             # Create an object representing the glitch
-            glitch = Glitch(lastReceivedRtpPacket, self.rtpStream[0])
+            glitch = Glitch(lastReceivedRtpPacket, self.rtpStream[0],self.__stats)
             # Add the latest glitch to the evenList[]
             self.__eventList.append(glitch)
             # Now update aggregate glitch stats
@@ -320,7 +321,7 @@ class RtpStream(object):
 
                 # Capture packets either side of the 'hole' and store them in the event list
                 # Create an object representing the glitch
-                glitch = Glitch(prevRtpPacket, rtpPacket)
+                glitch = Glitch(prevRtpPacket, rtpPacket,self.__stats)
                 # Add the glitch to the evenList[]
                 self.__eventList.append(glitch)
                 # Now update aggregate glitch stats
@@ -498,7 +499,7 @@ class RtpStream(object):
                     # Set flag
                     lossOfStreamFlag = True
                     # Add event to the list (but only do this once)
-                    self.__eventList.append(StreamLost(lastReceivedRtpPacket))
+                    self.__eventList.append(StreamLost(lastReceivedRtpPacket, self.__stats))
                     # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
                     self.__stats["jitter_min_uS"] = 0
                     self.__stats["jitter_max_uS"] = 0
@@ -584,7 +585,7 @@ class RtpStream(object):
 
                 # If the CPU is >99% utilised, add event to the list (but only do this once)
                 if self.__stats["processor_utilisation_percent"] > 99:
-                    self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket))
+                    self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket,self.__stats))
                     pass
             except Exception as e:
                 # print str(e),"\r"
