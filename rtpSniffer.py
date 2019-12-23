@@ -287,9 +287,9 @@ class RtpStream(object):
             # Add the latest glitch to the evenList[]
             self.__eventList.append(glitch)
             # Now update aggregate glitch stats
-            self.__stats["totalPacketsLost"] += glitch.packetsLost
+            self.__stats["glitch_packets_lost_total"] += glitch.packetsLost
             self.__stats["totalGlitchLength"] += glitch.glitchLength
-            self.__stats["totalGlitches"] += 1
+            self.__stats["glitch_counter_total"] += 1
 
             # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
             self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
@@ -324,9 +324,9 @@ class RtpStream(object):
                 # Add the glitch to the evenList[]
                 self.__eventList.append(glitch)
                 # Now update aggregate glitch stats
-                self.__stats["totalPacketsLost"] += glitch.packetsLost
+                self.__stats["glitch_packets_lost_total"] += glitch.packetsLost
                 self.__stats["totalGlitchLength"] += glitch.glitchLength
-                self.__stats["totalGlitches"] += 1
+                self.__stats["glitch_counter_total"] += 1
 
                 # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
                 self.sumOfTimeElapsedSinceLastGlitch += self.__stats["timeElapsedSinceLastGlitch"]
@@ -339,11 +339,11 @@ class RtpStream(object):
             # Store current rtp packet for the next iteration around the loop
             prevRtpPacket = rtpPacket
 
-        if self.__stats["totalGlitches"] > 1:
+        if self.__stats["glitch_counter_total"] > 1:
             # Calculate mean of new and prev value
             self.__stats["meanTimeBetweenGlitches"] = \
                 (self.sumOfTimeElapsedSinceLastGlitch + self.__stats["timeElapsedSinceLastGlitch"]) / \
-                self.__stats["totalGlitches"]
+                self.__stats["glitch_counter_total"]
 
     # Define a private calculation method that will run autonomously as a thread
     # This thread will
@@ -372,9 +372,9 @@ class RtpStream(object):
         self.__stats["time_elapsed_total"] = datetime.timedelta()
 
         # Glitch counters
-        self.__stats["totalPercentPacketsLost"] = 0
-        self.__stats["totalPacketsLost"] = 0
-        self.__stats["totalGlitches"] = 0
+        self.__stats["glitch_packets_lost_total_percent"] = 0
+        self.__stats["glitch_packets_lost_total"] = 0
+        self.__stats["glitch_counter_total"] = 0
         # define timedelta object to store an aggregate of of Glitch length
         self.__stats["totalGlitchLength"] = datetime.timedelta()
         self.__stats["timestampOfLastGlitch"] = datetime.timedelta()
@@ -506,15 +506,15 @@ class RtpStream(object):
 
             # Calculate elapsed since last glitch
             # But only if there has actually been a glitch in the past to measure against
-            if self.__stats["totalGlitches"] > 0:
+            if self.__stats["glitch_counter_total"] > 0:
                 # Calculate new value
                 self.__stats["timeElapsedSinceLastGlitch"] = datetime.datetime.now() - self.__stats[
                     "timestampOfLastGlitch"]
 
             # Calculate % packet loss
             if self.__stats["packet_counter_received_total"] > 0:
-                totalExpectedPackets = self.__stats["packet_counter_received_total"] + self.__stats["totalPacketsLost"]
-                self.__stats["totalPercentPacketsLost"] = self.__stats["totalPacketsLost"] * 100 / totalExpectedPackets
+                totalExpectedPackets = self.__stats["packet_counter_received_total"] + self.__stats["glitch_packets_lost_total"]
+                self.__stats["glitch_packets_lost_total_percent"] = self.__stats["glitch_packets_lost_total"] * 100 / totalExpectedPackets
 
             # 1 second timer
             if (timer() - loopTimerStart) >= 1:
