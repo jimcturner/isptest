@@ -824,13 +824,17 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
         if (timer()-startTime) >= 1 and enablePacketGeneration == True:
             # Reset elapsed timer
             startTime = timer()
-            # Test actual tx rate (averaged over a second) against desired tx rate
+            # Test actual tx rate (averaged over a second) against 99% of desired tx rate
             if (txBps_1s < txRate):
                 # Data not being sent fast enough, so reduce txPeriod time
+                # Measure difference between desired bps tx rate and actual bps tx rate
                 txRateError=txRate-txBps_1s
-                errorFactor= txRateError*1.0/txRate
+                # Convert the difference a fraction by which will modify txPeriod
+                errorFactor= (txRateError * 1.0/txRate)
                 # Modify txPeriod to compensate for error
-                txPeriod -= txPeriod*errorFactor
+                # Correction only happens in one direction (we can only dynamically reduce the txPeriod, so to prevent
+                # overshoots of the desired rate, only reduce txPeriod by 'half' the error amount in one go
+                txPeriod -= txPeriod*(errorFactor/2.0)
                 print "Compensating for timing error - Actual txData rate too low","Desired tx rate:",txRate, "Actual tx rate:", txBps_1s,"\r"
 
             # Clear counter
@@ -838,7 +842,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
 
         # The calculation time will be deductced from the sleep time, which should make the generator
         # output less jittery (because the calculation time is taken into account)
-        calculationPeriod=timer()-calculationStartTime
+        calculationPeriod = timer() - calculationStartTime
 
         compensatedTxPeriod=txPeriod + jitter - calculationPeriod
         # Have to guard against a negative time value
