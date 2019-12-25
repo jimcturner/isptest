@@ -291,6 +291,7 @@ class RtpStream(object):
             self.__stats["glitch_packets_lost_total"] += glitch.packetsLost
             self.__stats["glitch_length_total_time"] += glitch.glitchLength
             self.__stats["glitch_counter_total"] += 1
+            self.glitchCount1SecRunningTotal +=1
 
             # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
             self.sumOfTimeElapsedSinceLastGlitch += self.__stats["glitch_time_elapsed_since_last_glitch"]
@@ -334,6 +335,7 @@ class RtpStream(object):
                 self.__stats["glitch_packets_lost_total"] += glitch.packetsLost
                 self.__stats["glitch_length_total_time"] += glitch.glitchLength
                 self.__stats["glitch_counter_total"] += 1
+                self.glitchCount1SecRunningTotal += 1
 
                 # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
                 self.sumOfTimeElapsedSinceLastGlitch += self.__stats["glitch_time_elapsed_since_last_glitch"]
@@ -382,6 +384,10 @@ class RtpStream(object):
         self.__stats["glitch_packets_lost_total_percent"] = 0
         self.__stats["glitch_packets_lost_total"] = 0
         self.__stats["glitch_counter_total"] = 0
+        self.__stats["glitch_counter_last_10sec"]=0
+        self.glitchCount1SecRunningTotal = 0
+        # self.glitchCount1SecTimer = 0
+        historicGlitchLast10Sec = []
 
         # define timedelta object to store an aggregate of of Glitch length
         self.__stats["glitch_length_total_time"] = datetime.timedelta()
@@ -399,8 +405,6 @@ class RtpStream(object):
         self.__stats["jitter_mean_1S_uS"] = 0
         self.__stats["jitter_mean_10S_uS"] = 0
         self.__stats["jitter_long_term_uS"] = 0
-
-
         historicJitter = []
         sumOfJitter_1s = 0
 
@@ -571,6 +575,21 @@ class RtpStream(object):
                 # Wait a second, in order to know we're in a steady state
                 if self.__stats["packet_mean_receive_period_uS"] > 0 and self.__stats["time_elapsed_total"].seconds > 1:
                     self.__stats["calculate_thread_sampling_interval_S"] = 10.0 * self.__stats["packet_mean_receive_period_uS"] / 1000000.0
+
+                ######### Now calculate moving glitch counters
+                # Take snapshot of per second glitch counter and append to end of 10sec array
+                historicGlitchLast10Sec.append(self.glitchCount1SecRunningTotal)
+                # Now we have captured the value, clear the running total
+                self.glitchCount1SecRunningTotal=0
+                # if over 10 seconds worth of data, remove first item of array
+                if len(historicGlitchLast10Sec) > 10:
+                    historicGlitchLast10Sec.remove(historicGlitchLast10Sec[0])
+                # Clear old value for no of glitches in last 10 seconds
+                self.__stats["glitch_counter_last_10sec"]=0
+                # Sum remaining historicGlitchLast10Sec[] array to get total new val for no of glitches in last 10 seconds
+                for x in historicGlitchLast10Sec:
+                   self.__stats["glitch_counter_last_10sec"] += x
+
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
