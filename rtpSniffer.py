@@ -391,36 +391,36 @@ class RtpStream(object):
         # Moving Glitch counter - 10 second (1 sec sampling interval)
         self.__stats["glitch_counter_last_10sec"]=0
         self.glitchCount1SecRunningTotal = 0    # used for self.__stats["glitch_counter_last_10sec"
-        historicGlitchLast10Sec = []
+        self.historicGlitchLast10Sec = []
 
         # Moving Glitch counter - 1 minute (10 sec sampling interval)
         self.__stats["glitch_counter_last_1Minute"] = 0
         self.glitchCount10SecRunningTotal = 0 # used for self.__stats["glitch_counter_last_1Minute"]
-        historicGlitchLast1Minute = []
+        self.historicGlitchLast1Minute = [0]
         self.tenSecondTimer = 0
 
         # Moving Glitch counter - 10 minute (1 min sampling interval)
         self.__stats["glitch_counter_last_10Minutes"] = 0
         self.glitchCount1MinRunningTotal = 0  # used for self.__stats["glitch_counter_last_10Minutes"]
-        historicGlitchLast10Minutes = []
+        self.historicGlitchLast10Minutes = [0]
         self.oneMinuteTimer = 0
 
         # Moving Glitch counter - 1 hour (10 min sampling interval)
         self.__stats["glitch_counter_last_hour"] = 0
         self.glitchCount10MinRunningTotal = 0  # used for self.__stats["glitch_counter_last_10Minutes"]
-        historicGlitchLastHour = []
+        self.historicGlitchLastHour = [0]
         self.tenMinuteTimer = 0
 
         # Moving Glitch counter - 12 hour (1hr sampling interval)
         self.__stats["glitch_counter_last_12hours"] = 0
         self.glitchCount1HourRunningTotal = 0  # used for self.__stats["glitch_counter_last_10Minutes"]
-        historicGlitchLastHour = []
+        self.historicGlitchLastHour = [0]
         self.oneHourTimer = 0
 
         # Moving Glitch counter - 24 hour (2hr sampling interval)
         self.__stats["glitch_counter_last_24hours"] = 0
         self.glitchCount2HourRunningTotal = 0  # used for self.__stats["glitch_counter_last_10Minutes"]
-        historicGlitchLastHour = []
+        self.historicGlitchLastHour = [0]
         self.twoHourTimer = 0
 
 
@@ -446,7 +446,7 @@ class RtpStream(object):
         self.__stats["processor_utilisation_percent"] = 0
 
         # % deviation from longTermJitter_uS that will trigger an excessJitterEvent
-        self.__stats["jitter_excessive_alarm_threshold_percent"] = 15
+        self.__stats["jitter_excessive_alarm_threshold_percent"] = 30
         self.excessJitterThresholdFactor = 1.0 + (self.__stats["jitter_excessive_alarm_threshold_percent"] / 100.0)
 
         # No of seconds to inhibit an excessive jitter alarm
@@ -611,53 +611,68 @@ class RtpStream(object):
                 if self.__stats["packet_mean_receive_period_uS"] > 0 and self.__stats["time_elapsed_total"].seconds > 1:
                     self.__stats["calculate_thread_sampling_interval_S"] = 10.0 * self.__stats["packet_mean_receive_period_uS"] / 1000000.0
 
-                ######### Now calculate moving glitch counters
-                #### 10 sec running total (1 second resolution)
-                # Take snapshot of per second glitch counter and append to end of 10sec array
-                historicGlitchLast10Sec.append(self.glitchCount1SecRunningTotal)
-                # Now we have captured the value, clear the running total
-                self.glitchCount1SecRunningTotal=0
-                # if over 10 seconds worth of data, remove first item of array
-                if len(historicGlitchLast10Sec) > 10:
-                    historicGlitchLast10Sec.remove(historicGlitchLast10Sec[0])
-                # Clear old value for no of glitches in last 10 seconds
-                self.__stats["glitch_counter_last_10sec"]=0
-                # Sum remaining historicGlitchLast10Sec[] array to get total new val for no of glitches in last 10 seconds
-                for x in historicGlitchLast10Sec:
-                   self.__stats["glitch_counter_last_10sec"] += x
-
-                x=0
-                y=0
-                #### 1 min moving total (10 second resolution)
-                if self.tenSecondTimer > 9:
-                    self.tenSecondTimer = 0
-                    historicGlitchLast1Minute.append(self.glitchCount10SecRunningTotal)
-                    self.glitchCount10SecRunningTotal =0
-                if len(historicGlitchLast1Minute) > 6:
-                    historicGlitchLast1Minute.remove(historicGlitchLast1Minute[0])
-                    self.__stats["glitch_counter_last_1Minute"] = 0
-                for x in historicGlitchLast1Minute:
-                    y += x
-                self.__stats["glitch_counter_last_1Minute"] = y
-
-
-                #### 10 min moving total (1 minute resolution)
-                if self.oneMinuteTimer > 59:
-                    self.oneMinuteTimer =0
-                    historicGlitchLast10Minutes.append(self.glitchCount1MinRunningTotal)
-                    self.glitchCount1MinRunningTotal=0
-                if len(historicGlitchLast10Minutes) > 10:
-                    historicGlitchLast10Minutes.remove(historicGlitchLast10Minutes[0])
-                self.glitchCount1MinRunningTotal = 0
-                for x in historicGlitchLast10Minutes:
-                    y += x
-                self.glitchCount1MinRunningTotal = y
-
                 self.tenSecondTimer += 1
                 self.oneMinuteTimer += 1
                 self.tenMinuteTimer += 1
                 self.oneHourTimer += 1
                 self.twoHourTimer += 1
+                ######### Now calculate moving glitch counters
+                #### 10 sec running total (1 second resolution)
+                # Take snapshot of per second glitch counter and append to end of 10sec array
+                self.historicGlitchLast10Sec.append(self.glitchCount1SecRunningTotal)
+                # Now we have captured the value, clear the running total
+                self.glitchCount1SecRunningTotal=0
+                # if over 10 seconds worth of data, remove first item of array
+                if len(self.historicGlitchLast10Sec) > 10:
+                    self.historicGlitchLast10Sec.remove(self.historicGlitchLast10Sec[0])
+                # Clear old value for no of glitches in last 10 seconds
+                self.__stats["glitch_counter_last_10sec"]=0
+                # Sum remaining historicGlitchLast10Sec[] array to get total new val for no of glitches in last 10 seconds
+                for x in self.historicGlitchLast10Sec:
+                   self.__stats["glitch_counter_last_10sec"] += x
+
+                x=0
+                y=0
+                #### 1 min moving total (10 second resolution)
+                # Have 10 seconds elapsed?
+                if self.tenSecondTimer > 9:
+                    # Clear timer
+                    self.tenSecondTimer = 0
+                    # Append a new element onto thr end of the array (with value 0)
+                    self.historicGlitchLast1Minute.append(0)
+                    # Clear running total for this sampling period
+                    self.glitchCount10SecRunningTotal = 0
+                    # Check for length of array. If longer than 6 (6x 10sec = 1min), discard first element of array
+                    if len(self.historicGlitchLast1Minute) > 6:
+                        # Discard the oldest element of the array
+                        self.historicGlitchLast1Minute.remove(self.historicGlitchLast1Minute[0])
+
+                # Update most recent element of the array with current running total (within this sample period)
+                self.historicGlitchLast1Minute[-1] = self.glitchCount10SecRunningTotal
+                # Sum contents of array
+                for x in self.historicGlitchLast1Minute:
+                    y += x
+                # Assign sum of array to stats key
+                self.__stats["glitch_counter_last_1Minute"] = y
+
+                #### 10 min moving total (1 minute resolution)
+                # Has 1 minute elapsed?
+                if self.oneMinuteTimer > 59:
+                    # Clear timer
+                    self.oneMinuteTimer = 0
+                    # Append a new element onto thr end of the array (with value 0)
+                    self.historicGlitchLast10Minutes.append(0)
+                    # Clear running total for this sampling period
+                    self.glitchCount1MinRunningTotal = 0
+                    # Check for length of array. If longer than 10 (10x 1min = 10min), discard first element of array
+                    if len(self.historicGlitchLast10Minutes)>10:
+                        self.historicGlitchLast10Minutes.remove(self.historicGlitchLast10Minutes[0])
+                    # Sum contents of array
+                    for x in self.historicGlitchLast10Minutes:
+                        y += x
+                # Assign sum of array to stats key
+                self.__stats["glitch_counter_last_10Minutes"] = y
+
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
             try:
