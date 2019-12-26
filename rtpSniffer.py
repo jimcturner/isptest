@@ -383,18 +383,46 @@ class RtpStream(object):
         self.__stats["packet_counter_received_total"] = 0
         self.__stats["time_elapsed_total"] = datetime.timedelta()
 
-        # Glitch counters
+        # Aggregate Glitch counters
         self.__stats["glitch_packets_lost_total_percent"] = 0
         self.__stats["glitch_packets_lost_total"] = 0
         self.__stats["glitch_counter_total"] = 0
+
+        # Moving Glitch counter - 10 second (1 sec sampling interval)
         self.__stats["glitch_counter_last_10sec"]=0
         self.glitchCount1SecRunningTotal = 0    # used for self.__stats["glitch_counter_last_10sec"
         historicGlitchLast10Sec = []
 
+        # Moving Glitch counter - 1 minute (10 sec sampling interval)
         self.__stats["glitch_counter_last_1Minute"] = 0
         self.glitchCount10SecRunningTotal = 0 # used for self.__stats["glitch_counter_last_1Minute"]
         historicGlitchLast1Minute = []
-        self.TenSecondTimer=0
+        self.tenSecondTimer = 0
+
+        # Moving Glitch counter - 10 minute (1 min sampling interval)
+        self.__stats["glitch_counter_last_10Minutes"] = 0
+        self.glitchCount1MinRunningTotal = 0  # used for self.__stats["glitch_counter_last_10Minutes"]
+        historicGlitchLast10Minutes = []
+        self.oneMinuteTimer = 0
+
+        # Moving Glitch counter - 1 hour (10 min sampling interval)
+        self.__stats["glitch_counter_last_hour"] = 0
+        self.glitchCount10MinRunningTotal = 0  # used for self.__stats["glitch_counter_last_10Minutes"]
+        historicGlitchLastHour = []
+        self.tenMinuteTimer = 0
+
+        # Moving Glitch counter - 12 hour (1hr sampling interval)
+        self.__stats["glitch_counter_last_12hours"] = 0
+        self.glitchCount1HourRunningTotal = 0  # used for self.__stats["glitch_counter_last_10Minutes"]
+        historicGlitchLastHour = []
+        self.oneHourTimer = 0
+
+        # Moving Glitch counter - 24 hour (2hr sampling interval)
+        self.__stats["glitch_counter_last_24hours"] = 0
+        self.glitchCount2HourRunningTotal = 0  # used for self.__stats["glitch_counter_last_10Minutes"]
+        historicGlitchLastHour = []
+        self.twoHourTimer = 0
+
 
         # define timedelta object to store an aggregate of of Glitch length
         self.__stats["glitch_length_total_time"] = datetime.timedelta()
@@ -597,17 +625,39 @@ class RtpStream(object):
                 # Sum remaining historicGlitchLast10Sec[] array to get total new val for no of glitches in last 10 seconds
                 for x in historicGlitchLast10Sec:
                    self.__stats["glitch_counter_last_10sec"] += x
+
+                x=0
+                y=0
                 #### 1 min moving total (10 second resolution)
-                if self.TenSecondTimer > 9:
-                    self.TenSecondTimer = 0
+                if self.tenSecondTimer > 9:
+                    self.tenSecondTimer = 0
                     historicGlitchLast1Minute.append(self.glitchCount10SecRunningTotal)
                     self.glitchCount10SecRunningTotal =0
                 if len(historicGlitchLast1Minute) > 6:
                     historicGlitchLast1Minute.remove(historicGlitchLast1Minute[0])
-                self.__stats["glitch_counter_last_1Minute"] = 0
+                    self.__stats["glitch_counter_last_1Minute"] = 0
                 for x in historicGlitchLast1Minute:
-                    self.__stats["glitch_counter_last_1Minute"] += x
-                self.TenSecondTimer += 1
+                    y += x
+                self.__stats["glitch_counter_last_1Minute"] = y
+
+
+                #### 10 min moving total (1 minute resolution)
+                if self.oneMinuteTimer > 59:
+                    self.oneMinuteTimer =0
+                    historicGlitchLast10Minutes.append(self.glitchCount1MinRunningTotal)
+                    self.glitchCount1MinRunningTotal=0
+                if len(historicGlitchLast10Minutes) > 10:
+                    historicGlitchLast10Minutes.remove(historicGlitchLast10Minutes[0])
+                self.glitchCount1MinRunningTotal = 0
+                for x in historicGlitchLast10Minutes:
+                    y += x
+                self.glitchCount1MinRunningTotal = y
+
+                self.tenSecondTimer += 1
+                self.oneMinuteTimer += 1
+                self.tenMinuteTimer += 1
+                self.oneHourTimer += 1
+                self.twoHourTimer += 1
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
             try:
