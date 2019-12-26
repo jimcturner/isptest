@@ -291,7 +291,9 @@ class RtpStream(object):
             self.__stats["glitch_packets_lost_total"] += glitch.packetsLost
             self.__stats["glitch_length_total_time"] += glitch.glitchLength
             self.__stats["glitch_counter_total"] += 1
+            # Running moving counters
             self.glitchCount1SecRunningTotal +=1
+            self.glitchCount10SecRunningTotal += 1
 
             # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
             self.sumOfTimeElapsedSinceLastGlitch += self.__stats["glitch_time_elapsed_since_last_glitch"]
@@ -335,8 +337,9 @@ class RtpStream(object):
                 self.__stats["glitch_packets_lost_total"] += glitch.packetsLost
                 self.__stats["glitch_length_total_time"] += glitch.glitchLength
                 self.__stats["glitch_counter_total"] += 1
+                # update moving total counters
                 self.glitchCount1SecRunningTotal += 1
-
+                self.glitchCount10SecRunningTotal += 1
                 # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
                 self.sumOfTimeElapsedSinceLastGlitch += self.__stats["glitch_time_elapsed_since_last_glitch"]
 
@@ -385,9 +388,13 @@ class RtpStream(object):
         self.__stats["glitch_packets_lost_total"] = 0
         self.__stats["glitch_counter_total"] = 0
         self.__stats["glitch_counter_last_10sec"]=0
-        self.glitchCount1SecRunningTotal = 0
-        # self.glitchCount1SecTimer = 0
+        self.glitchCount1SecRunningTotal = 0    # used for self.__stats["glitch_counter_last_10sec"
         historicGlitchLast10Sec = []
+
+        self.__stats["glitch_counter_last_1Minute"] = 0
+        self.glitchCount10SecRunningTotal = 0 # used for self.__stats["glitch_counter_last_1Minute"]
+        historicGlitchLast1Minute = []
+        self.TenSecondTimer=0
 
         # define timedelta object to store an aggregate of of Glitch length
         self.__stats["glitch_length_total_time"] = datetime.timedelta()
@@ -577,6 +584,7 @@ class RtpStream(object):
                     self.__stats["calculate_thread_sampling_interval_S"] = 10.0 * self.__stats["packet_mean_receive_period_uS"] / 1000000.0
 
                 ######### Now calculate moving glitch counters
+                #### 10 sec running total (1 second resolution)
                 # Take snapshot of per second glitch counter and append to end of 10sec array
                 historicGlitchLast10Sec.append(self.glitchCount1SecRunningTotal)
                 # Now we have captured the value, clear the running total
@@ -589,8 +597,17 @@ class RtpStream(object):
                 # Sum remaining historicGlitchLast10Sec[] array to get total new val for no of glitches in last 10 seconds
                 for x in historicGlitchLast10Sec:
                    self.__stats["glitch_counter_last_10sec"] += x
-
-
+                #### 1 min moving total (10 second resolution)
+                if self.TenSecondTimer > 9:
+                    self.TenSecondTimer = 0
+                    historicGlitchLast1Minute.append(self.glitchCount10SecRunningTotal)
+                    self.glitchCount10SecRunningTotal =0
+                if len(historicGlitchLast1Minute) > 6:
+                    historicGlitchLast1Minute.remove(historicGlitchLast1Minute[0])
+                self.__stats["glitch_counter_last_1Minute"] = 0
+                for x in historicGlitchLast1Minute:
+                    self.__stats["glitch_counter_last_1Minute"] += x
+                self.TenSecondTimer += 1
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
             try:
