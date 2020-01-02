@@ -355,6 +355,11 @@ class RtpStream(object):
             glitch = Glitch(lastReceivedRtpPacket, self.rtpStream[0],self.__stats)
             # Add the latest glitch to the evenList[]
             self.__eventList.append(glitch)
+
+            # Inhibit immediate jitter-event triggering by setting self.__stats["jitter_time_of_last_excess_jitter_event"]
+            # to the current time
+            self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.datetime.now()
+
             # Now update aggregate glitch stats
             self.__stats["glitch_packets_lost_total"] += glitch.packetsLost
             self.__stats["glitch_length_total_time"] += glitch.glitchLength
@@ -423,6 +428,11 @@ class RtpStream(object):
                 glitch = Glitch(prevRtpPacket, rtpPacket,self.__stats)
                 # Add the glitch to the evenList[]
                 self.__eventList.append(glitch)
+
+                # Inhibit immediate jitter-event triggering by setting self.__stats["jitter_time_of_last_excess_jitter_event"]
+                # to the current time
+                self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.datetime.now()
+
                 # Now update aggregate glitch stats
                 self.__stats["glitch_packets_lost_total"] += glitch.packetsLost
                 self.__stats["glitch_length_total_time"] += glitch.glitchLength
@@ -1123,14 +1133,17 @@ def main(argv):
                 # Maximum Ethernet frame size is 1500 bytes (minus 12 bytes for the RTP header)
                 MAX_PAYLOAD_SIZE_bytes=1500-12
                 MIN_PAYLOAD_SIZE_bytes=20
-                if int(arg) > MAX_PAYLOAD_SIZE_bytes:
-                    print  "requested payload size (",arg,") exceeds maximum Ethernet frame size (1488 bytes with 12 byte RTP header), "
-                    payloadLength=MAX_PAYLOAD_SIZE_bytes
-                elif int(arg) <MIN_PAYLOAD_SIZE_bytes:
-                    print  "requested payload size (", arg, ") less than minimum permitted (",MIN_PAYLOAD_SIZE_bytes,")"
-                else:
-                    payloadLength=int(arg)
-
+                try:
+                    if int(arg) > MAX_PAYLOAD_SIZE_bytes:
+                        print  "requested payload size (",arg,") exceeds maximum Ethernet frame size (1488 bytes with 12 byte RTP header), "
+                        payloadLength=MAX_PAYLOAD_SIZE_bytes
+                    elif int(arg) <MIN_PAYLOAD_SIZE_bytes:
+                        print  "requested payload size (", arg, ") less than minimum permitted (",MIN_PAYLOAD_SIZE_bytes,")"
+                    else:
+                        payloadLength=int(arg)
+                except Exception as e:
+                    print "Invalid payload size specified '",arg,"'"
+                    exit()
 
     except getopt.GetoptError:
         print 'invalid options supplied', argv
