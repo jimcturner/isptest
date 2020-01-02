@@ -18,6 +18,7 @@ import platform
 import getopt   # Used to parse command line arguments
 import re       # Regex 'regular expression' module
 from timeit import default_timer as timer   # Used to calculate elapsed time
+import math
 
 ####################################################################################
 # Utility Functions
@@ -365,11 +366,33 @@ class RtpStream(object):
             # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean)
             self.sumOfTimeElapsedSinceLastGlitch += self.__stats["glitch_time_elapsed_since_last_glitch"]
 
-            # Calculate aggregate glitch stats
+            # Calculate aggregate mean glitch stats
             if self.__stats["glitch_counter_total"] > 1:
                 self.__stats["glitch_mean_duration"]= \
                     (self.__stats["glitch_mean_duration"] + glitch.glitchLength) / 2
+                self.__stats["glitch_packets_lost_per_glitch_mean"] = \
+                    int(math.ceil((self.__stats["glitch_packets_lost_per_glitch_mean"] + glitch.packetsLost) / 2.0))
 
+            # Update glitch min/max packet loss stats
+            if self.__stats["glitch_packets_lost_per_glitch_min"] < 1:
+                self.__stats["glitch_packets_lost_per_glitch_min"] = glitch.packetsLost
+
+            if glitch.packetsLost < self.__stats["glitch_packets_lost_per_glitch_min"]:
+                self.__stats["glitch_packets_lost_per_glitch_min"] = glitch.packetsLost
+
+            if glitch.packetsLost > self.__stats["glitch_packets_lost_per_glitch_max"]:
+                self.__stats["glitch_packets_lost_per_glitch_max"] = glitch.packetsLost
+
+            # update glitch min/max duration stats
+            # Test for 'zero' duration (the initial value)
+            if self.__stats["glitch_min_duration"] == datetime.timedelta():
+                self.__stats["glitch_min_duration"] = glitch.glitchLength
+
+            if glitch.glitchLength < self.__stats["glitch_min_duration"]:
+                self.__stats["glitch_min_duration"] = glitch.glitchLength
+
+            if glitch.glitchLength > self.__stats["glitch_max_duration"]:
+                self.__stats["glitch_max_duration"] = glitch.glitchLength
 
             # Finally, reset min/max/range jitter values as they're corrupted by a glitch
             self.__stats["jitter_min_uS"] = 0
@@ -410,6 +433,34 @@ class RtpStream(object):
 
                 # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
                 self.sumOfTimeElapsedSinceLastGlitch += self.__stats["glitch_time_elapsed_since_last_glitch"]
+
+                # Calculate aggregate mean glitch stats
+                if self.__stats["glitch_counter_total"] > 1:
+                    self.__stats["glitch_mean_duration"] = \
+                        (self.__stats["glitch_mean_duration"] + glitch.glitchLength) / 2
+                    self.__stats["glitch_packets_lost_per_glitch_mean"] = \
+                        int(math.ceil((self.__stats["glitch_packets_lost_per_glitch_mean"] + glitch.packetsLost) / 2.0))
+
+                # Update glitch min/max packet loss stats
+                if self.__stats["glitch_packets_lost_per_glitch_min"] < 1:
+                    self.__stats["glitch_packets_lost_per_glitch_min"] = glitch.packetsLost
+
+                if glitch.packetsLost < self.__stats["glitch_packets_lost_per_glitch_min"]:
+                    self.__stats["glitch_packets_lost_per_glitch_min"] = glitch.packetsLost
+
+                if glitch.packetsLost > self.__stats["glitch_packets_lost_per_glitch_max"]:
+                    self.__stats["glitch_packets_lost_per_glitch_max"] = glitch.packetsLost
+
+                # update glitch min/max duration stats
+                # Test for 'zero' duration (the initial value)
+                if self.__stats["glitch_min_duration"] == datetime.timedelta():
+                    self.__stats["glitch_min_duration"] = glitch.glitchLength
+
+                if glitch.glitchLength < self.__stats["glitch_min_duration"]:
+                    self.__stats["glitch_min_duration"] = glitch.glitchLength
+
+                if glitch.glitchLength > self.__stats["glitch_max_duration"]:
+                    self.__stats["glitch_max_duration"] = glitch.glitchLength
 
                 # Finally, reset min/max/range jitter values as they're corrupted by a glitch
                 self.__stats["jitter_min_uS"] = 0
@@ -454,12 +505,15 @@ class RtpStream(object):
         # Aggregate Glitch counters
         self.__stats["glitch_packets_lost_total_percent"] = 0
         self.__stats["glitch_packets_lost_total"] = 0
+        self.__stats["glitch_packets_lost_per_glitch_mean"] = 0
+        self.__stats["glitch_packets_lost_per_glitch_min"] = 0
+        self.__stats["glitch_packets_lost_per_glitch_max"] = 0
         self.__stats["glitch_counter_total"] = 0
 
-        # Moving glitch counters
+        ######## Moving glitch counters
         # array to store (any number of) moving glitch counters
         self.movingGlitchCounters = []
-        # Add some  moving glitch counters to the array
+        # Add some  moving glitch counters to the array:-
 
         # 10 second duration, 1 second sampling period
         self.movingGlitchCounters.append(MovingTotalEventCounter("glitch_counter_last_10Sec", 10, 1))
@@ -476,6 +530,8 @@ class RtpStream(object):
         self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.timedelta()
         self.__stats["glitch_mean_time_between_glitches"] = datetime.timedelta()
         self.__stats["glitch_mean_duration"]=datetime.timedelta()
+        self.__stats["glitch_max_duration"] = datetime.timedelta()
+        self.__stats["glitch_min_duration"] = datetime.timedelta()
         self.sumOfTimeElapsedSinceLastGlitch = datetime.timedelta()
 
         # Jitter counters
@@ -492,7 +548,7 @@ class RtpStream(object):
         self.__stats["processor_utilisation_percent"] = 0
 
         # % deviation from longTermJitter_uS that will trigger an excessJitterEvent
-        self.__stats["jitter_excessive_alarm_threshold_percent"] = 50
+        self.__stats["jitter_excessive_alarm_threshold_percent"] = 75
         self.excessJitterThresholdFactor = 1.0 + (self.__stats["jitter_excessive_alarm_threshold_percent"] / 100.0)
 
         # No of seconds to inhibit an excessive jitter alarm
