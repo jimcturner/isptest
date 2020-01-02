@@ -526,11 +526,11 @@ class RtpStream(object):
         # Add some  moving glitch counters to the array:-
 
         # 10 second duration, 1 second sampling period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("glitch_counter_last_10Sec", 10, 1))
+        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Sec", 10, 1))
         # 1 min duration, 10 second sample period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("glitch_counter_last_1Min", 60, 10))
+        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Min", 60, 10))
         # 10 min duration, 1 minute sample period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("glitch_counter_last_10Min", 600, 60))
+        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Min", 600, 60))
 
 
 
@@ -783,6 +783,15 @@ class RtpStream(object):
         self.__accessRtpStreamStatsMutex.release()
         return stats
 
+    def getRtpStreamStatsByFilter(self,filter):
+        # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
+        self.__accessRtpStreamStatsMutex.acquire()
+        stats = self.__stats.copy()
+        self.__accessRtpStreamStatsMutex.release()
+        # Filter keys of stats by startswith('filter') into a new dictionary
+        filteredStats = {k: v for k, v in stats.items() if k.startswith(filter)}
+        return filteredStats
+
     # Thread-safe method for accessing realtime RtpStream eventList
     def getRTPStreamEventList(self):
         self.__accessRtpStreamEventListMutex.acquire()
@@ -864,6 +873,11 @@ def __displayThread(rtpStream):
             else:
                 print event.type, event.timeCreated, "\r"
             # pass
+        print "Concise-----------------------------------", "\r"
+
+        items = rtpStream.getRtpStreamStatsByFilter("historic").items()
+        for x,y in items:
+            print x,y,"\r"
         print "------------------------------------------", "\r"
         time.sleep(1)
 
