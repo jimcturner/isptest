@@ -71,13 +71,13 @@ class StreamStarted(object):
     description = ""
 
     # Constructor
-    def __init__(self, firstPacketReceived, stats,syncSource):
+    def __init__(self, firstPacketReceived, stats):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
         self.firstPacketdReceived = firstPacketReceived
         # Take local copy of stats dictionary
         self.stats = dict(stats)
-        self.syncSource=syncSource
+        self.syncSource=stats["syncSource"]
 
     def getData(self):
         # Returns a dictionary containing information about this event
@@ -238,13 +238,15 @@ class RtpStream(object):
     # Constructor method.
     # The RtpStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
-    def __init__(self, id, srcAddress, srcPort):
-        # Assign to instance variable
-        self.__streamID = id
-        self.srcAddress = srcAddress
-        self.srcPort = srcPort
+    def __init__(self, syncSource, srcAddress, srcPort):
 
-        print "creating RtpStream with id:", self.__streamID, "\r"
+        # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
+        self.__stats = {}
+        # Assign to instance variable
+        self.__stats["syncSource"] = syncSource
+        self.__stats["srcAddress"] = srcAddress
+        self.__stats["srcPort"] = srcPort
+        print "creating RtpStream with syncSource:", self.__stats["syncSource"], "\r"
 
         # Create a mutex lock to be used by the a thread
         # To set the lock use: __accessRtpDataMutex.acquire(), To release use: __accessRtpDataMutex.release()
@@ -254,9 +256,6 @@ class RtpStream(object):
 
         # Create empty list to hold rtp stream data as it is received by the socket
         self.rtpStreamData = []
-
-        # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
-        self.__stats = {}
 
         # Create private empty list to hold Events for this RtpStream object. Accessible via a getter method
         self.__eventList = []
@@ -476,10 +475,10 @@ class RtpStream(object):
     # Define a private calculation method that will run autonomously as a thread
     # This thread will
     def __calculateThread(self):
-        print "__calculateThread started with id: ", self.__streamID, "\r"
+        print "__calculateThread started with sync Source: ", self.__stats["syncSource"], "\r"
 
         # Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
-        lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(),self.__streamID)
+        lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(),self.__stats["syncSource"])
         self.__stats["packet_first_packet_received_timestamp"] = datetime.timedelta()
 
         # General Counters
@@ -590,7 +589,7 @@ class RtpStream(object):
                 if self.__stats["packet_counter_received_total"] < 1:
                     self.__stats["packet_first_packet_received_timestamp"] = self.rtpStream[0].timestamp
                     # Add a StreamStarted event to the event list
-                    self.__eventList.append(StreamStarted(self.rtpStream[0], self.__stats,self.__streamID))
+                    self.__eventList.append(StreamStarted(self.rtpStream[0], self.__stats))
                 # Stream now being received so clear flag
 
                 if lossOfStreamFlag == True:
@@ -761,7 +760,7 @@ class RtpStream(object):
 
     # Define getter methods
     def getRTPStreamID(self):
-        return self.__streamID, self.srcAddress,self.srcPort
+        return self.__stats["syncSource"], self.__stats["srcAddress"],self.__stats["srcPort"]
 
     # Thread-safe method for accessing realtime RtpStream stats
     def getRtpStreamStats(self):
