@@ -53,10 +53,11 @@ else:
 # Define an object to hold data about an individual received rtp packet
 class RtpData(object):
     # Constructor method
-    def __init__(self, rtpSequenceNo, payloadSize, timestamp):
+    def __init__(self, rtpSequenceNo, payloadSize, timestamp, syncSource):
         self.rtpSequenceNo = rtpSequenceNo
         self.payloadSize = payloadSize
         self.timestamp = timestamp
+        self.syncSource = syncSource
         # timeDelta will store the timestamp diff between this and the previous packet
         self.timeDelta = 0
         # jitter will store the diff between the timeDelta of this and the prev packet
@@ -75,6 +76,12 @@ class StreamStarted(object):
         self.timeCreated = datetime.datetime.now()
         self.firstPacketdReceived = firstPacketReceived
 
+    def getData(self):
+        # Returns a dictionary containing information about this event
+        data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated}
+        data['rtpSequenceNo'] = self.firstPacketdReceived.rtpSequenceNo
+        return data
+
 # Define an event that represents a loss of rtpStream
 class StreamLost(object):
     # Define descriptive names. These might be useful later
@@ -89,6 +96,11 @@ class StreamLost(object):
         # Take local copy of stats dictionary
         self.stats = stats
 
+    def getData(self):
+        # Returns a dictionary containing information about this event
+        data = {'type': StreamLost.type, 'timeCreated': self.timeCreated}
+        return data
+
 # Define an event object that represents a excessive jitter event
 class ExcessiveJitter(object):
     # Define descriptive names. These might be useful later
@@ -102,6 +114,10 @@ class ExcessiveJitter(object):
         self.meanJitter_1s = stats["jitter_mean_1S_uS"]
         self.meanJitter_10s = stats["jitter_mean_10S_uS"]
 
+    def getData(self):
+        # Returns a dictionary containing information about this event
+        data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated}
+        return data
 # Define an event object that represents a procesor overload. This might happen if the calculateThread can't process
 # incoming packets fast enough
 class ProcessorOverload(object):
@@ -456,7 +472,7 @@ class RtpStream(object):
         print "__calculateThread started with id: ", self.__streamID, "\r"
 
         # Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
-        lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta())
+        lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(),self.__streamID)
         self.__stats["packet_first_packet_received_timestamp"] = datetime.timedelta()
 
         # General Counters
@@ -764,14 +780,14 @@ class RtpStream(object):
         return eventList
 
     # Define setter methods
-    def addData(self, rtpSequenceNo, payloadSize, timestamp):
-        self.rtpSequenceNo = rtpSequenceNo
-        self.payloadSize = payloadSize
-        self.timestamp = timestamp
+    def addData(self, rtpSequenceNo, payloadSize, timestamp,syncSource):
+        # self.rtpSequenceNo = rtpSequenceNo
+        # self.payloadSize = payloadSize
+        # self.timestamp = timestamp
         # print "addData():",self.rtpSequenceNo,self.payloadSize,self.timestamp
 
         # Create a new rtp data object to hold the rtp packet data
-        newData = RtpData(rtpSequenceNo, payloadSize, timestamp)
+        newData = RtpData(rtpSequenceNo, payloadSize, timestamp,syncSource)
 
         # NOW ADD DATA TO A LIST
 
@@ -832,11 +848,15 @@ def __displayThread(rtpStream):
                 print "\r"
         print "\r -----------------------------------------------------------------------------------------------------------------------", "\r"
         for event in rtpStream.getRTPStreamEventList():
-            if event.type == 'Glitch':
-                print event.type, event.timeCreated, "Expected:", event.expectedSequenceNo, ", Received", event.actualReceivedSequenceNo, "\r"
-            else:
-                print event.type, event.timeCreated, "\r"
+            # if event.type == 'Glitch':
+            #     print event.type, event.timeCreated, "Expected:", event.expectedSequenceNo, ", Received", event.actualReceivedSequenceNo, "\r"
+            # else:
+            #     print event.type, event.timeCreated, "\r"
             # pass
+            try:
+                print event.getData(),"\r"
+            except:
+                print "no getData() method \r"
         print "Concise-----------------------------------", "\r"
 
         items = rtpStream.getRtpStreamStatsByFilter("historic").items()
@@ -1201,8 +1221,8 @@ def main(argv):
 
                     runOnce = False
 
-                # Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp
-                s.addData(rtpSequenceNo, payloadSize, timeNow)
+                # Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp, syncSource
+                s.addData(rtpSequenceNo, payloadSize, timeNow,rtpSyncSourceIdentifier)
 
 
             except Exception as e:
