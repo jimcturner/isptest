@@ -71,17 +71,19 @@ class StreamStarted(object):
     description = ""
 
     # Constructor
-    def __init__(self, firstPacketReceived, stats):
+    def __init__(self, firstPacketReceived, stats,syncSource):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
         self.firstPacketdReceived = firstPacketReceived
         # Take local copy of stats dictionary
-        self.stats = stats
+        self.stats = dict(stats)
+        self.syncSource=syncSource
 
     def getData(self):
         # Returns a dictionary containing information about this event
         data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated}
         data['rtpSequenceNo'] = self.firstPacketdReceived.rtpSequenceNo
+        data['syncSource'] = self.syncSource
         return data
 
 # Define an event that represents a loss of rtpStream
@@ -96,7 +98,7 @@ class StreamLost(object):
         self.timeCreated = datetime.datetime.now()
         self.lastPacketReceived = lastPacketReceived
         # Take local copy of stats dictionary
-        self.stats = stats
+        self.stats = dict(stats)
 
     def getData(self):
         # Returns a dictionary containing information about this event
@@ -112,9 +114,12 @@ class ExcessiveJitter(object):
     def __init__(self, lastPacketReceived, stats):
         self.timeCreated = datetime.datetime.now()
         self.lastPacketReceived = lastPacketReceived
-        self.instantaneousJitter = stats["jitter_instantaneous"]
-        self.meanJitter_1s = stats["jitter_mean_1S_uS"]
-        self.meanJitter_10s = stats["jitter_mean_10S_uS"]
+        # Take local copy of stats dictionary
+        self.stats = dict(stats)
+        self.instantaneousJitter = self.stats["jitter_instantaneous"]
+        self.meanJitter_1s = self.stats["jitter_mean_1S_uS"]
+        self.meanJitter_10s = self.stats["jitter_mean_10S_uS"]
+
 
     def getData(self):
         # Returns a dictionary containing information about this event
@@ -131,7 +136,7 @@ class ProcessorOverload(object):
         self.timeCreated = datetime.datetime.now()
         self.lastPacketReceived = lastPacketReceived
         # Take local copy of stats dictionary
-        self.stats = stats
+        self.stats = dict(stats)
 
 # Define an event that represent a glitch
 # This will be in the form of the packets (RtpData objects) either side of the 'hole' in received data
@@ -148,7 +153,7 @@ class Glitch(object):
         self.startOfGap = lastReceivedPacketBeforeGap
         self.endOfGap = firstPackedReceivedAfterGap
         # Take local copy of stats dictionary
-        self.stats=stats
+        self.stats=dict(stats)
         # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
         # The '-1' is because it's fences and fenceposts
         self.packetsLost = abs(
@@ -585,7 +590,7 @@ class RtpStream(object):
                 if self.__stats["packet_counter_received_total"] < 1:
                     self.__stats["packet_first_packet_received_timestamp"] = self.rtpStream[0].timestamp
                     # Add a StreamStarted event to the event list
-                    self.__eventList.append(StreamStarted(self.rtpStream[0], self.__stats))
+                    self.__eventList.append(StreamStarted(self.rtpStream[0], self.__stats,self.__streamID))
                 # Stream now being received so clear flag
 
                 if lossOfStreamFlag == True:
