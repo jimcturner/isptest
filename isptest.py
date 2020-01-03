@@ -71,10 +71,12 @@ class StreamStarted(object):
     description = ""
 
     # Constructor
-    def __init__(self, firstPacketReceived):
+    def __init__(self, firstPacketReceived, stats):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
         self.firstPacketdReceived = firstPacketReceived
+        # Take local copy of stats dictionary
+        self.stats = stats
 
     def getData(self):
         # Returns a dictionary containing information about this event
@@ -583,7 +585,7 @@ class RtpStream(object):
                 if self.__stats["packet_counter_received_total"] < 1:
                     self.__stats["packet_first_packet_received_timestamp"] = self.rtpStream[0].timestamp
                     # Add a StreamStarted event to the event list
-                    self.__eventList.append(StreamStarted(self.rtpStream[0]))
+                    self.__eventList.append(StreamStarted(self.rtpStream[0]),self.__stats)
                 # Stream now being received so clear flag
 
                 if lossOfStreamFlag == True:
