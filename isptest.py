@@ -19,7 +19,7 @@ import getopt   # Used to parse command line arguments
 import re       # Regex 'regular expression' module
 from timeit import default_timer as timer   # Used to calculate elapsed time
 import math
-
+from terminaltables import SingleTable      # Used for pretty tables in displayThread
 ####################################################################################
 # Utility Functions
 # #################
@@ -825,6 +825,30 @@ class RtpStream(object):
         # Now we've added the newData object to the list rtpStreamData[] we cab delete the newData object
         del newData
 
+def createTable(inputDictionary, title):
+    # This function will take a dictionary and turn it into a two column table using terminaltables.Singletable
+    # it will return the table as a list of strings
+
+    # Create two seperate lists, one of the dictionary keys and one of the values
+    keys = []
+    values = []
+    for key, value in inputDictionary:
+        keys.append(key)  # Append key
+        values.append(value)  # Append value
+
+    # iterate over keys list to create a 2D array of the table contents
+    table_data = []
+    for x in range(len(keys)):
+        row = [keys[x], values[x]]      # Create a complete row containing a key and value column
+        table_data.append(row)          # Append the complete row to the table_data list (of lists)
+        del row                         # Remove the existing row
+
+    # Create the table
+    table = SingleTable(table_data)
+    table.title = title
+    table.inner_heading_row_border = False   # No headings on this table
+    # Split the table into a list containing separate lines and return
+    return table.table.splitlines()
 
 # Define a display thread that will run autonomously
 def __displayThread(rtpStream):
@@ -838,6 +862,34 @@ def __displayThread(rtpStream):
         id,srcAddr,srcPort=rtpStream.getRTPStreamID()
         # Clear screen and move cursor to origin
         print"\033[2J"
+        print "\r IBEOO ISP Analyser---------------------------------------------------------------------------------------------------", "\r"
+        print " | Src:", srcAddr, ":", srcPort, ", Sync Source:", id, "\r"
+        # Get a dictionary containing glitch stats
+        glitchStats = rtpStream.getRtpStreamStatsByFilter("glitch").items()
+        # Create a table
+        table=createTable(glitchStats, "Glitch Stats")
+        # Print the table to the screen line by line
+        for x in table:
+            print x,"\r"
+
+        # Create a table of jitter stats
+        table = createTable(rtpStream.getRtpStreamStatsByFilter("jitter").items(), "Jitter Stats")
+        # Print the table to the screen line by line
+        for x in table:
+            print x, "\r"
+
+        # Create a table of Packet stats
+        table = createTable(rtpStream.getRtpStreamStatsByFilter("packet").items(), "Packet Stats")
+        # Print the table to the screen line by line
+        for x in table:
+            print x, "\r"
+
+        # Create a table of historic glitch stats
+        table = createTable(rtpStream.getRtpStreamStatsByFilter("historic").items(), "Historic glitch stats")
+        # Print the table to the screen line by line
+        for x in table:
+            print x, "\r"
+
         # Clear tabCounter
         tabCounter = 0
         # print len(items), "\r"
