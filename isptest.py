@@ -77,13 +77,14 @@ class StreamStarted(object):
         self.firstPacketdReceived = firstPacketReceived
         # Take local copy of stats dictionary
         self.stats = dict(stats)
-        self.syncSource=stats["syncSource"]
 
-    def getData(self):
+    def getData(self,verbosityLevel):
         # Returns a dictionary containing information about this event
-        data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated}
-        data['rtpSequenceNo'] = self.firstPacketdReceived.rtpSequenceNo
-        data['syncSource'] = self.syncSource
+        # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
+        data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated,
+                'rtpSequenceNo': self.firstPacketdReceived.rtpSequenceNo, 'syncSource': self.stats["syncSource"]}
+        if verbosityLevel > 0:
+            data['stats']=self.stats
         return data
 
 # Define an event that represents a loss of rtpStream
@@ -100,9 +101,12 @@ class StreamLost(object):
         # Take local copy of stats dictionary
         self.stats = dict(stats)
 
-    def getData(self):
+    def getData(self,verbosityLevel):
         # Returns a dictionary containing information about this event
-        data = {'type': StreamLost.type, 'timeCreated': self.timeCreated}
+        # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
+        data = {'type': StreamLost.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["syncSource"]}
+        if verbosityLevel > 0:
+            data['stats']=self.stats
         return data
 
 # Define an event object that represents a excessive jitter event
@@ -116,15 +120,18 @@ class ExcessiveJitter(object):
         self.lastPacketReceived = lastPacketReceived
         # Take local copy of stats dictionary
         self.stats = dict(stats)
-        self.instantaneousJitter = self.stats["jitter_instantaneous"]
-        self.meanJitter_1s = self.stats["jitter_mean_1S_uS"]
-        self.meanJitter_10s = self.stats["jitter_mean_10S_uS"]
 
 
-    def getData(self):
+    def getData(self,verbosityLevel):
         # Returns a dictionary containing information about this event
-        data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated}
+        # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
+        data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["syncSource"],
+                'jitter_long_term_uS': self.stats["jitter_long_term_uS"],
+                'jitter_mean_1S_uS': self.stats["jitter_mean_1S_uS"]}
+        if verbosityLevel > 0:
+            data['stats']=self.stats
         return data
+
 # Define an event object that represents a procesor overload. This might happen if the calculateThread can't process
 # incoming packets fast enough
 class ProcessorOverload(object):
@@ -138,6 +145,14 @@ class ProcessorOverload(object):
         # Take local copy of stats dictionary
         self.stats = dict(stats)
 
+    def getData(self, verbosityLevel):
+        # Returns a dictionary containing information about this event
+        # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
+        data = {'type': ProcessorOverload.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["syncSource"],\
+                'processor_utilisation_percent': self.stats["processor_utilisation_percent"]}
+        if verbosityLevel > 0:
+            data['stats']=self.stats
+        return data
 # Define an event that represent a glitch
 # This will be in the form of the packets (RtpData objects) either side of the 'hole' in received data
 class Glitch(object):
@@ -164,6 +179,15 @@ class Glitch(object):
         # Calculate useful values showing expected and actual rtpSequence no
         self.expectedSequenceNo = self.startOfGap.rtpSequenceNo + 1
         self.actualReceivedSequenceNo = self.endOfGap.rtpSequenceNo
+
+    def getData(self, verbosityLevel):
+        # Returns a dictionary containing information about this event
+        # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
+        data = {'type': Glitch.type, 'timeCreated': self.timeCreated,
+                'syncSource': self.stats["syncSource"],'packetsLost': self.packetsLost, 'duration': self.glitchLength}
+        if verbosityLevel > 0:
+            data['stats'] = self.stats
+        return data
 
 class MovingTotalEventCounter(object):
     # Stores a running total of events that happened within the last x seconds with y granualarity
@@ -787,11 +811,6 @@ class RtpStream(object):
 
     # Define setter methods
     def addData(self, rtpSequenceNo, payloadSize, timestamp,syncSource):
-        # self.rtpSequenceNo = rtpSequenceNo
-        # self.payloadSize = payloadSize
-        # self.timestamp = timestamp
-        # print "addData():",self.rtpSequenceNo,self.payloadSize,self.timestamp
-
         # Create a new rtp data object to hold the rtp packet data
         newData = RtpData(rtpSequenceNo, payloadSize, timestamp,syncSource)
 
@@ -860,7 +879,7 @@ def __displayThread(rtpStream):
             #     print event.type, event.timeCreated, "\r"
             # pass
             try:
-                print event.getData(),"\r"
+                print event.getData(0),"\r"
             except:
                 print "no getData() method \r"
         print "Concise-----------------------------------", "\r"
