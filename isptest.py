@@ -149,7 +149,7 @@ class ProcessorOverload(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         data = {'type': ProcessorOverload.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"],\
-                'processor_utilisation_percent': self.stats["processor_utilisation_percent"]}
+                'processor_utilisation_percent': self.stats["stream_processor_utilisation_percent"]}
         if verbosityLevel > 0:
             data['stats']=self.stats
         return data
@@ -565,7 +565,7 @@ class RtpStream(object):
         historicJitter = []
         sumOfJitter_1s = 0
 
-        self.__stats["processor_utilisation_percent"] = 0
+        self.__stats["stream_processor_utilisation_percent"] = 0
 
         # % deviation from longTermJitter_uS that will trigger an excessJitterEvent
         self.__stats["jitter_excessive_alarm_threshold_percent"] = 75
@@ -759,11 +759,11 @@ class RtpStream(object):
                 self.__stats["calculate_thread_calculation_duration_uS"] = ((calculationEndTime - calculationStartTime)%1)*1000000
 
                 # Calculate processorUtilisationPercent. All time values in uS
-                self.__stats["processor_utilisation_percent"] = \
+                self.__stats["stream_processor_utilisation_percent"] = \
                     self.__stats["calculate_thread_calculation_duration_uS"] * 100.0 / (self.__stats["packet_mean_receive_period_uS"] * len(self.rtpStream))
 
                 # If the CPU is >99% utilised, add event to the list (but only do this once)
-                if self.__stats["processor_utilisation_percent"] > 99:
+                if self.__stats["stream_processor_utilisation_percent"] > 99:
                     self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket,self.__stats))
                     pass
             except Exception as e:
@@ -869,77 +869,58 @@ def printTable(xPos,yPos,tableData):
 def __displayThread(rtpStream):
     print "__displayThread started with id: ", rtpStream.getRTPStreamID(), "\r"
 
-    tabCounter = 0
-    columns = 2
+    padding = 1 # Gap between tables
+    margin = 1
     while True:
-        # Get keys/values from rtpStream
-        items = rtpStream.getRtpStreamStats().items()
-        id,srcAddr,srcPort=rtpStream.getRTPStreamID()
+        # Get all keys/values from rtpStream
+        # items = rtpStream.getRtpStreamStats().items()
         # Clear screen and move cursor to origin
-        print"\033[2J"
-        print "\r IBEOO ISP Analyser---------------------------------------------------------------------------------------------------", "\r"
-        print " | Src:", srcAddr, ":", srcPort, ", Sync Source:", id, "\r"
-        # Print a Glitch and Historic Glitch stats side by side
-        # Get a dictionary containing glitch stats
-        glitchStats = rtpStream.getRtpStreamStatsByFilter("glitch").items()
-        # Create a table
-        glitchWidth, glitchHeight, table = createTable(glitchStats, "Glitch Stats")
-        usedWidth=glitchWidth
-        usedHeight=glitchHeight
-        printTable(2, 2, table)
+        print "\033[2J", "\r"
+        print "\033[0;0HIBEOO ISP Analyser---------------------------------------------------------------------------------------------------", "\r"
+
+        nextUseableLine = 2 # Takes into account the title
+        nextUseableColumn = 0
+        # Create a table of stream stats
+        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("stream").items(), "Stream info")
+        printTable(margin, nextUseableLine, table)
+        nextUseableLine += (height + padding)
+        if (width + padding + margin) > nextUseableColumn:
+            nextUseableColumn = width + padding + margin
+        # Create a Glitch Stats table
+        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("glitch").items(), "Glitch Stats")
+        printTable(margin, nextUseableLine, table)
+        nextUseableLine += (height + padding)
+        if (width + padding + margin) > nextUseableColumn:
+            nextUseableColumn = width + padding + margin
 
         # Create a table of historic glitch stats
-        widthHistoric, heightHistoric, table = createTable(rtpStream.getRtpStreamStatsByFilter("historic").items(), "Historic glitch stats")
-        printTable(usedWidth + 2, 2, table)
+        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("historic").items(), "Historic glitch stats")
+        printTable(margin, nextUseableLine, table)
+        nextUseableLine += (height + padding)
+        if (width + padding + margin) > nextUseableColumn:
+            nextUseableColumn = width + padding + margin
 
+        # Now create tables on the RHS of the screen.
+        # Reset nextUseableLine to top of screen
+        nextUseableLine = 2
         # Create a table of jitter stats
-        widthJitter, heightJitter, table = createTable(rtpStream.getRtpStreamStatsByFilter("jitter").items(), "Jitter Stats")
-        usedWidth = widthJitter
-        printTable(2, usedHeight+2, table)
+        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("jitter").items(), "Jitter Stats")
+        printTable(nextUseableColumn, nextUseableLine, table)
+        nextUseableLine += (height + padding)
+        # if (width + padding + margin) > nextUseableColumn:
+        #     nextUseableColumn = width + padding + margin
 
-        # Create a table of Packet stats beside the jitter table
-        widthStats, heightStats, table = createTable(rtpStream.getRtpStreamStatsByFilter("packet").items(), "Packet Stats")
-        # Print the table to the screen line by line
-        printTable(usedWidth +2, usedHeight +2, table)
+        # # Create a table of Packet stats beside the jitter table
+        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("packet").items(), "Packet Stats")
+        # # Print the table to the screen line by line
+        printTable(nextUseableColumn, nextUseableLine, table)
+        nextUseableLine += (height + padding)
 
-        usedHeight += heightJitter
-        # Move cursor to start of next available line
-        print "\033[" + str(usedHeight+2) + ";" + str(0) + "H", "\r"
+        # # Move cursor to start of next available line
+        # print "\033[" + str(nextUseableLine) + ";" + str(0) + "H", "\r"
 
+        # Now create table from eventList
 
-        # Clear tabCounter
-        tabCounter = 0
-        # print len(items), "\r"
-        # print "\r IBEOO ISP Analyser---------------------------------------------------------------------------------------------------", "\r"
-        # print " | Src:",srcAddr,":",srcPort,", Stream ID:",id,"\r"
-        # for x, y in items:
-        #     if x == "totalDataReceivedPerSecond":
-        #         # Convert received rate from bytes/sec to bits/sec
-        #         rxRate = y * 8
-        #         friendlyValue = 0
-        #         if rxRate < 1024:
-        #             suffix = "bps"
-        #         elif rxRate <= 1048576:
-        #             suffix = "kbps"
-        #             friendlyValue = rxRate / 1024.0
-        #         else:
-        #             suffix = "Mbps"
-        #             friendlyValue = rxRate / 1048576.0
-        #
-        #         print " |",x, round(friendlyValue, 2), suffix,
-        #
-        #     else:
-        #         print " |",x, y,
-        #     # For alternate fields, return the cursor to the start of line position and then tab across
-        #     if (tabCounter % 2) >= 1:
-        #         # If the second field of the line, terminate with a | to complete the box
-        #         # print "\033[100D", "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t|","\033[100D",
-        #         print "\033[100D", "\t\t\t\t\t\t\t\t",
-        #     # Increment tab counter
-        #     tabCounter += 1
-        #     # If we've exceeded the number of columns, print a carriage return
-        #     if (tabCounter % columns) >= (columns - 1):
-        #         print "\r"
         print "\r -----------------------------------------------------------------------------------------------------------------------", "\r"
         for event in rtpStream.getRTPStreamEventList():
             # if event.type == 'Glitch':
@@ -951,7 +932,6 @@ def __displayThread(rtpStream):
                 print event.getData(0),"\r"
             except:
                 print "no getData() method \r"
-
         time.sleep(1)
 
 
