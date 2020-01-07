@@ -82,7 +82,7 @@ class StreamStarted(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated,
-                'rtpSequenceNo': self.firstPacketdReceived.rtpSequenceNo, 'syncSource': self.stats["syncSource"]}
+                'rtpSequenceNo': self.firstPacketdReceived.rtpSequenceNo, 'syncSource': self.stats["stream_syncSource"]}
         if verbosityLevel > 0:
             data['stats']=self.stats
         return data
@@ -104,7 +104,7 @@ class StreamLost(object):
     def getData(self,verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-        data = {'type': StreamLost.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["syncSource"]}
+        data = {'type': StreamLost.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"]}
         if verbosityLevel > 0:
             data['stats']=self.stats
         return data
@@ -125,7 +125,7 @@ class ExcessiveJitter(object):
     def getData(self,verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-        data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["syncSource"],
+        data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"],
                 'jitter_long_term_uS': self.stats["jitter_long_term_uS"],
                 'jitter_mean_1S_uS': self.stats["jitter_mean_1S_uS"]}
         if verbosityLevel > 0:
@@ -148,7 +148,7 @@ class ProcessorOverload(object):
     def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-        data = {'type': ProcessorOverload.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["syncSource"],\
+        data = {'type': ProcessorOverload.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"],\
                 'processor_utilisation_percent': self.stats["processor_utilisation_percent"]}
         if verbosityLevel > 0:
             data['stats']=self.stats
@@ -184,7 +184,7 @@ class Glitch(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         data = {'type': Glitch.type, 'timeCreated': self.timeCreated,
-                'syncSource': self.stats["syncSource"],'packetsLost': self.packetsLost, 'duration': self.glitchLength}
+                'syncSource': self.stats["stream_syncSource"],'packetsLost': self.packetsLost, 'duration': self.glitchLength}
         if verbosityLevel > 0:
             data['stats'] = self.stats
         return data
@@ -267,10 +267,10 @@ class RtpStream(object):
         # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
         self.__stats = {}
         # Assign to instance variable
-        self.__stats["syncSource"] = syncSource
-        self.__stats["srcAddress"] = srcAddress
-        self.__stats["srcPort"] = srcPort
-        print "creating RtpStream with syncSource:", self.__stats["syncSource"], "\r"
+        self.__stats["stream_syncSource"] = syncSource
+        self.__stats["stream_srcAddress"] = srcAddress
+        self.__stats["stream_srcPort"] = srcPort
+        print "creating RtpStream with syncSource:", self.__stats["stream_syncSource"], "\r"
 
         # Create a mutex lock to be used by the a thread
         # To set the lock use: __accessRtpDataMutex.acquire(), To release use: __accessRtpDataMutex.release()
@@ -499,10 +499,10 @@ class RtpStream(object):
     # Define a private calculation method that will run autonomously as a thread
     # This thread will
     def __calculateThread(self):
-        print "__calculateThread started with sync Source: ", self.__stats["syncSource"], "\r"
+        print "__calculateThread started with sync Source: ", self.__stats["stream_syncSource"], "\r"
 
         # Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
-        lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(),self.__stats["syncSource"])
+        lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(),self.__stats["stream_syncSource"])
         self.__stats["packet_first_packet_received_timestamp"] = datetime.timedelta()
 
         # General Counters
@@ -784,7 +784,7 @@ class RtpStream(object):
 
     # Define getter methods
     def getRTPStreamID(self):
-        return self.__stats["syncSource"], self.__stats["srcAddress"],self.__stats["srcPort"]
+        return self.__stats["stream_syncSource"], self.__stats["stream_srcAddress"],self.__stats["stream_srcPort"]
 
     # Thread-safe method for accessing realtime RtpStream stats
     def getRtpStreamStats(self):
