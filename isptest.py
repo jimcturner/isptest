@@ -403,7 +403,7 @@ class RtpStream(object):
     # Constructor method.
     # The RtpStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
-    def __init__(self, syncSource, srcAddress, srcPort):
+    def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort):
 
         # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
         self.__stats = {}
@@ -411,6 +411,8 @@ class RtpStream(object):
         self.__stats["stream_syncSource"] = syncSource
         self.__stats["stream_srcAddress"] = srcAddress
         self.__stats["stream_srcPort"] = srcPort
+        self.__stats["stream_rxAddress"] = rxAddress
+        self.__stats["stream_rxPort"] = rxPort
         print "creating RtpStream with syncSource:", self.__stats["stream_syncSource"], "\r"
 
         # Create a mutex lock to be used by the a thread
@@ -588,7 +590,7 @@ class RtpStream(object):
             lastReceivedRtpPacket.rtpSequenceNo = -1
 
         if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and \
-                self.__stats["time_elapsed_total"].seconds > 0:
+                self.__stats["stream_time_elapsed_total"].seconds > 0:
             # Take timestamp of most recent glitch
             self.__stats["glitch_most_recent_timestamp"] = datetime.datetime.now()
 
@@ -662,7 +664,7 @@ class RtpStream(object):
         self.__stats["packet_data_received_total_bytes"] = 0
         self.__stats["packet_payload_size_mean_1S_bytes"] = 0
         self.__stats["packet_counter_received_total"] = 0
-        self.__stats["time_elapsed_total"] = datetime.timedelta()
+        self.__stats["stream_time_elapsed_total"] = datetime.timedelta()
 
         # Aggregate Glitch counters
         self.__stats["glitch_packets_lost_total_percent"] = 0
@@ -832,7 +834,7 @@ class RtpStream(object):
                 # Reset loop timer starting reference
                 loopTimerStart = timer()
                 # Increment seconds elapsed
-                self.__stats["time_elapsed_total"] += datetime.timedelta(seconds=1)
+                self.__stats["stream_time_elapsed_total"] += datetime.timedelta(seconds=1)
                 # Take snapshots of running totals
                 self.__stats["packet_counter_1S"] = runningTotalPacketsPerSecond
                 self.__stats["packet_data_received_1S_bytes"] = runningTotalDataReceivedPerSecond
@@ -856,7 +858,7 @@ class RtpStream(object):
                 historicJitter.append(self.__stats["jitter_mean_1S_uS"])
                 # Calculate a long-term jitter value by averaging all meanJitter_1s value over time elapsed
                 sumOfJitter_1s += self.__stats["jitter_mean_1S_uS"]
-                self.__stats["jitter_long_term_uS"] = sumOfJitter_1s / self.__stats["time_elapsed_total"].seconds
+                self.__stats["jitter_long_term_uS"] = sumOfJitter_1s / self.__stats["stream_time_elapsed_total"].seconds
                 prevMeanJitter_10s = self.__stats["jitter_mean_10S_uS"]
                 # Check that we have enough results (10s worth) to calculate the 10s value
                 if len(historicJitter) > 10:
@@ -873,7 +875,7 @@ class RtpStream(object):
                 # This will ensure that self.rtpStream[] length never gets too large.
                 # Otherwise, for high packet receieve rates, the calculation time will become excessive
                 # Wait a second, in order to know we're in a steady state
-                if self.__stats["packet_mean_receive_period_uS"] > 0 and self.__stats["time_elapsed_total"].seconds > 1:
+                if self.__stats["packet_mean_receive_period_uS"] > 0 and self.__stats["stream_time_elapsed_total"].seconds > 1:
                     self.__stats["calculate_thread_sampling_interval_S"] = 10.0 * self.__stats[
                         "packet_mean_receive_period_uS"] / 1000000.0
 
@@ -1464,7 +1466,7 @@ def main(argv):
 
                 if (runOnce == True):
                     # Create a new rtpStream object (but only once)
-                    s = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort)
+                    s = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, UDP_RX_PORT)
 
                     # Create a __displayThread. Pass the RtpStream object (s) to it
                     displayThread = threading.Thread(target=__displayThread, args=(s,))
