@@ -942,6 +942,7 @@ class RtpStream(object):
 
     def getRtpStreamStatsByFilter(self, filter):
         # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
+        # Returns a list of tuples
         self.__accessRtpStreamStatsMutex.acquire()
         stats = self.__stats.copy()
         self.__accessRtpStreamStatsMutex.release()
@@ -1015,6 +1016,115 @@ def printTable(xPos, yPos, tableData):
     # Finally, move cursor to start of next available line
     print "\033[" + str(yPos + lineCount) + ";" + str(0) + "H", "\r"
 
+def humanise(inputDictionary):
+    # This function will examine the key/value pairs of the stats dictionary and
+    # prettify the values. It will return a list of tuples containing the value/key pairs
+
+    # You're not allowed to modify a dictionary whilst iterating over it, therefore create a new dictionary that will
+    # hold the modified values
+
+    # List of prefixes to be removed from the key names
+    prefixes = ["stream_", "glitch_", "historic_", "jitter_", "packet_"]
+    # List of suffixes to be removed from the key names
+    suffixes = ["_percent","_uS","_timestamp","_S","_bytes"]
+
+    # Create a list to hold the humanised output
+    newDictionary = {}
+    for key, value in inputDictionary:
+        # Next, Scan 'keys' to see if they contain any of the prefix or suffix terms. If they do, replace them with ""
+        # Take a copy of the key to be examined
+        tempKeyName=key
+        # Iterate over prefixes
+        for prefix in prefixes:
+            tempKeyName=str(key).replace(prefix,"",1)
+            # Check to see if tempKeyName has been modified?
+            if tempKeyName != key:
+                break
+        # Take a copy of the key with the prefix removed
+        keyWithoutPrefix=tempKeyName
+
+        # Now iterate over suffixes list
+        tempKeyName=keyWithoutPrefix
+        for suffix in suffixes:
+            tempKeyName = str(keyWithoutPrefix).replace(suffix,"",1)
+            # Check to see if tempKeyName has been modified?
+            if tempKeyName != keyWithoutPrefix:
+                break
+        # Take a copy of the key with the suffix removed
+        keyWithoutSuffix=tempKeyName
+
+        # To improve readability, remove underscore characters
+        tempKeyName=keyWithoutSuffix.replace("_"," ")
+
+        # Now capitalise
+        # tempKeyName=tempKeyName.title()
+        # Now capture the finished 'humanised' key name
+        humanisedKey=tempKeyName
+
+        # Scan the (original) key name for clues about the format of the corresponding value
+
+        if str(key).find("uS") > 0:
+            # Create human readable value
+            humanisedValue = str(value) + "uS"
+
+        elif str(key).find("percent") > 0:
+            # Create human readable value
+            # Format to two decimal places
+            value=round(value,2)
+            humanisedValue = str(value) + "%"
+
+        elif str(key).find("_S") > 0:
+            # Create human readable value
+            humanisedValue = str(value) + "s"
+
+        # elif str(key).find("data_received_1S_bytes") > 0:
+        elif key == "packet_data_received_1S_bytes":
+            # Convert bytes/sec to bps
+            bps = value * 8
+            if bps >= 1048576:
+                # Convert bps to Mbps
+                Mbps = bps / 1048576
+                humanisedValue = str(Mbps) + " Mbps"
+
+            elif bps >= 1024:
+                # Convert bps to kbps
+                kbps = bps / 1024
+                humanisedValue = str(kbps) + " kbps"
+
+            else:
+                humanisedValue = str(bps) + " bps"
+
+
+        elif key == "packet_data_received_total_bytes":
+            if value >= 1048576:
+                # Convert bytes to Mb
+                value = value / 1048576
+                humanisedValue = str(value) + " Mb"
+            elif value >= 1024:
+                # Convert bytes to kb
+                value = value / 1024
+                humanisedValue = str(value) + " kb"
+            else:
+                humanisedValue = str(value) + " bytes"
+
+        elif key == "packet_payload_size_mean_1S_bytes":
+            humanisedValue = str(value) + " bytes"
+
+        elif key == "packet_counter_1S":
+            humanisedValue = str(value)+" packets/s"
+
+        elif key == "packet_counter_received_total":
+            humanisedValue = str(value) + " packets"
+
+        else:
+            # Otherwise, keep the original value
+            humanisedValue=value
+
+        # Assign existing value to the new dictionary key
+        newDictionary[humanisedKey] = humanisedValue
+
+    # Return dictionary of humanised keys and values
+    return newDictionary.items()
 
 # Define a display thread that will run autonomously
 def __displayThread(rtpStream):
@@ -1032,20 +1142,21 @@ def __displayThread(rtpStream):
         nextUseableLine = 3  # Takes into account the title
         nextUseableColumn = 0
         # Create a table of stream stats
-        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("stream").items(), "Stream info")
+
+        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("stream").items()), "Stream info")
         printTable(margin, nextUseableLine, table)
         nextUseableLine += (height + padding)
         if (width + padding + margin) > nextUseableColumn:
             nextUseableColumn = width + padding + margin
         # Create a Glitch Stats table
-        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("glitch").items(), "Glitch Stats")
+        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("glitch").items()), "Glitch Stats")
         printTable(margin, nextUseableLine, table)
         nextUseableLine += (height + padding)
         if (width + padding + margin) > nextUseableColumn:
             nextUseableColumn = width + padding + margin
 
         # Create a table of historic glitch stats
-        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("historic").items(),
+        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("historic").items()),
                                            "Historic glitch stats")
         printTable(margin, nextUseableLine, table)
         nextUseableLine += (height + padding)
@@ -1057,14 +1168,14 @@ def __displayThread(rtpStream):
         # Reset nextUseableLine to top of screen
         nextUseableLine = 2
         # Create a table of jitter stats
-        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("jitter").items(), "Jitter Stats")
+        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("jitter").items()), "Jitter Stats")
         printTable(nextUseableColumn, nextUseableLine, table)
         nextUseableLine += (height + padding)
         # if (width + padding + margin) > nextUseableColumn:
         #     nextUseableColumn = width + padding + margin
 
         # Create a table of Packet stats beside the jitter table
-        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("packet").items(), "Packet Stats")
+        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("packet").items()), "Packet Stats")
         # # Print the table to the screen line by line
         printTable(nextUseableColumn, nextUseableLine, table)
         nextUseableLine += (height + padding)
@@ -1074,11 +1185,8 @@ def __displayThread(rtpStream):
 
 
         # Now create table from eventList
-
         eventTableRows = []
-
         allEvents = rtpStream.getRTPStreamEventList()
-        # nextUseableLineWholeScreen += 3
         noOfHistoricEventsToView = 10
         # Display the last x events
         # Get no of events in list
@@ -1103,18 +1211,13 @@ def __displayThread(rtpStream):
         width, height, table = createTable(eventTableRows,title)
         printTable(margin,nextUseableLineWholeScreen,table)
 
-        print "\r -----------------------------------------------------------------------------------------------------------------------", "\r"
+        items=rtpStream.getRtpStreamStatsByFilter("packet").items()
+        for k,v in items:
+            print "[",k,"], ",
+        print "\r"
+        print "-----------------------------------------------------------------------------------------------------------------------", "\r"
 
-        # for event in rtpStream.getRTPStreamEventList():
-        #     # if event.type == 'Glitch':
-        #     #     print event.type, event.timeCreated, "Expected:", event.expectedSequenceNo, ", Received", event.actualReceivedSequenceNo, "\r"
-        #     # else:
-        #     #     print event.type, event.timeCreated, "\r"
-        #     # pass
-        #     try:
-        #         print event.getData(0), "\r"
-        #     except Exception as e:
-        #         print "no getData() method", str(e), "\r"
+
         time.sleep(1)
 
 
