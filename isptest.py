@@ -15,11 +15,12 @@ import threading
 import random
 import string
 import platform
-import getopt   # Used to parse command line arguments
-import re       # Regex 'regular expression' module
-from timeit import default_timer as timer   # Used to calculate elapsed time
+import getopt  # Used to parse command line arguments
+import re  # Regex 'regular expression' module
+from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
-from terminaltables import SingleTable      # Used for pretty tables in displayThread
+from terminaltables import SingleTable  # Used for pretty tables in displayThread
+
 ####################################################################################
 # Utility Functions
 # #################
@@ -46,6 +47,93 @@ else:
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
         return ch
+
+
+# Define a function to get the size of the current console terminal.
+# This should hopefully work on Windows, OSX and Linux
+# From https://stackoverflow.com/questions/566746/how-to-get-linux-console-window-width-in-python
+# Returns a tuple contain the no of columns, rows
+def getTerminalSize():
+    import platform
+    current_os = platform.system()
+    tuple_xy = None
+    if current_os == 'Windows':
+        tuple_xy = _getTerminalSize_windows()
+        if tuple_xy is None:
+            tuple_xy = _getTerminalSize_tput()
+            # needed for window's python in cygwin's xterm!
+    if current_os == 'Linux' or current_os == 'Darwin' or current_os.startswith('CYGWIN'):
+        tuple_xy = _getTerminalSize_linux()
+    if tuple_xy is None:
+        print "default"
+        tuple_xy = (80, 25)  # default value
+    return tuple_xy
+
+
+def _getTerminalSize_windows():
+    res = None
+    try:
+        from ctypes import windll, create_string_buffer
+
+        # stdin handle is -10
+        # stdout handle is -11
+        # stderr handle is -12
+
+        h = windll.kernel32.GetStdHandle(-12)
+        csbi = create_string_buffer(22)
+        res = windll.kernel32.GetConsoleScreenBufferInfo(h, csbi)
+    except:
+        return None
+    if res:
+        import struct
+        (bufx, bufy, curx, cury, wattr,
+         left, top, right, bottom, maxx, maxy) = struct.unpack("hhhhHhhhhhh", csbi.raw)
+        sizex = right - left + 1
+        sizey = bottom - top + 1
+        return sizex, sizey
+    else:
+        return None
+
+
+def _getTerminalSize_tput():
+    # get terminal width
+    # src: http://stackoverflow.com/questions/263890/how-do-i-find-the-width-height-of-a-terminal-window
+    try:
+        import subprocess
+        proc = subprocess.Popen(["tput", "cols"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        output = proc.communicate(input=None)
+        cols = int(output[0])
+        proc = subprocess.Popen(["tput", "lines"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        output = proc.communicate(input=None)
+        rows = int(output[0])
+        return (cols, rows)
+    except:
+        return None
+
+
+def _getTerminalSize_linux():
+    def ioctl_GWINSZ(fd):
+        try:
+            import fcntl, termios, struct, os
+            cr = struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ, '1234'))
+        except:
+            return None
+        return cr
+
+    cr = ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
+    if not cr:
+        try:
+            fd = os.open(os.ctermid(), os.O_RDONLY)
+            cr = ioctl_GWINSZ(fd)
+            os.close(fd)
+        except:
+            pass
+    if not cr:
+        try:
+            cr = (env['LINES'], env['COLUMNS'])
+        except:
+            return None
+    return int(cr[1]), int(cr[0])
 
 
 ####################################################################################
@@ -78,14 +166,22 @@ class StreamStarted(object):
         # Take local copy of stats dictionary
         self.stats = dict(stats)
 
-    def getData(self,verbosityLevel):
+    def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-        data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated,
-                'rtpSequenceNo': self.firstPacketdReceived.rtpSequenceNo, 'syncSource': self.stats["stream_syncSource"]}
-        if verbosityLevel > 0:
-            data['stats']=self.stats
+        if verbosityLevel == 0:
+            summary = "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream Started"
+            data = {'timeCreated': self.timeCreated, 'summary': summary}
+        elif verbosityLevel == 1:
+            data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated, \
+                    'rtpSequenceNo': self.firstPacketdReceived.rtpSequenceNo,
+                    'syncSource': self.stats["stream_syncSource"]}
+        elif verbosityLevel == 2:
+            data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated,
+                    'rtpSequenceNo': self.firstPacketdReceived.rtpSequenceNo,
+                    'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
         return data
+
 
 # Define an event that represents a loss of rtpStream
 class StreamLost(object):
@@ -101,13 +197,22 @@ class StreamLost(object):
         # Take local copy of stats dictionary
         self.stats = dict(stats)
 
-    def getData(self,verbosityLevel):
+    def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-        data = {'type': StreamLost.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"]}
-        if verbosityLevel > 0:
-            data['stats']=self.stats
+
+        if verbosityLevel == 0:
+            summary = "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream lost"
+            data = {'timeCreated': self.timeCreated, 'summary': summary}
+        elif verbosityLevel == 1:
+            data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
+                    'syncSource': self.stats["stream_syncSource"]}
+
+        elif verbosityLevel == 2:
+            data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
+                    'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
         return data
+
 
 # Define an event object that represents a excessive jitter event
 class ExcessiveJitter(object):
@@ -121,16 +226,28 @@ class ExcessiveJitter(object):
         # Take local copy of stats dictionary
         self.stats = dict(stats)
 
-
-    def getData(self,verbosityLevel):
+    def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
-        # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-        data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"],
-                'jitter_long_term_uS': self.stats["jitter_long_term_uS"],
-                'jitter_mean_1S_uS': self.stats["jitter_mean_1S_uS"]}
-        if verbosityLevel > 0:
-            data['stats']=self.stats
+        # If verbosityLevel > 0, returns increasing level of detail associated with this event
+        if verbosityLevel == 0:
+            summary = "[" + str(self.stats["stream_syncSource"]) + "] " + "Excessive jitter: " + \
+                      str(self.stats["jitter_mean_1S_uS"]) + "/" + str(self.stats["jitter_long_term_uS"]) + "uS"
+            data = {'timeCreated': self.timeCreated, 'summary': summary}
+
+        elif verbosityLevel == 1:
+            data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated,
+                    'syncSource': self.stats["stream_syncSource"],
+                    'jitter_long_term_uS': self.stats["jitter_long_term_uS"],
+                    'jitter_mean_1S_uS': self.stats["jitter_mean_1S_uS"]}
+
+        elif verbosityLevel == 2:
+            data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated,
+                    'syncSource': self.stats["stream_syncSource"],
+                    'jitter_long_term_uS': self.stats["jitter_long_term_uS"],
+                    'jitter_mean_1S_uS': self.stats["jitter_mean_1S_uS"], 'stats': self.stats}
+
         return data
+
 
 # Define an event object that represents a procesor overload. This might happen if the calculateThread can't process
 # incoming packets fast enough
@@ -148,11 +265,24 @@ class ProcessorOverload(object):
     def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-        data = {'type': ProcessorOverload.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"],\
-                'processor_utilisation_percent': self.stats["stream_processor_utilisation_percent"]}
-        if verbosityLevel > 0:
-            data['stats']=self.stats
+        if verbosityLevel == 0:
+            summary = "[" + str(self.stats["stream_syncSource"]) + "] " + "Processor overload: " + \
+                      str(self.stats["stream_processor_utilisation_percent"]) + "%"
+            data = {'timeCreated': self.timeCreated, 'summary': summary}
+
+        elif verbosityLevel == 1:
+            data = {'type': ProcessorOverload.type, 'timeCreated': self.timeCreated,
+                    'syncSource': self.stats["stream_syncSource"], \
+                    'processor_utilisation_percent': self.stats["stream_processor_utilisation_percent"]}
+
+        elif verbosityLevel == 2:
+            data = {'type': ProcessorOverload.type, 'timeCreated': self.timeCreated,
+                    'syncSource': self.stats["stream_syncSource"],
+                    'processor_utilisation_percent': self.stats["stream_processor_utilisation_percent"],
+                    'stats': self.stats}
         return data
+
+
 # Define an event that represent a glitch
 # This will be in the form of the packets (RtpData objects) either side of the 'hole' in received data
 class Glitch(object):
@@ -168,7 +298,7 @@ class Glitch(object):
         self.startOfGap = lastReceivedPacketBeforeGap
         self.endOfGap = firstPackedReceivedAfterGap
         # Take local copy of stats dictionary
-        self.stats=dict(stats)
+        self.stats = dict(stats)
         # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
         # The '-1' is because it's fences and fenceposts
         self.packetsLost = abs(
@@ -183,11 +313,21 @@ class Glitch(object):
     def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-        data = {'type': Glitch.type, 'timeCreated': self.timeCreated,
-                'syncSource': self.stats["stream_syncSource"],'packetsLost': self.packetsLost, 'duration': self.glitchLength}
-        if verbosityLevel > 0:
-            data['stats'] = self.stats
+        if verbosityLevel ==0:
+            summary = "[" + str(self.stats["stream_syncSource"]) + "] " + "Glitch: " + \
+                      "Duration: " + str(self.glitchLength) +", " + str(self.packetsLost) + " packet(s) lost"
+            data = {'timeCreated': self.timeCreated, 'summary': summary}
+
+        elif verbosityLevel == 1:
+            data = {'type': Glitch.type, 'timeCreated': self.timeCreated,
+                    'syncSource': self.stats["stream_syncSource"], 'packetsLost': self.packetsLost,
+                    'duration': self.glitchLength}
+
+        elif verbosityLevel == 2:
+            data = {'type': Glitch.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"],
+                    'packetsLost': self.packetsLost, 'duration': self.glitchLength, 'stats': self.stats}
         return data
+
 
 class MovingTotalEventCounter(object):
     # Stores a running total of events that happened within the last x seconds with y granualarity
@@ -196,7 +336,7 @@ class MovingTotalEventCounter(object):
     # over that time
     # Once created, to register a new event, call addEvent()
     # The object does not have a bit in timer. Therefore it must be 'clocked' every second, by calling recalculate()
-    def __init__(self,name,totalPeriod_s,samplingPeriod_S):
+    def __init__(self, name, totalPeriod_s, samplingPeriod_S):
         self.name = name
         self.samplingPeriod_S = samplingPeriod_S
         # Calculate length of array required for totalPeriod_s for a given samplingPeriod_S
@@ -212,14 +352,14 @@ class MovingTotalEventCounter(object):
         self.__eventCountRunningTotal = 0
 
         # Declare var to hold latest result
-        self.__eventCountMovingTotal =0
+        self.__eventCountMovingTotal = 0
 
         # Declare a var to hold the elapsed time (in seconds)
         self.__timeElapsed_S = 0
 
     def addEvent(self, noOfEvents):
         # Adds noOfEvents to the current running total of events (in latest sampling period)
-        self.__eventCountRunningTotal+= noOfEvents
+        self.__eventCountRunningTotal += noOfEvents
         # Update the latest sampling period with the new total
         self.historicEventsList[-1] = self.__eventCountRunningTotal
 
@@ -256,6 +396,7 @@ class MovingTotalEventCounter(object):
     def getResults(self):
         # Return a tuple containing it's name, the current moving total and also a copy of the array
         return self.name, self.__eventCountMovingTotal, list(self.historicEventsList)
+
 
 # Define a class to represent a flow of received rtp packets (and associated stats)
 class RtpStream(object):
@@ -362,29 +503,31 @@ class RtpStream(object):
                 if self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >= \
                         self.__stats["jitter_alarm_event_timeout_S"] or \
                         self.__stats["jitter_excess_jitter_events_total"] == 0:
-
-                    self.__eventList.append(ExcessiveJitter(self.rtpStream[-1],self.__stats))
+                    self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats))
 
                 # Update the event counter for Excess Jitter
                 self.__stats["jitter_excess_jitter_events_total"] += 1
 
                 # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean period between events)
-                self.sumOfTimeElapsedSinceLastExcessJitterEvents += self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"]
+                self.sumOfTimeElapsedSinceLastExcessJitterEvents += self.__stats[
+                    "jitter_time_elapsed_since_last_excess_jitter_event"]
 
                 # Take timestamp fo this (the most recent) Excess Jitter event
                 self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.datetime.now()
         # Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
         if self.__stats["jitter_excess_jitter_events_total"] > 0:
             self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = datetime.datetime.now() - \
-                                                               self.__stats["jitter_time_of_last_excess_jitter_event"]
+                                                                                 self.__stats[
+                                                                                     "jitter_time_of_last_excess_jitter_event"]
 
         # Calculate meanTimeBetweenExcessJitterEvents (requires at least two jitter events)
         if self.__stats["jitter_excess_jitter_events_total"] > 1:
             self.__stats["jitter_mean_time_between_excess_jitter_events"] = \
-                (self.sumOfTimeElapsedSinceLastExcessJitterEvents + self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"]) / \
+                (self.sumOfTimeElapsedSinceLastExcessJitterEvents + self.__stats[
+                    "jitter_time_elapsed_since_last_excess_jitter_event"]) / \
                 self.__stats["jitter_excess_jitter_events_total"]
 
-    def __updateGlitchStats(self,latestGlitch):
+    def __updateGlitchStats(self, latestGlitch):
         # This method takes code out of __detectGlitches to reduce duplication
         # It's primary purpose is to update __stats keys relating to glitches
 
@@ -451,13 +594,12 @@ class RtpStream(object):
 
             # Capture packets either side of the 'hole' and store them in the event list
             # Create an object representing the glitch
-            glitch = Glitch(lastReceivedRtpPacket, self.rtpStream[0],self.__stats)
+            glitch = Glitch(lastReceivedRtpPacket, self.rtpStream[0], self.__stats)
             # Add the latest glitch to the evenList[]
             self.__eventList.append(glitch)
 
-            #update glitch stats
+            # update glitch stats
             self.__updateGlitchStats(glitch)
-
 
         # Now test for sequence errors within current data set
         # Take a copy of the first item in the list
@@ -480,7 +622,7 @@ class RtpStream(object):
 
                 # Capture packets either side of the 'hole' and store them in the event list
                 # Create an object representing the glitch
-                glitch = Glitch(prevRtpPacket, rtpPacket,self.__stats)
+                glitch = Glitch(prevRtpPacket, rtpPacket, self.__stats)
                 # Add the glitch to the evenList[]
                 self.__eventList.append(glitch)
 
@@ -502,7 +644,7 @@ class RtpStream(object):
         print "__calculateThread started with sync Source: ", self.__stats["stream_syncSource"], "\r"
 
         # Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
-        lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(),self.__stats["stream_syncSource"])
+        lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(), self.__stats["stream_syncSource"])
         self.__stats["packet_first_packet_received_timestamp"] = datetime.timedelta()
 
         # General Counters
@@ -542,14 +684,12 @@ class RtpStream(object):
         # 10 min duration, 1 minute sample period
         self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Min", 600, 60))
 
-
-
         # define timedelta object to store an aggregate of of Glitch length
         self.__stats["glitch_length_total_time"] = datetime.timedelta()
         self.__stats["glitch_most_recent_timestamp"] = datetime.timedelta()
         self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.timedelta()
         self.__stats["glitch_mean_time_between_glitches"] = datetime.timedelta()
-        self.__stats["glitch_mean_duration"]=datetime.timedelta()
+        self.__stats["glitch_mean_duration"] = datetime.timedelta()
         self.__stats["glitch_max_duration"] = datetime.timedelta()
         self.__stats["glitch_min_duration"] = datetime.timedelta()
         self.sumOfTimeElapsedSinceLastGlitch = datetime.timedelta()
@@ -677,12 +817,15 @@ class RtpStream(object):
             # But only if there has actually been a glitch in the past to measure against
             if self.__stats["glitch_counter_total"] > 0:
                 # Calculate new value
-                self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats["glitch_most_recent_timestamp"]
+                self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats[
+                    "glitch_most_recent_timestamp"]
 
             # Calculate % packet loss
             if self.__stats["packet_counter_received_total"] > 0:
-                totalExpectedPackets = self.__stats["packet_counter_received_total"] + self.__stats["glitch_packets_lost_total"]
-                self.__stats["glitch_packets_lost_total_percent"] = self.__stats["glitch_packets_lost_total"] * 100 / totalExpectedPackets
+                totalExpectedPackets = self.__stats["packet_counter_received_total"] + self.__stats[
+                    "glitch_packets_lost_total"]
+                self.__stats["glitch_packets_lost_total_percent"] = self.__stats[
+                                                                        "glitch_packets_lost_total"] * 100 / totalExpectedPackets
 
             # 1 second timer
             if (timer() - loopTimerStart) >= 1:
@@ -731,8 +874,8 @@ class RtpStream(object):
                 # Otherwise, for high packet receieve rates, the calculation time will become excessive
                 # Wait a second, in order to know we're in a steady state
                 if self.__stats["packet_mean_receive_period_uS"] > 0 and self.__stats["time_elapsed_total"].seconds > 1:
-                    self.__stats["calculate_thread_sampling_interval_S"] = 10.0 * self.__stats["packet_mean_receive_period_uS"] / 1000000.0
-
+                    self.__stats["calculate_thread_sampling_interval_S"] = 10.0 * self.__stats[
+                        "packet_mean_receive_period_uS"] / 1000000.0
 
                 ######### Now calculate moving glitch counters by iterating over the self.movingGlitchCounters array
                 # firstly reculculate, then generate stats keys automatically for any moving totals counters
@@ -756,15 +899,17 @@ class RtpStream(object):
                 # This is to guard against false-postives
                 # Calculate calculationDuration (in uS)
                 #   the %1 throws away the whole number part, *1000000 converts from s to uS
-                self.__stats["calculate_thread_calculation_duration_uS"] = ((calculationEndTime - calculationStartTime)%1)*1000000
+                self.__stats["calculate_thread_calculation_duration_uS"] = ((
+                                                                                        calculationEndTime - calculationStartTime) % 1) * 1000000
 
                 # Calculate processorUtilisationPercent. All time values in uS
                 self.__stats["stream_processor_utilisation_percent"] = \
-                    self.__stats["calculate_thread_calculation_duration_uS"] * 100.0 / (self.__stats["packet_mean_receive_period_uS"] * len(self.rtpStream))
+                    self.__stats["calculate_thread_calculation_duration_uS"] * 100.0 / (
+                                self.__stats["packet_mean_receive_period_uS"] * len(self.rtpStream))
 
                 # If the CPU is >99% utilised, add event to the list (but only do this once)
                 if self.__stats["stream_processor_utilisation_percent"] > 99:
-                    self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket,self.__stats))
+                    self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket, self.__stats))
                     pass
             except Exception as e:
                 # print str(e),"\r"
@@ -784,7 +929,7 @@ class RtpStream(object):
 
     # Define getter methods
     def getRTPStreamID(self):
-        return self.__stats["stream_syncSource"], self.__stats["stream_srcAddress"],self.__stats["stream_srcPort"]
+        return self.__stats["stream_syncSource"], self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"]
 
     # Thread-safe method for accessing realtime RtpStream stats
     def getRtpStreamStats(self):
@@ -793,7 +938,7 @@ class RtpStream(object):
         self.__accessRtpStreamStatsMutex.release()
         return stats
 
-    def getRtpStreamStatsByFilter(self,filter):
+    def getRtpStreamStatsByFilter(self, filter):
         # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
         self.__accessRtpStreamStatsMutex.acquire()
         stats = self.__stats.copy()
@@ -810,9 +955,9 @@ class RtpStream(object):
         return eventList
 
     # Define setter methods
-    def addData(self, rtpSequenceNo, payloadSize, timestamp,syncSource):
+    def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource):
         # Create a new rtp data object to hold the rtp packet data
-        newData = RtpData(rtpSequenceNo, payloadSize, timestamp,syncSource)
+        newData = RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource)
 
         # NOW ADD DATA TO A LIST
 
@@ -824,6 +969,7 @@ class RtpStream(object):
         self.__accessRtpDataMutex.release()
         # Now we've added the newData object to the list rtpStreamData[] we cab delete the newData object
         del newData
+
 
 def createTable(inputDictionary, title):
     # This function will take a dictionary and turn it into a two column table using terminaltables.Singletable
@@ -839,37 +985,39 @@ def createTable(inputDictionary, title):
     # iterate over keys list to create a 2D array of the table contents
     table_data = []
     for x in range(len(keys)):
-        row = [keys[x], values[x]]      # Create a complete row containing a key and value column
-        table_data.append(row)          # Append the complete row to the table_data list (of lists)
-        del row                         # Remove the existing row
+        row = [keys[x], values[x]]  # Create a complete row containing a key and value column
+        table_data.append(row)  # Append the complete row to the table_data list (of lists)
+        del row  # Remove the existing row
 
     # Create the table
     table = SingleTable(table_data)
     table.title = title
-    table.inner_heading_row_border = False   # No headings on this table
+    table.inner_heading_row_border = False  # No headings on this table
     # Split the table into a list containing separate lines and return (and also the width/height of the table
     width = table.table_width
     height = len(keys) + 2  # Takes into account the top/bottom border
     return width, height, table.table.splitlines()
 
-def printTable(xPos,yPos,tableData):
+
+def printTable(xPos, yPos, tableData):
     # Prints a table generated by createTable() at position xPos,Ypos
     # At the end, it will leave the cursor at the start of the next available line
-    lineCount = 0   # Used to increment the y cursor
+    lineCount = 0  # Used to increment the y cursor
     for row in tableData:
         # Generate an ascii escape sequence \033[<yPos>;<xPos>H to move the cursor
-        asciiCode = "\033[" + str((yPos+lineCount)) + ";" + str(xPos) + "H"
-        printString=asciiCode + row + "\r"
+        asciiCode = "\033[" + str((yPos + lineCount)) + ";" + str(xPos) + "H"
+        printString = asciiCode + row + "\r"
         print printString
         lineCount += 1
     # Finally, move cursor to start of next available line
-    print "\033[" + str(yPos+lineCount) + ";" + str(0) + "H", "\r"
+    print "\033[" + str(yPos + lineCount) + ";" + str(0) + "H", "\r"
+
 
 # Define a display thread that will run autonomously
 def __displayThread(rtpStream):
     print "__displayThread started with id: ", rtpStream.getRTPStreamID(), "\r"
 
-    padding = 1 # Gap between tables
+    padding = 1  # Gap between tables
     margin = 1
     while True:
         # Get all keys/values from rtpStream
@@ -877,8 +1025,8 @@ def __displayThread(rtpStream):
         # Clear screen and move cursor to origin
         print "\033[2J", "\r"
         print "\033[0;0HIBEOO ISP Analyser---------------------------------------------------------------------------------------------------", "\r"
-
-        nextUseableLine = 2 # Takes into account the title
+        # print "Terminal size",getTerminalSize(),"\r"
+        nextUseableLine = 3  # Takes into account the title
         nextUseableColumn = 0
         # Create a table of stream stats
         width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("stream").items(), "Stream info")
@@ -894,9 +1042,11 @@ def __displayThread(rtpStream):
             nextUseableColumn = width + padding + margin
 
         # Create a table of historic glitch stats
-        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("historic").items(), "Historic glitch stats")
+        width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("historic").items(),
+                                           "Historic glitch stats")
         printTable(margin, nextUseableLine, table)
         nextUseableLine += (height + padding)
+        nextUseableLineWholeScreen = nextUseableLine
         if (width + padding + margin) > nextUseableColumn:
             nextUseableColumn = width + padding + margin
 
@@ -917,7 +1067,7 @@ def __displayThread(rtpStream):
         nextUseableLine += (height + padding)
 
         # # Move cursor to start of next available line
-        # print "\033[" + str(nextUseableLine) + ";" + str(0) + "H", "\r"
+        print "\033[" + str(nextUseableLineWholeScreen) + ";" + str(0) + "H", "\r"
 
         # Now create table from eventList
 
@@ -929,9 +1079,9 @@ def __displayThread(rtpStream):
             #     print event.type, event.timeCreated, "\r"
             # pass
             try:
-                print event.getData(0),"\r"
-            except:
-                print "no getData() method \r"
+                print event.getData(0), "\r"
+            except Exception as e:
+                print "no getData() method", str(e), "\r"
         time.sleep(1)
 
 
@@ -945,10 +1095,10 @@ def __catchKeyboardPresses(keyPressed):
 
 
 # define a traffic generator thread
-def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
+def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
     # UDP_DEST_IP = "127.0.0.1"
     # UDP__DEST_PORT = 5004
-    txBps_1s=0
+    txBps_1s = 0
     # Generate random string
     # Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496 available bytes
     # stringLength = payloadLength
@@ -959,7 +1109,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
 
     txSock = socket.socket(socket.AF_INET,  # Internet
                            socket.SOCK_DGRAM)  # UDP
-    print "Traffic Generator thread started. Sending to ",UDP_TX_IP,":",UDP_TX_PORT,", txRate:",txRate,"bps, payloadLength:",payloadLength,"\r"
+    print "Traffic Generator thread started. Sending to ", UDP_TX_IP, ":", UDP_TX_PORT, ", txRate:", txRate, "bps, payloadLength:", payloadLength, "\r"
     print "[spacebar] insert single packet loss, [z] Inhibit/Re-enable packet generation, [j] Toggle jitter on/off", "\r"
 
     rtpParams = 0b01000000
@@ -977,7 +1127,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
     # Note: This is an estimate because time.sleep() is inherently unreliable so we have
     # to recalculate once the generator is running by averaging over a 1 sec period
     txPeriod = payloadLength * 8.0 / txRate
-    print "txPeriod",txPeriod,"\r"
+    print "txPeriod", txPeriod, "\r"
 
     jitterPerecentage = 50
     maxDeviation = txPeriod * jitterPerecentage / 100
@@ -988,7 +1138,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
     while True:
         # Start an execution timer (if we know the time required to construct the packet we can deduct this from the
         # txPeriod sleep time which should, in theory, reduce the jitter of the generator
-        calculationStartTime=timer()
+        calculationStartTime = timer()
 
         # Construct 12 byte header
         txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
@@ -1010,7 +1160,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
                 enablePacketGeneration = True
                 print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), " 'z' Enabling packet generator\r"
                 # Restart the 1 second timer used for txData averaging
-                startTime=timer()
+                startTime = timer()
         # Spacebar will introduce a single packet loss
         # If temporaryInhibit was set, clear it
         temporaryInhibit = False
@@ -1025,10 +1175,10 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
             try:
                 txSock.sendto(MESSAGE, (UDP_TX_IP, UDP_TX_PORT))
                 # Update tx data counter (*8 converts bytes to bits)
-                txBps_1s += len(payload)*8
+                txBps_1s += len(payload) * 8
                 # print rtpSequenceNo,txPeriod,txBps_1s,"\r"
             except Exception as e:
-                print "__rtpGenerator()",str(e),"\r"
+                print "__rtpGenerator()", str(e), "\r"
                 exit()
 
         if (keyPressed[0] == 'j'):
@@ -1060,37 +1210,38 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength):
         # 1 second timer
 
         # Has 1 second elapsed?
-        if (timer()-startTime) >= 1 and enablePacketGeneration == True:
+        if (timer() - startTime) >= 1 and enablePacketGeneration == True:
             # Reset elapsed timer
             startTime = timer()
             # Test actual tx rate (averaged over a second) against 99% of desired tx rate
-            if (txBps_1s < (0.99*txRate)):
+            if (txBps_1s < (0.99 * txRate)):
                 # Data not being sent fast enough, so reduce txPeriod time
                 # Measure difference between desired bps tx rate and actual bps tx rate
-                txRateError=txRate-txBps_1s
+                txRateError = txRate - txBps_1s
                 # Convert the difference a fraction by which will modify txPeriod
-                errorFactor= (txRateError * 1.0/txRate)
+                errorFactor = (txRateError * 1.0 / txRate)
                 # Modify txPeriod to compensate for error
                 # Correction only happens in one direction (we can only dynamically reduce the txPeriod, so to prevent
                 # overshoots of the desired rate, only reduce txPeriod by 'half' the error amount in one go
-                txPeriod -= txPeriod*(errorFactor/2.0)
-                print "Compensating for timing error - Actual txData rate too low","Desired tx rate:",txRate, "Actual tx rate:", txBps_1s,"\r"
+                txPeriod -= txPeriod * (errorFactor / 2.0)
+                print "Compensating for timing error - Actual txData rate too low", "Desired tx rate:", txRate, "Actual tx rate:", txBps_1s, "\r"
 
             # Clear counter
-            txBps_1s=0
+            txBps_1s = 0
 
         # The calculation time will be deductced from the sleep time, which should make the generator
         # output less jittery (because the calculation time is taken into account)
         calculationPeriod = timer() - calculationStartTime
 
-        compensatedTxPeriod=txPeriod + jitter - calculationPeriod
+        compensatedTxPeriod = txPeriod + jitter - calculationPeriod
         # Have to guard against a negative time value
-        if (compensatedTxPeriod>0):
+        if (compensatedTxPeriod > 0):
             # Sleep between packet transmision
             time.sleep(compensatedTxPeriod)
         else:
             # print "__rtpGenerator() - non-positive compensatedTxPeriod value",compensatedTxPeriod,"\r"
             pass
+
 
 ####################################################################################
 
@@ -1103,7 +1254,7 @@ def main(argv):
     txRate = 1 * 1024 * 1024
 
     # Specify a default packet size for the tx stream (if none supplied)
-    payloadLength=496
+    payloadLength = 496
 
     # print 'Argument List:', str(argv)
     try:
@@ -1179,37 +1330,37 @@ def main(argv):
                     # Use regex to split -b argument into numerical and string parts
                     splitArg = re.split('(\d+)', arg)
                     # Extract numerical part
-                    x=int(splitArg[1])
+                    x = int(splitArg[1])
                     # Extract string part
-                    multiplier=splitArg[2]
-                    print "x",x,"multiplier",multiplier
+                    multiplier = splitArg[2]
+                    print "x", x, "multiplier", multiplier
                     if multiplier == 'k' or multiplier == 'K':
-                        txRate=x * 1024
+                        txRate = x * 1024
                     elif multiplier == 'm' or multiplier == 'M':
                         txRate = x * 1024 * 1024
                     else:
-                        print "Invalid -b bandwidth specfied. Unknown multiplier",multiplier
+                        print "Invalid -b bandwidth specfied. Unknown multiplier", multiplier
                         exit()
                 except:
                     print "Invalid -b bandwidth specfied. Should be xy wheher x is anumerical value and y is k or m (kbps or mbps).", \
-                            "If no multiplier supplied then assuming x mbps. eg. 500k, 1m, 5m etc"
+                        "If no multiplier supplied then assuming x mbps. eg. 500k, 1m, 5m etc"
                     exit()
-                print "txRate",txRate
+                print "txRate", txRate
 
             elif opt in ("-d"):
                 # Maximum Ethernet frame size is 1500 bytes (minus 12 bytes for the RTP header)
-                MAX_PAYLOAD_SIZE_bytes=1500-12
-                MIN_PAYLOAD_SIZE_bytes=20
+                MAX_PAYLOAD_SIZE_bytes = 1500 - 12
+                MIN_PAYLOAD_SIZE_bytes = 20
                 try:
                     if int(arg) > MAX_PAYLOAD_SIZE_bytes:
-                        print  "requested payload size (",arg,") exceeds maximum Ethernet frame size (1488 bytes with 12 byte RTP header), "
-                        payloadLength=MAX_PAYLOAD_SIZE_bytes
-                    elif int(arg) <MIN_PAYLOAD_SIZE_bytes:
-                        print  "requested payload size (", arg, ") less than minimum permitted (",MIN_PAYLOAD_SIZE_bytes,")"
+                        print  "requested payload size (", arg, ") exceeds maximum Ethernet frame size (1488 bytes with 12 byte RTP header), "
+                        payloadLength = MAX_PAYLOAD_SIZE_bytes
+                    elif int(arg) < MIN_PAYLOAD_SIZE_bytes:
+                        print  "requested payload size (", arg, ") less than minimum permitted (", MIN_PAYLOAD_SIZE_bytes, ")"
                     else:
-                        payloadLength=int(arg)
+                        payloadLength = int(arg)
                 except Exception as e:
-                    print "Invalid payload size specified '",arg,"'"
+                    print "Invalid payload size specified '", arg, "'"
                     exit()
 
     except getopt.GetoptError:
@@ -1236,7 +1387,8 @@ def main(argv):
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
-        rtpGenerator = threading.Thread(target=__rtpGenerator, args=(keyPressed, UDP_TX_IP, UDP_TX_PORT,txRate,payloadLength))
+        rtpGenerator = threading.Thread(target=__rtpGenerator,
+                                        args=(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength))
         rtpGenerator.daemon = True  # Thread will auto shutdown when the prog ends
         rtpGenerator.start()
 
@@ -1291,7 +1443,7 @@ def main(argv):
                     runOnce = False
 
                 # Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp, syncSource
-                s.addData(rtpSequenceNo, payloadSize, timeNow,rtpSyncSourceIdentifier)
+                s.addData(rtpSequenceNo, payloadSize, timeNow, rtpSyncSourceIdentifier)
 
 
             except Exception as e:
