@@ -950,6 +950,7 @@ class RtpStream(object):
     # Thread-safe method for accessing realtime RtpStream eventList
     def getRTPStreamEventList(self):
         self.__accessRtpStreamEventListMutex.acquire()
+        # Create copy of events list
         eventList = list(self.__eventList)
         self.__accessRtpStreamEventListMutex.release()
         return eventList
@@ -1018,7 +1019,7 @@ def __displayThread(rtpStream):
     print "__displayThread started with id: ", rtpStream.getRTPStreamID(), "\r"
 
     padding = 1  # Gap between tables
-    margin = 1
+    margin = 2
     while True:
         # Get all keys/values from rtpStream
         # items = rtpStream.getRtpStreamStats().items()
@@ -1060,7 +1061,7 @@ def __displayThread(rtpStream):
         # if (width + padding + margin) > nextUseableColumn:
         #     nextUseableColumn = width + padding + margin
 
-        # # Create a table of Packet stats beside the jitter table
+        # Create a table of Packet stats beside the jitter table
         width, height, table = createTable(rtpStream.getRtpStreamStatsByFilter("packet").items(), "Packet Stats")
         # # Print the table to the screen line by line
         printTable(nextUseableColumn, nextUseableLine, table)
@@ -1069,19 +1070,49 @@ def __displayThread(rtpStream):
         # # Move cursor to start of next available line
         print "\033[" + str(nextUseableLineWholeScreen) + ";" + str(0) + "H", "\r"
 
+
         # Now create table from eventList
 
+        eventTableRows = []
+
+        allEvents = rtpStream.getRTPStreamEventList()
+        # nextUseableLineWholeScreen += 3
+        noOfHistoricEventsToView = 10
+        # Display the last x events
+        # Get no of events in list
+        if len(allEvents) > noOfHistoricEventsToView:
+            # Create a sub-list of of the last x event items
+            events = allEvents[(noOfHistoricEventsToView * -1):]
+        else:
+            events = allEvents
+
+        for event in events:
+            # Get dictionary from Event.getData() method containing timestamp and summary
+            eventData=event.getData(0)
+            # Create the new row
+            tableRow=[eventData["timeCreated"],eventData["summary"]]
+            # Append the new row to the list of rows
+            eventTableRows.append(tableRow)
+            # Now stored, delete the row, ready for next time around the loop
+            del tableRow
+
+        # print eventTableRows, "\r"
+        title = "Event list (last "+str(noOfHistoricEventsToView)+" events)"
+        width, height, table = createTable(eventTableRows,title)
+        printTable(margin,nextUseableLineWholeScreen,table)
+
         print "\r -----------------------------------------------------------------------------------------------------------------------", "\r"
-        for event in rtpStream.getRTPStreamEventList():
-            # if event.type == 'Glitch':
-            #     print event.type, event.timeCreated, "Expected:", event.expectedSequenceNo, ", Received", event.actualReceivedSequenceNo, "\r"
-            # else:
-            #     print event.type, event.timeCreated, "\r"
-            # pass
-            try:
-                print event.getData(0), "\r"
-            except Exception as e:
-                print "no getData() method", str(e), "\r"
+
+        # for event in rtpStream.getRTPStreamEventList():
+        #     # if event.type == 'Glitch':
+        #     #     print event.type, event.timeCreated, "Expected:", event.expectedSequenceNo, ", Received", event.actualReceivedSequenceNo, "\r"
+        #     # else:
+        #     #     print event.type, event.timeCreated, "\r"
+        #     # pass
+        #     try:
+        #         print event.getData(0), "\r"
+        #     except Exception as e:
+        #         print "no getData() method", str(e), "\r"
         time.sleep(1)
 
 
