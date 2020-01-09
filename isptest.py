@@ -695,6 +695,7 @@ class RtpStream(object):
         self.__stats["packet_payload_size_mean_1S_bytes"] = 0
         self.__stats["packet_counter_received_total"] = 0
         self.__stats["stream_time_elapsed_total"] = datetime.timedelta()
+        self.__stats["packet_mean_receive_period_uS"] = 0
 
         # Aggregate Glitch counters
         self.__stats["glitch_packets_lost_total_percent"] = 0
