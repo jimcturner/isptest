@@ -200,22 +200,25 @@ class StreamLost(object):
         self.lastPacketReceived = lastPacketReceived
         # Take local copy of stats dictionary
         self.stats = dict(stats)
+        # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
+        self.eventNo = self.stats["stream_all_events_counter"] + 1
 
     def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
 
         if verbosityLevel == 0:
-            summary = "["+ str(self.stats["stream_all_events_counter"])+"]"+ \
+            summary = "["+ str(self.eventNo)+"]" + \
                 "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream lost"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
         elif verbosityLevel == 1:
             data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
-                    'syncSource': self.stats["stream_syncSource"]}
+                    'syncSource': self.stats["stream_syncSource"], 'eventNo': self.eventNo}
 
         elif verbosityLevel == 2:
             data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
-                    'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
+                    'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
+                    'eventNo': self.eventNo}
         return data
 
 
@@ -230,12 +233,14 @@ class ExcessiveJitter(object):
         self.lastPacketReceived = lastPacketReceived
         # Take local copy of stats dictionary
         self.stats = dict(stats)
+        # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
+        self.eventNo = self.stats["stream_all_events_counter"] + 1
 
     def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns increasing level of detail associated with this event
         if verbosityLevel == 0:
-            summary = "["+ str(self.stats["stream_all_events_counter"])+"]"+ \
+            summary = "["+ str(self.eventNo)+"]" + \
                 "[" + str(self.stats["stream_syncSource"]) + "] " + "Excessive jitter: " + \
                       str(self.stats["jitter_mean_1S_uS"]) + "/" + str(self.stats["jitter_long_term_uS"]) + "uS"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
@@ -244,13 +249,15 @@ class ExcessiveJitter(object):
             data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated,
                     'syncSource': self.stats["stream_syncSource"],
                     'jitter_long_term_uS': self.stats["jitter_long_term_uS"],
-                    'jitter_mean_1S_uS': self.stats["jitter_mean_1S_uS"]}
+                    'jitter_mean_1S_uS': self.stats["jitter_mean_1S_uS"],
+                    'eventNo': self.eventNo}
 
         elif verbosityLevel == 2:
             data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated,
                     'syncSource': self.stats["stream_syncSource"],
                     'jitter_long_term_uS': self.stats["jitter_long_term_uS"],
-                    'jitter_mean_1S_uS': self.stats["jitter_mean_1S_uS"], 'stats': self.stats}
+                    'jitter_mean_1S_uS': self.stats["jitter_mean_1S_uS"], 'stats': self.stats,
+                    'eventNo': self.eventNo}
 
         return data
 
@@ -267,12 +274,14 @@ class ProcessorOverload(object):
         self.lastPacketReceived = lastPacketReceived
         # Take local copy of stats dictionary
         self.stats = dict(stats)
+        # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
+        self.eventNo = self.stats["stream_all_events_counter"] + 1
 
     def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         if verbosityLevel == 0:
-            summary = "["+ str(self.stats["stream_all_events_counter"])+"]"+ \
+            summary = "["+ str(self.eventNo)+"]" + \
                 "[" + str(self.stats["stream_syncSource"]) + "] " + "Processor overload: " + \
                       str(self.stats["stream_processor_utilisation_percent"]) + "%"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
@@ -280,13 +289,14 @@ class ProcessorOverload(object):
         elif verbosityLevel == 1:
             data = {'type': ProcessorOverload.type, 'timeCreated': self.timeCreated,
                     'syncSource': self.stats["stream_syncSource"], \
-                    'processor_utilisation_percent': self.stats["stream_processor_utilisation_percent"]}
+                    'processor_utilisation_percent': self.stats["stream_processor_utilisation_percent"],
+                    'eventNo': self.eventNo}
 
         elif verbosityLevel == 2:
             data = {'type': ProcessorOverload.type, 'timeCreated': self.timeCreated,
                     'syncSource': self.stats["stream_syncSource"],
                     'processor_utilisation_percent': self.stats["stream_processor_utilisation_percent"],
-                    'stats': self.stats}
+                    'stats': self.stats, 'eventNo': self.eventNo}
         return data
 
 
@@ -306,6 +316,9 @@ class Glitch(object):
         self.endOfGap = firstPackedReceivedAfterGap
         # Take local copy of stats dictionary
         self.stats = dict(stats)
+        # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
+        self.eventNo = self.stats["stream_all_events_counter"] + 1
+
         # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
         # The '-1' is because it's fences and fenceposts
         self.packetsLost = abs(
@@ -321,7 +334,7 @@ class Glitch(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         if verbosityLevel == 0:
-            summary = "["+ str(self.stats["stream_all_events_counter"])+"]"+ \
+            summary = "["+ str(self.eventNo)+"]" + \
                 "[" + str(self.stats["stream_syncSource"]) + "] " + "Glitch: " + \
                       "Duration: " + str(self.glitchLength) +", " + str(self.packetsLost) + " packet(s) lost"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
@@ -329,11 +342,12 @@ class Glitch(object):
         elif verbosityLevel == 1:
             data = {'type': Glitch.type, 'timeCreated': self.timeCreated,
                     'syncSource': self.stats["stream_syncSource"], 'packetsLost': self.packetsLost,
-                    'duration': self.glitchLength}
+                    'duration': self.glitchLength, 'eventNo': self.eventNo}
 
         elif verbosityLevel == 2:
             data = {'type': Glitch.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"],
-                    'packetsLost': self.packetsLost, 'duration': self.glitchLength, 'stats': self.stats}
+                    'packetsLost': self.packetsLost, 'duration': self.glitchLength, 'stats': self.stats,
+                    'eventNo': self.eventNo}
         return data
 
 
