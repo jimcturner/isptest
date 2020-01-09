@@ -346,7 +346,7 @@ class MovingTotalEventCounter(object):
         if self.noOfSamplePeriods < 1:
             self.noOfSamplePeriods = 1
         # Create array to hold historic totals
-        self.historicEventsList = [0]
+        self.historicEventsList = [0] * self.noOfSamplePeriods
 
         # Declare var to hold the current running total of events
         self.__eventCountRunningTotal = 0
@@ -685,6 +685,11 @@ class RtpStream(object):
         self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Min", 60, 10))
         # 10 min duration, 1 minute sample period
         self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Min", 600, 60))
+        # 1hr duration, 10 minute sample period
+        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Hr", 3600, 600))
+        # 24hr duration, 1hr sample period
+        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_24Hr", 86400, 3600))
+
 
         # define timedelta object to store an aggregate of of Glitch length
         self.__stats["glitch_length_total_time"] = datetime.timedelta()
@@ -1161,8 +1166,8 @@ def __displayThread(rtpStream):
         printTable(margin, nextUseableLine, table)
         nextUseableLine += (height + padding)
         nextUseableLineWholeScreen = nextUseableLine
-        if (width + padding + margin) > nextUseableColumn:
-            nextUseableColumn = width + padding + margin
+        # if (width + padding + margin) > nextUseableColumn:
+        #     nextUseableColumn = width + padding + margin
 
         # Now create tables on the RHS of the screen.
         # Reset nextUseableLine to top of screen
@@ -1211,10 +1216,7 @@ def __displayThread(rtpStream):
         width, height, table = createTable(eventTableRows,title)
         printTable(margin,nextUseableLineWholeScreen,table)
 
-        items=rtpStream.getRtpStreamStatsByFilter("packet").items()
-        for k,v in items:
-            print "[",k,"], ",
-        print "\r"
+
         print "-----------------------------------------------------------------------------------------------------------------------", "\r"
 
 
