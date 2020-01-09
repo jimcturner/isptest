@@ -170,7 +170,8 @@ class StreamStarted(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         if verbosityLevel == 0:
-            summary = "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream Started"
+            summary = "["+ str(self.stats["stream_all_events_counter"])+"]"+ \
+                      "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream Started"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
         elif verbosityLevel == 1:
             data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated, \
@@ -202,7 +203,8 @@ class StreamLost(object):
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
 
         if verbosityLevel == 0:
-            summary = "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream lost"
+            summary = "["+ str(self.stats["stream_all_events_counter"])+"]"+ \
+                "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream lost"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
         elif verbosityLevel == 1:
             data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
@@ -230,7 +232,8 @@ class ExcessiveJitter(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns increasing level of detail associated with this event
         if verbosityLevel == 0:
-            summary = "[" + str(self.stats["stream_syncSource"]) + "] " + "Excessive jitter: " + \
+            summary = "["+ str(self.stats["stream_all_events_counter"])+"]"+ \
+                "[" + str(self.stats["stream_syncSource"]) + "] " + "Excessive jitter: " + \
                       str(self.stats["jitter_mean_1S_uS"]) + "/" + str(self.stats["jitter_long_term_uS"]) + "uS"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
 
@@ -266,7 +269,8 @@ class ProcessorOverload(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         if verbosityLevel == 0:
-            summary = "[" + str(self.stats["stream_syncSource"]) + "] " + "Processor overload: " + \
+            summary = "["+ str(self.stats["stream_all_events_counter"])+"]"+ \
+                "[" + str(self.stats["stream_syncSource"]) + "] " + "Processor overload: " + \
                       str(self.stats["stream_processor_utilisation_percent"]) + "%"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
 
@@ -313,8 +317,9 @@ class Glitch(object):
     def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-        if verbosityLevel ==0:
-            summary = "[" + str(self.stats["stream_syncSource"]) + "] " + "Glitch: " + \
+        if verbosityLevel == 0:
+            summary = "["+ str(self.stats["stream_all_events_counter"])+"]"+ \
+                "[" + str(self.stats["stream_syncSource"]) + "] " + "Glitch: " + \
                       "Duration: " + str(self.glitchLength) +", " + str(self.packetsLost) + " packet(s) lost"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
 
