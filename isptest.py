@@ -516,12 +516,14 @@ class RtpStream(object):
             self.__stats["jitter_instantaneous"] = self.rtpStream[-1].jitter - z.jitter
             self.__stats["packet_mean_receive_period_uS"] = self.rtpStream[-1].timeDelta.microseconds
 
-        # Now attempt to detect excessive jitter by comparing the instantaneous value with the long term value
+        # Now attempt to detect excessive jitter bycomparing the 1S jitter with the mean receive period.
+        # Jitter should only be a problem if the packets
+        # start crashing into each other on receipt.
         # Check that long term value has actually been calculated
         if self.__stats["jitter_long_term_uS"] > 0:
             if self.__stats["jitter_mean_1S_uS"] > \
-                    (self.excessJitterThresholdFactor * self.__stats["jitter_long_term_uS"]):
-
+                    (self.excessJitterThresholdFactor * self.__stats["packet_mean_receive_period_uS"]):
+                    # (self.excessJitterThresholdFactor * self.__stats["jitter_long_term_uS"]):
                 # If jitter alarms not inhibited, add a new jitter event
                 # Take diff between time.now() and the time of the last event
                 if self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >= \
@@ -544,8 +546,7 @@ class RtpStream(object):
         # Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
         if self.__stats["jitter_excess_jitter_events_total"] > 0:
             self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = datetime.datetime.now() - \
-                                                                                 self.__stats[
-                                                                                     "jitter_time_of_last_excess_jitter_event"]
+                self.__stats["jitter_time_of_last_excess_jitter_event"]
 
         # Calculate meanTimeBetweenExcessJitterEvents (requires at least two jitter events)
         if self.__stats["jitter_excess_jitter_events_total"] > 1:
@@ -746,9 +747,9 @@ class RtpStream(object):
 
         self.__stats["stream_processor_utilisation_percent"] = 0
 
-        # % deviation from longTermJitter_uS that will trigger an excessJitterEvent
-        self.__stats["jitter_excessive_alarm_threshold_percent"] = 75
-        self.excessJitterThresholdFactor = 1.0 + (self.__stats["jitter_excessive_alarm_threshold_percent"] / 100.0)
+        # % ratio of 1S Jitter_uS to packet_mean_receive_period_uS that will trigger an excessJitterEvent
+        self.__stats["jitter_excessive_alarm_threshold_percent"] = 50
+        self.excessJitterThresholdFactor = (self.__stats["jitter_excessive_alarm_threshold_percent"] / 100.0)
 
         # No of seconds to inhibit an excessive jitter alarm
         self.__stats["jitter_alarm_event_timeout_S"] = 2
