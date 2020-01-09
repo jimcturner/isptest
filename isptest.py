@@ -165,22 +165,25 @@ class StreamStarted(object):
         self.firstPacketdReceived = firstPacketReceived
         # Take local copy of stats dictionary
         self.stats = dict(stats)
+        # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
+        self.eventNo=self.stats["stream_all_events_counter"] + 1
 
     def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         if verbosityLevel == 0:
-            summary = "["+ str(self.stats["stream_all_events_counter"])+"]"+ \
+            summary = "["+ str(self.eventNo)+"]" + \
                       "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream Started"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
         elif verbosityLevel == 1:
             data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated, \
                     'rtpSequenceNo': self.firstPacketdReceived.rtpSequenceNo,
-                    'syncSource': self.stats["stream_syncSource"]}
+                    'syncSource': self.stats["stream_syncSource"],
+                    'eventNo': self.eventNo}
         elif verbosityLevel == 2:
             data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated,
                     'rtpSequenceNo': self.firstPacketdReceived.rtpSequenceNo,
-                    'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
+                    'syncSource': self.stats["stream_syncSource"], 'stats': self.stats, 'eventNo': self.eventNo}
         return data
 
 
