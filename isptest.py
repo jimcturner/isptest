@@ -505,7 +505,10 @@ class RtpStream(object):
                 if self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >= \
                         self.__stats["jitter_alarm_event_timeout_S"] or \
                         self.__stats["jitter_excess_jitter_events_total"] == 0:
+                    # Add the event to the event list
                     self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats))
+                    # Increment the all_events counter
+                    self.__stats["stream_all_events_counter"] += 1
 
                 # Update the event counter for Excess Jitter
                 self.__stats["jitter_excess_jitter_events_total"] += 1
@@ -599,6 +602,8 @@ class RtpStream(object):
             glitch = Glitch(lastReceivedRtpPacket, self.rtpStream[0], self.__stats)
             # Add the latest glitch to the evenList[]
             self.__eventList.append(glitch)
+            # Increment the all_events counter
+            self.__stats["stream_all_events_counter"] += 1
 
             # update glitch stats
             self.__updateGlitchStats(glitch)
@@ -627,6 +632,8 @@ class RtpStream(object):
                 glitch = Glitch(prevRtpPacket, rtpPacket, self.__stats)
                 # Add the glitch to the evenList[]
                 self.__eventList.append(glitch)
+                # Increment the all_events counter
+                self.__stats["stream_all_events_counter"] += 1
 
                 # update glitch stats
                 self.__updateGlitchStats(glitch)
@@ -673,6 +680,9 @@ class RtpStream(object):
         self.__stats["glitch_packets_lost_per_glitch_min"] = 0
         self.__stats["glitch_packets_lost_per_glitch_max"] = 0
         self.__stats["glitch_counter_total"] = 0
+
+        # Keeps a count of all events recorded against this rtpStream
+        self.__stats["stream_all_events_counter"] = 0
 
         ######## Moving glitch counters
         # array to store (any number of) moving glitch counters
@@ -761,6 +771,8 @@ class RtpStream(object):
                     self.__stats["packet_first_packet_received_timestamp"] = self.rtpStream[0].timestamp
                     # Add a StreamStarted event to the event list
                     self.__eventList.append(StreamStarted(self.rtpStream[0], self.__stats))
+                    # Increment the all_events counter
+                    self.__stats["stream_all_events_counter"] += 1
                 # Stream now being received so clear flag
 
                 if lossOfStreamFlag == True:
@@ -815,6 +827,8 @@ class RtpStream(object):
                     lossOfStreamFlag = True
                     # Add event to the list (but only do this once)
                     self.__eventList.append(StreamLost(lastReceivedRtpPacket, self.__stats))
+                    # Increment the all_events counter
+                    self.__stats["stream_all_events_counter"] += 1
                     # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
                     self.__stats["jitter_min_uS"] = 0
                     self.__stats["jitter_max_uS"] = 0
@@ -917,6 +931,8 @@ class RtpStream(object):
                 # If the CPU is >99% utilised, add event to the list (but only do this once)
                 if self.__stats["stream_processor_utilisation_percent"] > 99:
                     self.__eventList.append(ProcessorOverload(lastReceivedRtpPacket, self.__stats))
+                    # Increment the all_events counter
+                    self.__stats["stream_all_events_counter"] += 1
                     pass
             except Exception as e:
                 # print str(e),"\r"
@@ -938,7 +954,7 @@ class RtpStream(object):
     def getRTPStreamID(self):
         return self.__stats["stream_syncSource"], self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"]
 
-    # Thread-safe method for accessing realtime RtpStream stats
+    # Thread-safe method for accessing all RtpStream stats
     def getRtpStreamStats(self):
         self.__accessRtpStreamStatsMutex.acquire()
         stats = self.__stats.copy()
@@ -1211,11 +1227,15 @@ def __displayThread(rtpStream):
             # Now stored, delete the row, ready for next time around the loop
             del tableRow
 
-        # print eventTableRows, "\r"
         title = "Event list (last "+str(noOfHistoricEventsToView)+" events)"
         width, height, table = createTable(eventTableRows,title)
         printTable(margin,nextUseableLineWholeScreen,table)
 
+        # # Get all available keys
+        # stats =rtpStream.getRtpStreamStatsByFilter("glitch")
+        # for k in stats:
+        #     print k,", ",
+        # print "\r"
 
         print "-----------------------------------------------------------------------------------------------------------------------", "\r"
 
