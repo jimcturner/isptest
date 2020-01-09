@@ -1177,7 +1177,7 @@ def __displayThread(rtpStream):
     margin = 2
     while True:
         # Get all keys/values from rtpStream
-        # items = rtpStream.getRtpStreamStats().items()
+        stats = rtpStream.getRtpStreamStats()
         # Clear screen and move cursor to origin
         print "\033[2J", "\r"
         print "\033[0;0HIBEOO ISP Analyser---------------------------------------------------------------------------------------------------", "\r"
@@ -1243,22 +1243,25 @@ def __displayThread(rtpStream):
             # Get dictionary from Event.getData() method containing timestamp and summary
             eventData=event.getData(0)
             # Create the new row
-            tableRow=[eventData["timeCreated"],eventData["summary"]]
+            tableRow=[eventData["timeCreated"].strftime("%H:%M:%S"),eventData["summary"]]
             # Append the new row to the list of rows
             eventTableRows.append(tableRow)
             # Now stored, delete the row, ready for next time around the loop
             del tableRow
 
-        title = "Event list (last "+str(noOfHistoricEventsToView)+" events)"
+        title = "Event list (last "+str(noOfHistoricEventsToView)+"/" +\
+            str(stats["stream_all_events_counter"])+" events)"
         width, height, table = createTable(eventTableRows,title)
         printTable(margin,nextUseableLineWholeScreen,table)
 
-        # # Get all available keys
-        # stats =rtpStream.getRtpStreamStatsByFilter("glitch")
+        # # # Get all available keys
+        # stats =rtpStream.getRtpStreamStatsByFilter("stream")
         # for k in stats:
         #     print k,", ",
         # print "\r"
-
+        stats = rtpStream.getRtpStreamStats()
+        # print stats["stream_time_elapsed_total"].seconds, "\r"
+        # print stats["stream_all_events_counter"], "\r"
         print "-----------------------------------------------------------------------------------------------------------------------", "\r"
 
 
