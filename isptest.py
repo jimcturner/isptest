@@ -1427,6 +1427,16 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
             # print "__rtpGenerator() - non-positive compensatedTxPeriod value",compensatedTxPeriod,"\r"
             pass
 
+def __diskLoggerThread(rtpStream):
+    # Autonomous thread to poll RtpStream eventList for new events
+    # and write them  to disk
+    print "diskLoggerThread starting\r"
+    x = 0
+    while True:
+        print "\033[1;0HdiskLoggerThread",x,"\r"
+        x += 1
+        time.sleep(0.2)
+
 
 ####################################################################################
 
@@ -1624,6 +1634,11 @@ def main(argv):
                     displayThread = threading.Thread(target=__displayThread, args=(s,))
                     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
                     displayThread.start()
+
+                    # Create a diskLogging Thread - pass rtpStream object to it
+                    diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(s,))
+                    diskLoggerThread.daemon = True # Thread will auto shutdown when the prog ends
+                    diskLoggerThread.start()
 
                     runOnce = False
 
