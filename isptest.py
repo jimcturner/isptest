@@ -561,7 +561,7 @@ class RtpStream(object):
         # It's primary purpose is to update __stats keys relating to glitches
 
         # Now update aggregate glitch stats
-        self.__stats["glitch_packets_lost_total"] += latestGlitch.packetsLost
+        self.__stats["glitch_packets_lost_total_count"] += latestGlitch.packetsLost
         self.__stats["glitch_length_total_time"] += latestGlitch.glitchLength
         self.__stats["glitch_counter_total"] += 1
         # Add event to moving counters
@@ -700,7 +700,7 @@ class RtpStream(object):
 
         # Aggregate Glitch counters
         self.__stats["glitch_packets_lost_total_percent"] = 0
-        self.__stats["glitch_packets_lost_total"] = 0
+        self.__stats["glitch_packets_lost_total_count"] = 0
         self.__stats["glitch_packets_lost_per_glitch_mean"] = 0
         self.__stats["glitch_packets_lost_per_glitch_min"] = 0
         self.__stats["glitch_packets_lost_per_glitch_max"] = 0
@@ -867,10 +867,10 @@ class RtpStream(object):
 
             # Calculate % packet loss
             if self.__stats["packet_counter_received_total"] > 0:
-                totalExpectedPackets = self.__stats["packet_counter_received_total"] + self.__stats[
-                    "glitch_packets_lost_total"]
-                self.__stats["glitch_packets_lost_total_percent"] = self.__stats[
-                                                                        "glitch_packets_lost_total"] * 100 / totalExpectedPackets
+                totalExpectedPackets = self.__stats["packet_counter_received_total"] + \
+                        self.__stats["glitch_packets_lost_total_count"]
+                self.__stats["glitch_packets_lost_total_percent"] = \
+                    self.__stats["glitch_packets_lost_total_count"] * 100 / totalExpectedPackets
 
             # 1 second timer
             if (timer() - loopTimerStart) >= 1:
