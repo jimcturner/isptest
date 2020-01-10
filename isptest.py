@@ -1431,11 +1431,47 @@ def __diskLoggerThread(rtpStream):
     # Autonomous thread to poll RtpStream eventList for new events
     # and write them  to disk
     print "diskLoggerThread starting\r"
-    x = 0
+    filename = "eventLog"+datetime.datetime.now().strftime("%H:%M:%S")+".csv"
+    lastWrittenEventNo = 0  # Stores last written Event.eventNo
+    latestEvents = []
     while True:
-        print "\033[1;0HdiskLoggerThread",x,"\r"
-        x += 1
-        time.sleep(0.2)
+        # Attempt to access rtpStream events list
+        # and create a sublist of the just the latest elements
+        try:
+            allEvents = rtpStream.getRTPStreamEventList()
+
+            # Now check to see if there are any previously unwritten events in the allEvents list
+            # Subtract lastWrittenEventNo from most recent eventNo
+            newEvents=allEvents[-1].eventNo - lastWrittenEventNo
+            if newEvents > 0:
+                # There are outstanding events to be written
+                # Slice the latest portion of the allEvents list into a sub list
+                latestEvents=allEvents[(newEvents *-1):]
+        except Exception as e:
+            print "\033[1;0H",str(e), "\r"
+
+
+        # Confirm to see that there are some events in the list
+        if len(latestEvents) > 0:
+            # Open the file for writing (a denotes 'append', + denotes read/write
+            try:
+                f = open(filename, "a+")
+                for event in latestEvents:
+                    # Get the event summary
+                    eventData=event.getData(0)
+                    # Format a string to write to disk
+                    eventString="["+str(eventData["timeCreated"])+", "+eventData["summary"]+"],\n"
+                    # Write the event(s) to disk
+                    f.write(eventString)
+                    lastWrittenEventNo = event.eventNo
+                # Close the file
+                f.close()
+                # Empty the latestEvents list
+                del latestEvents[:]
+            except Exception as e:
+                print "\033[1;0H", str(e), "\r"
+        # print "\033[1;0HdiskLoggerThread", filename, x, "\r"
+        time.sleep(1)
 
 
 ####################################################################################
