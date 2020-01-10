@@ -1489,7 +1489,7 @@ def __diskLoggerThread(rtpStream):
                     # Write the event(s) to disk
                     file_csv.write(eventString)
                     # Construct a json object from the event (as a string)
-                    eventAsJson = json.dumps(event.getData(2), sort_keys=True, indent=4)+"\n"
+                    eventAsJson = json.dumps(event.getData(2), sort_keys=True, indent=4,default=str)+"\n"
                     file_json.write(eventAsJson)
                     lastWrittenEventNo = event.eventNo
                 # Close the files
@@ -1500,7 +1500,7 @@ def __diskLoggerThread(rtpStream):
             except Exception as e:
                 print "\033[1;0H", str(e), "\r"
         # print "\033[1;0HdiskLoggerThread", filename, x, "\r"
-        time.sleep(1)
+        time.sleep(0.2)
 
 
 ####################################################################################
