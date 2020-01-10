@@ -166,13 +166,13 @@ class StreamStarted(object):
         # Take local copy of stats dictionary
         self.stats = dict(stats)
         # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
-        self.eventNo=self.stats["stream_all_events_counter"] + 1
+        self.eventNo = self.stats["stream_all_events_counter"] + 1
 
     def getData(self, verbosityLevel):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         if verbosityLevel == 0:
-            summary = "["+ str(self.eventNo)+"]" + \
+            summary = "[" + str(self.eventNo) + "]" + \
                       "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream Started"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
         elif verbosityLevel == 1:
@@ -208,8 +208,8 @@ class StreamLost(object):
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
 
         if verbosityLevel == 0:
-            summary = "["+ str(self.eventNo)+"]" + \
-                "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream lost"
+            summary = "[" + str(self.eventNo) + "]" + \
+                      "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream lost"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
         elif verbosityLevel == 1:
             data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
@@ -240,8 +240,8 @@ class ExcessiveJitter(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns increasing level of detail associated with this event
         if verbosityLevel == 0:
-            summary = "["+ str(self.eventNo)+"]" + \
-                "[" + str(self.stats["stream_syncSource"]) + "] " + "Excessive jitter: " + \
+            summary = "[" + str(self.eventNo) + "]" + \
+                      "[" + str(self.stats["stream_syncSource"]) + "] " + "Excessive jitter: " + \
                       str(self.stats["jitter_mean_1S_uS"]) + "/" + str(self.stats["jitter_long_term_uS"]) + "uS"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
 
@@ -281,8 +281,8 @@ class ProcessorOverload(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         if verbosityLevel == 0:
-            summary = "["+ str(self.eventNo)+"]" + \
-                "[" + str(self.stats["stream_syncSource"]) + "] " + "Processor overload: " + \
+            summary = "[" + str(self.eventNo) + "]" + \
+                      "[" + str(self.stats["stream_syncSource"]) + "] " + "Processor overload: " + \
                       str(self.stats["stream_processor_utilisation_percent"]) + "%"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
 
@@ -334,9 +334,9 @@ class Glitch(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         if verbosityLevel == 0:
-            summary = "["+ str(self.eventNo)+"]" + \
-                "[" + str(self.stats["stream_syncSource"]) + "] " + "Glitch: " + \
-                      "Duration: " + str(self.glitchLength) +", " + str(self.packetsLost) + " packet(s) lost"
+            summary = "[" + str(self.eventNo) + "]" + \
+                      "[" + str(self.stats["stream_syncSource"]) + "] " + "Glitch: " + \
+                      "Duration: " + str(self.glitchLength) + ", " + str(self.packetsLost) + " packet(s) lost"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
 
         elif verbosityLevel == 1:
@@ -523,7 +523,7 @@ class RtpStream(object):
         if self.__stats["jitter_long_term_uS"] > 0:
             if self.__stats["jitter_mean_1S_uS"] > \
                     (self.excessJitterThresholdFactor * self.__stats["packet_mean_receive_period_uS"]):
-                    # (self.excessJitterThresholdFactor * self.__stats["jitter_long_term_uS"]):
+                # (self.excessJitterThresholdFactor * self.__stats["jitter_long_term_uS"]):
                 # If jitter alarms not inhibited, add a new jitter event
                 # Take diff between time.now() and the time of the last event
                 if self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >= \
@@ -546,7 +546,8 @@ class RtpStream(object):
         # Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
         if self.__stats["jitter_excess_jitter_events_total"] > 0:
             self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = datetime.datetime.now() - \
-                self.__stats["jitter_time_of_last_excess_jitter_event"]
+                                                                                 self.__stats[
+                                                                                     "jitter_time_of_last_excess_jitter_event"]
 
         # Calculate meanTimeBetweenExcessJitterEvents (requires at least two jitter events)
         if self.__stats["jitter_excess_jitter_events_total"] > 1:
@@ -723,7 +724,6 @@ class RtpStream(object):
         self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Hr", 3600, 600))
         # 24hr duration, 1hr sample period
         self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_24Hr", 86400, 3600))
-
 
         # define timedelta object to store an aggregate of of Glitch length
         self.__stats["glitch_length_total_time"] = datetime.timedelta()
@@ -918,7 +918,8 @@ class RtpStream(object):
                 # This will ensure that self.rtpStream[] length never gets too large.
                 # Otherwise, for high packet receieve rates, the calculation time will become excessive
                 # Wait a second, in order to know we're in a steady state
-                if self.__stats["packet_mean_receive_period_uS"] > 0 and self.__stats["stream_time_elapsed_total"].seconds > 1:
+                if self.__stats["packet_mean_receive_period_uS"] > 0 and self.__stats[
+                    "stream_time_elapsed_total"].seconds > 1:
                     self.__stats["calculate_thread_sampling_interval_S"] = 10.0 * self.__stats[
                         "packet_mean_receive_period_uS"] / 1000000.0
 
@@ -945,12 +946,12 @@ class RtpStream(object):
                 # Calculate calculationDuration (in uS)
                 #   the %1 throws away the whole number part, *1000000 converts from s to uS
                 self.__stats["calculate_thread_calculation_duration_uS"] = ((
-                                                                                        calculationEndTime - calculationStartTime) % 1) * 1000000
+                                                                                    calculationEndTime - calculationStartTime) % 1) * 1000000
 
                 # Calculate processorUtilisationPercent. All time values in uS
                 self.__stats["stream_processor_utilisation_percent"] = \
                     self.__stats["calculate_thread_calculation_duration_uS"] * 100.0 / (
-                                self.__stats["packet_mean_receive_period_uS"] * len(self.rtpStream))
+                            self.__stats["packet_mean_receive_period_uS"] * len(self.rtpStream))
 
                 # If the CPU is >99% utilised, add event to the list (but only do this once)
                 if self.__stats["stream_processor_utilisation_percent"] > 99:
@@ -1061,6 +1062,7 @@ def printTable(xPos, yPos, tableData):
     # Finally, move cursor to start of next available line
     print "\033[" + str(yPos + lineCount) + ";" + str(0) + "H", "\r"
 
+
 def humanise(inputDictionary):
     # This function will examine the key/value pairs of the stats dictionary and
     # prettify the values. It will return a list of tuples containing the value/key pairs
@@ -1071,40 +1073,40 @@ def humanise(inputDictionary):
     # List of prefixes to be removed from the key names
     prefixes = ["stream_", "glitch_", "historic_", "jitter_", "packet_"]
     # List of suffixes to be removed from the key names
-    suffixes = ["_percent","_uS","_timestamp","_S","_bytes"]
+    suffixes = ["_percent", "_uS", "_timestamp", "_S", "_bytes"]
 
     # Create a list to hold the humanised output
     newDictionary = {}
     for key, value in inputDictionary:
         # Next, Scan 'keys' to see if they contain any of the prefix or suffix terms. If they do, replace them with ""
         # Take a copy of the key to be examined
-        tempKeyName=key
+        tempKeyName = key
         # Iterate over prefixes
         for prefix in prefixes:
-            tempKeyName=str(key).replace(prefix,"",1)
+            tempKeyName = str(key).replace(prefix, "", 1)
             # Check to see if tempKeyName has been modified?
             if tempKeyName != key:
                 break
         # Take a copy of the key with the prefix removed
-        keyWithoutPrefix=tempKeyName
+        keyWithoutPrefix = tempKeyName
 
         # Now iterate over suffixes list
-        tempKeyName=keyWithoutPrefix
+        tempKeyName = keyWithoutPrefix
         for suffix in suffixes:
-            tempKeyName = str(keyWithoutPrefix).replace(suffix,"",1)
+            tempKeyName = str(keyWithoutPrefix).replace(suffix, "", 1)
             # Check to see if tempKeyName has been modified?
             if tempKeyName != keyWithoutPrefix:
                 break
         # Take a copy of the key with the suffix removed
-        keyWithoutSuffix=tempKeyName
+        keyWithoutSuffix = tempKeyName
 
         # To improve readability, remove underscore characters
-        tempKeyName=keyWithoutSuffix.replace("_"," ")
+        tempKeyName = keyWithoutSuffix.replace("_", " ")
 
         # Now capitalise
         # tempKeyName=tempKeyName.title()
         # Now capture the finished 'humanised' key name
-        humanisedKey=tempKeyName
+        humanisedKey = tempKeyName
 
         # Scan the (original) key name for clues about the format of the corresponding value
 
@@ -1115,7 +1117,7 @@ def humanise(inputDictionary):
         elif str(key).find("percent") > 0:
             # Create human readable value
             # Format to two decimal places
-            value=round(value,2)
+            value = round(value, 2)
             humanisedValue = str(value) + "%"
 
         elif str(key).find("_S") > 0:
@@ -1156,20 +1158,21 @@ def humanise(inputDictionary):
             humanisedValue = str(value) + " bytes"
 
         elif key == "packet_counter_1S":
-            humanisedValue = str(value)+" packets/s"
+            humanisedValue = str(value) + " packets/s"
 
         elif key == "packet_counter_received_total":
             humanisedValue = str(value) + " packets"
 
         else:
             # Otherwise, keep the original value
-            humanisedValue=value
+            humanisedValue = value
 
         # Assign existing value to the new dictionary key
         newDictionary[humanisedKey] = humanisedValue
 
     # Return dictionary of humanised keys and values
     return newDictionary.items()
+
 
 # Define a display thread that will run autonomously
 def __displayThread(rtpStream):
@@ -1188,13 +1191,15 @@ def __displayThread(rtpStream):
         nextUseableColumn = 0
         # Create a table of stream stats
 
-        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("stream").items()), "Stream info")
+        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("stream").items()),
+                                           "Stream info")
         printTable(margin, nextUseableLine, table)
         nextUseableLine += (height + padding)
         if (width + padding + margin) > nextUseableColumn:
             nextUseableColumn = width + padding + margin
         # Create a Glitch Stats table
-        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("glitch").items()), "Glitch Stats")
+        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("glitch").items()),
+                                           "Glitch Stats")
         printTable(margin, nextUseableLine, table)
         nextUseableLine += (height + padding)
         if (width + padding + margin) > nextUseableColumn:
@@ -1213,21 +1218,22 @@ def __displayThread(rtpStream):
         # Reset nextUseableLine to top of screen
         nextUseableLine = 2
         # Create a table of jitter stats
-        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("jitter").items()), "Jitter Stats")
+        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("jitter").items()),
+                                           "Jitter Stats")
         printTable(nextUseableColumn, nextUseableLine, table)
         nextUseableLine += (height + padding)
         # if (width + padding + margin) > nextUseableColumn:
         #     nextUseableColumn = width + padding + margin
 
         # Create a table of Packet stats beside the jitter table
-        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("packet").items()), "Packet Stats")
+        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("packet").items()),
+                                           "Packet Stats")
         # # Print the table to the screen line by line
         printTable(nextUseableColumn, nextUseableLine, table)
         nextUseableLine += (height + padding)
 
         # # Move cursor to start of next available line
         print "\033[" + str(nextUseableLineWholeScreen) + ";" + str(0) + "H", "\r"
-
 
         # Now create table from eventList
         eventTableRows = []
@@ -1243,18 +1249,18 @@ def __displayThread(rtpStream):
 
         for event in events:
             # Get dictionary from Event.getData() method containing timestamp and summary
-            eventData=event.getData(0)
+            eventData = event.getData(0)
             # Create the new row
-            tableRow=[eventData["timeCreated"].strftime("%H:%M:%S"),eventData["summary"]]
+            tableRow = [eventData["timeCreated"].strftime("%H:%M:%S"), eventData["summary"]]
             # Append the new row to the list of rows
             eventTableRows.append(tableRow)
             # Now stored, delete the row, ready for next time around the loop
             del tableRow
 
-        title = "Event list (last "+str(noOfHistoricEventsToView)+"/" +\
-            str(stats["stream_all_events_counter"])+" events)"
-        width, height, table = createTable(eventTableRows,title)
-        printTable(margin,nextUseableLineWholeScreen,table)
+        title = "Event list (last " + str(noOfHistoricEventsToView) + "/" + \
+                str(stats["stream_all_events_counter"]) + " events)"
+        width, height, table = createTable(eventTableRows, title)
+        printTable(margin, nextUseableLineWholeScreen, table)
 
         # # # Get all available keys
         # stats =rtpStream.getRtpStreamStatsByFilter("stream")
@@ -1265,7 +1271,6 @@ def __displayThread(rtpStream):
         # print stats["stream_time_elapsed_total"].seconds, "\r"
         # print stats["stream_all_events_counter"], "\r"
         print "-----------------------------------------------------------------------------------------------------------------------", "\r"
-
 
         time.sleep(1)
 
@@ -1427,13 +1432,24 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
             # print "__rtpGenerator() - non-positive compensatedTxPeriod value",compensatedTxPeriod,"\r"
             pass
 
+
 def __diskLoggerThread(rtpStream):
     # Autonomous thread to poll RtpStream eventList for new events
     # and write them  to disk
     print "diskLoggerThread starting\r"
-    filename = "eventLog"+datetime.datetime.now().strftime("%H:%M:%S")+".csv"
+    filename = "eventLog" + datetime.datetime.now().strftime("%H%M%S") + ".csv"
     lastWrittenEventNo = 0  # Stores last written Event.eventNo
     latestEvents = []
+
+    # Create a file and write a header
+    try:
+        f = open(filename, "w+")
+        f.write("Event Log created by isptest. Created at: " + str(datetime.datetime.now()) +
+                "\r\n-------------------------------------------------------------------------\n")
+
+    except Exception as e:
+        print "\033[1;0H", str(e), "\r"
+
     while True:
         # Attempt to access rtpStream events list
         # and create a sublist of the just the latest elements
@@ -1442,14 +1458,13 @@ def __diskLoggerThread(rtpStream):
 
             # Now check to see if there are any previously unwritten events in the allEvents list
             # Subtract lastWrittenEventNo from most recent eventNo
-            newEvents=allEvents[-1].eventNo - lastWrittenEventNo
+            newEvents = allEvents[-1].eventNo - lastWrittenEventNo
             if newEvents > 0:
                 # There are outstanding events to be written
                 # Slice the latest portion of the allEvents list into a sub list
-                latestEvents=allEvents[(newEvents *-1):]
+                latestEvents = allEvents[(newEvents * -1):]
         except Exception as e:
-            print "\033[1;0H",str(e), "\r"
-
+            print "\033[1;0H", str(e), "\r"
 
         # Confirm to see that there are some events in the list
         if len(latestEvents) > 0:
@@ -1458,9 +1473,9 @@ def __diskLoggerThread(rtpStream):
                 f = open(filename, "a+")
                 for event in latestEvents:
                     # Get the event summary
-                    eventData=event.getData(0)
+                    eventData = event.getData(0)
                     # Format a string to write to disk
-                    eventString="["+str(eventData["timeCreated"])+", "+eventData["summary"]+"],\n"
+                    eventString = "[" + str(eventData["timeCreated"]) + ", " + eventData["summary"] + "],\n"
                     # Write the event(s) to disk
                     f.write(eventString)
                     lastWrittenEventNo = event.eventNo
@@ -1673,7 +1688,7 @@ def main(argv):
 
                     # Create a diskLogging Thread - pass rtpStream object to it
                     diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(s,))
-                    diskLoggerThread.daemon = True # Thread will auto shutdown when the prog ends
+                    diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
                     diskLoggerThread.start()
 
                     runOnce = False
