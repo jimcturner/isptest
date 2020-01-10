@@ -20,7 +20,7 @@ import re  # Regex 'regular expression' module
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
-
+import json
 ####################################################################################
 # Utility Functions
 # #################
@@ -219,6 +219,7 @@ class StreamLost(object):
             data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
                     'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
                     'eventNo': self.eventNo}
+
         return data
 
 
@@ -1437,16 +1438,24 @@ def __diskLoggerThread(rtpStream):
     # Autonomous thread to poll RtpStream eventList for new events
     # and write them  to disk
     print "diskLoggerThread starting\r"
-    filename = "eventLog" + datetime.datetime.now().strftime("%H%M%S") + ".csv"
+    filename_csv = "eventLog" + datetime.datetime.now().strftime("%H%M%S") + ".csv"
+    filename_json = "eventLog" + datetime.datetime.now().strftime("%H%M%S") + ".json"
     lastWrittenEventNo = 0  # Stores last written Event.eventNo
     latestEvents = []
 
     # Create a file and write a header
     try:
-        f = open(filename, "w+")
-        f.write("Event Log created by isptest. Created at: " + str(datetime.datetime.now()) +
+        # Write summary file
+        file_csv = open(filename_csv, "w+")
+        file_csv.write("Event Log summary created by isptest. Created at: " + str(datetime.datetime.now()) +
                 "\r\n-------------------------------------------------------------------------\n")
+        file_csv.close()
 
+        # Write detailed json file
+        file_json = open(filename_json,"w+")
+        file_json.write("Event Log json created by isptest. Created at: " + str(datetime.datetime.now()) +
+                "\r\n-------------------------------------------------------------------------\n")
+        file_json.close()
     except Exception as e:
         print "\033[1;0H", str(e), "\r"
 
@@ -1468,19 +1477,24 @@ def __diskLoggerThread(rtpStream):
 
         # Confirm to see that there are some events in the list
         if len(latestEvents) > 0:
-            # Open the file for writing (a denotes 'append', + denotes read/write
+            # Open the files for writing (a denotes 'append', + denotes read/write
             try:
-                f = open(filename, "a+")
+                file_csv = open(filename_csv, "a+")
+                file_json = open(filename_json,"a+")
                 for event in latestEvents:
                     # Get the event summary
-                    eventData = event.getData(0)
+                    eventSummary = event.getData(0)
                     # Format a string to write to disk
-                    eventString = "[" + str(eventData["timeCreated"]) + ", " + eventData["summary"] + "],\n"
+                    eventString = "[" + str(eventSummary["timeCreated"]) + ", " + eventSummary["summary"] + "],\n"
                     # Write the event(s) to disk
-                    f.write(eventString)
+                    file_csv.write(eventString)
+                    # Construct a json object from the event (as a string)
+                    eventAsJson = json.dumps(event.getData(2), sort_keys=True, indent=4)+"\n"
+                    file_json.write(eventAsJson)
                     lastWrittenEventNo = event.eventNo
-                # Close the file
-                f.close()
+                # Close the files
+                file_csv.close()
+                file_json.close()
                 # Empty the latestEvents list
                 del latestEvents[:]
             except Exception as e:
