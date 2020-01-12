@@ -172,11 +172,11 @@ class StreamStarted(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         if verbosityLevel == 0:
-            summary = "[" + str(self.eventNo) + "]" + \
-                      "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream Started"
+            summary = "[" + str(self.eventNo) + "]," + \
+                      "[" + str(self.stats["stream_syncSource"]) + "], " + "Stream Started"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
         elif verbosityLevel == 1:
-            data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated, \
+            data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated,\
                     'rtpSequenceNo': self.firstPacketdReceived.rtpSequenceNo,
                     'syncSource': self.stats["stream_syncSource"],
                     'eventNo': self.eventNo}
@@ -208,8 +208,8 @@ class StreamLost(object):
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
 
         if verbosityLevel == 0:
-            summary = "[" + str(self.eventNo) + "]" + \
-                      "[" + str(self.stats["stream_syncSource"]) + "] " + "Stream lost"
+            summary = "[" + str(self.eventNo) + "]," + \
+                      "[" + str(self.stats["stream_syncSource"]) + "], " + "Stream lost"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
         elif verbosityLevel == 1:
             data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
@@ -241,8 +241,8 @@ class ExcessiveJitter(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns increasing level of detail associated with this event
         if verbosityLevel == 0:
-            summary = "[" + str(self.eventNo) + "]" + \
-                      "[" + str(self.stats["stream_syncSource"]) + "] " + "Excessive jitter: " + \
+            summary = "[" + str(self.eventNo) + "]," + \
+                      "[" + str(self.stats["stream_syncSource"]) + "], " + "Excessive jitter:, " + \
                       str(self.stats["jitter_mean_1S_uS"]) + "/" + str(self.stats["jitter_long_term_uS"]) + "uS"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
 
@@ -282,8 +282,8 @@ class ProcessorOverload(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         if verbosityLevel == 0:
-            summary = "[" + str(self.eventNo) + "]" + \
-                      "[" + str(self.stats["stream_syncSource"]) + "] " + "Processor overload: " + \
+            summary = "[" + str(self.eventNo) + "]," + \
+                      "[" + str(self.stats["stream_syncSource"]) + "], " + "Processor overload:, " + \
                       str(self.stats["stream_processor_utilisation_percent"]) + "%"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
 
@@ -335,9 +335,9 @@ class Glitch(object):
         # Returns a dictionary containing information about this event
         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
         if verbosityLevel == 0:
-            summary = "[" + str(self.eventNo) + "]" + \
-                      "[" + str(self.stats["stream_syncSource"]) + "] " + "Glitch: " + \
-                      "Duration: " + str(self.glitchLength) + ", " + str(self.packetsLost) + " packet(s) lost"
+            summary = "[" + str(self.eventNo) + "]," + \
+                      "[" + str(self.stats["stream_syncSource"]) + "], " + "Glitch:, " + \
+                      "Duration:, " + str(self.glitchLength) + ", " + str(self.packetsLost) + ", packet(s) lost"
             data = {'timeCreated': self.timeCreated, 'summary': summary}
 
         elif verbosityLevel == 1:
@@ -1485,7 +1485,7 @@ def __diskLoggerThread(rtpStream):
                     # Get the event summary
                     eventSummary = event.getData(0)
                     # Format a string to write to disk
-                    eventString = "[" + str(eventSummary["timeCreated"]) + ", " + eventSummary["summary"] + "],\n"
+                    eventString = str(eventSummary["timeCreated"].strftime("%d/%m/%Y %H:%M:%S")) + ", " + eventSummary["summary"] + ",\n"
                     # Write the event(s) to disk
                     file_csv.write(eventString)
                     # Construct a json object from the event (as a string)
@@ -1500,7 +1500,7 @@ def __diskLoggerThread(rtpStream):
             except Exception as e:
                 print "\033[1;0H", str(e), "\r"
         # print "\033[1;0HdiskLoggerThread", filename, x, "\r"
-        time.sleep(0.2)
+        time.sleep(1)
 
 
 ####################################################################################
