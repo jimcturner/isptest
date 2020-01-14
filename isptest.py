@@ -144,7 +144,7 @@ class Message(object):
     # Define list to hold messages
     messages = []
     # No. of messages to keep before they're discarded
-    historicMessagesToKeep = 10
+    historicMessagesToKeep = 50
 
     # Class method to add a new message to the list
 
@@ -158,10 +158,27 @@ class Message(object):
             del cls.messages[:1]
 
 
-    # Class method to return the current message list
+    # Class method to return the messages list
     @classmethod
-    def getMessages(cls):
-        return cls.messages
+    def getMessages(cls, *args):
+        if len(args) == 2:
+            # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
+            try:
+                return cls.messages[args[0]:args[1]+1]
+            except:
+                print "gets here"
+                Message.addMessage("Messages:getMessage("+str(args[0])+":"+
+                                   str(args[1])+") requested start and end indexes out of range")
+        elif len(args) == 1:
+            # If one arg supplied, return the last n messages.
+            try:
+                return cls.messages[(args[0]*-1):]
+            except:
+                return cls.messages
+        else:
+            # if no args supplied, return complete list
+            return cls.messages
+
 
 
 
@@ -1656,13 +1673,6 @@ def main(argv):
         print 'invalid options supplied', argv
         exit()
 
-    for x in range(20):
-        Message.addMessage("cake"+str(x))
-
-    for x in Message.getMessages():
-        print x
-
-    exit()
 
     runOnce = True
 
