@@ -181,9 +181,6 @@ class Message(object):
 
 
 
-
-
-
 # Define an object to hold data about an individual received rtp packet
 class RtpData(object):
     # Constructor method
