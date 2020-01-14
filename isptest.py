@@ -495,10 +495,15 @@ class RtpStream(object):
         # Counter to be used by __calculateJitter()
         self.sumOfJitter_1s = 0
 
+        # No of events to keep before purging self.__eventList = []
+        self.historicEventsLimit = 50
+
         # Create a __calculateThread
         self.calculateThread = threading.Thread(target=self.__calculateThread, args=())
         self.calculateThread.daemon = True  # Thread will auto shutdown when the prog ends
         self.calculateThread.start()
+
+
 
     def __calculateJitter(self, prevRtpPacket):
         # Iterate over self.rtpStream to get total count of data received in this batch of data, no. of packets and also calculate
@@ -915,7 +920,7 @@ class RtpStream(object):
                 self.__stats["glitch_packets_lost_total_percent"] = \
                     self.__stats["glitch_packets_lost_total_count"] * 100 / totalExpectedPackets
 
-            # 1 second timer
+            ################# 1 second timer
             if (timer() - loopTimerStart) >= 1:
                 # Reset loop timer starting reference
                 loopTimerStart = timer()
@@ -975,6 +980,9 @@ class RtpStream(object):
                     # Dynamically create new stats keys using the name field of the moving glitch counter
                     self.__stats[name] = movingTotal
                     self.__stats[name + "_events"] = events
+
+                ######### Now housekeep __eventList[] to remove the oldest events
+                self.__houseKeepEventList()
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
@@ -1039,12 +1047,26 @@ class RtpStream(object):
         return filteredStats
 
     # Thread-safe method for accessing realtime RtpStream eventList
-    def getRTPStreamEventList(self):
+    def getRTPStreamEventList(self, *args):
         self.__accessRtpStreamEventListMutex.acquire()
         # Create copy of events list
         eventList = list(self.__eventList)
         self.__accessRtpStreamEventListMutex.release()
         return eventList
+
+    # Method to strip off the oldest events from the eventList once the threshold is reached
+    # Note **this does not** set mutex locks itself, so should only be called from another method that
+    # already has guaranteed exclusive access
+    def __houseKeepEventList(self):
+        # Check size of self.__eventList[]
+        noOfMessagesToPurge = len(self.__eventList) - self.historicEventsLimit
+        if noOfMessagesToPurge >0:
+            # Remove first x events
+            # oldSize = len(self.__eventList)
+            del self.__eventList[:noOfMessagesToPurge]
+            # newSize = len(self.__eventList)
+            # Message.addMessage("__houseKeepEventList() "+str(noOfMessagesToPurge)+
+            #                    " events removed"+str(oldSize)+">>"+str(newSize))
 
     # Define setter methods
     def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource):
