@@ -152,7 +152,7 @@ class Message(object):
     @classmethod
     def addMessage(cls, message):
         # Add the supplied message to the messages list as a tuple containing a timestamp
-        cls.messages.append(([datetime.datetime.now().strftime("%H:%M:%S:%f")], message))
+        cls.messages.append([datetime.datetime.now().strftime("%H:%M:%S:%f"), message])
         # Test length of messages list. Longer than historicMessagesToKeep?
         if len(cls.messages) > cls.historicMessagesToKeep:
             # Remove first (oldest) message
@@ -1251,7 +1251,7 @@ def __displayThread(rtpStream):
                                            "Historic glitch stats")
         printTable(margin, nextUsableLine, table)
         nextUsableLine += (height + padding)
-        nextUseableLineWholeScreen = nextUsableLine
+        nextUseableLineWholeWidth = nextUsableLine
         # if (width + padding + margin) > nextUseableColumn:
         #     nextUseableColumn = width + padding + margin
 
@@ -1274,7 +1274,7 @@ def __displayThread(rtpStream):
         nextUsableLine += (height + padding)
 
         # # Move cursor to start of next available line
-        print "\033[" + str(nextUseableLineWholeScreen) + ";" + str(0) + "H", "\r"
+        print "\033[" + str(nextUseableLineWholeWidth) + ";" + str(0) + "H", "\r"
 
         # Now create table from eventList
         eventTableRows = []
@@ -1301,7 +1301,17 @@ def __displayThread(rtpStream):
         title = "Event list (last " + str(noOfHistoricEventsToView) + "/" + \
                 str(stats["stream_all_events_counter"]) + " events)"
         width, height, table = createTable(eventTableRows, title)
-        printTable(margin, nextUseableLineWholeScreen, table)
+        printTable(margin, nextUseableLineWholeWidth, table)
+        nextUseableLineWholeWidth += (height + padding)
+        nextUsableColumn = width + padding + margin
+
+        # Print a messages table below the events list
+        # Get last 10 messages
+        messages=Message.getMessages(10)
+        if len(messages) > 0:
+            width, height, table=createTable(messages,"Messages")
+            printTable(margin, nextUseableLineWholeWidth, table)
+
 
         # # # Get all available keys
         # stats =rtpStream.getRtpStreamStatsByFilter("stream")
@@ -1453,8 +1463,9 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
                 # Correction only happens in one direction (we can only dynamically reduce the txPeriod, so to prevent
                 # overshoots of the desired rate, only reduce txPeriod by 'half' the error amount in one go
                 txPeriod -= txPeriod * (errorFactor / 2.0)
-                print "Compensating for timing error - Actual txData rate too low", "Desired tx rate:", txRate, "Actual tx rate:", txBps_1s, "\r"
-
+                # print "Compensating for timing error - Actual txData rate too low", "Desired tx rate:", txRate, "Actual tx rate:", txBps_1s, "\r"
+                Message.addMessage("Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
+                                   str(txRate)+", Actual tx rate:" + str(txBps_1s))
             # Clear counter
             txBps_1s = 0
 
