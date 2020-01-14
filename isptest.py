@@ -1600,7 +1600,7 @@ def main(argv):
     txRate = 1 * 1024 * 1024
 
     # Specify a default packet size for the tx stream (if none supplied)
-    payloadLength = 496
+    payloadLength = 1300
 
     # print 'Argument List:', str(argv)
     try:
