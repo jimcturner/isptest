@@ -1360,7 +1360,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
 
     rtpParams = 0b01000000
     rtpPayloadType = 0b00000000
-    rtpSequenceNo = 65535
+    rtpSequenceNo = 0
     # Create a 32 bit timestamp (needs truncating to 32 bits before passing to struct.pack)
     # 0xFFFFFFFF is 32 '1's, so the '&' operation will throw away MSBs larger than this
     rtpTimestamp = int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
@@ -1523,11 +1523,12 @@ def __diskLoggerThread(rtpStream):
 
             # Now check to see if there are any previously unwritten events in the allEvents list
             # Subtract lastWrittenEventNo from most recent eventNo
-            newEvents = allEvents[-1].eventNo - lastWrittenEventNo
-            if newEvents > 0:
-                # There are outstanding events to be written
-                # Slice the latest portion of the allEvents list into a sub list
-                latestEvents = allEvents[(newEvents * -1):]
+            if len(allEvents) > 0:
+                newEvents = allEvents[-1].eventNo - lastWrittenEventNo
+                if newEvents > 0:
+                    # There are outstanding events to be written
+                    # Slice the latest portion of the allEvents list into a sub list
+                    latestEvents = allEvents[(newEvents * -1):]
         except Exception as e:
             Message.addMessage("__diskLoggerThread "+str(e))
 
