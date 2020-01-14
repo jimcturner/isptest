@@ -166,7 +166,6 @@ class Message(object):
             try:
                 return cls.messages[args[0]:args[1] + 1]
             except Exception as e:
-                print "gets here"
                 Message.addMessage("Messages:getMessage(" + str(args[0]) + ":" +
                                    str(args[1]) + ") requested start and end indexes out of range: " + str(e))
         elif len(args) == 1:
@@ -1054,12 +1053,32 @@ class RtpStream(object):
         return filteredStats
 
     # Thread-safe method for accessing realtime RtpStream eventList
+    # No args: Returns the entire list
+    # 1 arg: Returns the last n events
+    # 2 args: returns the range specified (inclusive)
     def getRTPStreamEventList(self, *args):
         self.__accessRtpStreamEventListMutex.acquire()
         # Create copy of events list
         eventList = list(self.__eventList)
         self.__accessRtpStreamEventListMutex.release()
-        return eventList
+
+        if len(args) == 2:
+            # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
+            try:
+                # Slice the list
+                return eventList[args[0]:args[1] + 1]
+            except Exception as e:
+                Message.addMessage("RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
+                                   str(args[1]) + ") requested start and end indexes out of range: " + str(e))
+        elif len(args) == 1:
+            # If one arg supplied, return the last n events.
+            # IF event list not as long as n, return what does exist
+            try:
+                return eventList[(args[0] * -1):]
+            except:
+                return eventList
+        else:
+            return eventList
 
     # Method to strip off the oldest events from the eventList once the threshold is reached
     # Note **this does not** set mutex locks itself, so should only be called from another method that
@@ -1308,7 +1327,8 @@ def __displayThread(rtpStream):
 
             # Now create table from eventList
             eventTableRows = []
-            allEvents = rtpStream.getRTPStreamEventList()
+            # allEvents = rtpStream.getRTPStreamEventList()
+            allEvents = rtpStream.getRTPStreamEventList(5,7)
             noOfHistoricEventsToView = 10
             # Display the last x events
             # Get no of events in list
