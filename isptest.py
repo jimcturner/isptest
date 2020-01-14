@@ -498,6 +498,81 @@ class RtpStream(object):
         # No of events to keep before purging self.__eventList = []
         self.historicEventsLimit = 50
 
+        self.__stats["packet_first_packet_received_timestamp"] = datetime.timedelta()
+        self.__stats["packet_counter_1S"] = 0
+        self.__stats["packet_data_received_1S_bytes"] = 0
+        self.__stats["packet_data_received_total_bytes"] = 0
+        self.__stats["packet_payload_size_mean_1S_bytes"] = 0
+        self.__stats["packet_counter_received_total"] = 0
+        self.__stats["stream_time_elapsed_total"] = datetime.timedelta()
+        self.__stats["packet_instantaneous_receive_period_uS"] = 0
+        self.__stats["packet_mean_receive_period_uS"] = 0
+        self.aggregateSumOfTimeDeltas = 0  # Used to calculate self.__stats["packet_mean_receive_period_uS"]
+
+        # Aggregate Glitch counters
+        self.__stats["glitch_packets_lost_total_percent"] = 0
+        self.__stats["glitch_packets_lost_total_count"] = 0
+        self.__stats["glitch_packets_lost_per_glitch_mean"] = 0
+        self.__stats["glitch_packets_lost_per_glitch_min"] = 0
+        self.__stats["glitch_packets_lost_per_glitch_max"] = 0
+        self.__stats["glitch_counter_total"] = 0
+
+        # Keeps a count of all events recorded against this rtpStream
+        self.__stats["stream_all_events_counter"] = 0
+
+        ######## Moving glitch counters
+        # array to store (any number of) moving glitch counters
+        self.movingGlitchCounters = []
+        # Add some  moving glitch counters to the array:-
+
+        # 10 second duration, 1 second sampling period
+        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Sec", 10, 1))
+        # 1 min duration, 10 second sample period
+        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Min", 60, 10))
+        # 10 min duration, 1 minute sample period
+        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Min", 600, 60))
+        # 1hr duration, 10 minute sample period
+        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Hr", 3600, 600))
+        # 24hr duration, 1hr sample period
+        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_24Hr", 86400, 3600))
+
+        # define timedelta object to store an aggregate of of Glitch length
+        self.__stats["glitch_length_total_time"] = datetime.timedelta()
+        self.__stats["glitch_most_recent_timestamp"] = datetime.timedelta()
+        self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.timedelta()
+        self.__stats["glitch_mean_time_between_glitches"] = datetime.timedelta()
+        self.__stats["glitch_mean_duration"] = datetime.timedelta()
+        self.__stats["glitch_max_duration"] = datetime.timedelta()
+        self.__stats["glitch_min_duration"] = datetime.timedelta()
+        self.sumOfTimeElapsedSinceLastGlitch = datetime.timedelta()
+
+        # Jitter counters
+        self.__stats["jitter_min_uS"] = 0
+        self.__stats["jitter_max_uS"] = 0
+        self.__stats["jitter_range_uS"] = 0
+        self.__stats["jitter_instantaneous"] = 0
+        self.__stats["jitter_mean_1S_uS"] = 0
+        self.__stats["jitter_mean_10S_uS"] = 0
+        self.__stats["jitter_long_term_uS"] = 0
+
+        self.__stats["stream_processor_utilisation_percent"] = 0
+
+        # % ratio of 1S Jitter_uS to packet_mean_receive_period_uS that will trigger an excessJitterEvent
+        self.__stats["jitter_excessive_alarm_threshold_percent"] = 30
+        self.excessJitterThresholdFactor = (self.__stats["jitter_excessive_alarm_threshold_percent"] / 100.0)
+
+        # No of seconds to inhibit an excessive jitter alarm
+        self.__stats["jitter_alarm_event_timeout_S"] = 2
+        self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = datetime.timedelta()
+        self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.timedelta()
+        self.__stats["jitter_excess_jitter_events_total"] = 0
+        self.__stats["jitter_mean_time_between_excess_jitter_events"] = datetime.timedelta()
+        self.sumOfTimeElapsedSinceLastExcessJitterEvents = datetime.timedelta()
+
+        # Initially, __CalculateThread loop will execute every 10mS (but will then be modified dynamically
+        # based on the packet Rx period)
+        self.__stats["calculate_thread_sampling_interval_S"] = 0.01
+
         # Create a __calculateThread
         self.calculateThread = threading.Thread(target=self.__calculateThread, args=())
         self.calculateThread.daemon = True  # Thread will auto shutdown when the prog ends
@@ -726,11 +801,11 @@ class RtpStream(object):
     # Define a private calculation method that will run autonomously as a thread
     # This thread will
     def __calculateThread(self):
-        print "__calculateThread started with sync Source: ", self.__stats["stream_syncSource"], "\r"
+        Message.addMessage("__calculateThread started with sync Source: " +\
+                           str(self.__stats["stream_syncSource"]))
 
         # Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
         lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(), self.__stats["stream_syncSource"])
-        self.__stats["packet_first_packet_received_timestamp"] = datetime.timedelta()
 
         # General Counters
         loopCounter = 0
@@ -742,86 +817,13 @@ class RtpStream(object):
         runningTotalPacketsPerSecond = 0
         runningTotalDataReceivedPerSecond = 0
 
-        self.__stats["packet_counter_1S"] = 0
-        self.__stats["packet_data_received_1S_bytes"] = 0
-        self.__stats["packet_data_received_total_bytes"] = 0
-        self.__stats["packet_payload_size_mean_1S_bytes"] = 0
-        self.__stats["packet_counter_received_total"] = 0
-        self.__stats["stream_time_elapsed_total"] = datetime.timedelta()
-        self.__stats["packet_instantaneous_receive_period_uS"] = 0
-        self.__stats["packet_mean_receive_period_uS"] = 0
-        self.aggregateSumOfTimeDeltas = 0 # Used to calculate self.__stats["packet_mean_receive_period_uS"]
-
-
-        # Aggregate Glitch counters
-        self.__stats["glitch_packets_lost_total_percent"] = 0
-        self.__stats["glitch_packets_lost_total_count"] = 0
-        self.__stats["glitch_packets_lost_per_glitch_mean"] = 0
-        self.__stats["glitch_packets_lost_per_glitch_min"] = 0
-        self.__stats["glitch_packets_lost_per_glitch_max"] = 0
-        self.__stats["glitch_counter_total"] = 0
-
-        # Keeps a count of all events recorded against this rtpStream
-        self.__stats["stream_all_events_counter"] = 0
-
-        ######## Moving glitch counters
-        # array to store (any number of) moving glitch counters
-        self.movingGlitchCounters = []
-        # Add some  moving glitch counters to the array:-
-
-        # 10 second duration, 1 second sampling period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Sec", 10, 1))
-        # 1 min duration, 10 second sample period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Min", 60, 10))
-        # 10 min duration, 1 minute sample period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Min", 600, 60))
-        # 1hr duration, 10 minute sample period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Hr", 3600, 600))
-        # 24hr duration, 1hr sample period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_24Hr", 86400, 3600))
-
-        # define timedelta object to store an aggregate of of Glitch length
-        self.__stats["glitch_length_total_time"] = datetime.timedelta()
-        self.__stats["glitch_most_recent_timestamp"] = datetime.timedelta()
-        self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.timedelta()
-        self.__stats["glitch_mean_time_between_glitches"] = datetime.timedelta()
-        self.__stats["glitch_mean_duration"] = datetime.timedelta()
-        self.__stats["glitch_max_duration"] = datetime.timedelta()
-        self.__stats["glitch_min_duration"] = datetime.timedelta()
-        self.sumOfTimeElapsedSinceLastGlitch = datetime.timedelta()
-
-        # Jitter counters
-        self.__stats["jitter_min_uS"] = 0
-        self.__stats["jitter_max_uS"] = 0
-        self.__stats["jitter_range_uS"] = 0
-        self.__stats["jitter_instantaneous"] = 0
-        self.__stats["jitter_mean_1S_uS"] = 0
-        self.__stats["jitter_mean_10S_uS"] = 0
-        self.__stats["jitter_long_term_uS"] = 0
         historicJitter = []
         sumOfJitter_1s = 0
-
-        self.__stats["stream_processor_utilisation_percent"] = 0
-
-        # % ratio of 1S Jitter_uS to packet_mean_receive_period_uS that will trigger an excessJitterEvent
-        self.__stats["jitter_excessive_alarm_threshold_percent"] = 30
-        self.excessJitterThresholdFactor = (self.__stats["jitter_excessive_alarm_threshold_percent"] / 100.0)
-
-        # No of seconds to inhibit an excessive jitter alarm
-        self.__stats["jitter_alarm_event_timeout_S"] = 2
-        self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = datetime.timedelta()
-        self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.timedelta()
-        self.__stats["jitter_excess_jitter_events_total"] = 0
-        self.__stats["jitter_mean_time_between_excess_jitter_events"] = datetime.timedelta()
-        self.sumOfTimeElapsedSinceLastExcessJitterEvents = datetime.timedelta()
 
         # Declare flags
         lossOfStreamFlag = True
         possibleLossOfStreamFlag = False
         lossOfStreamAlarmThreshold = 1
-
-        # Initially, loop will execute every 10mS (but will then be modified dynamically based on the packet Rx period)
-        self.__stats["calculate_thread_sampling_interval_S"] = 0.01
 
         while True:
 
