@@ -503,8 +503,6 @@ class RtpStream(object):
         self.calculateThread.daemon = True  # Thread will auto shutdown when the prog ends
         self.calculateThread.start()
 
-
-
     def __calculateJitter(self, prevRtpPacket):
         # Iterate over self.rtpStream to get total count of data received in this batch of data, no. of packets and also calculate
         # rx time deltas and jitter
@@ -513,7 +511,7 @@ class RtpStream(object):
 
         # Keep prevRtpPacket value safe for later (because we'll be overwriting it as we iterate over self.rtpStream[])
         z = prevRtpPacket
-
+        # Iterate over packets recieved
         for y in self.rtpStream:
             # Calculate and write time delta into RtpData object
             y.timeDelta = y.timestamp - prevRtpPacket.timestamp
@@ -545,33 +543,40 @@ class RtpStream(object):
             # For 1 second jitter value
             self.sumOfJitter_1s += abs(y.jitter)
 
-            # Sum the timeDeltas to calculate the average time between packets arriving
+            # Sum the timeDeltas to calculate the instantaneous average time between packets arriving
             sumOfTimeDeltas += y.timeDelta.microseconds
+
             # Update prevTimestamp for next time around loop
             prevRtpPacket = y
 
         # Calculate jitter
         # Find the mean value of the microsecond portion of the jitter values in self.rtpStream
-        # and also the mean time period between packets arriving (should, on average match the rtp
+        # and also the instantaneous  time period between packets arriving (should, on average match the rtp
         # generator period)
         if len(self.rtpStream) > 1:
             self.__stats["jitter_instantaneous"] = sumOfInterPacketJitter / (len(self.rtpStream) - 1)
-            self.__stats["packet_mean_receive_period_uS"] = sumOfTimeDeltas / (len(self.rtpStream) - 1)
+            self.__stats["packet_instantaneous_receive_period_uS"] = sumOfTimeDeltas / (len(self.rtpStream) - 1)
+
         else:
             # This batch of data only contains a single packet.
             # as this requires at least two packets worth of data (the difference of a difference!)
             # The meanRxPeriod is possible to deduce by comparing this new single packet with the last received
             self.__stats["jitter_instantaneous"] = self.rtpStream[-1].jitter - z.jitter
-            self.__stats["packet_mean_receive_period_uS"] = self.rtpStream[-1].timeDelta.microseconds
+            self.__stats["packet_instantaneous_receive_period_uS"] = self.rtpStream[-1].timeDelta.microseconds
+
+
+        ### Calculate long term mean packet receive period
+        # Aggregate the time deltas for ever to calculate the long term average time between packets arriving
+        self.aggregateSumOfTimeDeltas += sumOfTimeDeltas
+        self.__stats["packet_mean_receive_period_uS"] =\
+            self.aggregateSumOfTimeDeltas / self.__stats["packet_counter_received_total"]
 
         # Now attempt to detect excessive jitter by comparing the 1S jitter with the mean receive period.
-        # Jitter should only be a problem if the packets
-        # start crashing into each other on receipt.
+        # Jitter should only be a problem if the packets start crashing into each other on receipt.
         # Check that long term value has actually been calculated
-        if self.__stats["jitter_long_term_uS"] > 0:
+        if self.__stats["packet_mean_receive_period_uS"] > 0:
             if self.__stats["jitter_mean_1S_uS"] > \
                     (self.excessJitterThresholdFactor * self.__stats["packet_mean_receive_period_uS"]):
-                # (self.excessJitterThresholdFactor * self.__stats["jitter_long_term_uS"]):
                 # If jitter alarms not inhibited, add a new jitter event
                 # Take diff between time.now() and the time of the last event
                 if self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >= \
@@ -594,8 +599,7 @@ class RtpStream(object):
         # Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
         if self.__stats["jitter_excess_jitter_events_total"] > 0:
             self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = datetime.datetime.now() - \
-                                                                                 self.__stats[
-                                                                                     "jitter_time_of_last_excess_jitter_event"]
+                 self.__stats["jitter_time_of_last_excess_jitter_event"]
 
         # Calculate meanTimeBetweenExcessJitterEvents (requires at least two jitter events)
         if self.__stats["jitter_excess_jitter_events_total"] > 1:
@@ -744,7 +748,10 @@ class RtpStream(object):
         self.__stats["packet_payload_size_mean_1S_bytes"] = 0
         self.__stats["packet_counter_received_total"] = 0
         self.__stats["stream_time_elapsed_total"] = datetime.timedelta()
+        self.__stats["packet_instantaneous_receive_period_uS"] = 0
         self.__stats["packet_mean_receive_period_uS"] = 0
+        self.aggregateSumOfTimeDeltas = 0 # Used to calculate self.__stats["packet_mean_receive_period_uS"]
+
 
         # Aggregate Glitch counters
         self.__stats["glitch_packets_lost_total_percent"] = 0
@@ -797,7 +804,7 @@ class RtpStream(object):
         self.__stats["stream_processor_utilisation_percent"] = 0
 
         # % ratio of 1S Jitter_uS to packet_mean_receive_period_uS that will trigger an excessJitterEvent
-        self.__stats["jitter_excessive_alarm_threshold_percent"] = 50
+        self.__stats["jitter_excessive_alarm_threshold_percent"] = 30
         self.excessJitterThresholdFactor = (self.__stats["jitter_excessive_alarm_threshold_percent"] / 100.0)
 
         # No of seconds to inhibit an excessive jitter alarm
@@ -813,10 +820,8 @@ class RtpStream(object):
         possibleLossOfStreamFlag = False
         lossOfStreamAlarmThreshold = 1
 
-        self.__stats["calculate_thread_sampling_interval_S"] = 0.01  # Loop will execute every 10mS
-
-        # Calculate the no of loops equating to a second
-        # loopsPerSecond = 1 / self.__stats["calculate_thread_sampling_interval_S"]
+        # Initially, loop will execute every 10mS (but will then be modified dynamically based on the packet Rx period)
+        self.__stats["calculate_thread_sampling_interval_S"] = 0.01
 
         while True:
 
@@ -965,10 +970,10 @@ class RtpStream(object):
                 # This will ensure that self.rtpStream[] length never gets too large.
                 # Otherwise, for high packet receive rates, the calculation time will become excessive
                 # Wait a second, in order to know we're in a steady state
-                if self.__stats["packet_mean_receive_period_uS"] > 0 and \
+                if self.__stats["packet_instantaneous_receive_period_uS"] > 0 and \
                         self.__stats["stream_time_elapsed_total"].seconds > 1:
                     self.__stats["calculate_thread_sampling_interval_S"] = 10.0 * \
-                       self.__stats["packet_mean_receive_period_uS"] / 1000000.0
+                       self.__stats["packet_instantaneous_receive_period_uS"] / 1000000.0
 
                 ######### Now calculate moving glitch counters by iterating over the self.movingGlitchCounters array
                 # firstly recalculate, then generate stats keys automatically for any moving totals counters
@@ -1001,7 +1006,7 @@ class RtpStream(object):
                 # Calculate processorUtilisationPercent. All time values in uS
                 self.__stats["stream_processor_utilisation_percent"] = \
                     self.__stats["calculate_thread_calculation_duration_uS"] * 100.0 / (
-                            self.__stats["packet_mean_receive_period_uS"] * len(self.rtpStream))
+                            self.__stats["packet_instantaneous_receive_period_uS"] * len(self.rtpStream))
 
                 # If the CPU is >99% utilised, add event to the list (but only do this once)
                 if self.__stats["stream_processor_utilisation_percent"] > 99:
