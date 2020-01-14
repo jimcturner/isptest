@@ -1325,19 +1325,13 @@ def __displayThread(rtpStream):
             # # Move cursor to start of next available line
             print "\033[" + str(nextUseableLineWholeWidth) + ";" + str(0) + "H", "\r"
 
+
+
+            # Get the last x events
+            noOfHistoricEventsToView = 10
+            events = rtpStream.getRTPStreamEventList(noOfHistoricEventsToView)
             # Now create table from eventList
             eventTableRows = []
-            # allEvents = rtpStream.getRTPStreamEventList()
-            allEvents = rtpStream.getRTPStreamEventList(5,7)
-            noOfHistoricEventsToView = 10
-            # Display the last x events
-            # Get no of events in list
-            if len(allEvents) > noOfHistoricEventsToView:
-                # Create a sub-list of of the last x event items
-                events = allEvents[(noOfHistoricEventsToView * -1):]
-            else:
-                events = allEvents
-
             for event in events:
                 # Get dictionary from Event.getData() method containing timestamp and summary
                 eventData = event.getData(0)
