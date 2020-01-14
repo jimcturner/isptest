@@ -1217,7 +1217,7 @@ def humanise(inputDictionary):
 
 # Define a display thread that will run autonomously
 def __displayThread(rtpStream):
-    print "__displayThread started with id: ", rtpStream.getRTPStreamID(), "\r"
+    Message.addMessage("__displayThread started with sync Source: "+str(rtpStream.getRTPStreamID()))
 
     padding = 1  # Gap between tables
     margin = 2
@@ -1230,81 +1230,85 @@ def __displayThread(rtpStream):
         # print "Terminal size",getTerminalSize(),"\r"
         nextUsableLine = 3  # Takes into account the title
         nextUsableColumn = 0
-        # Create a table of stream stats
+        try:
+            # Create a table of stream stats
 
-        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("stream").items()),
-                                           "Stream info")
-        printTable(margin, nextUsableLine, table)
-        nextUsableLine += (height + padding)
-        if (width + padding + margin) > nextUsableColumn:
+            width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("stream").items()),
+                                               "Stream info")
+            printTable(margin, nextUsableLine, table)
+            nextUsableLine += (height + padding)
+            if (width + padding + margin) > nextUsableColumn:
+                nextUsableColumn = width + padding + margin
+            # Create a Glitch Stats table
+            width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("glitch").items()),
+                                               "Glitch Stats")
+            printTable(margin, nextUsableLine, table)
+            nextUsableLine += (height + padding)
+            if (width + padding + margin) > nextUsableColumn:
+                nextUsableColumn = width + padding + margin
+
+            # Create a table of historic glitch stats
+            width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("historic").items()),
+                                               "Historic glitch stats")
+            printTable(margin, nextUsableLine, table)
+            nextUsableLine += (height + padding)
+            nextUseableLineWholeWidth = nextUsableLine
+            # if (width + padding + margin) > nextUseableColumn:
+            #     nextUseableColumn = width + padding + margin
+
+            # Now create tables on the RHS of the screen.
+            # Reset nextUseableLine to top of screen
+            nextUsableLine = 2
+            # Create a table of jitter stats
+            width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("jitter").items()),
+                                               "Jitter Stats")
+            printTable(nextUsableColumn, nextUsableLine, table)
+            nextUsableLine += (height + padding)
+            # if (width + padding + margin) > nextUseableColumn:
+            #     nextUseableColumn = width + padding + margin
+
+            # Create a table of Packet stats beside the jitter table
+            width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("packet").items()),
+                                               "Packet Stats")
+            # # Print the table to the screen line by line
+            printTable(nextUsableColumn, nextUsableLine, table)
+            nextUsableLine += (height + padding)
+
+            # # Move cursor to start of next available line
+            print "\033[" + str(nextUseableLineWholeWidth) + ";" + str(0) + "H", "\r"
+
+            # Now create table from eventList
+            eventTableRows = []
+            allEvents = rtpStream.getRTPStreamEventList()
+            noOfHistoricEventsToView = 10
+            # Display the last x events
+            # Get no of events in list
+            if len(allEvents) > noOfHistoricEventsToView:
+                # Create a sub-list of of the last x event items
+                events = allEvents[(noOfHistoricEventsToView * -1):]
+            else:
+                events = allEvents
+
+            for event in events:
+                # Get dictionary from Event.getData() method containing timestamp and summary
+                eventData = event.getData(0)
+                # Create the new row
+                tableRow = [eventData["timeCreated"].strftime("%H:%M:%S"), eventData["summary"]]
+                # Append the new row to the list of rows
+                eventTableRows.append(tableRow)
+                # Now stored, delete the row, ready for next time around the loop
+                del tableRow
+
+
+
+            title = "Event list (last " + str(noOfHistoricEventsToView) + "/" + \
+                    str(stats["stream_all_events_counter"]) + " events)"
+            width, height, table = createTable(eventTableRows, title)
+            printTable(margin, nextUseableLineWholeWidth, table)
+            nextUseableLineWholeWidth += (height + padding)
             nextUsableColumn = width + padding + margin
-        # Create a Glitch Stats table
-        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("glitch").items()),
-                                           "Glitch Stats")
-        printTable(margin, nextUsableLine, table)
-        nextUsableLine += (height + padding)
-        if (width + padding + margin) > nextUsableColumn:
-            nextUsableColumn = width + padding + margin
-
-        # Create a table of historic glitch stats
-        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("historic").items()),
-                                           "Historic glitch stats")
-        printTable(margin, nextUsableLine, table)
-        nextUsableLine += (height + padding)
-        nextUseableLineWholeWidth = nextUsableLine
-        # if (width + padding + margin) > nextUseableColumn:
-        #     nextUseableColumn = width + padding + margin
-
-        # Now create tables on the RHS of the screen.
-        # Reset nextUseableLine to top of screen
-        nextUsableLine = 2
-        # Create a table of jitter stats
-        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("jitter").items()),
-                                           "Jitter Stats")
-        printTable(nextUsableColumn, nextUsableLine, table)
-        nextUsableLine += (height + padding)
-        # if (width + padding + margin) > nextUseableColumn:
-        #     nextUseableColumn = width + padding + margin
-
-        # Create a table of Packet stats beside the jitter table
-        width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("packet").items()),
-                                           "Packet Stats")
-        # # Print the table to the screen line by line
-        printTable(nextUsableColumn, nextUsableLine, table)
-        nextUsableLine += (height + padding)
-
-        # # Move cursor to start of next available line
-        print "\033[" + str(nextUseableLineWholeWidth) + ";" + str(0) + "H", "\r"
-
-        # Now create table from eventList
-        eventTableRows = []
-        allEvents = rtpStream.getRTPStreamEventList()
-        noOfHistoricEventsToView = 10
-        # Display the last x events
-        # Get no of events in list
-        if len(allEvents) > noOfHistoricEventsToView:
-            # Create a sub-list of of the last x event items
-            events = allEvents[(noOfHistoricEventsToView * -1):]
-        else:
-            events = allEvents
-
-        for event in events:
-            # Get dictionary from Event.getData() method containing timestamp and summary
-            eventData = event.getData(0)
-            # Create the new row
-            tableRow = [eventData["timeCreated"].strftime("%H:%M:%S"), eventData["summary"]]
-            # Append the new row to the list of rows
-            eventTableRows.append(tableRow)
-            # Now stored, delete the row, ready for next time around the loop
-            del tableRow
-
-        title = "Event list (last " + str(noOfHistoricEventsToView) + "/" + \
-                str(stats["stream_all_events_counter"]) + " events)"
-        width, height, table = createTable(eventTableRows, title)
-        printTable(margin, nextUseableLineWholeWidth, table)
-        nextUseableLineWholeWidth += (height + padding)
-        nextUsableColumn = width + padding + margin
-
+        except Exception as e:
+            Message.addMessage("__displayThread: "+str(e))
         # Print a messages table below the events list
         # Get last 10 messages
         messages=Message.getMessages(10)
@@ -1328,7 +1332,7 @@ def __displayThread(rtpStream):
 
 # Define a thread that will trap keys pressed
 def __catchKeyboardPresses(keyPressed):
-    print "Starting __catchKeyboardPresses thread", "\r"
+    Message.addMessage("Starting __catchKeyboardPresses thread")
     while True:
         ch = getch()
         keyPressed[0] = ch
@@ -1348,7 +1352,10 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
 
     txSock = socket.socket(socket.AF_INET,  # Internet
                            socket.SOCK_DGRAM)  # UDP
-    print "Traffic Generator thread started. Sending to ", UDP_TX_IP, ":", UDP_TX_PORT, ", txRate:", txRate, "bps, payloadLength:", payloadLength, "\r"
+    msg="Traffic Generator thread started. Sending to "+UDP_TX_IP+":"+str(UDP_TX_PORT)+\
+        ", txRate:"+str(txRate)+"bps, payloadLength:"+str(payloadLength)
+    Message.addMessage(msg)
+    print msg, "\r"
     print "[spacebar] insert single packet loss, [z] Inhibit/Re-enable packet generation, [j] Toggle jitter on/off", "\r"
 
     rtpParams = 0b01000000
@@ -1366,7 +1373,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
     # Note: This is an estimate because time.sleep() is inherently unreliable so we have
     # to recalculate once the generator is running by averaging over a 1 sec period
     txPeriod = payloadLength * 8.0 / txRate
-    print "txPeriod", txPeriod, "\r"
+    # print "txPeriod", txPeriod, "\r"
 
     jitterPercentage = 50
     maxDeviation = txPeriod * jitterPercentage / 100
@@ -1391,13 +1398,13 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
                 keyPressed[0] = ''
                 # Clear enable flag
                 enablePacketGeneration = False
-                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), " 'z' Inhibiting packet generator\r"
+                Message.addMessage(" 'z' Inhibiting packet generator")
             else:
                 # Empty keyboard buffer
                 keyPressed[0] = ''
                 # Set enable flag
                 enablePacketGeneration = True
-                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), " 'z' Enabling packet generator\r"
+                Message.addMessage(" 'z' Enabling packet generator\r")
                 # Restart the 1 second timer used for txData averaging
                 startTime = timer()
         # Spacebar will introduce a single packet loss
@@ -1407,7 +1414,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
             # Clear keyboard buffer
             keyPressed[0] = ''
             temporaryInhibit = True
-            print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "[Spacebar] - Inhibit single packet\r"
+            Message.addMessage("[Spacebar] - Inhibit single packet")
 
         # If all tx flags are set then transmit the rtp packet
         if enablePacketGeneration == True and temporaryInhibit == False:
@@ -1417,7 +1424,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
                 txBps_1s += len(payload) * 8
                 # print rtpSequenceNo,txPeriod,txBps_1s,"\r"
             except Exception as e:
-                print "__rtpGenerator()", str(e), "\r"
+                Message.addMessage("__rtpGenerator()", str(e))
                 exit()
 
         if keyPressed[0] == 'j':
@@ -1426,17 +1433,18 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
             keyPressed[0] = ''
             if enableJitter == False:
                 enableJitter = True
-                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "[j] jitter enabled\r"
+                Message.addMessage("[j] jitter enabled")
+
             else:
                 enableJitter = False
-                print datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), "[j] jitter disabled\r"
+                Message.addMessage("[j] jitter disabled")
 
         # Increment rtp sequence number for next iteration of the loop
         rtpSequenceNo += 1
         # Seq no is only a 16 bit value, so reset at max value (65535)
         if rtpSequenceNo > 65535:
             rtpSequenceNo = 0
-        # print "rtpSequenceNo",rtpSequenceNo,"\r"
+            Message.addMessage("rtpGenerator. Seq no wrapping to zero")
         # If flag set, generate random delay centred around txPeriod (0.01 = 10mS period)
         if enableJitter == True:
             jitter = random.uniform(-1 * maxDeviation, maxDeviation)
@@ -1463,7 +1471,6 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
                 # Correction only happens in one direction (we can only dynamically reduce the txPeriod, so to prevent
                 # overshoots of the desired rate, only reduce txPeriod by 'half' the error amount in one go
                 txPeriod -= txPeriod * (errorFactor / 2.0)
-                # print "Compensating for timing error - Actual txData rate too low", "Desired tx rate:", txRate, "Actual tx rate:", txBps_1s, "\r"
                 Message.addMessage("Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
                                    str(txRate)+", Actual tx rate:" + str(txBps_1s))
             # Clear counter
@@ -1486,7 +1493,7 @@ def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
 def __diskLoggerThread(rtpStream):
     # Autonomous thread to poll RtpStream eventList for new events
     # and write them  to disk
-    print "diskLoggerThread starting\r"
+    Message.addMessage("diskLoggerThread starting")
     filename_csv = "eventLog" + datetime.datetime.now().strftime("%H%M%S") + ".csv"
     filename_json = "eventLog" + datetime.datetime.now().strftime("%H%M%S") + ".json"
     lastWrittenEventNo = 0  # Stores last written Event.eventNo
@@ -1506,7 +1513,7 @@ def __diskLoggerThread(rtpStream):
                         "\r\n-------------------------------------------------------------------------\n")
         file_json.close()
     except Exception as e:
-        print "\033[1;0H", str(e), "\r"
+        Message.addMessage("__diskLoggerThread "+str(e))
 
     while True:
         # Attempt to access rtpStream events list
@@ -1522,7 +1529,7 @@ def __diskLoggerThread(rtpStream):
                 # Slice the latest portion of the allEvents list into a sub list
                 latestEvents = allEvents[(newEvents * -1):]
         except Exception as e:
-            print "\033[1;0H", str(e), "\r"
+            Message.addMessage("__diskLoggerThread "+str(e))
 
         # Confirm to see that there are some events in the list
         if len(latestEvents) > 0:
@@ -1548,8 +1555,7 @@ def __diskLoggerThread(rtpStream):
                 # Empty the latestEvents list
                 del latestEvents[:]
             except Exception as e:
-                print "\033[1;0H", str(e), "\r"
-        # print "\033[1;0HdiskLoggerThread", filename, x, "\r"
+                Message.addMessage("__diskLoggerThread "+str(e))
         time.sleep(1)
 
 
