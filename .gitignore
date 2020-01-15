@@ -1,2 +1,5 @@
 .DS_Store
 get-pip.py
+*.csv
+*.json
+
