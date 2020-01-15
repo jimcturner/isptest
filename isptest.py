@@ -1378,35 +1378,40 @@ def humanise(inputDictionary):
 
 
 # Define a display thread that will run autonomously
-def __displayThread(operationMode, rtpStreams, txStreams):
+def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
     # Currently only decoding a single stream
-    rtpStream = rtpStreams[0]
 
-    Message.addMessage("__displayThread started with sync Source: " + str(rtpStream.getRTPStreamID()))
+
+    Message.addMessage("__displayThread started")
 
     padding = 1  # Gap between tables
     margin = 2
+    nextUsableLine = 4  # Takes into account the title
+    nextUseableLineWholeWidth = nextUsableLine
     while True:
-        # Get all keys/values from rtpStream
-        stats = rtpStream.getRtpStreamStats()
+        columns, rows = getTerminalSize()
         # Clear screen and move cursor to origin
         print "\033[2J", "\r"
         print "\033[0;0HIBEOO ISP Analyser---------------------------------------------------------------------------------------------------", "\r"
-        # print "Terminal size",getTerminalSize(),"\r"
+
         nextUsableLine = 4  # Takes into account the title
         nextUseableLineWholeWidth=nextUsableLine
         nextUsableColumn = 0
-        if operationMode == 'RECEIVE' or operationMode == 'LOOPBACK':
+        # Check operation mode and also check to see if a valid rtpRxStream currently exists in the array
+        if (operationMode == 'RECEIVE' or operationMode == 'LOOPBACK') and len(rtpRxStreams) > 0 :
             try:
+                # Get latest keys/values from rtpStream
+                stats = rtpRxStreams[0].getRtpStreamStats()
+
                 # Create a table of stream stats
-                width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("stream").items()),
+                width, height, table = createTable(humanise(rtpRxStreams[0].getRtpStreamStatsByFilter("stream").items()),
                                                    "Stream info")
                 printTable(margin, nextUsableLine, table)
                 nextUsableLine += (height + padding)
                 if (width + padding + margin) > nextUsableColumn:
                     nextUsableColumn = width + padding + margin
                 # Create a Glitch Stats table
-                width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("glitch").items()),
+                width, height, table = createTable(humanise(rtpRxStreams[0].getRtpStreamStatsByFilter("glitch").items()),
                                                    "Glitch Stats")
                 printTable(margin, nextUsableLine, table)
                 nextUsableLine += (height + padding)
@@ -1414,7 +1419,7 @@ def __displayThread(operationMode, rtpStreams, txStreams):
                     nextUsableColumn = width + padding + margin
 
                 # Create a table of historic glitch stats
-                width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("historic").items()),
+                width, height, table = createTable(humanise(rtpRxStreams[0].getRtpStreamStatsByFilter("historic").items()),
                                                    "Historic glitch stats")
                 printTable(margin, nextUsableLine, table)
                 nextUsableLine += (height + padding)
@@ -1426,7 +1431,7 @@ def __displayThread(operationMode, rtpStreams, txStreams):
                 # Reset nextUseableLine to top of screen
                 nextUsableLine = 2
                 # Create a table of jitter stats
-                width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("jitter").items()),
+                width, height, table = createTable(humanise(rtpRxStreams[0].getRtpStreamStatsByFilter("jitter").items()),
                                                    "Jitter Stats")
                 printTable(nextUsableColumn, nextUsableLine, table)
                 nextUsableLine += (height + padding)
@@ -1434,7 +1439,7 @@ def __displayThread(operationMode, rtpStreams, txStreams):
                 #     nextUseableColumn = width + padding + margin
 
                 # Create a table of Packet stats beside the jitter table
-                width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("packet").items()),
+                width, height, table = createTable(humanise(rtpRxStreams[0].getRtpStreamStatsByFilter("packet").items()),
                                                    "Packet Stats")
                 # # Print the table to the screen line by line
                 printTable(nextUsableColumn, nextUsableLine, table)
@@ -1445,7 +1450,7 @@ def __displayThread(operationMode, rtpStreams, txStreams):
 
                 # Get the last x events
                 noOfHistoricEventsToView = 10
-                events = rtpStream.getRTPStreamEventList(noOfHistoricEventsToView)
+                events = rtpRxStreams[0].getRTPStreamEventList(noOfHistoricEventsToView)
                 # Now create table from eventList
                 eventTableRows = []
                 for event in events:
@@ -1469,6 +1474,7 @@ def __displayThread(operationMode, rtpStreams, txStreams):
                 nextUsableColumn = width + padding + margin
             except Exception as e:
                 Message.addMessage("__displayThread: " + str(e))
+
         # Print a messages table on the next useable line
         # Get last 10 messages
         messages = Message.getMessages(10)
@@ -1880,6 +1886,11 @@ def main(argv):
     catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
     catchKeyboardPresses.start()
 
+    # Create a display thread
+    displayThread = threading.Thread(target=__displayThread, args=(MODE, rtpRxStreams, rtpTxStreams,))
+    displayThread.daemon = True  # Thread will auto shutdown when the prog ends
+    displayThread.start()
+
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
         rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength)
@@ -1930,11 +1941,6 @@ def main(argv):
                     rtpRxStream = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, UDP_RX_PORT)
                     # Append the rtpRxStream to the rtpRxStreams list
                     rtpRxStreams.append(rtpRxStream)
-
-                    # Create a __displayThread. Pass the RtpStream object (s) to it
-                    displayThread = threading.Thread(target=__displayThread, args=(MODE,rtpRxStreams,rtpTxStreams,))
-                    displayThread.daemon = True  # Thread will auto shutdown when the prog ends
-                    displayThread.start()
 
                     # Create a diskLogging Thread - pass rtpStream object to it
                     diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(rtpRxStream,))
