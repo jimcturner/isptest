@@ -1378,7 +1378,10 @@ def humanise(inputDictionary):
 
 
 # Define a display thread that will run autonomously
-def __displayThread(rtpStream):
+def __displayThread(operationMode, rtpStreams, txStreams):
+    # Currently only decoding a single stream
+    rtpStream = rtpStreams[0]
+
     Message.addMessage("__displayThread started with sync Source: " + str(rtpStream.getRTPStreamID()))
 
     padding = 1  # Gap between tables
@@ -1390,82 +1393,83 @@ def __displayThread(rtpStream):
         print "\033[2J", "\r"
         print "\033[0;0HIBEOO ISP Analyser---------------------------------------------------------------------------------------------------", "\r"
         # print "Terminal size",getTerminalSize(),"\r"
-        nextUsableLine = 3  # Takes into account the title
+        nextUsableLine = 4  # Takes into account the title
+        nextUseableLineWholeWidth=nextUsableLine
         nextUsableColumn = 0
-        try:
-            # Create a table of stream stats
+        if operationMode == 'RECEIVE' or operationMode == 'LOOPBACK':
+            try:
+                # Create a table of stream stats
+                width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("stream").items()),
+                                                   "Stream info")
+                printTable(margin, nextUsableLine, table)
+                nextUsableLine += (height + padding)
+                if (width + padding + margin) > nextUsableColumn:
+                    nextUsableColumn = width + padding + margin
+                # Create a Glitch Stats table
+                width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("glitch").items()),
+                                                   "Glitch Stats")
+                printTable(margin, nextUsableLine, table)
+                nextUsableLine += (height + padding)
+                if (width + padding + margin) > nextUsableColumn:
+                    nextUsableColumn = width + padding + margin
 
-            width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("stream").items()),
-                                               "Stream info")
-            printTable(margin, nextUsableLine, table)
-            nextUsableLine += (height + padding)
-            if (width + padding + margin) > nextUsableColumn:
+                # Create a table of historic glitch stats
+                width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("historic").items()),
+                                                   "Historic glitch stats")
+                printTable(margin, nextUsableLine, table)
+                nextUsableLine += (height + padding)
+                nextUseableLineWholeWidth = nextUsableLine
+                # if (width + padding + margin) > nextUseableColumn:
+                #     nextUseableColumn = width + padding + margin
+
+                # Now create tables on the RHS of the screen.
+                # Reset nextUseableLine to top of screen
+                nextUsableLine = 2
+                # Create a table of jitter stats
+                width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("jitter").items()),
+                                                   "Jitter Stats")
+                printTable(nextUsableColumn, nextUsableLine, table)
+                nextUsableLine += (height + padding)
+                # if (width + padding + margin) > nextUseableColumn:
+                #     nextUseableColumn = width + padding + margin
+
+                # Create a table of Packet stats beside the jitter table
+                width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("packet").items()),
+                                                   "Packet Stats")
+                # # Print the table to the screen line by line
+                printTable(nextUsableColumn, nextUsableLine, table)
+                nextUsableLine += (height + padding)
+
+                # # Move cursor to start of next available line
+                print "\033[" + str(nextUseableLineWholeWidth) + ";" + str(0) + "H", "\r"
+
+                # Get the last x events
+                noOfHistoricEventsToView = 10
+                events = rtpStream.getRTPStreamEventList(noOfHistoricEventsToView)
+                # Now create table from eventList
+                eventTableRows = []
+                for event in events:
+                    # Get dictionary from Event.getData() method containing timestamp and summary
+                    try:
+                        eventData = event.getData(0)
+                    except:
+                        eventData = event.getSummary()
+                    # Create the new row
+                    tableRow = [eventData["timeCreated"].strftime("%H:%M:%S"), eventData["summary"]]
+                    # Append the new row to the list of rows
+                    eventTableRows.append(tableRow)
+                    # Now stored, delete the row, ready for next time around the loop
+                    del tableRow
+
+                title = "Event list (last " + str(noOfHistoricEventsToView) + "/" + \
+                        str(stats["stream_all_events_counter"]) + " events)"
+                width, height, table = createTable(eventTableRows, title)
+                printTable(margin, nextUseableLineWholeWidth, table)
+                nextUseableLineWholeWidth += (height + padding)
                 nextUsableColumn = width + padding + margin
-            # Create a Glitch Stats table
-            width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("glitch").items()),
-                                               "Glitch Stats")
-            printTable(margin, nextUsableLine, table)
-            nextUsableLine += (height + padding)
-            if (width + padding + margin) > nextUsableColumn:
-                nextUsableColumn = width + padding + margin
-
-            # Create a table of historic glitch stats
-            width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("historic").items()),
-                                               "Historic glitch stats")
-            printTable(margin, nextUsableLine, table)
-            nextUsableLine += (height + padding)
-            nextUseableLineWholeWidth = nextUsableLine
-            # if (width + padding + margin) > nextUseableColumn:
-            #     nextUseableColumn = width + padding + margin
-
-            # Now create tables on the RHS of the screen.
-            # Reset nextUseableLine to top of screen
-            nextUsableLine = 2
-            # Create a table of jitter stats
-            width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("jitter").items()),
-                                               "Jitter Stats")
-            printTable(nextUsableColumn, nextUsableLine, table)
-            nextUsableLine += (height + padding)
-            # if (width + padding + margin) > nextUseableColumn:
-            #     nextUseableColumn = width + padding + margin
-
-            # Create a table of Packet stats beside the jitter table
-            width, height, table = createTable(humanise(rtpStream.getRtpStreamStatsByFilter("packet").items()),
-                                               "Packet Stats")
-            # # Print the table to the screen line by line
-            printTable(nextUsableColumn, nextUsableLine, table)
-            nextUsableLine += (height + padding)
-
-            # # Move cursor to start of next available line
-            print "\033[" + str(nextUseableLineWholeWidth) + ";" + str(0) + "H", "\r"
-
-            # Get the last x events
-            noOfHistoricEventsToView = 10
-            events = rtpStream.getRTPStreamEventList(noOfHistoricEventsToView)
-            # Now create table from eventList
-            eventTableRows = []
-            for event in events:
-                # Get dictionary from Event.getData() method containing timestamp and summary
-                try:
-                    eventData = event.getData(0)
-                except:
-                    eventData = event.getSummary()
-                # Create the new row
-                tableRow = [eventData["timeCreated"].strftime("%H:%M:%S"), eventData["summary"]]
-                # Append the new row to the list of rows
-                eventTableRows.append(tableRow)
-                # Now stored, delete the row, ready for next time around the loop
-                del tableRow
-
-            title = "Event list (last " + str(noOfHistoricEventsToView) + "/" + \
-                    str(stats["stream_all_events_counter"]) + " events)"
-            width, height, table = createTable(eventTableRows, title)
-            printTable(margin, nextUseableLineWholeWidth, table)
-            nextUseableLineWholeWidth += (height + padding)
-            nextUsableColumn = width + padding + margin
-        except Exception as e:
-            Message.addMessage("__displayThread: " + str(e))
-        # Print a messages table below the events list
+            except Exception as e:
+                Message.addMessage("__displayThread: " + str(e))
+        # Print a messages table on the next useable line
         # Get last 10 messages
         messages = Message.getMessages(10)
         if len(messages) > 0:
@@ -1480,7 +1484,7 @@ def __displayThread(rtpStream):
         # stats = rtpStream.getRtpStreamStats()
         # print stats["stream_time_elapsed_total"].seconds, "\r"
         # print stats["stream_all_events_counter"], "\r"
-        print "-----------------------------------------------------------------------------------------------------------------------", "\r"
+        print operationMode+" -----------------------------------------------------------------------------------------------------------------------", "\r"
 
         time.sleep(1)
 
@@ -1867,6 +1871,10 @@ def main(argv):
     # The first (and only) item of this 'list' will be our pointer
     keyPressed = ['']
 
+    # Create a list to contain a list of rtpStreams and txStreams
+    rtpRxStreams = []
+    rtpTxStreams = []
+
     # Start keyboard monitoring thread
     catchKeyboardPresses = threading.Thread(target=__catchKeyboardPresses, args=(keyPressed,))
     catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
@@ -1875,6 +1883,9 @@ def main(argv):
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
         rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength)
+
+        # Add the tx stream to the rtpTxStreams list
+        rtpTxStreams.append(rtpGenerator)
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
@@ -1916,22 +1927,24 @@ def main(argv):
 
                 if runOnce == True:
                     # Create a new rtpStream object (but only once)
-                    s = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, UDP_RX_PORT)
+                    rtpRxStream = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, UDP_RX_PORT)
+                    # Append the rtpRxStream to the rtpRxStreams list
+                    rtpRxStreams.append(rtpRxStream)
 
                     # Create a __displayThread. Pass the RtpStream object (s) to it
-                    displayThread = threading.Thread(target=__displayThread, args=(s,))
+                    displayThread = threading.Thread(target=__displayThread, args=(MODE,rtpRxStreams,rtpTxStreams,))
                     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
                     displayThread.start()
 
                     # Create a diskLogging Thread - pass rtpStream object to it
-                    diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(s,))
+                    diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(rtpRxStream,))
                     diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
                     diskLoggerThread.start()
 
                     runOnce = False
 
                 # Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp, syncSource
-                s.addData(rtpSequenceNo, payloadSize, timeNow, rtpSyncSourceIdentifier)
+                rtpRxStream.addData(rtpSequenceNo, payloadSize, timeNow, rtpSyncSourceIdentifier)
 
             except Exception as e:
                 print str(e), "Length:", len(data), "bytes received"
