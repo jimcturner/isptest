@@ -1493,156 +1493,173 @@ def __catchKeyboardPresses(keyPressed):
         keyPressed[0] = ch
         time.sleep(0.2)
 
+# Define an RTP Generator that can run autonomously as a thread
+class RtpGenerator(object):
 
-# define a traffic generator thread
-def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
-    txBps_1s = 0
-    # Generate random string
-    # Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496 available bytes
-    # stringLength = payloadLength
-    # Create string containing all uppercase and lowercase letters
-    letters = string.ascii_letters
-    # iterate over stringLength picking random letters from
-    payload = ''.join(random.choice(letters) for i in range(payloadLength))
+    def __init__(self, keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
+        # Assign instance vsriables
+        self.UDP_TX_IP = UDP_TX_IP
+        self.UDP_TX_PORT = UDP_TX_PORT
+        self.txRate = txRate
+        self.payloadLength = payloadLength
+        self.keyPressed = keyPressed
 
-    txSock = socket.socket(socket.AF_INET,  # Internet
-                           socket.SOCK_DGRAM)  # UDP
-    msg = "Traffic Generator thread started. Sending to " + UDP_TX_IP + ":" + str(UDP_TX_PORT) + \
-          ", txRate:" + str(txRate) + "bps, payloadLength:" + str(payloadLength)
-    Message.addMessage(msg)
-    print msg, "\r"
-    print "[spacebar] insert single packet loss, [z] Inhibit/Re-enable packet generation, [j] Toggle jitter on/off", "\r"
+        # Start the generator thread
+        self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
+        self.rtpGeneratorThread.daemon = True # Thread will auto shutdown when the prog ends
+        self.rtpGeneratorThread.start()
 
-    rtpParams = 0b01000000
-    rtpPayloadType = 0b00000000
-    rtpSequenceNo = 0
-    # Create a 32 bit timestamp (needs truncating to 32 bits before passing to struct.pack)
-    # 0xFFFFFFFF is 32 '1's, so the '&' operation will throw away MSBs larger than this
-    rtpTimestamp = int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
-    rtpSyncSourceIdentifier = 12345678
 
-    enablePacketGeneration = True
-    enableJitter = False
+    # define a traffic generator method that will run as a thread
+    # def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
+    def __rtpGeneratorThread(self):
+        txBps_1s = 0
+        # Generate random string
+        # Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496 available bytes
+        # stringLength = payloadLength
+        # Create string containing all uppercase and lowercase letters
+        letters = string.ascii_letters
+        # iterate over stringLength picking random letters from
+        payload = ''.join(random.choice(letters) for i in range(self.payloadLength))
 
-    # Calculate tx period required to provide supplied txRate for a given stringLength
-    # Note: This is an estimate because time.sleep() is inherently unreliable so we have
-    # to recalculate once the generator is running by averaging over a 1 sec period
-    txPeriod = payloadLength * 8.0 / txRate
-    # print "txPeriod", txPeriod, "\r"
+        txSock = socket.socket(socket.AF_INET,  # Internet
+                               socket.SOCK_DGRAM)  # UDP
+        msg = "Traffic Generator thread started. Sending to " + self.UDP_TX_IP + ":" + str(self.UDP_TX_PORT) + \
+              ", txRate:" + str(self.txRate) + "bps, payloadLength:" + str(self.payloadLength)
+        Message.addMessage(msg)
+        print msg, "\r"
+        print "[spacebar] insert single packet loss, [z] Inhibit/Re-enable packet generation, [j] Toggle jitter on/off", "\r"
 
-    jitterPercentage = 50
-    maxDeviation = txPeriod * jitterPercentage / 100
+        rtpParams = 0b01000000
+        rtpPayloadType = 0b00000000
+        rtpSequenceNo = 0
+        # Create a 32 bit timestamp (needs truncating to 32 bits before passing to struct.pack)
+        # 0xFFFFFFFF is 32 '1's, so the '&' operation will throw away MSBs larger than this
+        rtpTimestamp = int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
+        rtpSyncSourceIdentifier = 12345678
 
-    # start elapsed timer
-    startTime = timer()
+        enablePacketGeneration = True
+        enableJitter = False
 
-    while True:
-        # Start an execution timer (if we know the time required to construct the packet we can deduct this from the
-        # txPeriod sleep time which should, in theory, reduce the jitter of the generator
-        calculationStartTime = timer()
+        # Calculate tx period required to provide supplied txRate for a given stringLength
+        # Note: This is an estimate because time.sleep() is inherently unreliable so we have
+        # to recalculate once the generator is running by averaging over a 1 sec period
+        txPeriod = self.payloadLength * 8.0 / self.txRate
+        # print "txPeriod", txPeriod, "\r"
 
-        # Construct 12 byte header
-        txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
-                                  rtpSyncSourceIdentifier)
-        MESSAGE = txRtpHeader + payload
+        jitterPercentage = 50
+        maxDeviation = txPeriod * jitterPercentage / 100
 
-        # If 'z' pressed, toggle packet generation on/off
-        if keyPressed[0] == 'z':
-            if enablePacketGeneration == True:
-                # Empty keyboard buffer
-                keyPressed[0] = ''
-                # Clear enable flag
-                enablePacketGeneration = False
-                Message.addMessage(" 'z' Inhibiting packet generator")
+        # start elapsed timer
+        startTime = timer()
+
+        while True:
+            # Start an execution timer (if we know the time required to construct the packet we can deduct this from the
+            # txPeriod sleep time which should, in theory, reduce the jitter of the generator
+            calculationStartTime = timer()
+
+            # Construct 12 byte header
+            txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
+                                      rtpSyncSourceIdentifier)
+            MESSAGE = txRtpHeader + payload
+
+            # If 'z' pressed, toggle packet generation on/off
+            if self.keyPressed[0] == 'z':
+                if enablePacketGeneration == True:
+                    # Empty keyboard buffer
+                    self.keyPressed[0] = ''
+                    # Clear enable flag
+                    enablePacketGeneration = False
+                    Message.addMessage(" 'z' Inhibiting packet generator")
+                else:
+                    # Empty keyboard buffer
+                    self.keyPressed[0] = ''
+                    # Set enable flag
+                    enablePacketGeneration = True
+                    Message.addMessage(" 'z' Enabling packet generator\r")
+                    # Restart the 1 second timer used for txData averaging
+                    startTime = timer()
+            # Spacebar will introduce a single packet loss
+            # If temporaryInhibit was set, clear it
+            temporaryInhibit = False
+            if self.keyPressed[0] == ' ':
+                # Clear keyboard buffer
+                self.keyPressed[0] = ''
+                temporaryInhibit = True
+                Message.addMessage("[Spacebar] - Inhibit single packet")
+
+            # If all tx flags are set then transmit the rtp packet
+            if enablePacketGeneration == True and temporaryInhibit == False:
+                try:
+                    txSock.sendto(MESSAGE, (self.UDP_TX_IP, self.UDP_TX_PORT))
+                    # Update tx data counter (*8 converts bytes to bits)
+                    txBps_1s += len(payload) * 8
+                    # print rtpSequenceNo,txPeriod,txBps_1s,"\r"
+                except Exception as e:
+                    Message.addMessage("__rtpGenerator()", str(e))
+                    exit()
+
+            if self.keyPressed[0] == 'j':
+                # Turn jitter on/off by pressing 'j'
+                # Clear keyboard buffer
+                self.keyPressed[0] = ''
+                if enableJitter == False:
+                    enableJitter = True
+                    Message.addMessage("[j] jitter enabled")
+
+                else:
+                    enableJitter = False
+                    Message.addMessage("[j] jitter disabled")
+
+            # Increment rtp sequence number for next iteration of the loop
+            rtpSequenceNo += 1
+            # Seq no is only a 16 bit value, so reset at max value (65535)
+            if rtpSequenceNo > 65535:
+                rtpSequenceNo = 0
+                Message.addMessage("rtpGenerator. Seq no wrapping to zero")
+            # If flag set, generate random delay centred around txPeriod (0.01 = 10mS period)
+            if enableJitter == True:
+                jitter = random.uniform(-1 * maxDeviation, maxDeviation)
             else:
-                # Empty keyboard buffer
-                keyPressed[0] = ''
-                # Set enable flag
-                enablePacketGeneration = True
-                Message.addMessage(" 'z' Enabling packet generator\r")
-                # Restart the 1 second timer used for txData averaging
+                jitter = 0
+
+            # Calculate (inevitable) error in tx rate (bps)
+            # If there is an error between the desired tx speed and the actual tx speed (due to timing inaccuracies of the time.sleep() command)
+            # dynamically modify the txPeriod to actually generate the desired rate
+            # 1 second timer
+
+            # Has 1 second elapsed?
+            if (timer() - startTime) >= 1 and enablePacketGeneration == True:
+                # Reset elapsed timer
                 startTime = timer()
-        # Spacebar will introduce a single packet loss
-        # If temporaryInhibit was set, clear it
-        temporaryInhibit = False
-        if keyPressed[0] == ' ':
-            # Clear keyboard buffer
-            keyPressed[0] = ''
-            temporaryInhibit = True
-            Message.addMessage("[Spacebar] - Inhibit single packet")
+                # Test actual tx rate (averaged over a second) against 99% of desired tx rate
+                if txBps_1s < (0.99 * self.txRate):
+                    # Data not being sent fast enough, so reduce txPeriod time
+                    # Measure difference between desired bps tx rate and actual bps tx rate
+                    txRateError = self.txRate - txBps_1s
+                    # Convert the difference a fraction by which will modify txPeriod
+                    errorFactor = (txRateError * 1.0 / self.txRate)
+                    # Modify txPeriod to compensate for error
+                    # Correction only happens in one direction (we can only dynamically reduce the txPeriod, so to prevent
+                    # overshoots of the desired rate, only reduce txPeriod by 'half' the error amount in one go
+                    txPeriod -= txPeriod * (errorFactor / 2.0)
+                    Message.addMessage("Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
+                                       str(self.txRate) + ", Actual tx rate:" + str(txBps_1s))
+                # Clear counter
+                txBps_1s = 0
 
-        # If all tx flags are set then transmit the rtp packet
-        if enablePacketGeneration == True and temporaryInhibit == False:
-            try:
-                txSock.sendto(MESSAGE, (UDP_TX_IP, UDP_TX_PORT))
-                # Update tx data counter (*8 converts bytes to bits)
-                txBps_1s += len(payload) * 8
-                # print rtpSequenceNo,txPeriod,txBps_1s,"\r"
-            except Exception as e:
-                Message.addMessage("__rtpGenerator()", str(e))
-                exit()
+            # The calculation time will be deducted from the sleep time, which should make the generator
+            # output less jittery (because the calculation time is taken into account)
+            calculationPeriod = timer() - calculationStartTime
 
-        if keyPressed[0] == 'j':
-            # Turn jitter on/off by pressing 'j'
-            # Clear keyboard buffer
-            keyPressed[0] = ''
-            if enableJitter == False:
-                enableJitter = True
-                Message.addMessage("[j] jitter enabled")
-
+            compensatedTxPeriod = txPeriod + jitter - calculationPeriod
+            # Have to guard against a negative time value
+            if compensatedTxPeriod > 0:
+                # Sleep between packet transmission
+                time.sleep(compensatedTxPeriod)
             else:
-                enableJitter = False
-                Message.addMessage("[j] jitter disabled")
-
-        # Increment rtp sequence number for next iteration of the loop
-        rtpSequenceNo += 1
-        # Seq no is only a 16 bit value, so reset at max value (65535)
-        if rtpSequenceNo > 65535:
-            rtpSequenceNo = 0
-            Message.addMessage("rtpGenerator. Seq no wrapping to zero")
-        # If flag set, generate random delay centred around txPeriod (0.01 = 10mS period)
-        if enableJitter == True:
-            jitter = random.uniform(-1 * maxDeviation, maxDeviation)
-        else:
-            jitter = 0
-
-        # Calculate (inevitable) error in tx rate (bps)
-        # If there is an error between the desired tx speed and the actual tx speed (due to timing inaccuracies of the time.sleep() command)
-        # dynamically modify the txPeriod to actually generate the desired rate
-        # 1 second timer
-
-        # Has 1 second elapsed?
-        if (timer() - startTime) >= 1 and enablePacketGeneration == True:
-            # Reset elapsed timer
-            startTime = timer()
-            # Test actual tx rate (averaged over a second) against 99% of desired tx rate
-            if txBps_1s < (0.99 * txRate):
-                # Data not being sent fast enough, so reduce txPeriod time
-                # Measure difference between desired bps tx rate and actual bps tx rate
-                txRateError = txRate - txBps_1s
-                # Convert the difference a fraction by which will modify txPeriod
-                errorFactor = (txRateError * 1.0 / txRate)
-                # Modify txPeriod to compensate for error
-                # Correction only happens in one direction (we can only dynamically reduce the txPeriod, so to prevent
-                # overshoots of the desired rate, only reduce txPeriod by 'half' the error amount in one go
-                txPeriod -= txPeriod * (errorFactor / 2.0)
-                Message.addMessage("Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
-                                   str(txRate) + ", Actual tx rate:" + str(txBps_1s))
-            # Clear counter
-            txBps_1s = 0
-
-        # The calculation time will be deducted from the sleep time, which should make the generator
-        # output less jittery (because the calculation time is taken into account)
-        calculationPeriod = timer() - calculationStartTime
-
-        compensatedTxPeriod = txPeriod + jitter - calculationPeriod
-        # Have to guard against a negative time value
-        if compensatedTxPeriod > 0:
-            # Sleep between packet transmission
-            time.sleep(compensatedTxPeriod)
-        else:
-            # print "__rtpGenerator() - non-positive compensatedTxPeriod value",compensatedTxPeriod,"\r"
-            pass
+                # print "__rtpGenerator() - non-positive compensatedTxPeriod value",compensatedTxPeriod,"\r"
+                pass
 
 
 def __diskLoggerThread(rtpStream):
@@ -1857,10 +1874,7 @@ def main(argv):
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
-        rtpGenerator = threading.Thread(target=__rtpGenerator,
-                                        args=(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength))
-        rtpGenerator.daemon = True  # Thread will auto shutdown when the prog ends
-        rtpGenerator.start()
+        rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength)
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
