@@ -21,7 +21,6 @@ from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 import json
-from abc import ABC, abstractmethod # Used for event abstract class
 
 ####################################################################################
 # Utility Functions
