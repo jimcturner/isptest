@@ -1392,13 +1392,13 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
         columns, rows = getTerminalSize()
         # Clear screen and move cursor to origin
         print "\033[2J", "\r"
-        print "\033[0;0HIBEOO ISP Analyser---------------------------------------------------------------------------------------------------", "\r"
+        print "\033[0;0HIBEOO ISP Analyser V1.0---------------------------------------------------------------------------------------------------", "\r"
 
-        nextUsableLine = 4  # Takes into account the title
+        nextUsableLine = 3  # Takes into account the title
         nextUseableLineWholeWidth=nextUsableLine
         nextUsableColumn = 0
         # Check operation mode and also check to see if a valid rtpRxStream currently exists in the array
-        if (operationMode == 'RECEIVE' or operationMode == 'LOOPBACK') and len(rtpRxStreams) > 0 :
+        if (operationMode == 'RECEIVE' or operationMode == 'LOOPBACK') and len(rtpRxStreams) > 0:
             try:
                 # Get latest keys/values from rtpStream
                 stats = rtpRxStreams[0].getRtpStreamStats()
@@ -1474,6 +1474,11 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
                 nextUsableColumn = width + padding + margin
             except Exception as e:
                 Message.addMessage("__displayThread: " + str(e))
+
+        # Check operation mode and also check to see if a valid rtpTxStream currently exists in the array
+        elif operationMode == 'TRANSMIT' and len(rtpTxStreams) > 0:
+            pass
+
 
         # Print a messages table on the next useable line
         # Get last 10 messages
