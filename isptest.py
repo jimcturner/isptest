@@ -281,9 +281,7 @@ class StreamStarted(Event):
         return json.dumps(data, sort_keys=True, indent=4, default=str)
 
 
-
 # Define an event that represents a loss of rtpStream
-
 class StreamLost(Event):
 
     def __init__(self, stats, lastPacketReceived):
@@ -322,80 +320,43 @@ class StreamLost(Event):
                 'lastRtpSequenceNo': self.lastPacketReceived.rtpSequenceNo}
         return json.dumps(data, sort_keys=True, indent=4, default=str)
 
-
-# class StreamLost(object):
-#     # Define descriptive names. These might be useful later
-#     type = "StreamLost"
-#     description = ""
-#
-#     # Constructor
-#     def __init__(self, lastPacketReceived, stats):
-#         # Create timestamp of event
-#         self.timeCreated = datetime.datetime.now()
-#         self.lastPacketReceived = lastPacketReceived
-#         # Take local copy of stats dictionary
-#         self.stats = dict(stats)
-#         # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
-#         self.eventNo = self.stats["stream_all_events_counter"] + 1
-#
-#     def getData(self, verbosityLevel):
-#         # Returns a dictionary containing information about this event
-#         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-#
-#         if verbosityLevel == 0:
-#             summary = "[" + str(self.eventNo) + "]," + \
-#                       "[" + str(self.stats["stream_syncSource"]) + "], " + "Stream lost"
-#             data = {'timeCreated': self.timeCreated, 'summary': summary}
-#         elif verbosityLevel == 1:
-#             data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
-#                     'syncSource': self.stats["stream_syncSource"], 'eventNo': self.eventNo}
-#
-#         elif verbosityLevel == 2:
-#             data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
-#                     'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
-#                     'eventNo': self.eventNo}
-#
-#         return data
-
-
 # Define an event object that represents a excessive jitter event
-class ExcessiveJitter(object):
-    # Define descriptive names. These might be useful later
-    type = "ExcessiveJitter"
-    description = ""
+class ExcessiveJitter(Event):
 
-    def __init__(self, lastPacketReceived, stats):
+    def __init__(self, stats, lastPacketReceived):
+        # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
-        self.lastPacketReceived = lastPacketReceived
         # Take local copy of stats dictionary
         self.stats = dict(stats)
         # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
         self.eventNo = self.stats["stream_all_events_counter"] + 1
-
-    def getData(self, verbosityLevel):
-        # Returns a dictionary containing information about this event
-        # If verbosityLevel > 0, returns increasing level of detail associated with this event
-        if verbosityLevel == 0:
-            summary = "[" + str(self.eventNo) + "]," + \
-                      "[" + str(self.stats["stream_syncSource"]) + "], " + "Excessive jitter:, " + \
-                      str(self.stats["jitter_mean_1S_uS"]) + "/" + str(self.stats["jitter_long_term_uS"]) + "uS"
-            data = {'timeCreated': self.timeCreated, 'summary': summary}
-
-        elif verbosityLevel == 1:
-            data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated,
-                    'syncSource': self.stats["stream_syncSource"],
-                    'jitter_long_term_uS': self.stats["jitter_long_term_uS"],
-                    'jitter_mean_1S_uS': self.stats["jitter_mean_1S_uS"],
-                    'eventNo': self.eventNo}
-
-        elif verbosityLevel == 2:
-            data = {'type': ExcessiveJitter.type, 'timeCreated': self.timeCreated,
-                    'syncSource': self.stats["stream_syncSource"],
-                    'jitter_long_term_uS': self.stats["jitter_long_term_uS"],
-                    'jitter_mean_1S_uS': self.stats["jitter_mean_1S_uS"], 'stats': self.stats,
-                    'eventNo': self.eventNo}
-
+        # By default, take the name of the class as the 'type'. This could be overwritten
+        self.type = self.__class__.__name__
+        # Add additional instance variables as required
+        self.lastPacketReceived = lastPacketReceived
+    def getSummary(self):
+        optionalFields = " "+str(self.stats["jitter_mean_1S_uS"]) + "/" + str(self.stats["jitter_long_term_uS"]) + "uS"
+        summary = "[" + str(self.eventNo) + "]," + \
+                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
+        data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
+
+    def getCSV(self):
+        # returns a CSV formatted string suitable for import into Excel
+        optionalFields = "jitter_mean_1S_uS,"+str(self.stats["jitter_mean_1S_uS"])+\
+            ",jitter_long_term_uS,"+str(self.stats["jitter_long_term_uS"])
+        csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
+              ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
+              "," + optionalFields
+        return csv
+
+    def getJSON(self):
+        # Returns a json object representation of the event as a string
+        # Add additional keys as required
+        data = {'type': self.type, 'timeCreated': self.timeCreated,
+                'eventNo': self.eventNo,
+                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
+        return json.dumps(data, sort_keys=True, indent=4, default=str)
 
 
 # Define an event object that represents a processor overload. This might happen if the calculateThread can't process
@@ -750,7 +711,7 @@ class RtpStream(object):
                         self.__stats["jitter_alarm_event_timeout_S"] or \
                         self.__stats["jitter_excess_jitter_events_total"] == 0:
                     # Add the event to the event list
-                    self.__eventList.append(ExcessiveJitter(self.rtpStream[-1], self.__stats))
+                    self.__eventList.append(ExcessiveJitter(self.__stats, self.rtpStream[-1]))
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
 
