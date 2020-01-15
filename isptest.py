@@ -399,60 +399,22 @@ class ProcessorOverload(Event):
                 'lastRtpSequenceNo': self.lastPacketReceived.rtpSequenceNo}
         return json.dumps(data, sort_keys=True, indent=4, default=str)
 
-# class ProcessorOverload(object):
-#     # Define descriptive names. These might be useful later
-#     type = "ProcessorOverload"
-#     description = ""
-#
-#     def __init__(self, lastPacketReceived, stats):
-#         self.timeCreated = datetime.datetime.now()
-#         self.lastPacketReceived = lastPacketReceived
-#         # Take local copy of stats dictionary
-#         self.stats = dict(stats)
-#         # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
-#         self.eventNo = self.stats["stream_all_events_counter"] + 1
-#
-#     def getData(self, verbosityLevel):
-#         # Returns a dictionary containing information about this event
-#         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-#         if verbosityLevel == 0:
-#             summary = "[" + str(self.eventNo) + "]," + \
-#                       "[" + str(self.stats["stream_syncSource"]) + "], " + "Processor overload:, " + \
-#                       str(self.stats["stream_processor_utilisation_percent"]) + "%"
-#             data = {'timeCreated': self.timeCreated, 'summary': summary}
-#
-#         elif verbosityLevel == 1:
-#             data = {'type': ProcessorOverload.type, 'timeCreated': self.timeCreated,
-#                     'syncSource': self.stats["stream_syncSource"],
-#                     'processor_utilisation_percent': self.stats["stream_processor_utilisation_percent"],
-#                     'eventNo': self.eventNo}
-#
-#         elif verbosityLevel == 2:
-#             data = {'type': ProcessorOverload.type, 'timeCreated': self.timeCreated,
-#                     'syncSource': self.stats["stream_syncSource"],
-#                     'processor_utilisation_percent': self.stats["stream_processor_utilisation_percent"],
-#                     'stats': self.stats, 'eventNo': self.eventNo}
-#         return data
-
 
 # Define an event that represent a glitch
 # This will be in the form of the packets (RtpData objects) either side of the 'hole' in received data
-class Glitch(object):
-    # Define descriptive names. These might be useful later
-    type = "Glitch"
-    description = ""
-
-    # Constructor
-    def __init__(self, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap, stats):
+class Glitch(Event):
+    def __init__(self, stats, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
-        # Update instance variables
-        self.startOfGap = lastReceivedPacketBeforeGap
-        self.endOfGap = firstPackedReceivedAfterGap
         # Take local copy of stats dictionary
         self.stats = dict(stats)
         # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
         self.eventNo = self.stats["stream_all_events_counter"] + 1
+        # By default, take the name of the class as the 'type'. This could be overwritten
+        self.type = self.__class__.__name__
+        # Add additional instance variables as required
+        self.startOfGap = lastReceivedPacketBeforeGap
+        self.endOfGap = firstPackedReceivedAfterGap
 
         # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
         # The '-1' is because it's fences and fenceposts
@@ -465,25 +427,83 @@ class Glitch(object):
         self.expectedSequenceNo = self.startOfGap.rtpSequenceNo + 1
         self.actualReceivedSequenceNo = self.endOfGap.rtpSequenceNo
 
-    def getData(self, verbosityLevel):
-        # Returns a dictionary containing information about this event
-        # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-        if verbosityLevel == 0:
-            summary = "[" + str(self.eventNo) + "]," + \
-                      "[" + str(self.stats["stream_syncSource"]) + "], " + "Glitch:, " + \
-                      "Duration:, " + str(self.glitchLength) + ", " + str(self.packetsLost) + ", packet(s) lost"
-            data = {'timeCreated': self.timeCreated, 'summary': summary}
-
-        elif verbosityLevel == 1:
-            data = {'type': Glitch.type, 'timeCreated': self.timeCreated,
-                    'syncSource': self.stats["stream_syncSource"], 'packetsLost': self.packetsLost,
-                    'duration': self.glitchLength, 'eventNo': self.eventNo}
-
-        elif verbosityLevel == 2:
-            data = {'type': Glitch.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"],
-                    'packetsLost': self.packetsLost, 'duration': self.glitchLength, 'stats': self.stats,
-                    'eventNo': self.eventNo}
+    def getSummary(self):
+        optionalFields = ". Duration:, " + str(self.glitchLength) + ", " + str(self.packetsLost) + ", packet(s) lost. "+\
+            "Expected seq no "+str(self.expectedSequenceNo)+" but received "+ str(self.actualReceivedSequenceNo)
+        summary = "[" + str(self.eventNo) + "]," + \
+                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
+        data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
+
+    def getCSV(self):
+        # returns a CSV formatted string suitable for import into Excel
+        optionalFields = "Duration,"+str(self.glitchLength)+", packet(s) lost,"+str(self.packetsLost)+\
+            ",Expected seq no"+str(self.expectedSequenceNo)+",Actual received seq no,"+ str(self.actualReceivedSequenceNo)
+        csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
+              ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
+              "," + optionalFields
+        return csv
+
+    def getJSON(self):
+        # Returns a json object representation of the event as a string
+        # Add additional keys as required
+        data = {'type': self.type, 'timeCreated': self.timeCreated,
+                'eventNo': self.eventNo,
+                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
+                'packetsLost': self.packetsLost, 'duration': self.glitchLength,
+                'lastReceivedPacketBeforeGap.rtpSequenceNo': self.startOfGap.rtpSequenceNo,
+                'firstPackedReceivedAfterGap.rtpSequenceNo': self.endOfGap.rtpSequenceNo,
+                'expectedSequenceNo': self.expectedSequenceNo,
+                'actualReceivedSequenceNo': self.actualReceivedSequenceNo}
+        return json.dumps(data, sort_keys=True, indent=4, default=str)
+
+# class Glitch(object):
+#     # Define descriptive names. These might be useful later
+#     type = "Glitch"
+#     description = ""
+#
+#     # Constructor
+#     def __init__(self, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap, stats):
+#         # Create timestamp of event
+#         self.timeCreated = datetime.datetime.now()
+#         # Update instance variables
+#         self.startOfGap = lastReceivedPacketBeforeGap
+#         self.endOfGap = firstPackedReceivedAfterGap
+#         # Take local copy of stats dictionary
+#         self.stats = dict(stats)
+#         # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
+#         self.eventNo = self.stats["stream_all_events_counter"] + 1
+#
+#         # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
+#         # The '-1' is because it's fences and fenceposts
+#         self.packetsLost = abs(
+#             firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo) - 1
+#         # print firstPackedReceivedAfterGap.rtpSequenceNo,lastReceivedPacketBeforeGap.rtpSequenceNo,"\r"
+#         # Calculate length of this glitch
+#         self.glitchLength = firstPackedReceivedAfterGap.timestamp - lastReceivedPacketBeforeGap.timestamp
+#         # Calculate useful values showing expected and actual rtpSequence no
+#         self.expectedSequenceNo = self.startOfGap.rtpSequenceNo + 1
+#         self.actualReceivedSequenceNo = self.endOfGap.rtpSequenceNo
+#
+#     def getData(self, verbosityLevel):
+#         # Returns a dictionary containing information about this event
+#         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
+#         if verbosityLevel == 0:
+#             summary = "[" + str(self.eventNo) + "]," + \
+#                       "[" + str(self.stats["stream_syncSource"]) + "], " + "Glitch:, " + \
+#                       "Duration:, " + str(self.glitchLength) + ", " + str(self.packetsLost) + ", packet(s) lost"
+#             data = {'timeCreated': self.timeCreated, 'summary': summary}
+#
+#         elif verbosityLevel == 1:
+#             data = {'type': Glitch.type, 'timeCreated': self.timeCreated,
+#                     'syncSource': self.stats["stream_syncSource"], 'packetsLost': self.packetsLost,
+#                     'duration': self.glitchLength, 'eventNo': self.eventNo}
+#
+#         elif verbosityLevel == 2:
+#             data = {'type': Glitch.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"],
+#                     'packetsLost': self.packetsLost, 'duration': self.glitchLength, 'stats': self.stats,
+#                     'eventNo': self.eventNo}
+#         return data
 
 
 class MovingTotalEventCounter(object):
@@ -842,7 +862,7 @@ class RtpStream(object):
 
             # Capture packets either side of the 'hole' and store them in the event list
             # Create an object representing the glitch
-            glitch = Glitch(lastReceivedRtpPacket, self.rtpStream[0], self.__stats)
+            glitch = Glitch(self.__stats, lastReceivedRtpPacket, self.rtpStream[0])
             # Add the latest glitch to the evenList[]
             self.__eventList.append(glitch)
             # Increment the all_events counter
@@ -872,7 +892,7 @@ class RtpStream(object):
 
                 # Capture packets either side of the 'hole' and store them in the event list
                 # Create an object representing the glitch
-                glitch = Glitch(prevRtpPacket, rtpPacket, self.__stats)
+                glitch = Glitch(self.__stats, lastReceivedRtpPacket, self.rtpStream[0])
                 # Add the glitch to the evenList[]
                 self.__eventList.append(glitch)
                 # Increment the all_events counter
