@@ -198,6 +198,8 @@ class RtpData(object):
 # This class defines a template for event classes (because Python doesn;t support interfaces like Java)
 # Note all Python abstract classes inherit from 'ABC'
 class Event():
+    # NOTE: The following line may/may not be necessary for Python 2.7. Python 3 should use the class declaration
+    # class Event(ABC) but this causes an error in Python 2.7
     __metaclass__ = ABCMeta
     @abstractmethod
     def __init__(self, stats):
@@ -213,16 +215,19 @@ class Event():
 
     @abstractmethod
     def getSummary(self):
+        optionalFields =""
         summary = "[" + str(self.eventNo) + "]," + \
-                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type
+                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
     @abstractmethod
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
+        optionalFields = ""
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-              ",Event no," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"])
+              ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
+              "," + optionalFields
         return csv
 
     @abstractmethod
@@ -238,7 +243,7 @@ class Event():
 # Now define the 'events' that can happen to a stream
 class StreamStarted(Event):
 
-    def __init__(self, firstPacketReceived, stats):
+    def __init__(self, stats, firstPacketReceived):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
 
@@ -253,15 +258,18 @@ class StreamStarted(Event):
 
     def getSummary(self):
         # Returns a dictionary containing a timestamp and a concise description of the event as a string
+        optionalFields = ", first rtp sequence no:"+str(self.firstPacketReceived.rtpSequenceNo)
         summary = "[" + str(self.eventNo) + "]," + \
-                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type
+                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
+        optionalFields = "firstRtpSequenceNo,"+str(self.firstPacketReceived.rtpSequenceNo)
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-              ",Event no," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"])
+              ",Event no," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
+              "," + optionalFields
         return csv
 
     def getJSON(self):
@@ -273,17 +281,58 @@ class StreamStarted(Event):
         return json.dumps(data, sort_keys=True, indent=4, default=str)
 
 
-# # Define an object that represents a start of signal
-# class StreamStarted(object):
+
+# Define an event that represents a loss of rtpStream
+
+class StreamLost(Event):
+
+    def __init__(self, stats, lastPacketReceived):
+        # Create timestamp of event
+        self.timeCreated = datetime.datetime.now()
+        # Take local copy of stats dictionary
+        self.stats = dict(stats)
+        # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
+        self.eventNo = self.stats["stream_all_events_counter"] + 1
+        # By default, take the name of the class as the 'type'. This could be overwritten
+        self.type = self.__class__.__name__
+        # Add additional instance variables as required
+        self.lastPacketReceived = lastPacketReceived
+
+    def getSummary(self):
+        optionalFields = ", Most recent rtp sequence no: "+str(self.lastPacketReceived.rtpSequenceNo)
+        summary = "[" + str(self.eventNo) + "]," + \
+                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
+        data = {'timeCreated': self.timeCreated, 'summary': summary}
+        return data
+
+    def getCSV(self):
+        # returns a CSV formatted string suitable for import into Excel
+        optionalFields =  "lastRtpSequenceNo,"+str(self.lastPacketReceived.rtpSequenceNo)
+        csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
+              ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
+              "," + optionalFields
+        return csv
+
+    def getJSON(self):
+        # Returns a json object representation of the event as a string
+        # Add additional keys as required
+        data = {'type': self.type, 'timeCreated': self.timeCreated,
+                'eventNo': self.eventNo,
+                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
+                'lastRtpSequenceNo': self.lastPacketReceived.rtpSequenceNo}
+        return json.dumps(data, sort_keys=True, indent=4, default=str)
+
+
+# class StreamLost(object):
 #     # Define descriptive names. These might be useful later
-#     type = "StreamStarted"
+#     type = "StreamLost"
 #     description = ""
 #
 #     # Constructor
-#     def __init__(self, firstPacketReceived, stats):
+#     def __init__(self, lastPacketReceived, stats):
 #         # Create timestamp of event
 #         self.timeCreated = datetime.datetime.now()
-#         self.firstPacketReceived = firstPacketReceived
+#         self.lastPacketReceived = lastPacketReceived
 #         # Take local copy of stats dictionary
 #         self.stats = dict(stats)
 #         # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
@@ -292,56 +341,21 @@ class StreamStarted(Event):
 #     def getData(self, verbosityLevel):
 #         # Returns a dictionary containing information about this event
 #         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
+#
 #         if verbosityLevel == 0:
 #             summary = "[" + str(self.eventNo) + "]," + \
-#                       "[" + str(self.stats["stream_syncSource"]) + "], " + "Stream Started"
+#                       "[" + str(self.stats["stream_syncSource"]) + "], " + "Stream lost"
 #             data = {'timeCreated': self.timeCreated, 'summary': summary}
 #         elif verbosityLevel == 1:
-#             data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated, \
-#                     'rtpSequenceNo': self.firstPacketReceived.rtpSequenceNo,
-#                     'syncSource': self.stats["stream_syncSource"],
-#                     'eventNo': self.eventNo}
+#             data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
+#                     'syncSource': self.stats["stream_syncSource"], 'eventNo': self.eventNo}
+#
 #         elif verbosityLevel == 2:
-#             data = {'type': StreamStarted.type, 'timeCreated': self.timeCreated,
-#                     'rtpSequenceNo': self.firstPacketReceived.rtpSequenceNo,
-#                     'syncSource': self.stats["stream_syncSource"], 'stats': self.stats, 'eventNo': self.eventNo}
+#             data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
+#                     'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
+#                     'eventNo': self.eventNo}
+#
 #         return data
-
-
-# Define an event that represents a loss of rtpStream
-class StreamLost(object):
-    # Define descriptive names. These might be useful later
-    type = "StreamLost"
-    description = ""
-
-    # Constructor
-    def __init__(self, lastPacketReceived, stats):
-        # Create timestamp of event
-        self.timeCreated = datetime.datetime.now()
-        self.lastPacketReceived = lastPacketReceived
-        # Take local copy of stats dictionary
-        self.stats = dict(stats)
-        # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
-        self.eventNo = self.stats["stream_all_events_counter"] + 1
-
-    def getData(self, verbosityLevel):
-        # Returns a dictionary containing information about this event
-        # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-
-        if verbosityLevel == 0:
-            summary = "[" + str(self.eventNo) + "]," + \
-                      "[" + str(self.stats["stream_syncSource"]) + "], " + "Stream lost"
-            data = {'timeCreated': self.timeCreated, 'summary': summary}
-        elif verbosityLevel == 1:
-            data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
-                    'syncSource': self.stats["stream_syncSource"], 'eventNo': self.eventNo}
-
-        elif verbosityLevel == 2:
-            data = {'type': StreamLost.type, 'timeCreated': self.timeCreated,
-                    'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
-                    'eventNo': self.eventNo}
-
-        return data
 
 
 # Define an event object that represents a excessive jitter event
@@ -928,7 +942,7 @@ class RtpStream(object):
                 if self.__stats["packet_counter_received_total"] < 1:
                     self.__stats["packet_first_packet_received_timestamp"] = self.rtpStream[0].timestamp
                     # Add a StreamStarted event to the event list
-                    self.__eventList.append(StreamStarted(self.rtpStream[0], self.__stats))
+                    self.__eventList.append(StreamStarted(self.__stats, self.rtpStream[0]))
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
                 # Stream now being received so clear flag
@@ -984,7 +998,7 @@ class RtpStream(object):
                     # Set flag
                     lossOfStreamFlag = True
                     # Add event to the list (but only do this once)
-                    self.__eventList.append(StreamLost(lastReceivedRtpPacket, self.__stats))
+                    self.__eventList.append(StreamLost(self.__stats, lastReceivedRtpPacket))
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
                     # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
