@@ -1454,11 +1454,8 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
                 # Now create table from eventList
                 eventTableRows = []
                 for event in events:
-                    # Get dictionary from Event.getData() method containing timestamp and summary
-                    try:
-                        eventData = event.getData(0)
-                    except:
-                        eventData = event.getSummary()
+                    # Get dictionary from Event method containing timestamp and summary
+                    eventData = event.getSummary()
                     # Create the new row
                     tableRow = [eventData["timeCreated"].strftime("%H:%M:%S"), eventData["summary"]]
                     # Append the new row to the list of rows
@@ -1726,21 +1723,12 @@ def __diskLoggerThread(rtpStream):
                 file_csv = open(filename_csv, "a+")
                 file_json = open(filename_json, "a+")
                 for event in latestEvents:
-                    # Get the event summary
-                    try:
-                        eventSummary = event.getData(0)
-                        # Format a string to write to disk
-                        eventString = str(eventSummary["timeCreated"].strftime("%d/%m/%Y %H:%M:%S")) + ", " + \
-                                      eventSummary["summary"] + ",\n"
-                    except:
-                        eventString = event.getCSV()+"\n"
+                    # Get the event data in csv format
+                    eventString = event.getCSV()+"\n"
                     # Write the event(s) to disk
                     file_csv.write(eventString)
-                    # Construct a json object from the event (as a string)
-                    try:
-                        eventAsJson = json.dumps(event.getData(2), sort_keys=True, indent=4, default=str) + "\n"
-                    except:
-                        eventAsJson = event.getJSON() + "\n"
+                    # Get a json object from the event (as a string)
+                    eventAsJson = event.getJSON() + "\n"
                     file_json.write(eventAsJson)
                     lastWrittenEventNo = event.eventNo
                 # Close the files
