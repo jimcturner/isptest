@@ -1400,18 +1400,20 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
         # Check operation mode and also check to see if a valid rtpRxStream currently exists in the array
         if (operationMode == 'RECEIVE' or operationMode == 'LOOPBACK') and len(rtpRxStreams) > 0:
             try:
+                # Pick off the latest rx Stream from rtpStreams[]
+                currentRtpRxStream = rtpRxStreams[-1]
                 # Get latest keys/values from rtpStream
-                stats = rtpRxStreams[0].getRtpStreamStats()
+                stats = rtpRxStreams[-1].getRtpStreamStats()
 
                 # Create a table of stream stats
-                width, height, table = createTable(humanise(rtpRxStreams[0].getRtpStreamStatsByFilter("stream").items()),
+                width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("stream").items()),
                                                    "Stream info")
                 printTable(margin, nextUsableLine, table)
                 nextUsableLine += (height + padding)
                 if (width + padding + margin) > nextUsableColumn:
                     nextUsableColumn = width + padding + margin
                 # Create a Glitch Stats table
-                width, height, table = createTable(humanise(rtpRxStreams[0].getRtpStreamStatsByFilter("glitch").items()),
+                width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("glitch").items()),
                                                    "Glitch Stats")
                 printTable(margin, nextUsableLine, table)
                 nextUsableLine += (height + padding)
@@ -1419,7 +1421,7 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
                     nextUsableColumn = width + padding + margin
 
                 # Create a table of historic glitch stats
-                width, height, table = createTable(humanise(rtpRxStreams[0].getRtpStreamStatsByFilter("historic").items()),
+                width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("historic").items()),
                                                    "Historic glitch stats")
                 printTable(margin, nextUsableLine, table)
                 nextUsableLine += (height + padding)
@@ -1431,7 +1433,7 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
                 # Reset nextUseableLine to top of screen
                 nextUsableLine = 2
                 # Create a table of jitter stats
-                width, height, table = createTable(humanise(rtpRxStreams[0].getRtpStreamStatsByFilter("jitter").items()),
+                width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("jitter").items()),
                                                    "Jitter Stats")
                 printTable(nextUsableColumn, nextUsableLine, table)
                 nextUsableLine += (height + padding)
@@ -1439,7 +1441,7 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
                 #     nextUseableColumn = width + padding + margin
 
                 # Create a table of Packet stats beside the jitter table
-                width, height, table = createTable(humanise(rtpRxStreams[0].getRtpStreamStatsByFilter("packet").items()),
+                width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("packet").items()),
                                                    "Packet Stats")
                 # # Print the table to the screen line by line
                 printTable(nextUsableColumn, nextUsableLine, table)
@@ -1450,7 +1452,7 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
 
                 # Get the last x events
                 noOfHistoricEventsToView = 10
-                events = rtpRxStreams[0].getRTPStreamEventList(noOfHistoricEventsToView)
+                events = currentRtpRxStream.getRTPStreamEventList(noOfHistoricEventsToView)
                 # Now create table from eventList
                 eventTableRows = []
                 for event in events:
