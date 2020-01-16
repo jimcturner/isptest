@@ -1536,8 +1536,15 @@ class RtpGenerator(object):
         # iterate over stringLength picking random letters from
         payload = ''.join(random.choice(letters) for i in range(self.payloadLength))
 
-        txSock = socket.socket(socket.AF_INET,  # Internet
-                               socket.SOCK_DGRAM)  # UDP
+        # Attempt to create UDP socket
+        try:
+            txSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
+        except Exception as e:
+            Message.addMessage("\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket\x1B[0m" + self.UDP_TX_IP + ":" + \
+                               str(self.UDP_TX_PORT) + ", " + str(e))
+            time.sleep(2)
+            exit()
+
         msg = "Traffic Generator thread started. Sending to " + self.UDP_TX_IP + ":" + str(self.UDP_TX_PORT) + \
               ", txRate:" + str(self.txRate) + "bps, payloadLength:" + str(self.payloadLength)
         Message.addMessage(msg)
@@ -1610,7 +1617,8 @@ class RtpGenerator(object):
                     txBps_1s += len(payload) * 8
                     # print rtpSequenceNo,txPeriod,txBps_1s,"\r"
                 except Exception as e:
-                    Message.addMessage("__rtpGenerator()", str(e))
+                    Message.addMessage("\x1B[31m__rtpGenerator() txSock.sendto()\x1B[0m", str(e))
+                    time.sleep(2)
                     exit()
 
             if self.keyPressed[0] == 'j':
@@ -1898,12 +1906,24 @@ def main(argv):
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
         # Create receive UDP socket
-        sock = socket.socket(socket.AF_INET,  # Internet
-                             socket.SOCK_DGRAM)  # UDP
-        sock.bind((UDP_RX_IP, UDP_RX_PORT))
+        try:
+            sock = socket.socket(socket.AF_INET,  # Internet
+                                 socket.SOCK_DGRAM)  # UDP
+            sock.bind((UDP_RX_IP, UDP_RX_PORT))
+        except Exception as e:
+            Message.addMessage("\x1B[31m__main(): Cannot create socket listen on "+UDP_RX_IP+":"+str(UDP_RX_PORT)+", "+str(e)+\
+                ". Try another port. Exiting\x1B[0m")
+            time.sleep(2)
+            exit()
         while True:
             # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
-            data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
+            try:
+                data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
+            except Exception as e:
+                Message.addMessage("\x1B[31m__main()sock.recvfrom(): Cannot read socket\x1B[0m" + UDP_RX_IP + ":" + \
+                    str(UDP_RX_PORT) + ", " + str(e))
+                time.sleep(2)
+                exit()
 
             # Get timestamp at the point the packet was received
             timeNow = datetime.datetime.now()
