@@ -1676,7 +1676,7 @@ class RtpGenerator(object):
                 pass
 
 
-def __diskLoggerThread(rtpStream):
+def __diskLoggerThread(rtpStreams):
     # Autonomous thread to poll RtpStream eventList for new events
     # and write them  to disk
     Message.addMessage("diskLoggerThread starting")
@@ -1685,6 +1685,8 @@ def __diskLoggerThread(rtpStream):
     lastWrittenEventNo = 0  # Stores last written Event.eventNo
     latestEvents = []
 
+    # get latest stream from rtpStreams[]
+    currentRtpStream=rtpStreams[-1]
     # Create a file and write a header
     try:
         # Write summary file
@@ -1705,7 +1707,7 @@ def __diskLoggerThread(rtpStream):
         # Attempt to access rtpStream events list
         # and create a sublist of the just the latest elements
         try:
-            allEvents = rtpStream.getRTPStreamEventList()
+            allEvents = currentRtpStream.getRTPStreamEventList()
 
             # Now check to see if there are any previously unwritten events in the allEvents list
             # Subtract lastWrittenEventNo from most recent eventNo
@@ -1938,7 +1940,7 @@ def main(argv):
                     rtpRxStreams.append(rtpRxStream)
 
                     # Create a diskLogging Thread - pass rtpStream object to it
-                    diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(rtpRxStream,))
+                    diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(rtpRxStreams,))
                     diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
                     diskLoggerThread.start()
 
