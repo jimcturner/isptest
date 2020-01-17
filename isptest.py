@@ -1742,8 +1742,8 @@ class RtpGenerator(object):
                     # Modify txPeriod to compensate for error
                     # Prevent overshoots of the desired rate, only reduce self.txPeriod by 'half' the error amount in one go
                     self.txPeriod -= self.txPeriod * (errorFactor / 2.0)
-                    Message.addMessage("Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
-                                       str(self.txRate) + ", Actual tx rate:" + str(self.txBps_1s))
+                    # Message.addMessage("Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
+                    #                    str(self.txRate) + ", Actual tx rate:" + str(self.txBps_1s))
                 # Test for overshoots
                 if self.txBps_1s > (1.05 * self.txRate):
                     # Data being sent too fast, so need to reduce
@@ -1753,7 +1753,7 @@ class RtpGenerator(object):
                     errorFactor = (txRateError * 1.0 / self.txRate)
                     # Reduce by 'half' the errorFactor (per adjustment) to prevent hunting
                     self.txPeriod += self.txPeriod * (errorFactor / 2.0)
-                    Message.addMessage("Data rate too high. Reducing.)")
+                    # Message.addMessage("Data rate too high. Reducing.)")
 
                 # Take copy of current actual tx rate
                 self.txActualTxRate_bps = self.txBps_1s
