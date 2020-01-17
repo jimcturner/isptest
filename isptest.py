@@ -1266,6 +1266,18 @@ def printTable(xPos, yPos, tableData):
     # Finally, move cursor to start of next available line
     print "\033[" + str(yPos + lineCount) + ";" + str(0) + "H", "\r"
 
+def bToMb(value):
+    # Utility function convert a value in bytes to kB or MB with a suffix
+    if value >= 1048576:
+        # Convert bytes to Mb
+        value = round(value / 1048576.0, 1)
+        return str(value) + " M"
+    elif value >= 1024:
+        # Convert bytes to kb
+        value = value / 1024
+        return str(value) + " k"
+    else:
+        return str(value)
 
 def humanise(inputDictionary):
     # This function will examine the key/value pairs of the stats dictionary and
@@ -1474,9 +1486,7 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
             except Exception as e:
                 Message.addMessage("__displayThread: " + str(e))
 
-        # Check operation mode and also check to see if a valid rtpTxStream currently exists in the array
-        elif operationMode == 'TRANSMIT' and len(rtpTxStreams) > 0:
-            pass
+
 
 
         # Print a messages table on the next useable line
@@ -1494,7 +1504,19 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
         # stats = rtpStream.getRtpStreamStats()
         # print stats["stream_time_elapsed_total"].seconds, "\r"
         # print stats["stream_all_events_counter"], "\r"
-        print operationMode+" -----------------------------------------------------------------------------------------------------------------------", "\r"
+        print operationMode+" MODE-----------------------------------------------------------------------------------------------------------------------", "\r"
+        # Finally, print some tx info
+        # Check operation mode and also check to see if a valid rtpTxStream currently exists in the array
+        if (operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK') and len(rtpTxStreams) > 0:
+            # Get stats from latest rtpTxStream
+            stats = rtpTxStreams[-1].getStats()
+            txStatsString = " Sending to " + stats['Dest IP'] + ":"+str(stats['Dest Port'])+", " + \
+                "Tx rate: " + bToMb(stats['Tx Rate']) + "bps, " + \
+                "Packet size: " + str(stats['Packet size']) + " bytes, " + \
+                "Total Data sent: " + bToMb(stats['Bytes transmitted']) + "B"
+            optionsString = " [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off\r"
+            print txStatsString,"\r"
+            print optionsString,"\r"
 
         time.sleep(1)
 
@@ -1511,18 +1533,29 @@ def __catchKeyboardPresses(keyPressed):
 class RtpGenerator(object):
 
     def __init__(self, keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
-        # Assign instance vsriables
+        # Assign instance variables
         self.UDP_TX_IP = UDP_TX_IP
         self.UDP_TX_PORT = UDP_TX_PORT
         self.txRate = txRate
         self.payloadLength = payloadLength
         self.keyPressed = keyPressed
+        self.txCounter_bytes = 0
+        self.txActualtxRate_bps = 0
 
         # Start the generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
         self.rtpGeneratorThread.daemon = True # Thread will auto shutdown when the prog ends
         self.rtpGeneratorThread.start()
 
+    def getStats(self):
+        # Returns a dictionary of useful stats
+        return {'Dest IP': self.UDP_TX_IP,
+                'Dest Port': self.UDP_TX_PORT,
+                'Tx Rate': self.txRate,
+                'Tx Rate (actual)': self.txActualtxRate_bps,
+                'Packet size': self.payloadLength,
+                'Bytes transmitted': self.txCounter_bytes
+                }
 
     # define a traffic generator method that will run as a thread
     # def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
@@ -1613,7 +1646,9 @@ class RtpGenerator(object):
             if enablePacketGeneration == True and temporaryInhibit == False:
                 try:
                     txSock.sendto(MESSAGE, (self.UDP_TX_IP, self.UDP_TX_PORT))
-                    # Update tx data counter (*8 converts bytes to bits)
+                    # Update tx bytes counter
+                    self.txCounter_bytes += len(payload)
+                    # Update tx bps data counter (*8 converts bytes to bits)
                     txBps_1s += len(payload) * 8
                     # print rtpSequenceNo,txPeriod,txBps_1s,"\r"
                 except Exception as e:
@@ -1667,6 +1702,8 @@ class RtpGenerator(object):
                     txPeriod -= txPeriod * (errorFactor / 2.0)
                     Message.addMessage("Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
                                        str(self.txRate) + ", Actual tx rate:" + str(txBps_1s))
+                # Take copy of current actual tx rate
+                self.txActualtxRate_bps = txBps_1s
                 # Clear counter
                 txBps_1s = 0
 
