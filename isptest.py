@@ -1509,8 +1509,9 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
             # Get stats from latest rtpTxStream
             stats = rtpTxStreams[-1].getStats()
             txStatsString = " [Sending to " + stats['Dest IP'] + ":"+str(stats['Dest Port'])+", " + \
-                "Tx rate: " + bToMb(stats['Tx Rate']) + "bps, " + \
-                "Packet size: " + str(stats['Packet size']) + " bytes]," + \
+                bToMb(stats['Tx Rate']) + "bps, " + \
+                "Packet size: " + str(stats['Packet size']) + " bytes, " + \
+                "Src ID: "+str(stats['Sync Source ID'])+"], " \
                 " [Total Data sent: " + bToMb(stats['Bytes transmitted']) + "B" + \
                 " Actual Tx rate: "+ bToMb(stats['Tx Rate (actual)']) + "bps]"
             optionsString = " [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r"
@@ -1542,6 +1543,7 @@ class RtpGenerator(object):
         self.txCounter_bytes = 0
         self.txActualTxRate_bps = 0
         self.txBps_1s = 0               # Used to 'sample' the actual tx rate
+        self.syncSourceIdentifier =65534
 
         # Start the generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
@@ -1555,9 +1557,16 @@ class RtpGenerator(object):
                 'Tx Rate': self.txRate,
                 'Tx Rate (actual)': self.txActualTxRate_bps,
                 'Packet size': self.payloadLength,
-                'Bytes transmitted': self.txCounter_bytes
+                'Bytes transmitted': self.txCounter_bytes,
+                'Sync Source ID': self.syncSourceIdentifier
                 }
 
+    def setSyncSourceIdentifier(self,value):
+        # Sets the self self.syncSourceIdentifier value
+        # This is only allowed to be 32 bits long (specified by the RTP header)
+        # so mask input value for safety
+        maskedValue = value & 0xFFFFFFFF
+        self.syncSourceIdentifier=maskedValue
 
     def calculateTxPeriod(self, newTxRate_bps):
         # Calculates the required tx period for a given supplied txRate and payload length
@@ -1603,7 +1612,6 @@ class RtpGenerator(object):
         rtpPayloadType = 0b00000000
         rtpSequenceNo = 0
 
-        rtpSyncSourceIdentifier = 12345678
 
         enablePacketGeneration = True
         enableJitter = False
@@ -1631,7 +1639,7 @@ class RtpGenerator(object):
 
             # Construct 12 byte header
             txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
-                                      rtpSyncSourceIdentifier)
+                                      self.syncSourceIdentifier)
             MESSAGE = txRtpHeader + payload
 
             # If 'z' pressed, toggle packet generation on/off
@@ -1710,8 +1718,9 @@ class RtpGenerator(object):
                 self.setTxRate(newTxRate)
 
             if self.keyPressed[0] == 'e':
+                # Increment sync source identifier
                 self.keyPressed[0] = ''
-                Message.addMessage(str(self.txPeriod))
+                self.setSyncSourceIdentifier(self.syncSourceIdentifier+1)
             ###########
             # Increment rtp sequence number for next iteration of the loop
             rtpSequenceNo += 1
