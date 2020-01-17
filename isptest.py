@@ -1346,7 +1346,7 @@ def humanise(inputDictionary):
             bps = value * 8
             if bps >= 1048576:
                 # Convert bps to Mbps
-                Mbps = bps / 1048576
+                Mbps = round(bps / 1048576.0, 1)
                 humanisedValue = str(Mbps) + " Mbps"
 
             elif bps >= 1024:
@@ -1360,7 +1360,7 @@ def humanise(inputDictionary):
         elif key == "packet_data_received_total_bytes":
             if value >= 1048576:
                 # Convert bytes to Mb
-                value = value / 1048576
+                value = round(value / 1048576.0,1)
                 humanisedValue = str(value) + " Mb"
             elif value >= 1024:
                 # Convert bytes to kb
@@ -1487,8 +1487,6 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
                 Message.addMessage("__displayThread: " + str(e))
 
 
-
-
         # Print a messages table on the next useable line
         # Get last 10 messages
         messages = Message.getMessages(10)
@@ -1510,11 +1508,12 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
         if (operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK') and len(rtpTxStreams) > 0:
             # Get stats from latest rtpTxStream
             stats = rtpTxStreams[-1].getStats()
-            txStatsString = " Sending to " + stats['Dest IP'] + ":"+str(stats['Dest Port'])+", " + \
+            txStatsString = " [Sending to " + stats['Dest IP'] + ":"+str(stats['Dest Port'])+", " + \
                 "Tx rate: " + bToMb(stats['Tx Rate']) + "bps, " + \
-                "Packet size: " + str(stats['Packet size']) + " bytes, " + \
-                "Total Data sent: " + bToMb(stats['Bytes transmitted']) + "B"
-            optionsString = " [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off\r"
+                "Packet size: " + str(stats['Packet size']) + " bytes]," + \
+                " [Total Data sent: " + bToMb(stats['Bytes transmitted']) + "B" + \
+                " Actual Tx rate: "+ bToMb(stats['Tx Rate (actual)']) + "bps]"
+            optionsString = " [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r"
             print txStatsString,"\r"
             print optionsString,"\r"
 
@@ -1540,7 +1539,8 @@ class RtpGenerator(object):
         self.payloadLength = payloadLength
         self.keyPressed = keyPressed
         self.txCounter_bytes = 0
-        self.txActualtxRate_bps = 0
+        self.txActualTxRate_bps = 0
+        self.txBps_1s = 0               # Used to 'sample' the actual tx rate
 
         # Start the generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
@@ -1552,20 +1552,28 @@ class RtpGenerator(object):
         return {'Dest IP': self.UDP_TX_IP,
                 'Dest Port': self.UDP_TX_PORT,
                 'Tx Rate': self.txRate,
-                'Tx Rate (actual)': self.txActualtxRate_bps,
+                'Tx Rate (actual)': self.txActualTxRate_bps,
                 'Packet size': self.payloadLength,
                 'Bytes transmitted': self.txCounter_bytes
                 }
 
-    def setTxRate(self, newTxRate_bps):
-        # Modifies the tx rate of the transmitted rtp stream
-        pass
+    def calculateTxPeriod(self, newTxRate_bps):
+        # Sets the tx rate of the transmitted rtp stream
+        # and calculates the required tx period
+        self.txRate = newTxRate_bps
+        # Reset txBps_1s counter
+        self.txBps_1s =0
+        # Calculate tx period required to provide supplied txRate for a given stringLength
+        # Note: This is an estimate because time.sleep() is inherently unreliable so we have
+        # to recalculate once the generator is running by averaging over a 1 sec period
+        txPeriod = self.payloadLength * 8.0 / newTxRate_bps
+        return txPeriod
 
 
     # define a traffic generator method that will run as a thread
     # def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
     def __rtpGeneratorThread(self):
-        txBps_1s = 0
+
         # Generate random string
         # Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496 available bytes
         # stringLength = payloadLength
@@ -1603,7 +1611,8 @@ class RtpGenerator(object):
         # Calculate tx period required to provide supplied txRate for a given stringLength
         # Note: This is an estimate because time.sleep() is inherently unreliable so we have
         # to recalculate once the generator is running by averaging over a 1 sec period
-        txPeriod = self.payloadLength * 8.0 / self.txRate
+        # txPeriod = self.payloadLength * 8.0 / self.txRate
+        txPeriod = self.calculateTxPeriod(self.txRate)
         # print "txPeriod", txPeriod, "\r"
 
         jitterPercentage = 50
@@ -1654,7 +1663,7 @@ class RtpGenerator(object):
                     # Update tx bytes counter
                     self.txCounter_bytes += len(payload)
                     # Update tx bps data counter (*8 converts bytes to bits)
-                    txBps_1s += len(payload) * 8
+                    self.txBps_1s += len(payload) * 8
                     # print rtpSequenceNo,txPeriod,txBps_1s,"\r"
                 except Exception as e:
                     Message.addMessage("\x1B[31m__rtpGenerator() txSock.sendto()\x1B[0m", str(e))
@@ -1673,6 +1682,31 @@ class RtpGenerator(object):
                     enableJitter = False
                     Message.addMessage("[j] jitter disabled")
 
+            if self.keyPressed[0] == 'w':
+                # Increase tx rate by 500kbps 'w'
+                # Clear keyboard buffer
+                self.keyPressed[0] = ''
+                newTxRate = self.txRate + (500 * 1024)
+                Message.addMessage("[w] pressed. Increasing txRate from "+
+                                   str(bToMb(self.txRate))+"ps to "+
+                                   str(bToMb(newTxRate))+"ps")
+                # Set tx period according to new rate
+                txPeriod = self.calculateTxPeriod(newTxRate)
+
+            if self.keyPressed[0] == 'q':
+                # Decrease tx rate by 500kbps 'w'
+                # Clear keyboard buffer
+                self.keyPressed[0] = ''
+                newTxRate = self.txRate - (500 * 1024)
+                # Set a minimum tx rate of 500kbps
+                if newTxRate < 500 * 1024:
+                    newTxRate = 500 * 1024
+                Message.addMessage("[q] pressed. Decreasing txRate from "+
+                                   str(bToMb(self.txRate))+"ps to "+
+                                   str(bToMb(newTxRate))+"ps")
+                # Set tx period according to new rate
+                txPeriod = self.calculateTxPeriod(newTxRate)
+            ###########
             # Increment rtp sequence number for next iteration of the loop
             rtpSequenceNo += 1
             # Seq no is only a 16 bit value, so reset at max value (65535)
@@ -1695,10 +1729,10 @@ class RtpGenerator(object):
                 # Reset elapsed timer
                 startTime = timer()
                 # Test actual tx rate (averaged over a second) against 99% of desired tx rate
-                if txBps_1s < (0.99 * self.txRate):
+                if self.txBps_1s < (0.99 * self.txRate):
                     # Data not being sent fast enough, so reduce txPeriod time
                     # Measure difference between desired bps tx rate and actual bps tx rate
-                    txRateError = self.txRate - txBps_1s
+                    txRateError = self.txRate - self.txBps_1s
                     # Convert the difference a fraction by which will modify txPeriod
                     errorFactor = (txRateError * 1.0 / self.txRate)
                     # Modify txPeriod to compensate for error
@@ -1706,11 +1740,11 @@ class RtpGenerator(object):
                     # overshoots of the desired rate, only reduce txPeriod by 'half' the error amount in one go
                     txPeriod -= txPeriod * (errorFactor / 2.0)
                     Message.addMessage("Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
-                                       str(self.txRate) + ", Actual tx rate:" + str(txBps_1s))
+                                       str(self.txRate) + ", Actual tx rate:" + str(self.txBps_1s))
                 # Take copy of current actual tx rate
-                self.txActualtxRate_bps = txBps_1s
+                self.txActualTxRate_bps = self.txBps_1s
                 # Clear counter
-                txBps_1s = 0
+                self.txBps_1s = 0
 
             # The calculation time will be deducted from the sleep time, which should make the generator
             # output less jittery (because the calculation time is taken into account)
