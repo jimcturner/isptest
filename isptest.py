@@ -19,11 +19,11 @@ import getopt  # Used to parse command line arguments
 import re  # Regex 'regular expression' module
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
-from terminaltables import SingleTable  # Used for pretty tables in displayThread
 import json
 from abc import ABCMeta, abstractmethod  # Used for event abstract class
+# Non standard libraries (need importing with pip)
+from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init # Used to allow ansi escape sequences to work on Windows
-
 
 ####################################################################################
 # Utility Functions
