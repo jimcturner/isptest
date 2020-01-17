@@ -1502,7 +1502,7 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
         # stats = rtpStream.getRtpStreamStats()
         # print stats["stream_time_elapsed_total"].seconds, "\r"
         # print stats["stream_all_events_counter"], "\r"
-        print operationMode+" MODE-----------------------------------------------------------------------------------------------------------------------", "\r"
+
         # Finally, print some tx info
         # Check operation mode and also check to see if a valid rtpTxStream currently exists in the array
         if (operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK') and len(rtpTxStreams) > 0:
@@ -1514,12 +1514,13 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
                 "Src ID: "+str(stats['Sync Source ID'])+"], " \
                 " [Total Data sent: " + bToMb(stats['Bytes transmitted']) + "B" + \
                 " Actual Tx rate: "+ bToMb(stats['Tx Rate (actual)']) + "bps]"
-            optionsString = " [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r"
+
             print txStatsString,"\r"
-            print optionsString,"\r"
+            print operationMode + " MODE-----------------------------------------------------------------------------------------------------------------------", "\r"
+            print " [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r"
+            print" [e] Increment sync source id, [a]/[s] Decrease/Increase tx packet size\r"
 
         time.sleep(1)
-
 
 # Define a thread that will trap keys pressed
 def __catchKeyboardPresses(keyPressed):
@@ -1544,6 +1545,7 @@ class RtpGenerator(object):
         self.txActualTxRate_bps = 0
         self.txBps_1s = 0               # Used to 'sample' the actual tx rate
         self.syncSourceIdentifier =65534
+        self.rtpPayload = ""                 # The 'dummy data' sent in the packet
 
         # Start the generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
@@ -1560,6 +1562,13 @@ class RtpGenerator(object):
                 'Bytes transmitted': self.txCounter_bytes,
                 'Sync Source ID': self.syncSourceIdentifier
                 }
+
+    def generatePayload(self,length):
+        # Generate random string of length 'length' to create a payload
+        # Create string containing all uppercase and lowercase letters
+        letters = string.ascii_letters
+        # iterate over stringLength picking random letters from
+        self.rtpPayload = ''.join(random.choice(letters) for i in range(self.payloadLength))
 
     def setSyncSourceIdentifier(self,value):
         # Sets the self self.syncSourceIdentifier value
@@ -1585,14 +1594,8 @@ class RtpGenerator(object):
     # def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
     def __rtpGeneratorThread(self):
 
-        # Generate random string
-        # Supposedly the max safe UDP payload over the internet is 508 bytes. Minus 12 bytes for the rtp header gives 496 available bytes
-        # stringLength = payloadLength
-        # Create string containing all uppercase and lowercase letters
-        letters = string.ascii_letters
-        # iterate over stringLength picking random letters from
-        payload = ''.join(random.choice(letters) for i in range(self.payloadLength))
-
+        # Generate payload (consisting of a random string)
+        self.generatePayload(self.payloadLength)
         # Attempt to create UDP socket
         try:
             txSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
@@ -1640,7 +1643,7 @@ class RtpGenerator(object):
             # Construct 12 byte header
             txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
                                       self.syncSourceIdentifier)
-            MESSAGE = txRtpHeader + payload
+            MESSAGE = txRtpHeader + self.rtpPayload
 
             # If 'z' pressed, toggle packet generation on/off
             if self.keyPressed[0] == 'z':
@@ -1672,9 +1675,9 @@ class RtpGenerator(object):
                 try:
                     txSock.sendto(MESSAGE, (self.UDP_TX_IP, self.UDP_TX_PORT))
                     # Update tx bytes counter
-                    self.txCounter_bytes += len(payload)
+                    self.txCounter_bytes += len(self.rtpPayload)
                     # Update tx bps data counter (*8 converts bytes to bits)
-                    self.txBps_1s += len(payload) * 8
+                    self.txBps_1s += len(self.rtpPayload) * 8
                 except Exception as e:
                     Message.addMessage("\x1B[31m__rtpGenerator() txSock.sendto()\x1B[0m", str(e))
                     time.sleep(2)
@@ -1721,6 +1724,33 @@ class RtpGenerator(object):
                 # Increment sync source identifier
                 self.keyPressed[0] = ''
                 self.setSyncSourceIdentifier(self.syncSourceIdentifier+1)
+
+            if self.keyPressed[0] == 's':
+                # Increase payload length
+                self.keyPressed[0] = ''
+                self.payloadLength += 10
+                if self.payloadLength > 1488:
+                    self.payloadLength = 1488
+                    self.generatePayload(self.payloadLength)
+                    Message.addMessage("[s] Payload already at max size of 1488 bytes")
+                else:
+                    # Regenerate new payload based on the new length
+                    self.generatePayload(self.payloadLength)
+                    Message.addMessage("[s] Increasing payload size to "+str(self.payloadLength))
+
+            if self.keyPressed[0] == 'a':
+                # Decrease payload length
+                self.keyPressed[0] = ''
+                self.payloadLength -= 10
+                if self.payloadLength <20:
+                    self.payloadLength = 20
+                    Message.addMessage("[s] Payload already at min size of 20 bytes")
+                    self.generatePayload(self.payloadLength)
+                else:
+                    # Regenerate new payload based on the new length
+                    self.generatePayload(self.payloadLength)
+                    Message.addMessage("[a] Decreasing payload size to " + str(self.payloadLength))
+
             ###########
             # Increment rtp sequence number for next iteration of the loop
             rtpSequenceNo += 1
