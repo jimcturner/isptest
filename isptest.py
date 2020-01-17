@@ -1602,9 +1602,7 @@ class RtpGenerator(object):
         rtpParams = 0b01000000
         rtpPayloadType = 0b00000000
         rtpSequenceNo = 0
-        # Create a 32 bit timestamp (needs truncating to 32 bits before passing to struct.pack)
-        # 0xFFFFFFFF is 32 '1's, so the '&' operation will throw away MSBs larger than this
-        rtpTimestamp = int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
+
         rtpSyncSourceIdentifier = 12345678
 
         enablePacketGeneration = True
@@ -1626,6 +1624,10 @@ class RtpGenerator(object):
             # Start an execution timer (if we know the time required to construct the packet we can deduct this from the
             # txPeriod sleep time which should, in theory, reduce the jitter of the generator
             calculationStartTime = timer()
+
+            # Create a 32 bit timestamp (needs truncating to 32 bits before passing to struct.pack)
+            # 0xFFFFFFFF is 32 '1's, so the '&' operation will throw away MSBs larger than this
+            rtpTimestamp = int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
 
             # Construct 12 byte header
             txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
