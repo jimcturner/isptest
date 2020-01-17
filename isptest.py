@@ -22,6 +22,7 @@ import math
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 import json
 from abc import ABCMeta, abstractmethod  # Used for event abstract class
+from colorama import init # Used to allow ansi escape sequences to work on Windows
 
 
 ####################################################################################
@@ -1890,6 +1891,7 @@ def __diskLoggerThread(rtpStreams):
 # Main prog starts here
 # #####################
 def main(argv):
+    init()  # Invoke colorama to allow ansi escape sequences to work on Windows
     MODE = ""
     # Specify a default txRate of 1Mbps if no rate specified
     txRate = 1 * 1024 * 1024
