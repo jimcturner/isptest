@@ -1401,8 +1401,10 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
     margin = 2
     nextUsableLine = 4  # Takes into account the title
     nextUseableLineWholeWidth = nextUsableLine
+
+    columns, rows = getTerminalSize()
+    Message.addMessage("Terminal size: " + str(columns) + ", " + str(rows))
     while True:
-        columns, rows = getTerminalSize()
         # Clear screen and move cursor to origin
         print "\033[2J", "\r"
         print "\033[0;0HIBEOO ISP Analyser V1.0---------------------------------------------------------------------------------------------------", "\r"
