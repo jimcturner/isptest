@@ -1,0 +1,25 @@
+# Declare dependencies as a array
+dependencies=(colorama terminaltables)
+
+# Temporary folder where pip will collect the dependencies. The name of this folder will determine the name of the file executable archive
+targetSubFolder=isptest
+
+echo "Creating isptest executable archive file"
+# echo ${dependencies[@]}
+
+echo "downloading dependancies into new subfolder $targetSubFolder"
+python -m pip install  ${dependencies[@]} --target $targetSubFolder
+
+echo 'Copying __main__.py (main program code) into target subfolder $targetSubFolder for parcelling up with dependencies'
+cp __main__.py $targetSubFolder
+
+echo "Creating $targetSubFolder.pyz file from contents of $targetSubFolder" 
+python3 -m zipapp -p "/usr/bin/env python" $targetSubFolder
+
+echo "Delete $targetSubFolder subfolder (as no longer required) y/n?"
+read answer
+if [ "$answer" != "${answer#[Yy]}" ] ;then
+    rm -rf $targetSubFolder
+else
+    exit
+fi
