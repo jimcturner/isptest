@@ -23,7 +23,7 @@ import json
 from abc import ABCMeta, abstractmethod  # Used for event abstract class
 # Non standard libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
-from colorama import init # Used to allow ansi escape sequences to work on Windows
+from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
 
 ####################################################################################
 # Utility Functions
@@ -1395,7 +1395,7 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
     # Currently only decoding a single stream
 
 
-    Message.addMessage("__displayThread started")
+    Message.addMessage("Starting __displayThread")
 
     padding = 1  # Gap between tables
     margin = 2
@@ -1603,7 +1603,7 @@ class RtpGenerator(object):
         try:
             txSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
         except Exception as e:
-            Message.addMessage("\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket\x1B[0m" + self.UDP_TX_IP + ":" + \
+            Message.addMessage("\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Exiting\x1B[0m" + self.UDP_TX_IP + ":" + \
                                str(self.UDP_TX_PORT) + ", " + str(e))
             time.sleep(2)
             exit()
@@ -1682,7 +1682,7 @@ class RtpGenerator(object):
                     # Update tx bps data counter (*8 converts bytes to bits)
                     self.txBps_1s += len(self.rtpPayload) * 8
                 except Exception as e:
-                    Message.addMessage("\x1B[31m__rtpGenerator() txSock.sendto()\x1B[0m", str(e))
+                    Message.addMessage("\x1B[31m__rtpGenerator() txSock.sendto(). Exiting. \x1B[0m " + str(e))
                     time.sleep(2)
                     exit()
 
@@ -1893,7 +1893,7 @@ def __diskLoggerThread(rtpStreams):
 # Main prog starts here
 # #####################
 def main(argv):
-    init()  # Invoke colorama to allow ansi escape sequences to work on Windows
+    init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
     MODE = ""
     # Specify a default txRate of 1Mbps if no rate specified
     txRate = 1 * 1024 * 1024
@@ -1901,7 +1901,7 @@ def main(argv):
     # Specify a default packet size for the tx stream (if none supplied)
     payloadLength = 1300
 
-    # print 'Argument List:', str(argv)
+    # print ('Argument List: '+ str(argv))
     try:
         # options are:
         # -h: help
@@ -1917,19 +1917,19 @@ def main(argv):
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
             if opt == '-h':
-                print "Version 0.5\r"
-                print "options are:\r"
-                print "-h: help (this message)\r"
-                print "-l: loopback mode\r"
-                print "-t: transmit mode usage: address:port\r"
-                print "-r receive mode usage: address:port\r"
-                print "-b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps\r"
-                print "-d rtp payload size (bytes)\r"
+                print ("Version 0.5\r")
+                print ("options are:\r")
+                print ("-h: help (this message)\r")
+                print ("-l: loopback mode\r")
+                print ("-t: transmit mode usage: address:port\r")
+                print ("-r receive mode usage: address:port\r")
+                print ("-b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps\r")
+                print ("-d rtp payload size (bytes)\r")
                 exit()
 
             elif opt == '-l':
                 MODE = "LOOPBACK"
-                print MODE
+                print (MODE)
                 UDP_RX_IP = "127.0.0.1"
                 UDP_RX_PORT = 5004
                 UDP_TX_IP = "127.0.0.1"
@@ -1945,11 +1945,11 @@ def main(argv):
                     try:
                         socket.inet_aton(UDP_TX_IP)
                     except socket.error:
-                        print "Invalid TRANSMIT IP address:port combination supplied:", arg
+                        print ("Invalid TRANSMIT IP address:port combination supplied: " + str(arg))
                         exit()
                     print MODE, UDP_TX_IP, UDP_TX_PORT
                 else:
-                    print "Invalid TRANSMIT IP address:port combination supplied:", arg
+                    print ("Invalid TRANSMIT IP address:port combination supplied: "+ str(arg))
                     exit()
 
             elif opt in ("-r"):
@@ -1961,12 +1961,12 @@ def main(argv):
                     # Validate supplied IP address
                     try:
                         socket.inet_aton(UDP_RX_IP)
-                    except socket.error:
-                        print "Invalid RECEIVE IP address:port combination supplied:", arg
+                    except Exception as e:
+                        print ("Invalid RECEIVE IP address:port combination supplied: " + str(arg) + ", "+ str(e))
                         exit()
                     print MODE, UDP_RX_IP, UDP_RX_PORT
                 else:
-                    print "Invalid RECEIVE IP address:port combination supplied:", arg
+                    print ("Invalid RECEIVE IP address:port combination supplied: " + str(arg))
                     exit()
 
             elif opt in ("-b"):
@@ -1977,17 +1977,17 @@ def main(argv):
                     x = int(splitArg[1])
                     # Extract string part
                     multiplier = splitArg[2]
-                    print "x", x, "multiplier", multiplier
+
                     if multiplier == 'k' or multiplier == 'K':
                         txRate = x * 1024
                     elif multiplier == 'm' or multiplier == 'M':
                         txRate = x * 1024 * 1024
                     else:
-                        print "Invalid -b bandwidth specified. Unknown multiplier", multiplier
+                        print ("Invalid -b bandwidth specified. Unknown multiplier: " + str(multiplier))
                         exit()
                 except:
-                    print "Invalid -b bandwidth specfied. Should be xy whether x is a numerical value and y is k or m (kbps or mbps).", \
-                        "If no multiplier supplied then assuming x mbps. eg. 500k, 1m, 5m etc"
+                    print ("Invalid -b bandwidth specfied. Should be xy whether x is a numerical value and y is k or m (kbps or mbps). "+ \
+                        "If no multiplier supplied then assuming x mbps. eg. 500k, 1m, 5m etc")
                     exit()
                 print "txRate", txRate
 
@@ -1997,18 +1997,23 @@ def main(argv):
                 MIN_PAYLOAD_SIZE_bytes = 20
                 try:
                     if int(arg) > MAX_PAYLOAD_SIZE_bytes:
-                        print "requested payload size (", arg, ") exceeds maximum Ethernet frame size (1488 bytes with 12 byte RTP header), "
+                        print ("requested payload size ("+ str(arg)+ \
+                                ") exceeds maximum Ethernet frame size (1488 bytes with 12 byte RTP header). Setting to "+\
+                               str(MAX_PAYLOAD_SIZE_bytes) + " bytes")
                         payloadLength = MAX_PAYLOAD_SIZE_bytes
+                        time.sleep(1)
                     elif int(arg) < MIN_PAYLOAD_SIZE_bytes:
-                        print "requested payload size (", arg, ") less than minimum permitted (", MIN_PAYLOAD_SIZE_bytes, ")"
+                        print ("requested payload size ("+ str(arg)+ ") less than minimum permitted ("+ str(MIN_PAYLOAD_SIZE_bytes)+
+                               "). Setting to " + str(MIN_PAYLOAD_SIZE_bytes)+ "bytes")
+                        time.sleep(1)
                     else:
                         payloadLength = int(arg)
                 except Exception as e:
-                    print "Invalid payload size specified '", arg, "'"
+                    print ("Invalid payload size specified '"+ str(arg)+ "'")
                     exit()
 
     except getopt.GetoptError:
-        print 'invalid options supplied', argv
+        print ('invalid options supplied'+ str(argv))
         exit()
 
     runOnce = True
@@ -2072,7 +2077,6 @@ def main(argv):
 
             try:
                 # Split rtp header into an array of values
-                # print "received message:", hexData
                 # RTP header is 12 bytes long. Unpack it as an array.
                 # !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
                 RTP_HEADER_SIZE = 12
@@ -2080,7 +2084,6 @@ def main(argv):
 
                 # Calculate the data payload size
                 payloadSize = len(data) - RTP_HEADER_SIZE
-                # print"Total data",len(data),"RTP Header size:",RTP_HEADER_SIZE," Payload size",payloadSize,
 
                 # 	sequence no=rtpHeader[2]
                 #	timestamp=rtpHeader[3]
@@ -2105,7 +2108,10 @@ def main(argv):
                 rtpRxStream.addData(rtpSequenceNo, payloadSize, timeNow, rtpSyncSourceIdentifier)
 
             except Exception as e:
-                print str(e), "Length:", len(data), "bytes received"
+                message = Fore.RED+"Cannot decode RTP headers. Is this an RTP packet? "+str(e)+ " Length:" + str(len(data))+\
+                       " bytes received\r"
+                print (message)
+                Message.addMessage(message)
 
     # Sit in endless loop
     while True:
