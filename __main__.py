@@ -913,7 +913,7 @@ class RtpStream(object):
     # Define a private calculation method that will run autonomously as a thread
     # This thread will
     def __calculateThread(self):
-        Message.addMessage("__calculateThread started with sync Source: " + \
+        Message.addMessage("Starting __calculateThread with sync Source: " + \
                            str(self.__stats["stream_syncSource"]))
 
         # Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
@@ -1943,7 +1943,7 @@ def main(argv):
                     except socket.error:
                         print ("Invalid TRANSMIT IP address:port combination supplied: " + str(arg))
                         exit()
-                    print MODE, UDP_TX_IP, UDP_TX_PORT
+                    print (MODE+", "+str(UDP_TX_IP)+", "+str(UDP_TX_PORT))
                 else:
                     print ("Invalid TRANSMIT IP address:port combination supplied: "+ str(arg))
                     exit()
@@ -1960,7 +1960,7 @@ def main(argv):
                     except Exception as e:
                         print ("Invalid RECEIVE IP address:port combination supplied: " + str(arg) + ", "+ str(e))
                         exit()
-                    print MODE, UDP_RX_IP, UDP_RX_PORT
+                    print (MODE+", "+str(UDP_RX_IP)+", "+str(UDP_RX_PORT))
                 else:
                     print ("Invalid RECEIVE IP address:port combination supplied: " + str(arg))
                     exit()
@@ -1985,7 +1985,6 @@ def main(argv):
                     print ("Invalid -b bandwidth specfied. Should be xy whether x is a numerical value and y is k or m (kbps or mbps). "+ \
                         "If no multiplier supplied then assuming x mbps. eg. 500k, 1m, 5m etc")
                     exit()
-                print "txRate", txRate
 
             elif opt in ("-d"):
                 # Maximum Ethernet frame size is 1500 bytes (minus 12 bytes for the RTP header)
