@@ -1511,14 +1511,14 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
             # Get stats from latest rtpTxStream
             try:
                 stats = rtpTxStreams[-1].getStats()
-                txStatsString = " [Sending to " + stats['Dest IP'] + ":"+str(stats['Dest Port'])+", " + \
+                print(" [Sending to " + stats['Dest IP'] + ":"+str(stats['Dest Port'])+", " + \
                     bToMb(stats['Tx Rate']) + "bps, " + \
                     "Packet size: " + str(stats['Packet size']) + " bytes, " + \
-                    "Src ID: "+str(stats['Sync Source ID'])+"], " \
-                    " [Total Data sent: " + bToMb(stats['Bytes transmitted']) + "B" + \
+                    "Src ID: "+str(stats['Sync Source ID'])+"],\r")
+                print(" [Total Data sent: " + bToMb(stats['Bytes transmitted']) + "B" + \
                     " Actual Tx rate: "+ bToMb(stats['Tx Rate (actual)']) + "bps, " + \
-                    "Elapsed Time: " + str(stats['Elapsed Time']) + "]"
-                print (txStatsString+"\r")
+                    "Elapsed Time: " + str(stats['Elapsed Time']) + "]\r")
+
             except Exception as e:
                 Message.addMessage("RtpGenerator: "+ str(stats['Sync Source ID'])+", " + str(e))
             print (operationMode + " MODE-----------------------------------------------------------------------------------------------------------------------\r")
