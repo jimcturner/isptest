@@ -336,7 +336,7 @@ class ExcessiveJitter(Event):
         # Add additional instance variables as required
         self.lastPacketReceived = lastPacketReceived
     def getSummary(self):
-        optionalFields = " "+str(self.stats["jitter_mean_1S_uS"]) + "/" + str(self.stats["jitter_long_term_uS"]) + "uS"
+        optionalFields = " "+str(int(self.stats["jitter_mean_1S_uS"])) + "/" + str(int(self.stats["jitter_long_term_uS"])) + "uS"
         summary = "[" + str(self.eventNo) + "]," + \
                   "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
@@ -344,8 +344,8 @@ class ExcessiveJitter(Event):
 
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
-        optionalFields = "jitter_mean_1S_uS,"+str(self.stats["jitter_mean_1S_uS"])+\
-            ",jitter_long_term_uS,"+str(self.stats["jitter_long_term_uS"])
+        optionalFields = "jitter_mean_1S_uS,"+str(int(self.stats["jitter_mean_1S_uS"]))+\
+            ",jitter_long_term_uS,"+str(int(self.stats["jitter_long_term_uS"]))
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
               ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
               "," + optionalFields
@@ -1328,7 +1328,7 @@ def humanise(inputDictionary):
 
         if str(key).find("uS") > 0:
             # Create human readable value
-            humanisedValue = str(value) + "uS"
+            humanisedValue = str(int(value)) + "uS"
 
         elif str(key).find("percent") > 0:
             # Create human readable value
