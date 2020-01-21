@@ -1642,7 +1642,7 @@ class RtpGenerator(object):
             # Construct 12 byte header
             txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
                                       self.syncSourceIdentifier)
-            MESSAGE = txRtpHeader + self.rtpPayload
+            MESSAGE = txRtpHeader + self.rtpPayload.encode('ascii')
 
             # If 'z' pressed, toggle packet generation on/off
             if self.keyPressed[0] == 'z':
