@@ -2025,6 +2025,9 @@ def main(argv):
     rtpRxStreams = []
     rtpTxStreams = []
 
+    # Create a dictionary to hold the rx Streams
+    rtpRxStreamsDict = {}
+
     # Start keyboard monitoring thread
     catchKeyboardPresses = threading.Thread(target=__catchKeyboardPresses, args=(keyPressed,))
     catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
@@ -2106,6 +2109,11 @@ def main(argv):
 
                 # Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp, syncSource
                 rtpRxStream.addData(rtpSequenceNo, payloadSize, timeNow, rtpSyncSourceIdentifier)
+                # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
+                try:
+                    rtpRxStreamsDict[rtpSyncSourceIdentifier].addData(rtpSequenceNo, payloadSize, timeNow, rtpSyncSourceIdentifier)
+                except:
+                    Message.addMessage("Stream doesn't exist, creating a new rx stream with sync source: " + str(rtpSyncSourceIdentifier))
 
             except Exception as e:
                 message = Fore.RED+"Cannot decode RTP headers. Is this an RTP packet? "+str(e)+ " Length:" + str(len(data))+\
