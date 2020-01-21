@@ -458,54 +458,6 @@ class Glitch(Event):
                 'actualReceivedSequenceNo': self.actualReceivedSequenceNo}
         return json.dumps(data, sort_keys=True, indent=4, default=str)
 
-# class Glitch(object):
-#     # Define descriptive names. These might be useful later
-#     type = "Glitch"
-#     description = ""
-#
-#     # Constructor
-#     def __init__(self, stats, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap):
-#         # Create timestamp of event
-#         self.timeCreated = datetime.datetime.now()
-#         # Update instance variables
-#         self.startOfGap = lastReceivedPacketBeforeGap
-#         self.endOfGap = firstPackedReceivedAfterGap
-#         # Take local copy of stats dictionary
-#         self.stats = dict(stats)
-#         # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
-#         self.eventNo = self.stats["stream_all_events_counter"] + 1
-#
-#         # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
-#         # The '-1' is because it's fences and fenceposts
-#         self.packetsLost = abs(
-#             firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo) - 1
-#         # print firstPackedReceivedAfterGap.rtpSequenceNo,lastReceivedPacketBeforeGap.rtpSequenceNo,"\r"
-#         # Calculate length of this glitch
-#         self.glitchLength = firstPackedReceivedAfterGap.timestamp - lastReceivedPacketBeforeGap.timestamp
-#         # Calculate useful values showing expected and actual rtpSequence no
-#         self.expectedSequenceNo = self.startOfGap.rtpSequenceNo + 1
-#         self.actualReceivedSequenceNo = self.endOfGap.rtpSequenceNo
-#
-#     def getData(self, verbosityLevel):
-#         # Returns a dictionary containing information about this event
-#         # If verbosityLevel > 0, returns the entire stats dictionary associated with this event
-#         if verbosityLevel == 0:
-#             summary = "[" + str(self.eventNo) + "]," + \
-#                       "[" + str(self.stats["stream_syncSource"]) + "], " + "Glitch:, " + \
-#                       "Duration:, " + str(self.glitchLength) + ", " + str(self.packetsLost) + ", packet(s) lost"
-#             data = {'timeCreated': self.timeCreated, 'summary': summary}
-#
-#         elif verbosityLevel == 1:
-#             data = {'type': Glitch.type, 'timeCreated': self.timeCreated,
-#                     'syncSource': self.stats["stream_syncSource"], 'packetsLost': self.packetsLost,
-#                     'duration': self.glitchLength, 'eventNo': self.eventNo}
-#
-#         elif verbosityLevel == 2:
-#             data = {'type': Glitch.type, 'timeCreated': self.timeCreated, 'syncSource': self.stats["stream_syncSource"],
-#                     'packetsLost': self.packetsLost, 'duration': self.glitchLength, 'stats': self.stats,
-#                     'eventNo': self.eventNo}
-#         return data
-
 
 class MovingTotalEventCounter(object):
     # Stores a running total of events that happened within the last x seconds with y granularity
@@ -611,6 +563,7 @@ class RtpStream(object):
         # No of events to keep before purging self.__eventList = []
         self.historicEventsLimit = 50
         self.__stats["glitch_Event_Trigger_Threshold_packets"]= glitchEventTriggerThreshold
+        self.__stats["glitch_glitches_ignored_counter"] = 0
 
         self.__stats["packet_first_packet_received_timestamp"] = datetime.timedelta()
         self.__stats["packet_counter_1S"] = 0
@@ -799,46 +752,58 @@ class RtpStream(object):
 
     def __updateGlitchStats(self, latestGlitch):
         # This method takes code out of __detectGlitches to reduce duplication
-        # It's primary purpose is to update __stats keys relating to glitches
+        # It's primary purpose is to update __stats keys relating to glitches (depending upon whether the
+        # size of the glitch exceeds self.__stats["glitch_Event_Trigger_Threshold_packets"] or not)
 
-        # Now update aggregate glitch stats
+        # Update packets lost counter
         self.__stats["glitch_packets_lost_total_count"] += latestGlitch.packetsLost
-        self.__stats["glitch_length_total_time"] += latestGlitch.glitchLength
-        self.__stats["glitch_counter_total_glitches"] += 1
-        # Add event to moving counters
-        for x in self.movingGlitchCounters:
-            x.addEvent(1)
 
-        # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
-        self.sumOfTimeElapsedSinceLastGlitch += self.__stats["glitch_time_elapsed_since_last_glitch"]
+        # If the glitch is insignificant, increment the 'ignored' counter so we record that it happened
+        if latestGlitch.packetsLost <= self.__stats["glitch_Event_Trigger_Threshold_packets"]:
+            self.__stats["glitch_glitches_ignored_counter"] += 1
 
-        # Calculate aggregate mean glitch stats
-        if self.__stats["glitch_counter_total_glitches"] > 1:
-            self.__stats["glitch_mean_glitch_duration"] = \
-                (self.__stats["glitch_mean_glitch_duration"] + latestGlitch.glitchLength) / 2
-            self.__stats["glitch_packets_lost_per_glitch_mean"] = \
-                int(math.ceil((self.__stats["glitch_packets_lost_per_glitch_mean"] + latestGlitch.packetsLost) / 2.0))
+        # If the glitch is significant then it's worth updating the stats
+        # if latestGlitch.packetsLost > self.__stats["glitch_Event_Trigger_Threshold_packets"]:
+        else:
+            # update aggregate glitch stats
+            self.__stats["glitch_length_total_time"] += latestGlitch.glitchLength
+            self.__stats["glitch_counter_total_glitches"] += 1
 
-        # Update glitch min/max packet loss stats
-        if self.__stats["glitch_packets_lost_per_glitch_min"] < 1:
-            self.__stats["glitch_packets_lost_per_glitch_min"] = latestGlitch.packetsLost
+            # Add event to moving counters
+            for x in self.movingGlitchCounters:
+                x.addEvent(1)
 
-        if latestGlitch.packetsLost < self.__stats["glitch_packets_lost_per_glitch_min"]:
-            self.__stats["glitch_packets_lost_per_glitch_min"] = latestGlitch.packetsLost
+            # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
+            self.sumOfTimeElapsedSinceLastGlitch += self.__stats["glitch_time_elapsed_since_last_glitch"]
 
-        if latestGlitch.packetsLost > self.__stats["glitch_packets_lost_per_glitch_max"]:
-            self.__stats["glitch_packets_lost_per_glitch_max"] = latestGlitch.packetsLost
+            # Calculate aggregate mean glitch stats
+            if self.__stats["glitch_counter_total_glitches"] > 1:
+                self.__stats["glitch_mean_glitch_duration"] = \
+                    (self.__stats["glitch_mean_glitch_duration"] + latestGlitch.glitchLength) / 2
+                self.__stats["glitch_packets_lost_per_glitch_mean"] = \
+                    int(math.ceil((self.__stats["glitch_packets_lost_per_glitch_mean"] + latestGlitch.packetsLost) / 2.0))
 
-        # update glitch min/max duration stats
-        # Test for 'zero' duration (the initial value)
-        if self.__stats["glitch_min_glitch_duration"] == datetime.timedelta():
-            self.__stats["glitch_min_glitch_duration"] = latestGlitch.glitchLength
+            # Update glitch min/max packet loss stats
+            if self.__stats["glitch_packets_lost_per_glitch_min"] < 1:
+                self.__stats["glitch_packets_lost_per_glitch_min"] = latestGlitch.packetsLost
 
-        if latestGlitch.glitchLength < self.__stats["glitch_min_glitch_duration"]:
-            self.__stats["glitch_min_glitch_duration"] = latestGlitch.glitchLength
+            # Update min/max counters
+            if latestGlitch.packetsLost < self.__stats["glitch_packets_lost_per_glitch_min"]:
+                self.__stats["glitch_packets_lost_per_glitch_min"] = latestGlitch.packetsLost
 
-        if latestGlitch.glitchLength > self.__stats["glitch_max_glitch_duration"]:
-            self.__stats["glitch_max_glitch_duration"] = latestGlitch.glitchLength
+            if latestGlitch.packetsLost > self.__stats["glitch_packets_lost_per_glitch_max"]:
+                self.__stats["glitch_packets_lost_per_glitch_max"] = latestGlitch.packetsLost
+
+            # update glitch min/max duration stats
+            # Test for 'zero' duration (the initial value)
+            if self.__stats["glitch_min_glitch_duration"] == datetime.timedelta():
+                self.__stats["glitch_min_glitch_duration"] = latestGlitch.glitchLength
+
+            if latestGlitch.glitchLength < self.__stats["glitch_min_glitch_duration"]:
+                self.__stats["glitch_min_glitch_duration"] = latestGlitch.glitchLength
+
+            if latestGlitch.glitchLength > self.__stats["glitch_max_glitch_duration"]:
+                self.__stats["glitch_max_glitch_duration"] = latestGlitch.glitchLength
 
         # Inhibit immediate jitter-event triggering by setting self.__stats["jitter_time_of_last_excess_jitter_event"]
         # to the current time
@@ -859,17 +824,23 @@ class RtpStream(object):
 
         if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and \
                 self.__stats["stream_time_elapsed_total"].seconds > 0:
-            # Take timestamp of most recent glitch
-            self.__stats["glitch_most_recent_timestamp"] = datetime.datetime.now()
 
             # Capture packets either side of the 'hole' and store them in the event list
             # Create an object representing the glitch
             glitch = Glitch(self.__stats, lastReceivedRtpPacket, self.rtpStream[0])
-            # Add the latest glitch to the evenList[]
-            self.__eventList.append(glitch)
-            # Increment the all_events counter
-            self.__stats["stream_all_events_counter"] += 1
 
+            # Check to see if this glitch is significant enough to be considered an event
+            if glitch.packetsLost > self.__stats["glitch_Event_Trigger_Threshold_packets"]:
+                # Take timestamp of most recent glitch
+                self.__stats["glitch_most_recent_timestamp"] = datetime.datetime.now()
+                # Add the latest glitch to the evenList[]
+                self.__eventList.append(glitch)
+                # Increment the all_events counter
+                self.__stats["stream_all_events_counter"] += 1
+                # Post a message
+                Message.addMessage(glitch.getSummary()['summary'])
+            else:
+                Message.addMessage("Insignificant glitch (ignored): " + glitch.getSummary()['summary'])
             # update glitch stats
             self.__updateGlitchStats(glitch)
 
@@ -889,15 +860,23 @@ class RtpStream(object):
 
             # Test sequence no of current packet against previous packet
             if rtpPacket.rtpSequenceNo != (prevRtpPacket.rtpSequenceNo + 1):
-                # Take timestamp of most recent glitch
-                self.__stats["glitch_most_recent_timestamp"] = datetime.datetime.now()
+
                 # Capture packets either side of the 'hole' and store them in the event list
                 # Create an object representing the glitch
                 glitch = Glitch(self.__stats, prevRtpPacket, rtpPacket)
-                # Add the glitch to the evenList[]
-                self.__eventList.append(glitch)
-                # Increment the all_events counter
-                self.__stats["stream_all_events_counter"] += 1
+
+                # Check to see if this glitch is significant enough to be considered an event
+                if glitch.packetsLost > self.__stats["glitch_Event_Trigger_Threshold_packets"]:
+                    # Take timestamp of most recent glitch
+                    self.__stats["glitch_most_recent_timestamp"] = datetime.datetime.now()
+                    # Add the latest glitch to the evenList[]
+                    self.__eventList.append(glitch)
+                    # Increment the all_events counter
+                    self.__stats["stream_all_events_counter"] += 1
+                    # Post a message
+                    Message.addMessage(glitch.getSummary()['summary'])
+                else:
+                    Message.addMessage("Insignificant glitch (ignored): " + glitch.getSummary()['summary'])
 
                 # update glitch stats
                 self.__updateGlitchStats(glitch)
