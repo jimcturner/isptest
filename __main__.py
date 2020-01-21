@@ -1262,10 +1262,10 @@ def printTable(xPos, yPos, tableData):
         # Generate an ascii escape sequence \033[<yPos>;<xPos>H to move the cursor
         asciiCode = "\033[" + str((yPos + lineCount)) + ";" + str(xPos) + "H"
         printString = asciiCode + row + "\r"
-        print printString
+        print (printString)
         lineCount += 1
     # Finally, move cursor to start of next available line
-    print "\033[" + str(yPos + lineCount) + ";" + str(0) + "H", "\r"
+    print ("\033[" + str(yPos + lineCount) + ";" + str(0) + "H" + "\r")
 
 def bToMb(value):
     # Utility function convert a value in bytes to kB or MB with a suffix
@@ -1406,8 +1406,8 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
     Message.addMessage("Terminal size: " + str(columns) + ", " + str(rows))
     while True:
         # Clear screen and move cursor to origin
-        print "\033[2J", "\r"
-        print "\033[0;0HIBEOO ISP Analyser V1.0---------------------------------------------------------------------------------------------------", "\r"
+        print ("\033[2J\r")
+        print ("\033[0;0HIBEOO ISP Analyser V1.0---------------------------------------------------------------------------------------------------\r")
 
         nextUsableLine = 3  # Takes into account the title
         nextUseableLineWholeWidth=nextUsableLine
@@ -1463,7 +1463,7 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
                 nextUsableLine += (height + padding)
 
                 # # Move cursor to start of next available line
-                print "\033[" + str(nextUseableLineWholeWidth) + ";" + str(0) + "H", "\r"
+                print ("\033[" + str(nextUseableLineWholeWidth) + ";" + str(0) + "H" + "\r")
 
                 # Get the last x events
                 noOfHistoricEventsToView = 10
@@ -1518,10 +1518,10 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
                 " [Total Data sent: " + bToMb(stats['Bytes transmitted']) + "B" + \
                 " Actual Tx rate: "+ bToMb(stats['Tx Rate (actual)']) + "bps]"
 
-            print txStatsString,"\r"
-            print operationMode + " MODE-----------------------------------------------------------------------------------------------------------------------", "\r"
-            print " [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r"
-            print" [e] Increment sync source id, [a]/[s] Decrease/Increase tx packet size\r"
+            print (txStatsString+"\r")
+            print (operationMode + " MODE-----------------------------------------------------------------------------------------------------------------------\r")
+            print (" [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r")
+            print (" [e] Increment sync source id, [a]/[s] Decrease/Increase tx packet size\r")
 
         time.sleep(1)
 
@@ -2116,7 +2116,6 @@ def main(argv):
     # Sit in endless loop
     while True:
         time.sleep(1)
-
 
 # Invoke main() method (entry point for Python script)
 if __name__ == "__main__":
