@@ -1968,7 +1968,7 @@ def main(argv):
             elif opt in ("-b"):
                 try:
                     # Use regex to split -b argument into numerical and string parts
-                    splitArg = re.split('(\d+)', arg)
+                    splitArg = re.split(r'(\d+)', arg)
                     # Extract numerical part
                     x = int(splitArg[1])
                     # Extract string part
@@ -1985,6 +1985,7 @@ def main(argv):
                     print ("Invalid -b bandwidth specfied. Should be xy whether x is a numerical value and y is k or m (kbps or mbps). "+ \
                         "If no multiplier supplied then assuming x mbps. eg. 500k, 1m, 5m etc")
                     exit()
+
 
             elif opt in ("-d"):
                 # Maximum Ethernet frame size is 1500 bytes (minus 12 bytes for the RTP header)
