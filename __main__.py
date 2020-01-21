@@ -581,7 +581,7 @@ class RtpStream(object):
     # Constructor method.
     # The RtpStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
-    def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort):
+    def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold):
 
         # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
         self.__stats = {}
@@ -610,6 +610,7 @@ class RtpStream(object):
 
         # No of events to keep before purging self.__eventList = []
         self.historicEventsLimit = 50
+        self.__stats["glitch_Event_Trigger_Threshold_packets"]= glitchEventTriggerThreshold
 
         self.__stats["packet_first_packet_received_timestamp"] = datetime.timedelta()
         self.__stats["packet_counter_1S"] = 0
@@ -1906,6 +1907,9 @@ def main(argv):
     # Specify a default packet size for the tx stream (if none supplied)
     payloadLength = 1300
 
+    # Default level of packet loss that will generate an event
+    glitchEventTriggerThreshold  = 4
+
     # print ('Argument List: '+ str(argv))
     try:
         # options are:
@@ -1915,6 +1919,7 @@ def main(argv):
         # -r receive mode usage: address:port
         # -b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps
         # -d udp packet size
+        # -i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4
 
         address = ""
         opts, args = getopt.getopt(argv, "hlt:r:i:t:b:d:")
@@ -1929,7 +1934,8 @@ def main(argv):
                 print ("-t: transmit mode usage: address:port\r")
                 print ("-r receive mode usage: address:port\r")
                 print ("-b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps\r")
-                print ("-d rtp payload size (bytes)\r")
+                print ("-d rtp payload size (bytes). Default = 1300 bytes\r")
+                print ("-i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4\r")
                 exit()
 
             elif opt == '-l':
@@ -2017,6 +2023,15 @@ def main(argv):
                     print ("Invalid payload size specified '"+ str(arg)+ "'")
                     exit()
 
+            elif opt in ("-i"):
+                # Test to see if supplied value is an int
+                try:
+                    # Simple test to see if arg is an integer. If it's a string, this will fail
+                    glitchEventTriggerThreshold = int(arg) +1 -1
+                except:
+                    print ("Invalid glitch ignore threashold specified. Must be an integer: " + int(arg))
+                    exit()
+
     except getopt.GetoptError:
         print ('invalid options supplied'+ str(argv))
         exit()
@@ -2098,7 +2113,8 @@ def main(argv):
 
                 if runOnce == True:
                     # Create a new rtpStream object (but only once)
-                    rtpRxStream = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, UDP_RX_PORT)
+                    rtpRxStream = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP,
+                                            UDP_RX_PORT, glitchEventTriggerThreshold)
                     # Append the rtpRxStream to the rtpRxStreams list
                     rtpRxStreams.append(rtpRxStream)
 
