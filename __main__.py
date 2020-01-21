@@ -1509,15 +1509,18 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
         # Check operation mode and also check to see if a valid rtpTxStream currently exists in the array
         if (operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK') and len(rtpTxStreams) > 0:
             # Get stats from latest rtpTxStream
-            stats = rtpTxStreams[-1].getStats()
-            txStatsString = " [Sending to " + stats['Dest IP'] + ":"+str(stats['Dest Port'])+", " + \
-                bToMb(stats['Tx Rate']) + "bps, " + \
-                "Packet size: " + str(stats['Packet size']) + " bytes, " + \
-                "Src ID: "+str(stats['Sync Source ID'])+"], " \
-                " [Total Data sent: " + bToMb(stats['Bytes transmitted']) + "B" + \
-                " Actual Tx rate: "+ bToMb(stats['Tx Rate (actual)']) + "bps]"
-
-            print (txStatsString+"\r")
+            try:
+                stats = rtpTxStreams[-1].getStats()
+                txStatsString = " [Sending to " + stats['Dest IP'] + ":"+str(stats['Dest Port'])+", " + \
+                    bToMb(stats['Tx Rate']) + "bps, " + \
+                    "Packet size: " + str(stats['Packet size']) + " bytes, " + \
+                    "Src ID: "+str(stats['Sync Source ID'])+"], " \
+                    " [Total Data sent: " + bToMb(stats['Bytes transmitted']) + "B" + \
+                    " Actual Tx rate: "+ bToMb(stats['Tx Rate (actual)']) + "bps, " + \
+                    "Elapsed Time: " + str(stats['Elapsed Time']) + "]"
+                print (txStatsString+"\r")
+            except Exception as e:
+                Message.addMessage("RtpGenerator: "+ str(stats['Sync Source ID'])+", " + str(e))
             print (operationMode + " MODE-----------------------------------------------------------------------------------------------------------------------\r")
             print (" [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r")
             print (" [e] Increment sync source id, [a]/[s] Decrease/Increase tx packet size\r")
@@ -1548,6 +1551,7 @@ class RtpGenerator(object):
         self.txBps_1s = 0               # Used to 'sample' the actual tx rate
         self.syncSourceIdentifier =65534
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
+        self.elapsedTime = datetime.timedelta()
 
         # Start the generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
@@ -1562,7 +1566,8 @@ class RtpGenerator(object):
                 'Tx Rate (actual)': self.txActualTxRate_bps,
                 'Packet size': self.payloadLength,
                 'Bytes transmitted': self.txCounter_bytes,
-                'Sync Source ID': self.syncSourceIdentifier
+                'Sync Source ID': self.syncSourceIdentifier,
+                'Elapsed Time': self.elapsedTime
                 }
 
     def generatePayload(self,length):
@@ -1770,8 +1775,12 @@ class RtpGenerator(object):
 
             # Has 1 second elapsed?
             if (timer() - startTime) >= 1 and enablePacketGeneration == True:
-                # Reset elapsed timer
+                # Reset elapsed timer (for 1 second timer)
                 startTime = timer()
+
+                # Increment elapsed time counter by 1 second
+                self.elapsedTime += datetime.timedelta(seconds=1)
+
                 # Test actual tx rate (averaged over a second) against 99% of desired tx rate
                 if self.txBps_1s < (0.99 * self.txRate):
                     # Data not being sent fast enough, so reduce txPeriod time
