@@ -69,7 +69,6 @@ def getTerminalSize():
     if current_os == 'Linux' or current_os == 'Darwin' or current_os.startswith('CYGWIN'):
         tuple_xy = _getTerminalSize_linux()
     if tuple_xy is None:
-        print "default"
         tuple_xy = (80, 25)  # default value
     return tuple_xy
 
@@ -592,7 +591,7 @@ class RtpStream(object):
         self.__stats["stream_srcPort"] = srcPort
         self.__stats["stream_rxAddress"] = rxAddress
         self.__stats["stream_rxPort"] = rxPort
-        print "creating RtpStream with syncSource:", self.__stats["stream_syncSource"], "\r"
+        Message.addMessage("Creating RtpStream with syncSource: " + str(self.__stats["stream_syncSource"]))
 
         # Create a mutex lock to be used by the a thread
         # To set the lock use: __accessRtpDataMutex.acquire(), To release use: __accessRtpDataMutex.release()
