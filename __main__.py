@@ -1610,13 +1610,10 @@ class RtpGenerator(object):
         msg = "Traffic Generator thread started. Sending to " + self.UDP_TX_IP + ":" + str(self.UDP_TX_PORT) + \
               ", txRate:" + str(self.txRate) + "bps, payloadLength:" + str(self.payloadLength)
         Message.addMessage(msg)
-        print msg, "\r"
-        print "[spacebar] insert single packet loss, [z] Inhibit/Re-enable packet generation, [j] Toggle jitter on/off", "\r"
 
         rtpParams = 0b01000000
         rtpPayloadType = 0b00000000
         rtpSequenceNo = 0
-
 
         enablePacketGeneration = True
         enableJitter = False
