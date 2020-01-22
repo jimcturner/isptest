@@ -1421,7 +1421,12 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         nextUsableColumn = 0
 
         # Get dictionary of available rtpRxStreams as a list
-        availableRtpRxStreamList = rtpRxStreamsDict.items()
+        availableRtpRxStreamList = []
+        temp = []
+        for k,v in rtpRxStreamsDict.items():
+            temp=[k,v]
+            availableRtpRxStreamList.append(temp)
+
         # Check operation mode and also check to see if a valid rtpRxStream currently exists in the array
         if (operationMode == 'RECEIVE' or operationMode == 'LOOPBACK') and len(availableRtpRxStreamList) > 0:
             try:
@@ -1433,11 +1438,16 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
                     if selectedStream > (len(availableRtpRxStreamList) - 1):
                         # If already on the last available stream, cycle back to the first
                         selectedStream = 0
+            except Exception as e:
+                Message.addMessage("__displayThread: keyPressed " + str(e))
 
+            try:
                 # Get latest keys/values from rtpStream
                 currentRtpRxStream = availableRtpRxStreamList[selectedStream][1]
                 stats = currentRtpRxStream.getRtpStreamStats()
-
+            except Exception as e:
+                Message.addMessage("__displayThread: Get current stream " + str(e))
+            try:
                 # Create a table of stream stats
                 width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("stream").items()),
                                                    "Stream info")
@@ -1482,7 +1492,10 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
                 # # Move cursor to start of next available line
                 print ("\033[" + str(nextUseableLineWholeWidth) + ";" + str(0) + "H" + "\r")
+            except Exception as e:
+                Message.addMessage("__displayThread: stats tables" + str(e))
 
+            try:
                 # Get the last x events
                 noOfHistoricEventsToView = 10
                 events = currentRtpRxStream.getRTPStreamEventList(noOfHistoricEventsToView)
@@ -1505,7 +1518,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
                 nextUseableLineWholeWidth += (height + padding)
                 nextUsableColumn = width + padding + margin
             except Exception as e:
-                Message.addMessage("__displayThread: " + str(e))
+                Message.addMessage("__displayThread: Events tables " + str(e))
 
 
         # Print a messages table on the next useable line
@@ -1555,6 +1568,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
                     streamListString += Fore.WHITE+Back.BLACK+str(x[0]) + Style.RESET_ALL + ", "
                 else:
                     streamListString += str(x[0]) + ", "
+
             print ("Available streams: " + streamListString + "\r")
         time.sleep(1)
 
