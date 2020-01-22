@@ -1374,7 +1374,7 @@ def humanise(inputDictionary):
 
 
 # Define a display thread that will run autonomously
-def __displayThread(operationMode, rtpRxStreams, rtpTxStreams, rtpRxStreamTempDict, rtpRxStreamsDict):
+def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict):
     # Currently only decoding a single stream
 
 
@@ -1396,12 +1396,14 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams, rtpRxStreamTempDi
         nextUseableLineWholeWidth=nextUsableLine
         nextUsableColumn = 0
         # Check operation mode and also check to see if a valid rtpRxStream currently exists in the array
-        if (operationMode == 'RECEIVE' or operationMode == 'LOOPBACK') and len(rtpRxStreams) > 0:
+        # Pick off the latest rx Stream from rtpStreams[]
+        availableRtpRxStreamList = rtpRxStreamsDict.items()
+
+        if (operationMode == 'RECEIVE' or operationMode == 'LOOPBACK') and len(availableRtpRxStreamList) > 0:
             try:
-                # Pick off the latest rx Stream from rtpStreams[]
-                currentRtpRxStream = rtpRxStreams[-1]
                 # Get latest keys/values from rtpStream
-                stats = rtpRxStreams[-1].getRtpStreamStats()
+                currentRtpRxStream = availableRtpRxStreamList[0][1]
+                stats = currentRtpRxStream.getRtpStreamStats()
 
                 # Create a table of stream stats
                 width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("stream").items()),
@@ -1508,9 +1510,10 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams, rtpRxStreamTempDi
         print (operationMode + " MODE-----------------------------------------------------------------------------------------------------------------------\r")
         print (" [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r")
         print (" [e] Increment sync source id, [a]/[s] Decrease/Increase tx packet size\r")
-        print ("rtpRxStreamTempDict: "+ str(rtpRxStreamTempDict)+"\r")
-        print ("rtpRxStreamsDict: " + str(rtpRxStreamsDict) + "\r")
-
+        streamList = ""
+        for x in availableRtpRxStreamList:
+            streamList += str(x[0]) + ", "
+        print ("Available streams: " + streamList + "\r")
         time.sleep(1)
 
 # Define a thread that will trap keys pressed
@@ -2042,7 +2045,7 @@ def main(argv):
     catchKeyboardPresses.start()
 
     # Create a display thread
-    displayThread = threading.Thread(target=__displayThread, args=(MODE, rtpRxStreams, rtpTxStreams, rtpRxStreamTempDict, rtpRxStreamsDict,))
+    displayThread = threading.Thread(target=__displayThread, args=(MODE, rtpTxStreams, rtpRxStreamsDict,))
     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
     displayThread.start()
 
