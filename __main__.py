@@ -1525,10 +1525,14 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         # If receive mode, list the available streams
         if operationMode == 'RECEIVE' or operationMode == 'LOOPBACK':
             print("[n] to cycle through available receive streams\r")
-            streamList = ""
+            streamListString = ""
             for x in availableRtpRxStreamList:
-                streamList += str(x[0]) + ", "
-            print ("Available streams: " + streamList + "\r")
+                # if the list item sync source id matches the currently selected stream sync source, highlight it
+                if x[0] == availableRtpRxStreamList[selectedStream][0]:
+                    streamListString += Fore.WHITE+Back.BLACK+str(x[0]) + Style.RESET_ALL + ", "
+                else:
+                    streamListString += str(x[0]) + ", "
+            print ("Available streams: " + streamListString + "\r")
         time.sleep(1)
 
 # Define a thread that will trap keys pressed
