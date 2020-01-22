@@ -1400,10 +1400,10 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         nextUsableLine = 3  # Takes into account the title
         nextUseableLineWholeWidth=nextUsableLine
         nextUsableColumn = 0
-        # Check operation mode and also check to see if a valid rtpRxStream currently exists in the array
-        # Pick off the latest rx Stream from rtpStreams[]
-        availableRtpRxStreamList = rtpRxStreamsDict.items()
 
+        # Get dictionary of available rtpRxStreams as a list
+        availableRtpRxStreamList = rtpRxStreamsDict.items()
+        # Check operation mode and also check to see if a valid rtpRxStream currently exists in the array
         if (operationMode == 'RECEIVE' or operationMode == 'LOOPBACK') and len(availableRtpRxStreamList) > 0:
             try:
                 # Check for [n] having been pressed. If so, cycle through the available streams
@@ -1835,17 +1835,16 @@ class RtpGenerator(object):
                 pass
 
 
-def __diskLoggerThread(rtpStreams):
-    # Autonomous thread to poll RtpStream eventList for new events
+def __diskLoggerThread(rtpRxStreamsDict):
+    # Autonomous thread to iterate over rtpRxStreamsDict and poll RtpStream eventLists for new events
     # and write them  to disk
     Message.addMessage("diskLoggerThread starting")
     filename_csv = "eventLog" + datetime.datetime.now().strftime("%H%M%S") + ".csv"
     filename_json = "eventLog" + datetime.datetime.now().strftime("%H%M%S") + ".json"
     lastWrittenEventNo = 0  # Stores last written Event.eventNo
+    lastWrittenEventNoDict = {} # Dictionary to hold the last written event no for each stream
     latestEvents = []
 
-    # get latest stream from rtpStreams[]
-    currentRtpStream=rtpStreams[-1]
     # Create a file and write a header
     try:
         # Write summary file
@@ -1863,44 +1862,62 @@ def __diskLoggerThread(rtpStreams):
         Message.addMessage("__diskLoggerThread " + str(e))
 
     while True:
-        # Attempt to access rtpStream events list
-        # and create a sublist of the just the latest elements
-        try:
-            allEvents = currentRtpStream.getRTPStreamEventList()
+        # Get dictionary of available rtpRxStreams as a list
+        # This will return a list of tuples [0]= sync Source id, [1]=the actual RtpStream object
+        availableRtpRxStreamList = rtpRxStreamsDict.items()
+        if len(availableRtpRxStreamList) > 0:
+            # Iterate over availableRtpRxStreamList looking for new events
+            for currentRtpStream in availableRtpRxStreamList:
 
-            # Now check to see if there are any previously unwritten events in the allEvents list
-            # Subtract lastWrittenEventNo from most recent eventNo
-            if len(allEvents) > 0:
-                newEvents = allEvents[-1].eventNo - lastWrittenEventNo
-                if newEvents > 0:
-                    # There are outstanding events to be written
-                    # Slice the latest portion of the allEvents list into a sub list
-                    latestEvents = allEvents[(newEvents * -1):]
-        except Exception as e:
-            Message.addMessage("__diskLoggerThread " + str(e))
+                # Attempt to access rtpStream events list
+                # and create a sublist of the just the latest elements
+                try:
+                    allEvents = currentRtpStream[1].getRTPStreamEventList()
 
-        # Confirm to see that there are some events in the list
-        if len(latestEvents) > 0:
-            # Open the files for writing (a denotes 'append', + denotes read/write
-            try:
-                file_csv = open(filename_csv, "a+")
-                file_json = open(filename_json, "a+")
-                for event in latestEvents:
-                    # Get the event data in csv format
-                    eventString = event.getCSV()+"\n"
-                    # Write the event(s) to disk
-                    file_csv.write(eventString)
-                    # Get a json object from the event (as a string)
-                    eventAsJson = event.getJSON() + "\n"
-                    file_json.write(eventAsJson)
-                    lastWrittenEventNo = event.eventNo
-                # Close the files
-                file_csv.close()
-                file_json.close()
-                # Empty the latestEvents list
-                del latestEvents[:]
-            except Exception as e:
-                Message.addMessage("__diskLoggerThread " + str(e))
+                    # Now check to see if there are any previously unwritten events in the allEvents list
+                    # Subtract lastWrittenEventNo from most recent eventNo
+                    if len(allEvents) > 0:
+                        # newEvents = allEvents[-1].eventNo - lastWrittenEventNo
+                        # Determine the new events for this particular stream
+                        # Note, if this stream is 'brand new' the key for that stream won't exist yet, so create it
+                        # and set it to a default value of 0 (because we haven't written any events yet from that RtpStream object)
+                        if not currentRtpStream[0] in lastWrittenEventNoDict:
+                            lastWrittenEventNoDict[currentRtpStream[0]] = 0
+
+                        # Calculate how many new (i.e not yet written to disk) events there in are in this RtpStream object
+                        newEvents = allEvents[-1].eventNo - lastWrittenEventNoDict[currentRtpStream[0]]
+
+                        if newEvents > 0:
+                            # There are outstanding events to be written
+                            # Slice the latest portion of the allEvents list into a sub list
+                            latestEvents = allEvents[(newEvents * -1):]
+                except Exception as e:
+                    Message.addMessage("__diskLoggerThread " + str(e))
+
+                # Confirm to see that there are some events in the list
+                if len(latestEvents) > 0:
+                    # Open the files for writing (a denotes 'append', + denotes read/write
+                    try:
+                        file_csv = open(filename_csv, "a+")
+                        file_json = open(filename_json, "a+")
+                        for event in latestEvents:
+                            # Get the event data in csv format
+                            eventString = event.getCSV()+"\n"
+                            # Write the event(s) to disk
+                            file_csv.write(eventString)
+                            # Get a json object from the event (as a string)
+                            eventAsJson = event.getJSON() + "\n"
+                            file_json.write(eventAsJson)
+                            lastWrittenEventNo = event.eventNo
+                            # Make a note of the last written event no against this stream id key
+                            lastWrittenEventNoDict[currentRtpStream[0]] = event.eventNo
+                        # Close the files
+                        file_csv.close()
+                        file_json.close()
+                        # Empty the latestEvents list
+                        del latestEvents[:]
+                    except Exception as e:
+                        Message.addMessage("__diskLoggerThread " + str(e))
         time.sleep(1)
 
 
@@ -2091,6 +2108,12 @@ def main(argv):
                 ". Try another port. Exiting\x1B[0m")
             time.sleep(2)
             exit()
+
+        # Create a diskLogging Thread - pass rtpStream object to it
+        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(rtpRxStreamsDict,))
+        diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
+        diskLoggerThread.start()
+
         while True:
             # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
             try:
@@ -2127,22 +2150,6 @@ def main(argv):
                 rtpSequenceNo = rtpHeader[2]
                 rtpSyncSourceIdentifier = rtpHeader[4]
 
-                if runOnce == True:
-                    # Create a new rtpStream object (but only once)
-                    rtpRxStream = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP,
-                                            UDP_RX_PORT, glitchEventTriggerThreshold)
-                    # Append the rtpRxStream to the rtpRxStreams list
-                    rtpRxStreams.append(rtpRxStream)
-
-                    # Create a diskLogging Thread - pass rtpStream object to it
-                    diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(rtpRxStreams,))
-                    diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
-                    diskLoggerThread.start()
-
-                    runOnce = False
-
-                # Add new data to rtpStream object rtpSequenceNo,payloadSize,timestamp, syncSource
-                rtpRxStream.addData(rtpSequenceNo, payloadSize, timeNow, rtpSyncSourceIdentifier)
                 # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
                 try:
                     rtpRxStreamsDict[rtpSyncSourceIdentifier].addData(rtpSequenceNo, payloadSize, timeNow, rtpSyncSourceIdentifier)
