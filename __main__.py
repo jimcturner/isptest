@@ -553,6 +553,9 @@ class RtpStream(object):
         self.__accessRtpStreamStatsMutex = threading.Lock()
         self.__accessRtpStreamEventListMutex = threading.Lock()
 
+        # Add a name field (which can be set with a friendly name (via a setter method) to identify the stream)
+        self.__stats["stream_friendly_name"] = ""
+
         # Create empty list to hold rtp stream data as it is received by the socket
         self.rtpStreamData = []
 
@@ -1133,9 +1136,25 @@ class RtpStream(object):
 
             time.sleep(self.__stats["calculate_thread_sampling_interval_S"])
 
+    # Define setter methods
+    def setFriendlyName(self, friendlyName):
+        # Thread-safe method to set the friendly name field
+
+        # Truncate supplied name to 12 characters (truncated to preserve the screen layout)
+        truncatedName = friendlyName[:12]
+        self.__accessRtpStreamStatsMutex.acquire()
+        self.__stats["stream_friendly_name"]=truncatedName
+        self.__accessRtpStreamStatsMutex.release()
+        return truncatedName
+
     # Define getter methods
     def getRTPStreamID(self):
-        return self.__stats["stream_syncSource"], self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"]
+        # Thread-safe method to access stream syncSource, src address, src port and name fields
+        self.__accessRtpStreamStatsMutex.acquire()
+        stats = self.__stats.copy()
+        self.__accessRtpStreamStatsMutex.release()
+        return stats["stream_syncSource"], stats["stream_srcAddress"], \
+               stats["stream_srcPort"], self.__stats["stream_friendly_name"]
 
     # Thread-safe method for accessing all RtpStream stats
     def getRtpStreamStats(self):
@@ -1890,7 +1909,7 @@ def __diskLoggerThread(rtpRxStreamsDict):
                             # Slice the latest portion of the allEvents list into a sub list
                             latestEvents = allEvents[(newEvents * -1):]
                 except Exception as e:
-                    Message.addMessage("__diskLoggerThread " + str(e))
+                    Message.addMessage("__diskLoggerThread - determining new events" + str(e))
 
                 # Confirm to see that there are some events in the list
                 if len(latestEvents) > 0:
@@ -1915,7 +1934,7 @@ def __diskLoggerThread(rtpRxStreamsDict):
                         # Empty the latestEvents list
                         del latestEvents[:]
                     except Exception as e:
-                        Message.addMessage("__diskLoggerThread " + str(e))
+                        Message.addMessage("__diskLoggerThread - appending to file" + str(e))
         time.sleep(1)
 
 
