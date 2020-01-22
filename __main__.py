@@ -1399,8 +1399,6 @@ def humanise(inputDictionary):
 # Define a display thread that will run autonomously
 def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     # Currently only decoding a single stream
-
-
     Message.addMessage("Starting __displayThread")
 
     padding = 1  # Gap between tables
@@ -1896,7 +1894,13 @@ def __diskLoggerThread(rtpRxStreamsDict):
     while True:
         # Get dictionary of available rtpRxStreams as a list
         # This will return a list of tuples [0]= sync Source id, [1]=the actual RtpStream object
-        availableRtpRxStreamList = rtpRxStreamsDict.items()
+        availableRtpRxStreamList = []
+        temp =[]
+        # Iterate over tuples returned by items() to create a list of tuples
+        for k,v in rtpRxStreamsDict.items():
+            temp = [k, v]
+            availableRtpRxStreamList.append(temp)
+
         if len(availableRtpRxStreamList) > 0:
             # Iterate over availableRtpRxStreamList looking for new events
             for currentRtpStream in availableRtpRxStreamList:
