@@ -568,6 +568,7 @@ class RtpStream(object):
         self.__stats["glitch_glitches_ignored_counter"] = 0
 
         self.__stats["packet_first_packet_received_timestamp"] = datetime.timedelta()
+        self.__stats["packet_last_seen_received_timestamp"] = datetime.timedelta()
         self.__stats["packet_counter_1S"] = 0
         self.__stats["packet_data_received_1S_bytes"] = 0
         self.__stats["packet_data_received_total_bytes"] = 0
@@ -886,6 +887,7 @@ class RtpStream(object):
             # Store current rtp packet for the next iteration around the loop
             prevRtpPacket = rtpPacket
 
+
         if self.__stats["glitch_counter_total_glitches"] > 1:
             # Calculate mean of new and prev value
             self.__stats["glitch_mean_time_between_glitches"] = \
@@ -946,8 +948,8 @@ class RtpStream(object):
                     self.__eventList.append(StreamStarted(self.__stats, self.rtpStream[0]))
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
-                # Stream now being received so clear flag
 
+                # Stream now being received so clear flag
                 if lossOfStreamFlag == True:
                     # We're now receiving a stream, so clear alarm flag
                     lossOfStreamFlag = False
@@ -983,6 +985,8 @@ class RtpStream(object):
 
                 # Capture most recent packet (last item of current data set) for next time around loop
                 lastReceivedRtpPacket = self.rtpStream[-1]
+                # Take timestamp of last packet in this batch
+                self.__stats["packet_last_seen_received_timestamp"] = lastReceivedRtpPacket.timestamp
 
             else:
                 # No data, so set lossOfStreamFlag (unless it's already been set)
