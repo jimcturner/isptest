@@ -421,7 +421,9 @@ class Glitch(Event):
         # The '-1' is because it's fences and fenceposts
         self.packetsLost = abs(
             firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo) - 1
-        # print firstPackedReceivedAfterGap.rtpSequenceNo,lastReceivedPacketBeforeGap.rtpSequenceNo,"\r"
+        # Guard against the possibility of a -ve packetsLost value
+        if self.packetsLost < 0:
+            self.packetsLost =0
         # Calculate length of this glitch
         self.glitchLength = firstPackedReceivedAfterGap.timestamp - lastReceivedPacketBeforeGap.timestamp
         # Calculate useful values showing expected and actual rtpSequence no
@@ -1016,8 +1018,10 @@ class RtpStream(object):
             if self.__stats["packet_counter_received_total"] > 0:
                 totalExpectedPackets = self.__stats["packet_counter_received_total"] + \
                                        self.__stats["glitch_packets_lost_total_count"]
-                self.__stats["glitch_packets_lost_total_percent"] = \
-                    self.__stats["glitch_packets_lost_total_count"] * 100 / totalExpectedPackets
+                # Guard against divide by zero errors
+                if totalExpectedPackets > 0:
+                    self.__stats["glitch_packets_lost_total_percent"] = \
+                        self.__stats["glitch_packets_lost_total_count"] * 100 / totalExpectedPackets
 
             ################# 1 second timer
             if (timer() - loopTimerStart) >= 1:
@@ -1370,7 +1374,7 @@ def humanise(inputDictionary):
 
 
 # Define a display thread that will run autonomously
-def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
+def __displayThread(operationMode, rtpRxStreams, rtpTxStreams, rtpRxStreamTempDict, rtpRxStreamsDict):
     # Currently only decoding a single stream
 
 
@@ -1501,9 +1505,11 @@ def __displayThread(operationMode, rtpRxStreams, rtpTxStreams):
 
             except Exception as e:
                 Message.addMessage("RtpGenerator: "+ str(stats['Sync Source ID'])+", " + str(e))
-            print (operationMode + " MODE-----------------------------------------------------------------------------------------------------------------------\r")
-            print (" [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r")
-            print (" [e] Increment sync source id, [a]/[s] Decrease/Increase tx packet size\r")
+        print (operationMode + " MODE-----------------------------------------------------------------------------------------------------------------------\r")
+        print (" [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r")
+        print (" [e] Increment sync source id, [a]/[s] Decrease/Increase tx packet size\r")
+        print ("rtpRxStreamTempDict: "+ str(rtpRxStreamTempDict)+"\r")
+        print ("rtpRxStreamsDict: " + str(rtpRxStreamsDict) + "\r")
 
         time.sleep(1)
 
@@ -2027,6 +2033,8 @@ def main(argv):
 
     # Create a dictionary to hold the rx Streams
     rtpRxStreamsDict = {}
+    # Create a dictionary to initially hold the sync source of a potential rx stream
+    rtpRxStreamTempDict = {}
 
     # Start keyboard monitoring thread
     catchKeyboardPresses = threading.Thread(target=__catchKeyboardPresses, args=(keyPressed,))
@@ -2034,7 +2042,7 @@ def main(argv):
     catchKeyboardPresses.start()
 
     # Create a display thread
-    displayThread = threading.Thread(target=__displayThread, args=(MODE, rtpRxStreams, rtpTxStreams,))
+    displayThread = threading.Thread(target=__displayThread, args=(MODE, rtpRxStreams, rtpTxStreams, rtpRxStreamTempDict, rtpRxStreamsDict,))
     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
     displayThread.start()
 
@@ -2113,7 +2121,27 @@ def main(argv):
                 try:
                     rtpRxStreamsDict[rtpSyncSourceIdentifier].addData(rtpSequenceNo, payloadSize, timeNow, rtpSyncSourceIdentifier)
                 except:
-                    Message.addMessage("Stream doesn't exist, creating a new rx stream with sync source: " + str(rtpSyncSourceIdentifier))
+
+                    # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
+
+                    if rtpSyncSourceIdentifier in rtpRxStreamTempDict:
+                        # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
+                        Message.addMessage(Fore.GREEN + str(rtpSyncSourceIdentifier) +
+                                           " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
+                        # Add new stream to the rtpRxStreamsDict
+                        rtpRxStreamsDict[rtpSyncSourceIdentifier] = \
+                            RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP,
+                                      UDP_RX_PORT, glitchEventTriggerThreshold)
+                        # Now delete the entry from the temporary dict
+                        rtpRxStreamTempDict.pop(rtpSyncSourceIdentifier,None)
+
+                    else:
+                        # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
+                        # create a entry in the temporary list (with a timestamp)
+                        Message.addMessage(Fore.RED+"Stream doesn't exist yet, adding to temp list: " + str(rtpSyncSourceIdentifier))
+                        rtpRxStreamTempDict[rtpSyncSourceIdentifier] = datetime.datetime.now()
+
+
 
             except Exception as e:
                 message = Fore.RED+"Cannot decode RTP headers. Is this an RTP packet? "+str(e)+ " Length:" + str(len(data))+\
