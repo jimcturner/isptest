@@ -1374,7 +1374,7 @@ def humanise(inputDictionary):
 
 
 # Define a display thread that will run autonomously
-def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict):
+def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     # Currently only decoding a single stream
 
 
@@ -1387,6 +1387,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict):
 
     columns, rows = getTerminalSize()
     Message.addMessage("Terminal size: " + str(columns) + ", " + str(rows))
+    selectedStream = 0 # Keeps track of the currently selected stream (from the list of available rtpRxStreams)
     while True:
         # Clear screen and move cursor to origin
         print ("\033[2J\r")
@@ -1401,8 +1402,17 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict):
 
         if (operationMode == 'RECEIVE' or operationMode == 'LOOPBACK') and len(availableRtpRxStreamList) > 0:
             try:
+                # Check for [n] having been pressed. If so, cycle through the available streams
+                if keyPressed[0] == 'n':
+                    # Clear keyboard buffer
+                    keyPressed[0] = ''
+                    selectedStream +=1
+                    if selectedStream > (len(availableRtpRxStreamList) - 1):
+                        # If already on the last available stream, cycle back to the first
+                        selectedStream = 0
+
                 # Get latest keys/values from rtpStream
-                currentRtpRxStream = availableRtpRxStreamList[0][1]
+                currentRtpRxStream = availableRtpRxStreamList[selectedStream][1]
                 stats = currentRtpRxStream.getRtpStreamStats()
 
                 # Create a table of stream stats
@@ -1508,12 +1518,17 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict):
             except Exception as e:
                 Message.addMessage("RtpGenerator: "+ str(stats['Sync Source ID'])+", " + str(e))
         print (operationMode + " MODE-----------------------------------------------------------------------------------------------------------------------\r")
-        print (" [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r")
-        print (" [e] Increment sync source id, [a]/[s] Decrease/Increase tx packet size\r")
-        streamList = ""
-        for x in availableRtpRxStreamList:
-            streamList += str(x[0]) + ", "
-        print ("Available streams: " + streamList + "\r")
+
+        if (operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK') and len(rtpTxStreams) > 0:
+            print (" [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r")
+            print (" [e] Increment sync source id, [a]/[s] Decrease/Increase tx packet size\r")
+        # If receive mode, list the available streams
+        if operationMode == 'RECEIVE' or operationMode == 'LOOPBACK':
+            print("[n] to cycle through available receive streams\r")
+            streamList = ""
+            for x in availableRtpRxStreamList:
+                streamList += str(x[0]) + ", "
+            print ("Available streams: " + streamList + "\r")
         time.sleep(1)
 
 # Define a thread that will trap keys pressed
@@ -2045,7 +2060,7 @@ def main(argv):
     catchKeyboardPresses.start()
 
     # Create a display thread
-    displayThread = threading.Thread(target=__displayThread, args=(MODE, rtpTxStreams, rtpRxStreamsDict,))
+    displayThread = threading.Thread(target=__displayThread, args=(MODE, rtpTxStreams, rtpRxStreamsDict, keyPressed, ))
     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
     displayThread.start()
 
