@@ -1839,9 +1839,8 @@ def __diskLoggerThread(rtpRxStreamsDict):
     # Autonomous thread to iterate over rtpRxStreamsDict and poll RtpStream eventLists for new events
     # and write them  to disk
     Message.addMessage("diskLoggerThread starting")
-    filename_csv = "eventLog" + datetime.datetime.now().strftime("%H%M%S") + ".csv"
-    filename_json = "eventLog" + datetime.datetime.now().strftime("%H%M%S") + ".json"
-    lastWrittenEventNo = 0  # Stores last written Event.eventNo
+    filename_csv = "eventLog_" + datetime.datetime.now().strftime("%H%M%S") + ".csv"
+    filename_json = "eventLog_" + datetime.datetime.now().strftime("%H%M%S") + ".json"
     lastWrittenEventNoDict = {} # Dictionary to hold the last written event no for each stream
     latestEvents = []
 
@@ -1877,7 +1876,6 @@ def __diskLoggerThread(rtpRxStreamsDict):
                     # Now check to see if there are any previously unwritten events in the allEvents list
                     # Subtract lastWrittenEventNo from most recent eventNo
                     if len(allEvents) > 0:
-                        # newEvents = allEvents[-1].eventNo - lastWrittenEventNo
                         # Determine the new events for this particular stream
                         # Note, if this stream is 'brand new' the key for that stream won't exist yet, so create it
                         # and set it to a default value of 0 (because we haven't written any events yet from that RtpStream object)
@@ -2070,8 +2068,7 @@ def main(argv):
     # The first (and only) item of this 'list' will be our pointer
     keyPressed = ['']
 
-    # Create a list to contain a list of rtpStreams and txStreams
-    rtpRxStreams = []
+    # Create a list of txStreams
     rtpTxStreams = []
 
     # Create a dictionary to hold the rx Streams
