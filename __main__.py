@@ -231,29 +231,37 @@ class Term(object):
         # or [foreground, background]
         # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
 
-        if len(args) == 1:
-            try:
-                # Foreground Colour parameter supplied
-                print ("\033[3"+str(int(args[0]))+"m"+
-                       "\033[" + str(yPos) + ";" + str(xPos)
-                       + "H" + str(text) + "\r")
-            except:
-                # invalid colour parameter supplied
+        try:
+            # For the benefit of Python3, just in case, convert supplied values to ints
+            xPos=int(xPos)
+            yPos=int(yPos)
+
+            if len(args) == 1:
+                try:
+                    # Foreground Colour parameter supplied
+                    print ("\033[3"+str(int(args[0]))+"m"+
+                           "\033[" + str(yPos) + ";" + str(xPos)
+                           + "H" + str(text) + "\r")
+                except:
+                    # invalid colour parameter supplied
+                    print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\r")
+
+            elif len(args) == 2:
+                try:
+                    # Foreground and background colour parameter supplied
+                    print ("\033[3"+str(int(args[0]))+"m"+      # Foreground
+                           "\033[4" + str(int(args[1])) + "m" + # Background
+                           "\033[" + str(yPos) + ";" + str(xPos) +
+                           "H" + str(text) + "\r")
+                except:
+                    # invalid colour parameter supplied
+                    print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\r")
+            else:
+                # No colour parameter supplied
                 print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\r")
 
-        elif len(args) == 2:
-            try:
-                # Foreground and background colour parameter supplied
-                print ("\033[3"+str(int(args[0]))+"m"+      # Foreground
-                       "\033[4" + str(int(args[1])) + "m" + # Background
-                       "\033[" + str(yPos) + ";" + str(xPos) +
-                       "H" + str(text) + "\r")
-            except:
-                # invalid colour parameter supplied
-                print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\r")
-        else:
-            # No colour parameter supplied
-            print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\r")
+        except:
+            print(str(text)+"\r")
 
     @classmethod
     def printCentered(cls,text,yPos, *args):
@@ -264,7 +272,8 @@ class Term(object):
         width,height = cls.getTerminalSize()
         stringLength=len(text)
         xPos = (width/2) - (stringLength/2)
-        cls.printAt(text, xPos, yPos, *args)
+        # cls.printAt(text, xPos, yPos, *args)
+        cls.printAt(text, xPos, 1, *args)
 
     @classmethod
     def printRightJustified(cls, text, yPos, *args):
@@ -310,9 +319,13 @@ class Term(object):
 
 
     @classmethod
-    def drawTitleBar(cls,text,row):
+    def printTitleBar(cls,text,row, fgColour, bgColour):
         # Draws an inverse video bar with a centered title string
-        pass
+        # Draw inverse video horizontal bar
+        Term.setBackgroundColourSingleLine(1,row,bgColour)
+        # Write text
+        Term.printCentered(text,row,fgColour,bgColour)
+
 
 
 # Define an object to hold data about an individual received rtp packet
@@ -1530,15 +1543,31 @@ def humanise(inputDictionary):
     return newDictionary.items()
 
 
-def __newdisplayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
+def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     availableRtpRxStreamList = []
     temp = []
     redrawScreen = True
+
+    # Grab current terminal dimensions
+    termWidth, termHeight = Term.getTerminalSize()
+    # Set up display window
+    Term.initAlternateScreen()
+    Term.setBackgroundColour(Term.BLUE)
+    Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
     while True:
 
-        if redrawScreen == True:
-            pass
+        # Check to see if terminal has been resized
+        w,h = Term.getTerminalSize()
+        if w != termWidth or h != termHeight:
+            # If it has, set a flag
+            redrawScreen = True
 
+        if redrawScreen == True:
+            # Clear flag
+            redrawScreen = False
+            Term.setBackgroundColour(Term.BLUE)
+            Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
+        Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
         # Get dictionary of available rtpRxStreams as a list
         # Flush existing contents of list
         del availableRtpRxStreamList[:]
@@ -1546,9 +1575,11 @@ def __newdisplayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed
             temp = [k, v]
             availableRtpRxStreamList.append(temp)
 
+        time.sleep(1)
+
 
 # Define a display thread that will run autonomously
-def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
+def __olddisplayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     # Currently only decoding a single stream
     Message.addMessage("Starting __displayThread")
 
@@ -2114,23 +2145,24 @@ def __diskLoggerThread(rtpRxStreamsDict):
 # #####################
 def main(argv):
 
-    Term.initAlternateScreen()
-    Term.printAt(Fore.GREEN+"Hello\r",10,10)
-    Term.printAt("Hello", 1, 1,Term.CYAN)
-    Term.printCentered("cake",4, Term.RED, Term.BLACK)
-    Term.printAt("More cake",0,5)
-    Term.printRightJustified(str(datetime.datetime.now()),1,2,3)
-    Term.printRightJustified("hello", 1)
-    Term.setBackgroundColourSingleLine(1,2,5)
-    Term.setBackgroundColourSingleLine(2, 3, 6)
-    Term.printAt("Hello again", 10, 14, 4, 3)
-    time.sleep (3)
-    Term.clearLine(4)
-    time.sleep(3)
-    Term.setBackgroundColour(Term.YELLOW)
-    time.sleep(2)
-    # Term.exitScreen()
-    exit()
+    # Term.initAlternateScreen()
+    # Term.printAt(Fore.GREEN+"Hello\r",10,10)
+    # Term.printAt("Hello", 1, 1,Term.CYAN)
+    # Term.printCentered("cake",4, Term.RED, Term.BLACK)
+    # Term.printAt("More cake",0,5)
+    # Term.printRightJustified(str(datetime.datetime.now()),1,2,3)
+    # Term.printRightJustified("hello", 1)
+    # Term.setBackgroundColourSingleLine(1,2,5)
+    # Term.setBackgroundColourSingleLine(2, 3, 6)
+    # Term.printAt("Hello again", 10, 14, 4, 3)
+    # time.sleep (3)
+    # Term.clearLine(4)
+    # time.sleep(3)
+    # Term.setBackgroundColour(Term.BLUE)
+    # Term.printTitleBar("IBEOO ISP Analyser V1.0",1,Term.BLACK,Term.WHITE)
+    # time.sleep(2)
+    # # Term.exitScreen()
+    # exit()
 
     init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
     MODE = ""
