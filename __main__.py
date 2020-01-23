@@ -283,6 +283,7 @@ class Term(object):
     def setBackgroundColourSingleLine(cls, xPos, yPos, colour):
 
         # Paints the specified line a colour from the starting xPos position
+        # It will then return the cursor to the start of that line
         # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
         width, height = cls.getTerminalSize()
         # Create a string of spaces to fill an entire terminal width
@@ -292,7 +293,7 @@ class Term(object):
         try:
             print ("\033[4" + str(int(colour)) + "m" +
                    "\033[" + str(yPos) + ";" + str(xPos)
-                   + "H" + blankString + "\r")
+                   + "H" + blankString + "\033[" + str(yPos-1)+";" + str(1)+"H"+"\r")
         except:
             pass
 
@@ -302,6 +303,8 @@ class Term(object):
         # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
         # Get terminal width
         width, height = cls.getTerminalSize()
+        for lineNo in range (1,height):
+            cls.setBackgroundColourSingleLine(1,lineNo,colour)
 
 
 
@@ -2124,6 +2127,8 @@ def main(argv):
     time.sleep (3)
     Term.clearLine(4)
     time.sleep(3)
+    Term.setBackgroundColour(Term.YELLOW)
+    time.sleep(2)
     # Term.exitScreen()
     exit()
 
