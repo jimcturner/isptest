@@ -1584,6 +1584,18 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             availableRtpRxStreamList.append(temp)
 
         # Create table containing the available incoming streams
+        titleRow=["Name","Sync src"," Stream source","bps","Loss\n %","Packets\nlost","Glitches","Jitter","Time Elapsed"]
+        tableData=[titleRow]
+        table = SingleTable(tableData)
+        table.title="Available Streams"
+        tableRowsRendered=table.table.splitlines()
+        yPos=3
+        xPos=2
+
+        for x in range(0,len(tableRowsRendered)):
+            Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
+
+
 
         time.sleep(1)
 
