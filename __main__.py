@@ -1548,25 +1548,33 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     temp = []
     redrawScreen = True
 
-    # Grab current terminal dimensions
-    termWidth, termHeight = Term.getTerminalSize()
+    # Grab initial terminal dimensions
+    currentTermWidth, currentTermHeight = Term.getTerminalSize()
+
     # Set up display window
     Term.initAlternateScreen()
     Term.setBackgroundColour(Term.BLUE)
     Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
+    Term.printAt(operationMode,1,1,Term.BLACK, Term.WHITE)
     while True:
 
         # Check to see if terminal has been resized
         w,h = Term.getTerminalSize()
-        if w != termWidth or h != termHeight:
+        if w != currentTermWidth or h != currentTermHeight:
             # If it has, set a flag
             redrawScreen = True
+            # And store the new values
+            currentTermWidth = w
+            currentTermHeight = h
 
         if redrawScreen == True:
             # Clear flag
             redrawScreen = False
             Term.setBackgroundColour(Term.BLUE)
             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
+            Term.printAt(operationMode, 1, 1, Term.BLACK, Term.WHITE)
+
+        # Update clock on top RHS of screen
         Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
         # Get dictionary of available rtpRxStreams as a list
         # Flush existing contents of list
@@ -1574,6 +1582,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         for k, v in rtpRxStreamsDict.items():
             temp = [k, v]
             availableRtpRxStreamList.append(temp)
+
+        # Create table containing the available incoming streams
 
         time.sleep(1)
 
