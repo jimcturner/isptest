@@ -195,38 +195,38 @@ class Term(object):
     def clearScreen(cls):
         # Clears the screen and moves cursor to (0,0)
         # Clear screen
-        print ("\033[2J\r")
+        print ("\033[2J")
         # Move cursor to 0,0,
-        print ("\033[0;0H\r")
+        print ("\033[0;0H")
 
     @classmethod
     def clearLine(cls, yPos):
         # clears the line specified in yPos
         # Go to specified line and clear it
-        print ("\033["+str(int(yPos))+";0H"+"\033[2K\r")
+        print ("\033["+str(int(yPos))+";0H"+"\033[2K")
 
     @classmethod
     def initAlternateScreen(cls):
         # Initialise Colorama module (which transcodes ascii escape sequences for Windows)
         init(autoreset=True)
         # Switch to an alternate screen buffer (may not work predictably in Windows)
-        print ("\033[?1049h\033[H\r")
+        print ("\033[?1049h\033[H")
         # Reset terminal
-        print ("\033c\r")
+        print ("\033c")
         # Clear scrollback buffer
-        print ("\033[3J\r")
+        print ("\033[3J")
 
     @classmethod
     def clearTerminalScrollbackBuffer(cls):
         # Clear scrollback buffer
-        print ("\033[3J\r")
+        print ("\033[3J")
 
     @classmethod
     def exitScreen(cls):
         # Clear screen
         cls.clearScreen()
         # Revert to original terminal screen
-        print ("\033[?1049l\r")
+        print ("\033[?1049l")
 
     @classmethod
     def printAt(cls,text, xPos, yPos, *args):
@@ -245,10 +245,10 @@ class Term(object):
                     # Foreground Colour parameter supplied
                     print ("\033[3"+str(int(args[0]))+"m"+
                            "\033[" + str(yPos) + ";" + str(xPos)
-                           + "H" + str(text) + "\r")
+                           + "H" + str(text) + "\033[1;1H")
                 except:
                     # invalid colour parameter supplied
-                    print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\r")
+                    print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\033[1;1H")
 
             elif len(args) == 2:
                 try:
@@ -256,15 +256,16 @@ class Term(object):
                     print ("\033[3"+str(int(args[0]))+"m"+      # Foreground
                            "\033[4" + str(int(args[1])) + "m" + # Background
                            "\033[" + str(yPos) + ";" + str(xPos) +
-                           "H" + str(text) + "\r")
+                           "H" + str(text) + "\033[1;1H")
                 except:
                     # invalid colour parameter supplied
-                    print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\r")
+                    print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\033[1;1H")
             else:
                 # No colour parameter supplied
-                print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\r")
+                print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\033[1;1H")
 
         except:
+            # Failing everything else, do a plain old print with a CR at the end
             print(str(text)+"\r")
 
     @classmethod
@@ -296,7 +297,7 @@ class Term(object):
     def setBackgroundColourSingleLine(cls, xPos, yPos, colour):
 
         # Paints the specified line a colour from the starting xPos position
-        # It will then return the cursor to the start of that line
+        # It will then return the cursor to the origin
         # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
         width, height = cls.getTerminalSize()
         # Create a string of spaces to fill an entire terminal width
@@ -306,7 +307,7 @@ class Term(object):
         try:
             print ("\033[4" + str(int(colour)) + "m" +
                    "\033[" + str(yPos) + ";" + str(xPos)
-                   + "H" + blankString + "\033[" + str(yPos-1)+";" + str(1)+"H"+"\r")
+                   + "H" + blankString + "\033[" + str(yPos)+";" + str(1)+"H"+"\033[1;1H")
         except:
             pass
 
