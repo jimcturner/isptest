@@ -176,6 +176,21 @@ class Term(object):
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             return ch
+
+    # Use the following colour enumerations in place of unfriencly numbers when specifying colours
+    # in calls to Term.printAt() etc
+    BLACK = 0
+    RED = 1
+    GREEN = 2
+    YELLOW = 3
+    BLUE = 4
+    MAGENTA = 5
+    CYAN = 6
+    WHITE = 7
+    RESET = 9
+
+    # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+
     @classmethod
     def clearScreen(cls):
         # Clears the screen and moves cursor to (0,0)
@@ -183,6 +198,12 @@ class Term(object):
         print ("\033[2J\r")
         # Move cursor to 0,0,
         print ("\033[0;0H\r")
+
+    @classmethod
+    def clearLine(cls, yPos):
+        # clears the line specified in yPos
+        # Go to specified line and clear it
+        print ("\033["+str(int(yPos))+";0H"+"\033[2K\r")
 
     @classmethod
     def initAlternateScreen(cls):
@@ -204,31 +225,85 @@ class Term(object):
         print ("\033[?1049l\r")
 
     @classmethod
-    def printAt(cls,text, xPos, yPos):
-        # Prints text at screen position xPos, yPos (0,0 is top left)
-        print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text)+"\r")
+    def printAt(cls,text, xPos, yPos, *args):
+        # Prints text at screen position xPos, yPos (NOTE: 1,1 is top left)
+        # Last argument is an optional colour [foreground],
+        # or [foreground, background]
+        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+
+        if len(args) == 1:
+            try:
+                # Foreground Colour parameter supplied
+                print ("\033[3"+str(int(args[0]))+"m"+
+                       "\033[" + str(yPos) + ";" + str(xPos)
+                       + "H" + str(text) + "\r")
+            except:
+                # invalid colour parameter supplied
+                print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\r")
+
+        elif len(args) == 2:
+            try:
+                # Foreground and background colour parameter supplied
+                print ("\033[3"+str(int(args[0]))+"m"+      # Foreground
+                       "\033[4" + str(int(args[1])) + "m" + # Background
+                       "\033[" + str(yPos) + ";" + str(xPos) +
+                       "H" + str(text) + "\r")
+            except:
+                # invalid colour parameter supplied
+                print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\r")
+        else:
+            # No colour parameter supplied
+            print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\r")
 
     @classmethod
-    def printCentered(cls,text,yPos):
+    def printCentered(cls,text,yPos, *args):
+        # Centres text on the page.
+        # Optional foreground or [foreground,background] options
+        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
         # Get terminal width
         width,height = cls.getTerminalSize()
         stringLength=len(text)
         xPos = (width/2) - (stringLength/2)
-        cls.printAt(text, xPos, yPos)
+        cls.printAt(text, xPos, yPos, *args)
 
     @classmethod
-    def printRightJustified(cls, text, yPos):
+    def printRightJustified(cls, text, yPos, *args):
+        # Right justifies text on the page.
+        # Optional foreground or [foreground,background] options
+        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
         # Get terminal width
         width, height = cls.getTerminalSize()
         stringLength = len(text)
         xPos=width - stringLength + 1
         if xPos < 0:
             xPos = 0
-        cls.printAt(text, xPos, yPos)
+        cls.printAt(text, xPos, yPos, *args)
+
+    @classmethod
+    def setBackgroundColourSingleLine(cls, xPos, yPos, colour):
+
+        # Paints the specified line a colour from the starting xPos position
+        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+        width, height = cls.getTerminalSize()
+        # Create a string of spaces to fill an entire terminal width
+        blankString = ""
+        for x in range (0,(width- xPos+1)):
+            blankString += " "
+        try:
+            print ("\033[4" + str(int(colour)) + "m" +
+                   "\033[" + str(yPos) + ";" + str(xPos)
+                   + "H" + blankString + "\r")
+        except:
+            pass
 
     @classmethod
     def setBackgroundColour(cls, colour):
-        pass
+        # Paints the specified background colour
+        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+        # Get terminal width
+        width, height = cls.getTerminalSize()
+
+
 
 
     @classmethod
@@ -2038,10 +2113,17 @@ def main(argv):
 
     Term.initAlternateScreen()
     Term.printAt(Fore.GREEN+"Hello\r",10,10)
-    Term.printCentered("cake",4)
-    Term.printRightJustified(str(datetime.datetime.now()),1)
+    Term.printAt("Hello", 1, 1,Term.CYAN)
+    Term.printCentered("cake",4, Term.RED, Term.BLACK)
+    Term.printAt("More cake",0,5)
+    Term.printRightJustified(str(datetime.datetime.now()),1,2,3)
     Term.printRightJustified("hello", 1)
+    Term.setBackgroundColourSingleLine(1,2,5)
+    Term.setBackgroundColourSingleLine(2, 3, 6)
+    Term.printAt("Hello again", 10, 14, 4, 3)
     time.sleep (3)
+    Term.clearLine(4)
+    time.sleep(3)
     # Term.exitScreen()
     exit()
 
