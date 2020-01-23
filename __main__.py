@@ -176,6 +176,65 @@ class Term(object):
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             return ch
+    @classmethod
+    def clearScreen(cls):
+        # Clears the screen and moves cursor to (0,0)
+        # Clear screen
+        print ("\033[2J\r")
+        # Move cursor to 0,0,
+        print ("\033[0;0H\r")
+
+    @classmethod
+    def initAlternateScreen(cls):
+        # Initialise Colorama module (which transcodes ascii escape sequences for Windows)
+        init(autoreset=True)
+        # Switch to an alternate screen buffer (may not work predictably in Windows)
+        print ("\033[?1049h\033[H\r")
+        # Reset terminal
+        print ("\033c\r")
+        # Clear scrollback buffer
+        print ("\033[3J\r")
+
+
+    @classmethod
+    def exitScreen(cls):
+        # Clear screen
+        cls.clearScreen()
+        # Revert to original terminal screen
+        print ("\033[?1049l\r")
+
+    @classmethod
+    def printAt(cls,text, xPos, yPos):
+        # Prints text at screen position xPos, yPos (0,0 is top left)
+        print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text)+"\r")
+
+    @classmethod
+    def printCentered(cls,text,yPos):
+        # Get terminal width
+        width,height = cls.getTerminalSize()
+        stringLength=len(text)
+        xPos = (width/2) - (stringLength/2)
+        cls.printAt(text, xPos, yPos)
+
+    @classmethod
+    def printRightJustified(cls, text, yPos):
+        # Get terminal width
+        width, height = cls.getTerminalSize()
+        stringLength = len(text)
+        xPos=width - stringLength + 1
+        if xPos < 0:
+            xPos = 0
+        cls.printAt(text, xPos, yPos)
+
+    @classmethod
+    def setBackgroundColour(cls, colour):
+        pass
+
+
+    @classmethod
+    def drawTitleBar(cls,text,row):
+        # Draws an inverse video bar with a centered title string
+        pass
 
 
 # Define an object to hold data about an individual received rtp packet
@@ -1392,26 +1451,6 @@ def humanise(inputDictionary):
     # Return dictionary of humanised keys and values
     return newDictionary.items()
 
-def clearScreen():
-    # Clears the screen and moves cursor to (0,0)
-    # Clear screen
-    print ("\033[2J\r")
-    # Move cursor to 0,0,
-    print ("\033[0;0H\r")
-
-def initScreen():
-    # Initialise Colorama module (which transcodes ascii escape sequences for Windows)
-    init(autoreset=True)
-    # Switch to an alternate screen buffer (may not work predictably in Windows)
-    print ("\033[?1049h\033[H")
-
-def printAt(text, xPos, yPos):
-    # Prints text at screen position xPos, yPos (0,0 is top left)
-    print ("\033["+str(yPos)+";"+str(xPos)+"H"+str(text))
-
-def drawTitle():
-    pass
-
 
 def __newdisplayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     availableRtpRxStreamList = []
@@ -1997,11 +2036,15 @@ def __diskLoggerThread(rtpRxStreamsDict):
 # #####################
 def main(argv):
 
-    # print(str(Term.getTerminalSize()))
-    #
-    # ch=Term.getch()
-    # print ch
-    # exit()
+    Term.initAlternateScreen()
+    Term.printAt(Fore.GREEN+"Hello\r",10,10)
+    Term.printCentered("cake",4)
+    Term.printRightJustified(str(datetime.datetime.now()),1)
+    Term.printRightJustified("hello", 1)
+    time.sleep (3)
+    # Term.exitScreen()
+    exit()
+
     init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
     MODE = ""
     # Specify a default txRate of 1Mbps if no rate specified
