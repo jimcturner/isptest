@@ -1580,6 +1580,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         if redrawScreen == True:
             # Clear flag
             redrawScreen = False
+            Term.clearTerminalScrollbackBuffer()
             Term.setBackgroundColour(Term.BLUE)
             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
             Term.printAt(operationMode, 1, 1, Term.BLACK, Term.WHITE)
