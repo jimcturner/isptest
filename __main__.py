@@ -1619,8 +1619,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
         # for x in range(0,len(tableRowsRendered)):
         #     Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
-        # Term.printList(tableRowsRendered,2,20)
-        printTable(2,3,tableRowsRendered)
+        Term.printList(tableRowsRendered,2,20)
+        printTable(2,30,tableRowsRendered)
 
         time.sleep(1)
 
