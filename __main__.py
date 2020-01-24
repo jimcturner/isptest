@@ -57,19 +57,19 @@ class Message(object):
         if len(args) == 2:
             # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
             try:
-                return cls.messages[args[0]:args[1] + 1]
+                return list (cls.messages[args[0]:args[1] + 1])
             except Exception as e:
                 Message.addMessage("Messages:getMessage(" + str(args[0]) + ":" +
                                    str(args[1]) + ") requested start and end indexes out of range: " + str(e))
         elif len(args) == 1:
             # If one arg supplied, return the last n messages.
             try:
-                return cls.messages[(args[0] * -1):]
+                return list (cls.messages[(args[0] * -1):])
             except Exception as e:
-                return cls.messages
+                return list (cls.messages)
         else:
             # if no args supplied, return complete list
-            return cls.messages
+            return list (cls.messages)
 
 # Define a utility class to help with screen drawing
 class Term(object):
@@ -1700,18 +1700,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         ##################### Create table showing messages
         # Get last 10 messages
         messages = Message.getMessages(10)
-        # Now check that the messages aren't too long. If they are, wrap the text
-        my_wrap = textwrap.TextWrapper(width=60)
-        wrappedMessage = []
-        # Iterate over message list
-        for message in messages:
-            # Convert original message text into a list of lines
-            wrap_list = my_wrap.wrap(text=message[1])
-            # Now create single string which consists of the lines of wrap_list seperated with a \n
-            del wrappedMessage [:]
-            for x in wrap_list:
-                wrappedMessage = x+"\n"
-            message = wrappedMessage
+
 
         if len(messages) > 0:
             width, height, tableData = createTable(messages, "Messages")
