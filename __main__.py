@@ -21,6 +21,7 @@ from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 import json
 from abc import ABCMeta, abstractmethod  # Used for event abstract class
+import textwrap # Used for formatting long messages
 # Non standard libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
@@ -44,7 +45,7 @@ class Message(object):
     @classmethod
     def addMessage(cls, message):
         # Add the supplied message to the messages list as a tuple containing a timestamp
-        cls.messages.append([datetime.datetime.now().strftime("%H:%M:%S:%f"), message])
+        cls.messages.append([datetime.datetime.now().strftime("%H:%M:%S"), message])
         # Test length of messages list. Longer than historicMessagesToKeep?
         if len(cls.messages) > cls.historicMessagesToKeep:
             # Remove first (oldest) message
@@ -1686,8 +1687,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             temp = [k, v]
             availableRtpRxStreamList.append(temp)
 
-        # Create table containing the available incoming streams
-        titleRow=["Name","Sync src"," Stream source","bps","Loss\n %","Packets\nlost"] # ,"Glitches","Jitter","Time Elapsed"]
+        ##############Create table containing the available incoming streams
+        titleRow=["Name","Sync src"," Stream source","bps","Loss\n %","Pckts\nlost"] # ,"Glitches","Jitter","Time Elapsed"]
         tableData=[titleRow]
         table = SingleTable(tableData)
         table.title="Available Streams"
@@ -1696,7 +1697,29 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
         Term.printTable(tableRowsRendered,2,3,tableWidth,Term.RED, Term.WHITE)
 
+        ##################### Create table showing messages
+        # Get last 10 messages
+        messages = Message.getMessages(10)
+        # Now check that the messages aren't too long. If they are, wrap the text
+        my_wrap = textwrap.TextWrapper(width=60)
+        wrappedMessage = []
+        # Iterate over message list
+        for message in messages:
+            # Convert original message text into a list of lines
+            wrap_list = my_wrap.wrap(text=message[1])
+            # Now create single string which consists of the lines of wrap_list seperated with a \n
+            del wrappedMessage [:]
+            for x in wrap_list:
+                wrappedMessage = x+"\n"
+            message = wrappedMessage
+
+        if len(messages) > 0:
+            width, height, tableData = createTable(messages, "Messages")
+            Term.printTable(tableData,2,10,width,Term.BLACK,Term.WHITE)
+
         time.sleep(1)
+
+
 
 
 # Define a display thread that will run autonomously
@@ -1812,8 +1835,9 @@ def __olddisplayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed
                     # Now stored, delete the row, ready for next time around the loop
                     del tableRow
 
-                title = "Event list (last " + str(noOfHistoricEventsToView) + "/" + \
+                title = "Event list (last " + str(noOfHistoricEventsToView) + "of" + \
                         str(stats["stream_all_events_counter"]) + " events)"
+
                 width, height, table = createTable(eventTableRows, title)
                 printTable(margin, nextUseableLineWholeWidth, table)
                 nextUseableLineWholeWidth += (height + padding)
