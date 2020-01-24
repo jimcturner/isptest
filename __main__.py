@@ -1562,7 +1562,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
     # Grab initial terminal dimensions
     currentTermWidth, currentTermHeight = Term.getTerminalSize()
-
     # Set up display window
     Term.initAlternateScreen()
     # Set background colour
@@ -1572,12 +1571,12 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     # Print operation mode in top LHS
     Term.printAt(operationMode+" MODE",1,1,Term.BLACK, Term.WHITE)
     # Print Status bar at bottom of screen
-    # Term.setBackgroundColourSingleLine(1,currentTermHeight,Term.WHITE)
-    Term.printAt(str(currentTermWidth)+","+str(currentTermWidth),1,currentTermHeight,Term.BLACK,Term.WHITE)
+    Term.setBackgroundColourSingleLine(1,currentTermHeight,Term.WHITE)
+    Term.printAt(str(currentTermWidth)+","+str(currentTermHeight),1,currentTermHeight,Term.BLACK,Term.WHITE)
     while True:
 
         # Check to see if terminal has been resized
-        w,h = Term.getTerminalSize()
+        w, h = Term.getTerminalSize()
         if (w != currentTermWidth) or (h != currentTermHeight):
             # If it has, set a flag
             redrawScreen = True
@@ -1592,8 +1591,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             Term.setBackgroundColour(Term.BLUE)
             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
             Term.printAt(operationMode, 1, 1, Term.BLACK, Term.WHITE)
-            # Term.setBackgroundColourSingleLine(1, currentTermHeight, Term.WHITE)
-            Term.printAt(str(currentTermWidth) + "," + str(currentTermWidth), 1, currentTermHeight, Term.BLACK,
+            Term.setBackgroundColourSingleLine(1, currentTermHeight, Term.WHITE)
+            Term.printAt(str(currentTermWidth) + "," + str(currentTermHeight), 1, currentTermHeight, Term.BLACK,
                          Term.WHITE)
 
         # Update clock on top RHS of screen
@@ -2207,6 +2206,7 @@ def main(argv):
     # time.sleep(2)
     # # Term.exitScreen()
     # exit()
+
 
     init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
     MODE = ""
