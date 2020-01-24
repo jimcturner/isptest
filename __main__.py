@@ -1494,8 +1494,14 @@ def createTable(inputDictionary, title):
     table.inner_heading_row_border = False  # No headings on this table
     # Split the table into a list containing separate lines and return (and also the width/height of the table
     width = table.table_width
+    # Remove all padding to save space on the screen
+    table.padding_left=0
+    table.padding_right=0
     height = len(keys) + 2  # Takes into account the top/bottom border
-    return width, height, table.table.splitlines()
+    # Note: width parameter doesn't take into account the fact I've disabled cell
+    # padding. Therefore manually deduct '4' from the width as this is by definition
+    # a two column table (because its data is sourced from a dictionary (with keys and values)
+    return (width-4), height, table.table.splitlines()
 
 
 def printTable(xPos, yPos, tableData):
@@ -1701,11 +1707,17 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         # Get last 10 messages
         messages = Message.getMessages(10)
 
+        # Now iterate over actual messages to make sure they're not too long for display
+        # If they are, truncate them
+        maxMessageDisplayLength=50
+        for message in messages:
+            if len(message[1])>maxMessageDisplayLength:
+                message[1] = message [1][:maxMessageDisplayLength]
 
         if len(messages) > 0:
             width, height, tableData = createTable(messages, "Messages")
             Term.printTable(tableData,2,10,width,Term.BLACK,Term.WHITE)
-
+        redrawScreen =True
         time.sleep(1)
 
 
