@@ -390,7 +390,7 @@ class Term(object):
         Term.printCentered(text,row,fgColour,bgColour)
 
     @classmethod
-    def printList(cls,list,xPos,yPos,tableWidth,*colourArgs):
+    def printTable(cls,list,xPos,yPos,tableWidth,*colourArgs):
         # Renders a list (such as table data) at specified xPos, Ypos
         # Optional colourargs are foreground or [foreground, background]
         # It will create a pseudo shadow beneath the list (table)
@@ -1694,13 +1694,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         tableWidth = table.table_width
         tableRowsRendered=table.table.splitlines()
 
-        yPos=3
-        xPos=2
-
-        # for x in range(0,len(tableRowsRendered)):
-        #     Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
-        Term.printList(tableRowsRendered,4,20,tableWidth,Term.RED)
-        # printTable(2,30,tableRowsRendered)
+        Term.printTable(tableRowsRendered,2,3,tableWidth,Term.RED)
 
         time.sleep(1)
 
