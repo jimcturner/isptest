@@ -1619,7 +1619,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
         Term.printList(tableRowsRendered,2,20)
 
-
         time.sleep(1)
 
 
