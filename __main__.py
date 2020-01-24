@@ -394,8 +394,12 @@ class Term(object):
         # Renders a list (such as table data) at specified xPos, Ypos
         # Optional colourargs are foreground or [foreground, background]
 
+        # Move cursor to start position and set colour
+        print(Term.XY(xPos,yPos))
         for x in range(0,len(list)):
-            Term.printAt(list[x],xPos,yPos+x,*colourArgs)
+            # Term.printAt(list[x]),xPos,yPos+x)
+            print(Term.XY(xPos,yPos)+list[x]+"\r")
+            yPos+=1
 
 
 # Define an object to hold data about an individual received rtp packet
@@ -1675,10 +1679,10 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         yPos=3
         xPos=2
 
-        for x in range(0,len(tableRowsRendered)):
-            Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
-        # Term.printList(tableRowsRendered,2,20)
-        printTable(2,30,tableRowsRendered)
+        # for x in range(0,len(tableRowsRendered)):
+        #     Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
+        Term.printList(tableRowsRendered,3,20)
+        # printTable(2,30,tableRowsRendered)
 
         time.sleep(1)
 
