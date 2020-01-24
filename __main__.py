@@ -396,9 +396,17 @@ class Term(object):
 
         # Move cursor to start position and set colour
         print(Term.XY(xPos,yPos))
+        # Test to see if a foreground colour has been specified
+        if len(colourArgs)== 1:
+            colourString = Term.FG(colourArgs[0])
+        # Otherwise test to see if a foreground and background colour has been specified
+        elif len(colourArgs) > 1:
+            colourString = Term.FG(colourArgs[0])+Term.BG(colourArgs[1])
+
+        # Iterate over list
         for x in range(0,len(list)):
             # Term.printAt(list[x]),xPos,yPos+x)
-            print(Term.XY(xPos,yPos)+list[x]+"\r")
+            print(Term.XY(xPos,yPos)+colourString + list[x]+"\r")
             yPos+=1
 
 
@@ -1681,7 +1689,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
         # for x in range(0,len(tableRowsRendered)):
         #     Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
-        Term.printList(tableRowsRendered,3,20)
+        Term.printList(tableRowsRendered,4,20,Term.RED)
         # printTable(2,30,tableRowsRendered)
 
         time.sleep(1)
