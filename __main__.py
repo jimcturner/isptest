@@ -189,17 +189,26 @@ class Term(object):
     WHITE = 7
     RESET = 9
 
-    # Lambda utility function to convert a colour index no into the equivalent ASCII foreground colour escape sequence
-    # invoke useing y=FG(x)
-    FG = lambda x: "\033[3"+str(x)+"m"
+    # Ascii seq to move the cursor to 1,1 (the origin)
+    HOME = "\033[0;0H"
 
-    # Lambda utility function to convert a colour index no into the equivalent ASCII background colour escape sequence
-    # invoke useing y=BG(x)
-    BG = lambda x: "\033[4"+str(x)+"m"
+    # Utility function to convert a colour index no into the equivalent ASCII foreground colour escape sequence
+    # invoke using y=FG(x)
+    @classmethod
+    def FG (cls,x):
+        return "\033[3"+str(int(x))+"m"
 
-    # Lambda utility function to convert x,y (column,row) into an ascii escape sequence to move the cursor
-    # invoke useing z=FG(x,y) where x is the column, y is the row
-    xy = lambda x,y: "\033["+str(y)+";"+str(x)+"H"
+    # Utility function to convert a colour index no into the equivalent ASCII background colour escape sequence
+    # invoke using y=BG(x)
+    @classmethod
+    def BG (cls,x):
+        return "\033[4"+str(int(x))+"m"
+
+    # Utility function to convert x,y (column,row) into an ascii escape sequence to move the cursor
+    # invoke using z=FG(x,y) where x is the column, y is the row
+    @classmethod
+    def XY (cls,x,y):
+        return "\033["+str(int(y))+";"+str(int(x))+"H"
 
     @classmethod
     def clearScreen(cls):
@@ -239,7 +248,7 @@ class Term(object):
         print ("\033[?1049l")
 
     @classmethod
-    def printAt(cls,text, xPos, yPos, *args):
+    def oldPrintAt(cls,text, xPos, yPos, *args):
         # Prints text at screen position xPos, yPos (NOTE: 1,1 is top left)
         # Last argument is an optional colour [foreground],
         # or [foreground, background]
@@ -277,6 +286,43 @@ class Term(object):
         except:
             # Failing everything else, do a plain old print with a CR at the end
             print(str(text)+"\r")
+
+    @classmethod
+    def printAt(cls,text, xPos, yPos, *args):
+        # Prints text at screen position xPos, yPos (NOTE: 1,1 is top left)
+        # Last argument is an optional colour [foreground],
+        # or [foreground, background]
+        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+
+        try:
+            if len(args) == 1:
+                try:
+
+                    # Foreground Colour parameter supplied
+                    print (Term.FG(args[0]) +
+                           Term.XY(xPos,yPos)+
+                           str(text) + Term.HOME)
+                except:
+                    # invalid colour parameter supplied
+                    print (Term.XY(xPos,yPos) + str(text) + Term.HOME)
+
+            elif len(args) == 2:
+                try:
+                    # Foreground and background colour parameter supplied
+                    print (Term.FG(args[0]) +      # Foreground
+                           Term.BG(args[1]) +    # Background
+                           Term.XY(xPos,yPos)+
+                           str(text) + Term.HOME)
+                except:
+                    # invalid colour parameter supplied
+                    print (Term.XY(xPos) + str(text) + Term.HOME)
+            else:
+                # No colour parameter supplied
+                print (Term.XY(xPos,yPos) + + str(text) + Term.HOME)
+
+        except Exception as e:
+            # Failing everything else, do a plain old print with a CR at the end
+            print(str(text)+", "+str(e)+"\r")
 
 
 
@@ -1579,7 +1625,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     # Set background colour
     Term.setBackgroundColour(Term.BLUE)
     # Print Title bar
-    Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
+    Term.printTitleBar("IBEOO ISP Analyser V1.0", 3, Term.BLACK, Term.WHITE)
     # Print operation mode in top LHS
     Term.printAt(operationMode+" MODE",1,1,Term.BLACK, Term.WHITE)
     # Print Status bar at bottom of screen
@@ -1629,9 +1675,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         yPos=3
         xPos=2
 
-        # for x in range(0,len(tableRowsRendered)):
-        #     Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
-        Term.printList(tableRowsRendered,2,20)
+        for x in range(0,len(tableRowsRendered)):
+            Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
+        # Term.printList(tableRowsRendered,2,20)
         printTable(2,30,tableRowsRendered)
 
         time.sleep(1)
