@@ -1572,7 +1572,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     # Print operation mode in top LHS
     Term.printAt(operationMode+" MODE",1,1,Term.BLACK, Term.WHITE)
     # Print Status bar at bottom of screen
-    Term.setBackgroundColourSingleLine(1,currentTermHeight,Term.WHITE)
+    # Term.setBackgroundColourSingleLine(1,currentTermHeight,Term.WHITE)
     Term.printAt(str(currentTermWidth)+","+str(currentTermWidth),1,currentTermHeight,Term.BLACK,Term.WHITE)
     while True:
 
