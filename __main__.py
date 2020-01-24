@@ -1572,7 +1572,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     Term.printAt(operationMode+" MODE",1,1,Term.BLACK, Term.WHITE)
     # Print Status bar at bottom of screen
     Term.setBackgroundColourSingleLine(1,currentTermHeight,Term.WHITE)
-    Term.printAt(str(currentTermWidth)+","+str(currentTermHeight),1,currentTermHeight,Term.BLACK,Term.WHITE)
+    Term.printAt(str(currentTermWidth)+","+str(currentTermHeight),1,(currentTermHeight-1),Term.BLACK,Term.WHITE)
     while True:
 
         # Check to see if terminal has been resized
@@ -1592,7 +1592,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
             Term.printAt(operationMode, 1, 1, Term.BLACK, Term.WHITE)
             Term.setBackgroundColourSingleLine(1, currentTermHeight, Term.WHITE)
-            Term.printAt(str(currentTermWidth) + "," + str(currentTermHeight), 1, currentTermHeight, Term.BLACK,
+            Term.printAt(str(currentTermWidth) + "," + str(currentTermHeight), 1, (currentTermHeight-1), Term.BLACK,
                          Term.WHITE)
 
         # Update clock on top RHS of screen
