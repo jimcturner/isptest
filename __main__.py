@@ -390,7 +390,7 @@ class Term(object):
         Term.printCentered(text,row,fgColour,bgColour)
 
     @classmethod
-    def printList(cls,list,xPos,yPos,*colourArgs):
+    def printList(cls,list,xPos,yPos,tableWidth,*colourArgs):
         # Renders a list (such as table data) at specified xPos, Ypos
         # Optional colourargs are foreground or [foreground, background]
         # It will create a pseudo shadow beneath the list (table)
@@ -404,18 +404,19 @@ class Term(object):
         elif len(colourArgs) > 1:
             colourString = Term.FG(colourArgs[0])+Term.BG(colourArgs[1])
         shadowRHS = ""
-        shadowBottom = ""
+
         # Iterate over list
         for x in range(0,len(list)):
             if x>0:
                 shadowRHS=Term.BG(Term.BLACK)+" "
             # Term.printAt(list[x]),xPos,yPos+x)
-            print(Term.XY(xPos,yPos)+colourString + list[x]+shadowRHS+"\r")
+            print(Term.XY(xPos,yPos)+colourString + list[x]+shadowRHS)
             yPos+=1
         # Create bottom black line as a shadow (consists of a string of blank spaces with black as bg colour)
         # the same width as the table but offset by 1
-        shadowBottom = (" " * len(list[0]))
-        print (Term.XY(xPos,yPos)+shadowBottom+"\r")
+        shadowBottom = Term.BG(Term.BLACK)+(" " * tableWidth)
+
+        print (Term.XY(xPos+1,yPos)+shadowBottom+Term.HOME)
 
 # Define an object to hold data about an individual received rtp packet
 class RtpData(object):
@@ -1690,13 +1691,15 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         tableData=[titleRow]
         table = SingleTable(tableData)
         table.title="Available Streams"
+        tableWidth = table.table_width
         tableRowsRendered=table.table.splitlines()
+
         yPos=3
         xPos=2
 
         # for x in range(0,len(tableRowsRendered)):
         #     Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
-        Term.printList(tableRowsRendered,4,20,Term.RED)
+        Term.printList(tableRowsRendered,4,20,tableWidth,Term.RED)
         # printTable(2,30,tableRowsRendered)
 
         time.sleep(1)
