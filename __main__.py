@@ -1694,7 +1694,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         tableWidth = table.table_width
         tableRowsRendered=table.table.splitlines()
 
-        Term.printTable(tableRowsRendered,2,3,tableWidth,Term.RED)
+        Term.printTable(tableRowsRendered,2,3,tableWidth,Term.RED, Term.WHITE)
 
         time.sleep(1)
 
