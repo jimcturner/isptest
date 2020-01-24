@@ -393,6 +393,7 @@ class Term(object):
     def printList(cls,list,xPos,yPos,*colourArgs):
         # Renders a list (such as table data) at specified xPos, Ypos
         # Optional colourargs are foreground or [foreground, background]
+        # It will create a pseudo shadow beneath the list (table)
 
         # Move cursor to start position and set colour
         print(Term.XY(xPos,yPos))
@@ -402,13 +403,19 @@ class Term(object):
         # Otherwise test to see if a foreground and background colour has been specified
         elif len(colourArgs) > 1:
             colourString = Term.FG(colourArgs[0])+Term.BG(colourArgs[1])
-
+        shadowRHS = ""
+        shadowBottom = ""
         # Iterate over list
         for x in range(0,len(list)):
+            if x>0:
+                shadowRHS=Term.BG(Term.BLACK)+" "
             # Term.printAt(list[x]),xPos,yPos+x)
-            print(Term.XY(xPos,yPos)+colourString + list[x]+"\r")
+            print(Term.XY(xPos,yPos)+colourString + list[x]+shadowRHS+"\r")
             yPos+=1
-
+        # Create bottom black line as a shadow (consists of a string of blank spaces with black as bg colour)
+        # the same width as the table but offset by 1
+        shadowBottom = (" " * len(list[0]))
+        print (Term.XY(xPos,yPos)+shadowBottom+"\r")
 
 # Define an object to hold data about an individual received rtp packet
 class RtpData(object):
