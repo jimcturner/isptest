@@ -1578,6 +1578,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     while True:
 
         # Check to see if terminal has been resized
+        # NOTE: Safe max print area height seems to be currentTermHeight -1
         w, h = Term.getTerminalSize()
         if (w != currentTermWidth) or (h != currentTermHeight):
             # If it has, set a flag
@@ -1592,7 +1593,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             Term.clearTerminalScrollbackBuffer()
             Term.setBackgroundColour(Term.BLUE)
             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
-            Term.printAt(operationMode, 1, 1, Term.BLACK, Term.WHITE)
+            Term.printAt(operationMode+" MODE", 1, 1, Term.BLACK, Term.WHITE)
             Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
             Term.printAt(str(currentTermWidth) + "," + str(currentTermHeight), 1, (currentTermHeight -1), Term.BLACK,
                          Term.WHITE)
@@ -1616,9 +1617,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         yPos=3
         xPos=2
 
-        # for x in range(0,len(tableRowsRendered)):
-        #     Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
-        # Term.printList(tableRowsRendered,2,20)
+        for x in range(0,len(tableRowsRendered)):
+            Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
+        Term.printList(tableRowsRendered,2,20)
 
         time.sleep(1)
 
