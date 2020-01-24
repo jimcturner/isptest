@@ -331,6 +331,13 @@ class Term(object):
         # Write text
         Term.printCentered(text,row,fgColour,bgColour)
 
+    @classmethod
+    def printList(cls,list,xPos,yPos,*colourArgs):
+        # Renders a list (such as table data) at specified xPos, Ypos
+        # Optional colourargs are foreground or [foreground, background]
+
+        for x in range(0,len(list)):
+            Term.printAt(list[x],xPos,yPos+x,*colourArgs)
 
 
 # Define an object to hold data about an individual received rtp packet
@@ -1610,7 +1617,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
         for x in range(0,len(tableRowsRendered)):
             Term.printAt(tableRowsRendered[x],xPos,yPos+x,Term.BLACK, Term.WHITE)
-
+        Term.printList(tableRowsRendered,2,20)
 
 
         time.sleep(1)
