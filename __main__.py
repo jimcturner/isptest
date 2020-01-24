@@ -1592,9 +1592,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             Term.setBackgroundColour(Term.BLUE)
             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
             Term.printAt(operationMode, 1, 1, Term.BLACK, Term.WHITE)
-            Term.setBackgroundColourSingleLine(1, currentTermHeight, Term.WHITE)
-            Term.printAt(str(currentTermWidth) + "," + str(currentTermWidth), 1, currentTermHeight, Term.BLACK,
-                         Term.WHITE)
+            # Term.setBackgroundColourSingleLine(1, currentTermHeight, Term.WHITE)
+            # Term.printAt(str(currentTermWidth) + "," + str(currentTermWidth), 1, currentTermHeight, Term.BLACK,
+            #              Term.WHITE)
 
         # Update clock on top RHS of screen
         Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
