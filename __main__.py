@@ -177,7 +177,7 @@ class Term(object):
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             return ch
 
-    # Use the following colour enumerations in place of unfriencly numbers when specifying colours
+    # Use the following colour enumerations in place of unfriendly numbers when specifying colours
     # in calls to Term.printAt() etc
     BLACK = 0
     RED = 1
@@ -189,7 +189,17 @@ class Term(object):
     WHITE = 7
     RESET = 9
 
-    # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+    # Lambda utility function to convert a colour index no into the equivalent ASCII foreground colour escape sequence
+    # invoke useing y=FG(x)
+    FG = lambda x: "\033[3"+str(x)+"m"
+
+    # Lambda utility function to convert a colour index no into the equivalent ASCII background colour escape sequence
+    # invoke useing y=BG(x)
+    BG = lambda x: "\033[4"+str(x)+"m"
+
+    # Lambda utility function to convert x,y (column,row) into an ascii escape sequence to move the cursor
+    # invoke useing z=FG(x,y) where x is the column, y is the row
+    xy = lambda x,y: "\033["+str(y)+";"+str(x)+"H"
 
     @classmethod
     def clearScreen(cls):
@@ -267,6 +277,8 @@ class Term(object):
         except:
             # Failing everything else, do a plain old print with a CR at the end
             print(str(text)+"\r")
+
+
 
     @classmethod
     def printCentered(cls,text,yPos, *args):
