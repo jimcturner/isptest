@@ -1578,7 +1578,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
         # Check to see if terminal has been resized
         w,h = Term.getTerminalSize()
-        if w != currentTermWidth or h != currentTermHeight:
+        if (w != currentTermWidth) or (h != currentTermHeight):
             # If it has, set a flag
             redrawScreen = True
             # And store the new values
