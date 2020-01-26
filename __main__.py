@@ -189,6 +189,12 @@ class Term(object):
     CYAN = 6
     WHITE = 7
     RESET = 9
+    # Black on White - shorthand
+    BlaWh = "\033[30m"+"\033[47m"
+    # Black on Cyan
+    BlaCy = "\033[30m"+"\033[46m"
+    # White on blue
+    WhiBlu = "\033[37m"+"\033[44m"
 
     # Ascii seq to move the cursor to 1,1 (the origin)
     HOME = "\033[0;0H"
@@ -319,7 +325,7 @@ class Term(object):
                     print (Term.XY(xPos) + str(text) + Term.HOME)
             else:
                 # No colour parameter supplied
-                print (Term.XY(xPos,yPos) + + str(text) + Term.HOME)
+                print (Term.XY(xPos,yPos) + str(text) + Term.HOME)
 
         except Exception as e:
             # Failing everything else, do a plain old print with a CR at the end
@@ -1660,6 +1666,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     Term.setBackgroundColourSingleLine(1, 25, Term.WHITE)
     Term.printAt(str(currentTermWidth)+","+str(currentTermHeight),1,(currentTermHeight-1),Term.BLACK,Term.WHITE)
 
+    selectedOption = 0
     while True:
 
         # Check to see if terminal has been resized
@@ -1693,6 +1700,27 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             temp = [k, v]
             availableRtpRxStreamList.append(temp)
 
+        ####Print a status bar showing the available (and currently selected) table options
+        tableOptions = ["Summary","Stream","Glitches","Jitter"]
+        tableOptsString = ""
+        try:
+            if (ord(keyPressed[0])==67):    # Cursor right pressed?
+                keyPressed[0]=''    # Clear key buffer
+                selectedOption += 1
+        except:
+            pass
+        for option in tableOptions:
+            # Create printable string
+            if option == tableOptions[selectedOption]:
+                tableOptsString+=Term.BlaWh + " " + option+" "+Term.WhiBlu+" "
+            else:
+                tableOptsString+=Term.BlaCy + " "+option+" "+Term.WhiBlu+" "
+        Term.printAt(tableOptsString,2,3)
+
+
+
+
+
         ##############Create table containing the available incoming streams
         titleRow=["Name","Sync src"," Stream source","bps","Loss\n %","Pckts\nlost"] # ,"Glitches","Jitter","Time Elapsed"]
         tableData=[titleRow]
@@ -1701,7 +1729,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         tableWidth = table.table_width
         tableRowsRendered=table.table.splitlines()
 
-        Term.printTable(tableRowsRendered,2,3,tableWidth,Term.RED, Term.WHITE)
+        Term.printTable(tableRowsRendered,2,4,tableWidth,Term.BLACK, Term.WHITE)
 
         ##################### Create table showing messages
         # Get last 10 messages
@@ -1709,7 +1737,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
         # Now iterate over actual messages to make sure they're not too long for display
         # If they are, truncate them
-        maxMessageDisplayLength=50
+        maxMessageDisplayLength=66
         for message in messages:
             if len(message[1])>maxMessageDisplayLength:
                 message[1] = message [1][:maxMessageDisplayLength]
@@ -2308,6 +2336,15 @@ def main(argv):
     # Term.printTitleBar("IBEOO ISP Analyser V1.0",1,Term.BLACK,Term.WHITE)
     # time.sleep(2)
     # # Term.exitScreen()
+    # while True:
+    #
+    #     x=Term.getch()
+    #     if ord(x)==67:
+    #         print ("CURSOR RIGHT")
+    #     elif ord(x)==3:
+    #         print ("Ctrl-C")
+    #         break
+    #
     # exit()
 
 
