@@ -1959,6 +1959,9 @@ def __catchKeyboardPresses(keyPressed):
             # Esc
             keyPressed[0] = 'Enter'
 
+        # Special case if 'i' pressed
+        # provide input prompt -used to edit a stream name
+
         else:
             keyPressed[0] = ch
         time.sleep(0.2)
