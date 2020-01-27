@@ -1703,12 +1703,30 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         ####Print a status bar showing the available (and currently selected) table options
         tableOptions = ["Summary","Stream","Glitches","Jitter"]
         tableOptsString = ""
-        try:
-            if (keyPressed[0]=='CursorR'):    # Cursor right pressed?
-                keyPressed[0]=''    # Clear key buffer
-                selectedOption += 1
-        except:
-            pass
+
+        if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
+            keyPressed[0]=''    # Clear key buffer
+            selectedOption += 1
+
+        if (keyPressed[0]=='CursorLeft'):
+            keyPressed[0] = ''  # Clear key buffer
+            Message.addMessage("Cursor Left")
+
+        if (keyPressed[0]=='CursorUp'):
+            keyPressed[0] = ''  # Clear key buffer
+            Message.addMessage("Cursor Up")
+
+        if (keyPressed[0] == 'CursorDown'):
+            keyPressed[0] = ''  # Clear key buffer
+            Message.addMessage("Cursor Down")
+
+        if (keyPressed[0] == 'Enter'):
+            keyPressed[0] = ''  # Clear key buffer
+            Message.addMessage("Enter")
+
+
+
+
         for option in tableOptions:
             # Create printable string
             if option == tableOptions[selectedOption]:
@@ -1929,21 +1947,22 @@ def __olddisplayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed
 # Define a thread that will trap keys pressed
 def __catchKeyboardPresses(keyPressed):
     Message.addMessage("Starting __catchKeyboardPresses thread")
+    # OSX and Windows seem to return different codes for the cursor keys, so check for both
     while True:
         ch = Term.getch()
-        if ord(ch)==67:
+        if ord(ch)==67 or ord(ch)==77:
             # Right cursor key
             keyPressed[0] = 'CursorRight'
 
-        elif ord(ch)==68:
+        elif ord(ch)==68 or ord(ch)==75:
             # Left cursor key
             keyPressed[0] = 'CursorLeft'
 
-        elif ord(ch)==65:
+        elif ord(ch)==65 or ord(ch)==72:
             # Up cursor key
             keyPressed[0] = 'CursorUp'
 
-        elif ord(ch) == 66:
+        elif ord(ch) == 66 or ord(ch)==80:
             # Down cursor key
             keyPressed[0] = 'CursorDown'
 
@@ -1951,9 +1970,10 @@ def __catchKeyboardPresses(keyPressed):
             # Ctrl-C
             keyPressed[0] = 'Ctrl-C'
 
-        elif ord(ch)==27:
-            # Esc
-            keyPressed[0] = 'Esc'
+        # Not dependable because cursor keys also send '27'
+        # elif ord(ch)==27:
+        #     # Esc
+        #     keyPressed[0] = 'Esc'
 
         elif ord(ch) == 13:
             # Esc
@@ -2368,19 +2388,19 @@ def main(argv):
     # Term.printTitleBar("IBEOO ISP Analyser V1.0",1,Term.BLACK,Term.WHITE)
     # time.sleep(2)
     # # Term.exitScreen()
-    while True:
-
-        x=Term.getch()
-        if ord(x)==67:
-            print ("CURSOR RIGHT")
-
-        elif ord(x)==3:
-            print ("Ctrl-C")
-            break
-        else:
-            print (ord(x))
-
-    exit()
+    # while True:
+    #
+    #     x=Term.getch()
+    #     if ord(x)==67:
+    #         print ("CURSOR RIGHT")
+    #
+    #     elif ord(x)==3:
+    #         print ("Ctrl-C")
+    #         break
+    #     else:
+    #         print (ord(x))
+    #
+    # exit()
 
 
     init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
