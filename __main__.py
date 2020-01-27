@@ -189,10 +189,10 @@ class Term(object):
     CYAN = 6
     WHITE = 7
     RESET = 9
-    # Black on White - shorthand
-    BlaWh = "\033[30m"+"\033[47m"
-    # Black on Cyan
-    BlaCy = "\033[30m"+"\033[46m"
+    # Black on White, normal brightness - shorthand
+    BlaWh = "\033[22m"+"\033[30m"+"\033[47m"
+    # Black on Cyan, dim brightness
+    BlaCy = "\033[2m"+"\033[30m"+"\033[46m"
     # White on blue
     WhiBlu = "\033[37m"+"\033[44m"
 
@@ -1704,7 +1704,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         tableOptions = ["Summary","Stream","Glitches","Jitter"]
         tableOptsString = ""
         try:
-            if (ord(keyPressed[0])==67):    # Cursor right pressed?
+            if (keyPressed[0]=='CursorR'):    # Cursor right pressed?
                 keyPressed[0]=''    # Clear key buffer
                 selectedOption += 1
         except:
@@ -1931,7 +1931,36 @@ def __catchKeyboardPresses(keyPressed):
     Message.addMessage("Starting __catchKeyboardPresses thread")
     while True:
         ch = Term.getch()
-        keyPressed[0] = ch
+        if ord(ch)==67:
+            # Right cursor key
+            keyPressed[0] = 'CursorRight'
+
+        elif ord(ch)==68:
+            # Left cursor key
+            keyPressed[0] = 'CursorLeft'
+
+        elif ord(ch)==65:
+            # Up cursor key
+            keyPressed[0] = 'CursorUp'
+
+        elif ord(ch) == 66:
+            # Down cursor key
+            keyPressed[0] = 'CursorDown'
+
+        elif ord(ch)==3:
+            # Ctrl-C
+            keyPressed[0] = 'Ctrl-C'
+
+        elif ord(ch)==27:
+            # Esc
+            keyPressed[0] = 'Esc'
+
+        elif ord(ch) == 13:
+            # Esc
+            keyPressed[0] = 'Enter'
+
+        else:
+            keyPressed[0] = ch
         time.sleep(0.2)
 
 # Define an RTP Generator that can run autonomously as a thread
@@ -2336,16 +2365,19 @@ def main(argv):
     # Term.printTitleBar("IBEOO ISP Analyser V1.0",1,Term.BLACK,Term.WHITE)
     # time.sleep(2)
     # # Term.exitScreen()
-    # while True:
-    #
-    #     x=Term.getch()
-    #     if ord(x)==67:
-    #         print ("CURSOR RIGHT")
-    #     elif ord(x)==3:
-    #         print ("Ctrl-C")
-    #         break
-    #
-    # exit()
+    while True:
+
+        x=Term.getch()
+        if ord(x)==67:
+            print ("CURSOR RIGHT")
+
+        elif ord(x)==3:
+            print ("Ctrl-C")
+            break
+        else:
+            print (ord(x))
+
+    exit()
 
 
     init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
