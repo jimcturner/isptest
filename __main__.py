@@ -1725,8 +1725,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             Message.addMessage("Enter")
 
 
-
-
         for option in tableOptions:
             # Create printable string
             if option == tableOptions[selectedOption]:
@@ -2400,7 +2398,14 @@ def main(argv):
     #     else:
     #         print (ord(x))
     #
-    # exit()
+    try:
+        input = raw_input
+    except NameError:
+        pass
+
+    input1 = str(input())
+    print (input1)
+    exit()
 
 
     init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
