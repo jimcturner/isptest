@@ -2461,6 +2461,13 @@ def main(argv):
         # -i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4
 
         address = ""
+
+        # Check for no no option supplied:
+        if len (argv) < 1:
+            print ("No options supplied. Use -h for help")
+            exit(
+
+            )
         opts, args = getopt.getopt(argv, "hlt:r:i:t:b:d:")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
@@ -2574,6 +2581,7 @@ def main(argv):
     except getopt.GetoptError:
         print ('invalid options supplied'+ str(argv))
         exit()
+
 
     runOnce = True
 
