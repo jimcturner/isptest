@@ -2443,7 +2443,13 @@ def main(argv):
     #     else:
     #         print (ord(x))
     #
-
+    try:
+        input = raw_input
+    except NameError:
+        pass
+    friendlyName = input("Enter friendly name for stream: ")
+    print (friendlyName)
+    exit()
 
 
     init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
