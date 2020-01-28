@@ -1681,7 +1681,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     selectedView = 0  # Keeps track of which view is currently being displayed
 
     availableRtpRxStreamList = []
-    temp = []
+
     redrawScreen = True
 
     # Grab initial terminal dimensions
@@ -1732,13 +1732,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             temp = [k, v]
             availableRtpRxStreamList.append(temp)
 
-        ####Print a status bar showing the available (and currently selected) table options
-        tableOptions = ["Summary","Stream","Glitches","Jitter"]
-        tableOptsString = ""
 
         if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
             keyPressed[0]=''    # Clear key buffer
-            # selectedOption += 1
             selectedView += 1
             # Prevent an 'out of range' view being selected
             if selectedView > (len(views)-1):
@@ -1746,7 +1742,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
         if (keyPressed[0]=='CursorLeft'):
             keyPressed[0] = ''  # Clear key buffer
-            Message.addMessage("Cursor Left")
             selectedView -= 1
             # Prevent an 'out of range' view being selected
             if selectedView < 0:
@@ -1778,25 +1773,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
 
             ######### Print Navigation bar (shows the available views)
-            # Create sublist containing the names of the available views
-            # This will be rendered as a string with the selected view highlighted
-            # availableViews = []
-            # for view in views:
-            #     availableViews.append(view[0])
-
-
-            # # Now render availableViews[] as a coloured string
-            # for viewName in availableViews:
-            #     if viewName == availableViews[selectedView]:
-            #         # If this is the 'current' view, create black on white
-            #         navigationBar += Term.BlaWh + " " + viewName+" "+Term.WhiBlu+" "
-            #     else:
-            #         # Otherwise create as dimmed white on cyan
-            #         navigationBar += Term.BlaCy + " "+viewName+" "+Term.WhiBlu+" "
-
-            # Now render availableViews[] as a coloured string
             navigationBar = ""  # Clear navigation bar for next time
-            # Iterate over the views definition extracting the name of the view
+            # Iterate over the views definition extracting the name of the view (view[0])
             # and create a printable string with colour coding
             # If the view is currently selected, black on white, otherwise black on cyan
             for view in views:
@@ -1806,27 +1784,40 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
                 else:
                     # Otherwise create as dimmed white on cyan
                     navigationBar += Term.BlaCy + " " + view[0] + " " + Term.WhiBlu + " "
-
+            # Print the rendered nav bar
             Term.printAt(navigationBar,2,3)
 
 
-            for option in tableOptions:
-                # Create printable string
-                if option == tableOptions[selectedOption]:
-                    tableOptsString+=Term.BlaWh + " " + option+" "+Term.WhiBlu+" "
-                else:
-                    tableOptsString+=Term.BlaCy + " "+option+" "+Term.WhiBlu+" "
-            # Term.printAt(tableOptsString,2,3)
 
             ##############Create table containing the available incoming streams
-            titleRow=["Name","Sync src"," Stream source","bps","Loss\n %","Pckts\nlost"] # ,"Glitches","Jitter","Time Elapsed"]
-            tableData=[titleRow]
-            table = SingleTable(tableData)
-            table.title="Available Streams"
-            tableWidth = table.table_width
-            tableRowsRendered=table.table.splitlines()
+            # titleRow=["Name","Sync src"," Stream source","bps","Loss\n %","Pckts\nlost"] # ,"Glitches","Jitter","Time Elapsed"]
+            # tableData=[titleRow]
+            # table = SingleTable(tableData)
+            # table.title="Available Streams"
+            # tableWidth = table.table_width
+            # tableRowsRendered=table.table.splitlines()
+            #
+            # Term.printTable(tableRowsRendered,2,4,tableWidth,Term.BLACK, Term.WHITE)
 
-            Term.printTable(tableRowsRendered,2,4,tableWidth,Term.BLACK, Term.WHITE)
+            #### Auto generate a table of the selected view based on the view[] definitions
+            # Create a title row
+            titleRow=[]
+            keyRow = []
+            # Extract the column titles and stats keys for the current view
+            for view in views:
+                if view[0] == views[selectedView][0]:
+                    # view[1] represents a tuple containing a column title and a key pair
+                    columns = view[1]
+                    for column in columns:
+                        titleRow.append(column[0])
+                        keyRow.append(column[1])
+            tableData = [titleRow]
+            table = SingleTable(tableData)
+            tableWidth = table.table_width
+            tableRowsRendered = table.table.splitlines()
+            Term.printTable(tableRowsRendered, 2, 4, tableWidth, Term.BLACK, Term.WHITE)
+
+
 
             ##################### Create table showing messages
             # Get last 10 messages
