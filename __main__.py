@@ -1999,7 +1999,7 @@ def __catchKeyboardPresses(keyPressed):
 
             # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
             keyPressed[0]='inhibit_redraw'
-            # Generate and print ascii string to move cursor to start of penultimate line
+            # Generate and print ascii string to move cursor to start of penultimate line, blue on white text
             print(str(Term.XY(1,(termH - 2))))
             # Request user input
             # Cludge to make input code compatible for Python2 and Python3
@@ -2008,7 +2008,7 @@ def __catchKeyboardPresses(keyPressed):
             # This cludge attempts to redefine raw_input() as input () (if it exists)
             # so that input() can be used by both versions
             try:
-                friendlyName = input("Enter friendly name for stream: ")
+                friendlyName = input("Enter friendly name for stream> ")
                 # Now signal to _displayThread that a friendly name has been entered
                 # Pass the friendly name as the second arg of keyPressed[]
                 keyPressed[0]='newFriendlyNameEntered'
@@ -2434,17 +2434,9 @@ def main(argv):
     #         print (ord(x))
     #
 
-    # friendlyName = input("Enter friendly name for stream: ")
-    # print (friendlyName)
-    # exit()
 
 
     init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
-
-
-    # input1 = str(input())
-    # print (input1)
-    # exit()
 
     MODE = ""
     # Specify a default txRate of 1Mbps if no rate specified
