@@ -1682,6 +1682,13 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
     availableRtpRxStreamList = []
 
+    # Specify the maximum no. of rows to be displayed in the stream table
+    noOfStreamTableRows = 2
+    # Specify the default starting row for the available streams table
+    streamTableFirstRow = 0
+    # Specify the default ending row for the available streams table
+    streamTableLastRow = noOfStreamTableRows
+
     redrawScreen = True
 
     # Grab initial terminal dimensions
@@ -1748,11 +1755,28 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
                 selectedView = 0
 
         if (keyPressed[0]=='CursorUp'):
+            # Scroll the available stream list up
             keyPressed[0] = ''  # Clear key buffer
+            streamTableFirstRow -= 1
+            if streamTableFirstRow <0:
+                streamTableFirstRow =0
+            streamTableLastRow -= 1
+            if streamTableLastRow < len(availableRtpRxStreamList):
+                streamTableLastRow = len(availableRtpRxStreamList)
+
             Message.addMessage("Cursor Up")
 
         if (keyPressed[0] == 'CursorDown'):
+            # Scroll the available stream list down
             keyPressed[0] = ''  # Clear key buffer
+            streamTableFirstRow += 1
+            if (streamTableLastRow - streamTableFirstRow) < noOfStreamTableRows:
+                streamTableFirstRow = 0
+                streamTableLastRow = len(availableRtpRxStreamList)
+            streamTableLastRow += 1
+            if streamTableLastRow > len (availableRtpRxStreamList):
+                streamTableLastRow = len (availableRtpRxStreamList)
+
             Message.addMessage("Cursor Down")
 
         if (keyPressed[0] == 'Enter'):
@@ -1790,6 +1814,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
 
             #### Auto generate a table of the selected view based on the view[] definitions
+            # Step 1) Establish the titles and key list for the table
             # Create a title row
             titleRow=[]
             # Create a list of keys that will be accessed for this view
@@ -1802,11 +1827,15 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
                     for column in columns:
                         titleRow.append(column[0])
                         keyList.append(column[1])
+
             # Create a table data list with the title row at the head
             tableData = [titleRow]
 
-            ###### Uses the availableRtpRxStreamList[]
-            for rxStream in availableRtpRxStreamList:
+            if len(availableRtpRxStreamList)< noOfStreamTableRows:
+                streamTableLastRow=len(availableRtpRxStreamList)
+
+            # Step 2) Populate the remaining table rows with data
+            for rxStream in availableRtpRxStreamList[streamTableFirstRow:streamTableLastRow]:
                 # Retrieve the stats dictionary for that key
                 rxStreamStats = rxStream[1].getRtpStreamStats()
                 # iterate over the keys list for each stream - this will list in a new tableData row per stream
@@ -1817,6 +1846,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
                 tableData.append(tableRow)
                 del tableRow
 
+            # Step 3) Render the table
             table = SingleTable(tableData)
             tableWidth = table.table_width
             tableRowsRendered = table.table.splitlines()
@@ -1837,7 +1867,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
             if len(messages) > 0:
                 width, height, tableData = createTable(messages, "Messages")
-                Term.printTable(tableData,2,10,width,Term.BLACK,Term.WHITE)
+                Term.printTable(tableData,2,15,width,Term.BLACK,Term.WHITE)
             redrawScreen =True
         time.sleep(1)
 
