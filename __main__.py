@@ -215,7 +215,7 @@ class Term(object):
     # invoke using z=FG(x,y) where x is the column, y is the row
     @classmethod
     def XY (cls,x,y):
-        return "\033["+str(int(y))+";"+str(int(x))+"H"
+        return "\033["+str(int(y))+";"+str(int(x))+"f"
 
     @classmethod
     def clearScreen(cls):
@@ -1678,8 +1678,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             # And store the new values
             currentTermWidth = w
             currentTermHeight = h
+            Message.addMessage("INFO: Terminal size has changed to "+str(currentTermWidth)+","+str(currentTermHeight))
 
-        if redrawScreen == True:
+        if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
             # Clear flag
             redrawScreen = False
             Term.clearTerminalScrollbackBuffer()
@@ -1689,9 +1690,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
             Term.printAt(str(currentTermWidth) + "," + str(currentTermHeight), 1, (currentTermHeight -1), Term.BLACK,
                          Term.WHITE)
-
-        # Update clock on top RHS of screen
-        Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
 
         # Get dictionary of available rtpRxStreams as a list
         # Flush existing contents of list
@@ -1724,44 +1722,53 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             keyPressed[0] = ''  # Clear key buffer
             Message.addMessage("Enter")
 
+        if (keyPressed[0] == 'newFriendlyNameEntered'):
+            keyPressed[0] = ''  # Clear key buffer
+            try:
+                newFriendlyName=keyPressed[1]
+                del keyPressed[1]  # Remove key buffer array now eve stored it
+                Message.addMessage("newFriendlyNameEntered: "+newFriendlyName)
+            except Exception as e:
+                Message.addMessage(Term.FG((Term.RED))+"ERR: __displayThread() newFriendlyNameEntered: "+ str(e))
 
-        for option in tableOptions:
-            # Create printable string
-            if option == tableOptions[selectedOption]:
-                tableOptsString+=Term.BlaWh + " " + option+" "+Term.WhiBlu+" "
-            else:
-                tableOptsString+=Term.BlaCy + " "+option+" "+Term.WhiBlu+" "
-        Term.printAt(tableOptsString,2,3)
+        if not (keyPressed[0] == 'inhibit_redraw'):
+            # Update clock on top RHS of screen
+            Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
 
+            ######### Print Nav bar
+            for option in tableOptions:
+                # Create printable string
+                if option == tableOptions[selectedOption]:
+                    tableOptsString+=Term.BlaWh + " " + option+" "+Term.WhiBlu+" "
+                else:
+                    tableOptsString+=Term.BlaCy + " "+option+" "+Term.WhiBlu+" "
+            Term.printAt(tableOptsString,2,3)
 
+            ##############Create table containing the available incoming streams
+            titleRow=["Name","Sync src"," Stream source","bps","Loss\n %","Pckts\nlost"] # ,"Glitches","Jitter","Time Elapsed"]
+            tableData=[titleRow]
+            table = SingleTable(tableData)
+            table.title="Available Streams"
+            tableWidth = table.table_width
+            tableRowsRendered=table.table.splitlines()
 
+            Term.printTable(tableRowsRendered,2,4,tableWidth,Term.BLACK, Term.WHITE)
 
+            ##################### Create table showing messages
+            # Get last 10 messages
+            messages = Message.getMessages(10)
 
-        ##############Create table containing the available incoming streams
-        titleRow=["Name","Sync src"," Stream source","bps","Loss\n %","Pckts\nlost"] # ,"Glitches","Jitter","Time Elapsed"]
-        tableData=[titleRow]
-        table = SingleTable(tableData)
-        table.title="Available Streams"
-        tableWidth = table.table_width
-        tableRowsRendered=table.table.splitlines()
+            # Now iterate over actual messages to make sure they're not too long for display
+            # If they are, truncate them
+            maxMessageDisplayLength=66
+            for message in messages:
+                if len(message[1])>maxMessageDisplayLength:
+                    message[1] = message [1][:maxMessageDisplayLength]
 
-        Term.printTable(tableRowsRendered,2,4,tableWidth,Term.BLACK, Term.WHITE)
-
-        ##################### Create table showing messages
-        # Get last 10 messages
-        messages = Message.getMessages(10)
-
-        # Now iterate over actual messages to make sure they're not too long for display
-        # If they are, truncate them
-        maxMessageDisplayLength=66
-        for message in messages:
-            if len(message[1])>maxMessageDisplayLength:
-                message[1] = message [1][:maxMessageDisplayLength]
-
-        if len(messages) > 0:
-            width, height, tableData = createTable(messages, "Messages")
-            Term.printTable(tableData,2,10,width,Term.BLACK,Term.WHITE)
-        redrawScreen =True
+            if len(messages) > 0:
+                width, height, tableData = createTable(messages, "Messages")
+                Term.printTable(tableData,2,10,width,Term.BLACK,Term.WHITE)
+            redrawScreen =True
         time.sleep(1)
 
 
@@ -1978,8 +1985,32 @@ def __catchKeyboardPresses(keyPressed):
             keyPressed[0] = 'Enter'
 
         # Special case if 'i' pressed
-        # provide input prompt -used to edit a stream name
+        elif ch == 'i':
+            # provide input prompt -used to edit a stream name
 
+            # Print user prompt on penultimate line of terminal
+            termW, termH = Term.getTerminalSize()
+
+            # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
+            keyPressed[0]='inhibit_redraw'
+            # Generate and print ascii string to move cursor to start of penultimate line
+            print(str(Term.XY(1,(termH - 2))))
+            # Request user input
+            # Cludge to make input code compatible for Python2 and Python3
+            # Python 2 uses the command raw_input() to get user input,
+            # whereas Python3 uses input().
+            # This cludge attempts to redefine raw_input() as input () (if it exists)
+            # so that input() can be used by both versions
+            try:
+                input = raw_input
+            except NameError:
+                pass
+            friendlyName = input("Enter friendly name for stream: ")
+
+            # Now signal to _displayThread that a friendly name has been entered
+            # Pass the friendly name as the second arg of keyPressed[]
+            keyPressed[0]='newFriendlyNameEntered'
+            keyPressed.append(str(friendlyName))
         else:
             keyPressed[0] = ch
         time.sleep(0.2)
@@ -2398,17 +2429,16 @@ def main(argv):
     #     else:
     #         print (ord(x))
     #
-    try:
-        input = raw_input
-    except NameError:
-        pass
 
-    input1 = str(input())
-    print (input1)
-    exit()
 
 
     init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
+
+
+    # input1 = str(input())
+    # print (input1)
+    # exit()
+
     MODE = ""
     # Specify a default txRate of 1Mbps if no rate specified
     txRate = 1 * 1024 * 1024
