@@ -1986,6 +1986,7 @@ def __catchKeyboardPresses(keyPressed):
 
         # Special case if 'i' pressed
         elif ch == 'i':
+            ch == ''    # Clear keybuffer
             # provide input prompt -used to edit a stream name
 
             # Print user prompt on penultimate line of terminal
@@ -2002,15 +2003,22 @@ def __catchKeyboardPresses(keyPressed):
             # This cludge attempts to redefine raw_input() as input () (if it exists)
             # so that input() can be used by both versions
             try:
+                # try:
+                #     # Try Python3 version of input() first
+                #     # getInput = input
+                #     friendlyName = input("Enter friendly name for stream: ")
+                # except Exception as e: # except NameError:
+                #     # If it fails, try Python version of input()
+                #     print(str(Term.XY(1, (termH - 2))))
+                #     friendlyName = raw_input("Enter friendly name for stream: ")
+                #     Message.addMessage("__CatchKeyboardPresses: "+str(e))
+
+                # Bind raw_input to input in Python 2
                 try:
                     input = raw_input
-                    friendlyName = input("Enter friendly name for stream: ")
-                # except NameError:
-                except:
-                    # getInput = input
-                    friendlyName = input("Enter friendly name for stream: ")
-                    Message.addMessage("ERR: _catchKeyboardPresses: "+ str(e))
-
+                except NameError:
+                    pass
+                friendlyName = input("Enter friendly name for stream: ")
                 # Now signal to _displayThread that a friendly name has been entered
                 # Pass the friendly name as the second arg of keyPressed[]
                 keyPressed[0]='newFriendlyNameEntered'
