@@ -26,7 +26,11 @@ import textwrap # Used for formatting long messages
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
 
-
+# Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
+try:
+    input = raw_input
+except NameError:
+    pass
 
 ####################################################################################
 # Utility Classes
@@ -2443,10 +2447,7 @@ def main(argv):
     #     else:
     #         print (ord(x))
     #
-    try:
-        input = raw_input
-    except NameError:
-        pass
+
     friendlyName = input("Enter friendly name for stream: ")
     print (friendlyName)
     exit()
