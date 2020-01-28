@@ -2005,7 +2005,8 @@ def __catchKeyboardPresses(keyPressed):
                 try:
                     input = raw_input
                     friendlyName = input("Enter friendly name for stream: ")
-                except NameError:
+                # except NameError:
+                except:
                     # getInput = input
                     friendlyName = input("Enter friendly name for stream: ")
 
