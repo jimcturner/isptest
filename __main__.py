@@ -2002,15 +2002,19 @@ def __catchKeyboardPresses(keyPressed):
             # This cludge attempts to redefine raw_input() as input () (if it exists)
             # so that input() can be used by both versions
             try:
-                input = raw_input
-            except NameError:
-                pass
-            friendlyName = input("Enter friendly name for stream: ")
+                try:
+                    input = raw_input
+                    friendlyName = input("Enter friendly name for stream: ")
+                except NameError:
+                    # getInput = input
+                    friendlyName = input("Enter friendly name for stream: ")
 
-            # Now signal to _displayThread that a friendly name has been entered
-            # Pass the friendly name as the second arg of keyPressed[]
-            keyPressed[0]='newFriendlyNameEntered'
-            keyPressed.append(str(friendlyName))
+                # Now signal to _displayThread that a friendly name has been entered
+                # Pass the friendly name as the second arg of keyPressed[]
+                keyPressed[0]='newFriendlyNameEntered'
+                keyPressed.append(str(friendlyName))
+            except:
+                pass
         else:
             keyPressed[0] = ch
         time.sleep(0.2)
