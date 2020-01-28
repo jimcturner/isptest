@@ -1789,19 +1789,10 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
 
 
-            ##############Create table containing the available incoming streams
-            # titleRow=["Name","Sync src"," Stream source","bps","Loss\n %","Pckts\nlost"] # ,"Glitches","Jitter","Time Elapsed"]
-            # tableData=[titleRow]
-            # table = SingleTable(tableData)
-            # table.title="Available Streams"
-            # tableWidth = table.table_width
-            # tableRowsRendered=table.table.splitlines()
-            #
-            # Term.printTable(tableRowsRendered,2,4,tableWidth,Term.BLACK, Term.WHITE)
-
             #### Auto generate a table of the selected view based on the view[] definitions
             # Create a title row
             titleRow=[]
+            # Create a list of keys that will be accessed for this view
             keyList = []
             # Extract the column titles and stats keys for the current view
             for view in views:
@@ -1814,18 +1805,12 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             # Create a table data list with the title row at the head
             tableData = [titleRow]
 
-            # now iterate over the available streams (by key), picking off the data specified by the keys in keyRow = []
-            for rxStreamKey in rtpRxStreamsDict: # Iterates over the keys of the dictionary
-
-                # Retrieve the actual rxStream object by accessing by the current key
-                rxStream = rtpRxStreamsDict[rxStreamKey]
-                # Retreive the stats dictionary for that key
-                rxStreamStats=rxStream.getRtpStreamStats()
-
-                # Message.addMessage(str(rxStreamStats))
-
+            ###### Uses the availableRtpRxStreamList[]
+            for rxStream in availableRtpRxStreamList:
+                # Retrieve the stats dictionary for that key
+                rxStreamStats = rxStream[1].getRtpStreamStats()
                 # iterate over the keys list for each stream - this will list in a new tableData row per stream
-                tableRow=[] # Create new row to hold the data
+                tableRow = []  # Create new row to hold the data
                 for key in keyList:
                     tableRow.append(rxStreamStats[key])
                 # Now append this complete row to the tableData list (of lists)
