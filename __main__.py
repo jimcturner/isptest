@@ -1663,7 +1663,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     # view [n][1] is a tuple containing [column title, the stats dictionary key relating to that parameter]
     views = []
     views.append(["Summary",
-                  [["Name", "stream_friendly_name"],
+                  [["#",0], # Used as an index
+                   ["Name", "stream_friendly_name"],
                    ["Sync Source", "stream_syncSource"],
                    ["Src Addr", "stream_srcAddress"],
                    ["port", "stream_srcPort"],
@@ -1673,7 +1674,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
                    ]])
 
     views.append(["Stream",
-                  [["Name", "stream_friendly_name"],
+                  [["#",0], # Used as an index
+                   ["Name", "stream_friendly_name"],
                    ["Src Addr", "stream_srcAddress"],
                    ["port", "stream_srcPort"],
                    ["Pkts\n Rx'd","packet_data_received_total_bytes"]
@@ -1682,6 +1684,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     selectedView = 0  # Keeps track of which view is currently being displayed
 
     availableRtpRxStreamList = []
+    # Keeps a chronological index of the streams being picked up by _displayThread
+    rtpStreamAddedIndex=0
 
     # Specify the maximum no. of rows to be displayed in the stream table
     noOfStreamTableRows = 5
@@ -1738,7 +1742,10 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
         # Flush existing contents of list
         del availableRtpRxStreamList[:]
         for k, v in rtpRxStreamsDict.items():
-            temp = [k, v]
+            # Get keys and values from dictionary. Copy into a new tuple.
+            # The third element of the tuple will be an index no (which reflects the order in which the stream was added
+            rtpStreamAddedIndex +=1
+            temp = [k, v,rtpStreamAddedIndex]
             availableRtpRxStreamList.append(temp)
 
         if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
@@ -1842,8 +1849,17 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
                 # iterate over the keys list for each stream - this will list in a new tableData row per stream
                 tableRow = []  # Create new row to hold the data
                 for key in keyList:
-                    # Retrieve the data from the rtpStream object by looking up it's key
-                    tableRow.append(rxStreamStats[key])
+                    # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
+                    # which is stored as the third element of an rxStream tuple in the availableRxStreamsList
+                    if key ==0:
+                        tableRow.append(rxStream[2])
+                    else:
+                        try:
+                            # Retrieve the data from the rtpStream object by looking up it's key
+                            tableRow.append(rxStreamStats[key])
+                        except:
+                            # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
+                            tableRow.append("keyErr")
                 # Now append this complete row to the tableData list (of lists)
                 tableData.append(tableRow)
                 del tableRow
