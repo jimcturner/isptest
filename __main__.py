@@ -1802,7 +1802,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             #### Auto generate a table of the selected view based on the view[] definitions
             # Create a title row
             titleRow=[]
-            keyRow = []
+            keyList = []
             # Extract the column titles and stats keys for the current view
             for view in views:
                 if view[0] == views[selectedView][0]:
@@ -1810,8 +1810,28 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
                     columns = view[1]
                     for column in columns:
                         titleRow.append(column[0])
-                        keyRow.append(column[1])
+                        keyList.append(column[1])
+            # Create a table data list with the title row at the head
             tableData = [titleRow]
+
+            # now iterate over the available streams (by key), picking off the data specified by the keys in keyRow = []
+            for rxStreamKey in rtpRxStreamsDict: # Iterates over the keys of the dictionary
+
+                # Retrieve the actual rxStream object by accessing by the current key
+                rxStream = rtpRxStreamsDict[rxStreamKey]
+                # Retreive the stats dictionary for that key
+                rxStreamStats=rxStream.getRtpStreamStats()
+
+                # Message.addMessage(str(rxStreamStats))
+
+                # iterate over the keys list for each stream - this will list in a new tableData row per stream
+                tableRow=[] # Create new row to hold the data
+                for key in keyList:
+                    tableRow.append(rxStreamStats[key])
+                # Now append this complete row to the tableData list (of lists)
+                tableData.append(tableRow)
+                del tableRow
+
             table = SingleTable(tableData)
             tableWidth = table.table_width
             tableRowsRendered = table.table.splitlines()
