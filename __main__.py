@@ -27,6 +27,7 @@ from terminaltables import SingleTable  # Used for pretty tables in displayThrea
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
 
 # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
+# From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
 try:
     input = raw_input
 except NameError:
@@ -2007,21 +2008,6 @@ def __catchKeyboardPresses(keyPressed):
             # This cludge attempts to redefine raw_input() as input () (if it exists)
             # so that input() can be used by both versions
             try:
-                # try:
-                #     # Try Python3 version of input() first
-                #     # getInput = input
-                #     friendlyName = input("Enter friendly name for stream: ")
-                # except Exception as e: # except NameError:
-                #     # If it fails, try Python version of input()
-                #     print(str(Term.XY(1, (termH - 2))))
-                #     friendlyName = raw_input("Enter friendly name for stream: ")
-                #     Message.addMessage("__CatchKeyboardPresses: "+str(e))
-
-                # Bind raw_input to input in Python 2
-                try:
-                    input = raw_input
-                except NameError:
-                    pass
                 friendlyName = input("Enter friendly name for stream: ")
                 # Now signal to _displayThread that a friendly name has been entered
                 # Pass the friendly name as the second arg of keyPressed[]
@@ -2448,9 +2434,9 @@ def main(argv):
     #         print (ord(x))
     #
 
-    friendlyName = input("Enter friendly name for stream: ")
-    print (friendlyName)
-    exit()
+    # friendlyName = input("Enter friendly name for stream: ")
+    # print (friendlyName)
+    # exit()
 
 
     init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
