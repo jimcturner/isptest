@@ -2009,6 +2009,7 @@ def __catchKeyboardPresses(keyPressed):
                 except:
                     # getInput = input
                     friendlyName = input("Enter friendly name for stream: ")
+                    Message.addMessage("ERR: _catchKeyboardPresses: "+ str(e))
 
                 # Now signal to _displayThread that a friendly name has been entered
                 # Pass the friendly name as the second arg of keyPressed[]
