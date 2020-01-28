@@ -1652,6 +1652,34 @@ def humanise(inputDictionary):
 
 
 def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
+
+    # define views, tables headings and keys
+    # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
+    # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
+    # views =[name of view 1, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],
+    #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]]]
+    # view [n][0] will be the name of the view (used to generate the navigation bar)
+    # view [n][1] is a tuple containing [column title, the stats dictionary key relating to that parameter]
+    views = []
+    views.append(["Summary",
+                  [["Name", "stream_friendly_name"],
+                   ["Sync Source", "stream_syncSource"],
+                   ["Src Addr", "stream_srcAddress"],
+                   ["port", "stream_srcPort"],
+                   ["bps", "packet_data_received_1S_bytes"],
+                   ["Pkts\nlost", "glitch_packets_lost_total_count"],
+                   ["Loss\n %", "glitch_packets_lost_total_percent"]
+                   ]])
+
+    views.append(["Stream",
+                  [["Name", "stream_friendly_name"],
+                   ["Src Addr", "stream_srcAddress"],
+                   ["port", "stream_srcPort"],
+                   ["Pkts\n Rx'd","packet_data_received_total_bytes"]
+                   ]])
+
+    selectedView = 0  # Keeps track of which view is currently being displayed
+
     availableRtpRxStreamList = []
     temp = []
     redrawScreen = True
@@ -1672,6 +1700,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
     Term.printAt(str(currentTermWidth)+","+str(currentTermHeight),1,(currentTermHeight-1),Term.BLACK,Term.WHITE)
 
     selectedOption = 0
+
     while True:
 
         # Check to see if terminal has been resized
@@ -1709,11 +1738,19 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
         if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
             keyPressed[0]=''    # Clear key buffer
-            selectedOption += 1
+            # selectedOption += 1
+            selectedView += 1
+            # Prevent an 'out of range' view being selected
+            if selectedView > (len(views)-1):
+                selectedView = len(views)-1
 
         if (keyPressed[0]=='CursorLeft'):
             keyPressed[0] = ''  # Clear key buffer
             Message.addMessage("Cursor Left")
+            selectedView -= 1
+            # Prevent an 'out of range' view being selected
+            if selectedView < 0:
+                selectedView = 0
 
         if (keyPressed[0]=='CursorUp'):
             keyPressed[0] = ''  # Clear key buffer
@@ -1740,14 +1777,46 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             # Update clock on top RHS of screen
             Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
 
-            ######### Print Nav bar
+            ######### Print Navigation bar (shows the available views)
+            # Create sublist containing the names of the available views
+            # This will be rendered as a string with the selected view highlighted
+            # availableViews = []
+            # for view in views:
+            #     availableViews.append(view[0])
+
+
+            # # Now render availableViews[] as a coloured string
+            # for viewName in availableViews:
+            #     if viewName == availableViews[selectedView]:
+            #         # If this is the 'current' view, create black on white
+            #         navigationBar += Term.BlaWh + " " + viewName+" "+Term.WhiBlu+" "
+            #     else:
+            #         # Otherwise create as dimmed white on cyan
+            #         navigationBar += Term.BlaCy + " "+viewName+" "+Term.WhiBlu+" "
+
+            # Now render availableViews[] as a coloured string
+            navigationBar = ""  # Clear navigation bar for next time
+            # Iterate over the views definition extracting the name of the view
+            # and create a printable string with colour coding
+            # If the view is currently selected, black on white, otherwise black on cyan
+            for view in views:
+                if view[0] == views[selectedView][0]:
+                    # If this is the 'current' view, create black on white
+                    navigationBar += Term.BlaWh + " " + view[0] + " " + Term.WhiBlu + " "
+                else:
+                    # Otherwise create as dimmed white on cyan
+                    navigationBar += Term.BlaCy + " " + view[0] + " " + Term.WhiBlu + " "
+
+            Term.printAt(navigationBar,2,3)
+
+
             for option in tableOptions:
                 # Create printable string
                 if option == tableOptions[selectedOption]:
                     tableOptsString+=Term.BlaWh + " " + option+" "+Term.WhiBlu+" "
                 else:
                     tableOptsString+=Term.BlaCy + " "+option+" "+Term.WhiBlu+" "
-            Term.printAt(tableOptsString,2,3)
+            # Term.printAt(tableOptsString,2,3)
 
             ##############Create table containing the available incoming streams
             titleRow=["Name","Sync src"," Stream source","bps","Loss\n %","Pckts\nlost"] # ,"Glitches","Jitter","Time Elapsed"]
