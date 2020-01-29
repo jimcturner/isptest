@@ -1751,9 +1751,9 @@ def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict, rtp
         # Write the list index value to the third element of the stream tuple
         stream[2]=index
 
-def humaniseValues(key,value):
+def humaniseValues(inputDictionary):
     # This function tests the supplied key against a list, and formats the corresponding value to make it more readable
-    if
+    pass
 
 def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, rtpRxStreamsDictMutex):
 
