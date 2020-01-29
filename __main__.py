@@ -1714,6 +1714,23 @@ def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict, rtp
                 except Exception as e:
                     Message.addMessage("__updateAvailableStreamsList: "+str(e))
                 break
+
+    # 7.5) Check that availableRtpRxStreamList and rtpRxStreamsDict are actually looking at the same objects in memory
+    # It's possible that duplicate streams with the same stream ID can lead to orphan streams remaining
+    # in availableRtpRxStreamList.
+    # To check, we actually need to compare the objects in both lists of objects. Using the 'is' keyword
+    # confirms that they are the same object (as opposed to the same type of object)
+    rtpRxStreamsDictMutex.acquire()
+    for stream in availableRtpRxStreamList:
+        try:
+            if stream[1] is not rtpRxStreamsDict[stream[0]]:
+                Message.addMessage("ERR:__updateAvailableStreamsList() Object mismatch for streamID "+str(stream[0])+". Repointing to correct object")
+                # Now re-point availableRtpRxStreamList to the correct version of that object
+                # by assigning the correct object to the entry in availableRtpRxStreamList[]
+                stream[1]=rtpRxStreamsDict[stream[0]]
+        except Exception as e:
+            Message.addMessage("ERR:__updateAvailableStreamsList(), rtpRxStreamsDictkey error for stream "+str(stream[0])+", "+str(e))
+    rtpRxStreamsDictMutex.release()
     # 8) delete newStreamsList, currentStreamsList, diff, addList and deleteList
     del newStreamsList
     del currentStreamsList
@@ -1872,6 +1889,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             streamID=availableRtpRxStreamList[0][0]
             removeRtpStreamFromDict(streamID, rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
+
         if not (keyPressed[0] == 'inhibit_redraw'):
             # Update clock on top RHS of screen
             Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
@@ -1964,7 +1982,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
             # Now iterate over actual messages to make sure they're not too long for display
             # If they are, truncate them
-            maxMessageDisplayLength=66
+            # maxMessageDisplayLength=66
+            maxMessageDisplayLength = 100
             for message in messages:
                 if len(message[1])>maxMessageDisplayLength:
                     message[1] = message [1][:maxMessageDisplayLength]
