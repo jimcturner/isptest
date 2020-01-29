@@ -1704,6 +1704,9 @@ def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict):
     del deleteList
 
     # 9) Optionally recalculate availableRtpRxStreamList indices - Note these shouldn't change unless a stream has been deleted
+    for index, stream in enumerate(availableRtpRxStreamList):
+        # Write the list index value to the third element of the stream tuple
+        stream[2]=index
 
 def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
 
@@ -2768,6 +2771,10 @@ def main(argv):
     # Create a dictionary to initially hold the sync source of a potential rx stream
     rtpRxStreamTempDict = {}
 
+    # Create a mutex lock to be used when writing to the rtpRxStreamsDict (or deleting objects)
+    rtpRxStreamsDictMutex = threading.Lock()
+
+
     # Start keyboard monitoring thread
     catchKeyboardPresses = threading.Thread(target=__catchKeyboardPresses, args=(keyPressed,))
     catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
@@ -2841,7 +2848,9 @@ def main(argv):
 
                 # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
                 try:
+                    # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
                     rtpRxStreamsDict[rtpSyncSourceIdentifier].addData(rtpSequenceNo, payloadSize, timeNow, rtpSyncSourceIdentifier)
+
                 except:
 
                     # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
@@ -2851,9 +2860,11 @@ def main(argv):
                         Message.addMessage(Fore.GREEN + str(rtpSyncSourceIdentifier) +
                                            " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
                         # Add new stream to the rtpRxStreamsDict
+                        rtpRxStreamsDictMutex.acquire()
                         rtpRxStreamsDict[rtpSyncSourceIdentifier] = \
                             RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP,
                                       UDP_RX_PORT, glitchEventTriggerThreshold)
+                        rtpRxStreamsDictMutex.release()
                         # Now delete the entry from the temporary dict
                         rtpRxStreamTempDict.pop(rtpSyncSourceIdentifier,None)
 
@@ -2862,8 +2873,6 @@ def main(argv):
                         # create a entry in the temporary list (with a timestamp)
                         Message.addMessage(Fore.RED+"Stream doesn't exist yet, adding to temp list: " + str(rtpSyncSourceIdentifier))
                         rtpRxStreamTempDict[rtpSyncSourceIdentifier] = datetime.datetime.now()
-
-
 
             except Exception as e:
                 message = Fore.RED+"Cannot decode RTP headers. Is this an RTP packet? "+str(e)+ " Length:" + str(len(data))+\
