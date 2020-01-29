@@ -200,6 +200,8 @@ class Term(object):
     BlaCy = "\033[2m"+"\033[30m"+"\033[46m"
     # White on blue
     WhiBlu = "\033[37m"+"\033[44m"
+    # White on black
+    WhBla = "\033[37m"+"\033[40m"
 
     # Ascii seq to move the cursor to 1,1 (the origin)
     HOME = "\033[0;0H"
@@ -1773,17 +1775,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                    ]])
 
     selectedView = 0  # Keeps track of which view is currently being displayed
+    selectedStream =0 # Kepps track of which stream is currently highlighted in the streams table
 
     availableRtpRxStreamList = []
-    # Keeps a chronological index of the streams being picked up by _displayThread
-    rtpStreamAddedIndex=0
-
-    # Specify the maximum no. of rows to be displayed in the stream table
-    noOfStreamTableRows = 5
-    # Specify the default starting row for the available streams table
-    streamTableFirstRow = 0
-    # Specify the default ending row for the available streams table
-    streamTableLastRow = noOfStreamTableRows
 
     redrawScreen = True
 
@@ -1846,27 +1840,21 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                 selectedView = 0
 
         if (keyPressed[0]=='CursorUp'):
-            # Scroll the available stream list up
+            # Scroll the highlight stream up the list
             keyPressed[0] = ''  # Clear key buffer
-            streamTableFirstRow -= 1
-            if streamTableFirstRow <0:
-                streamTableFirstRow =0
-            streamTableLastRow -= 1
-            if streamTableLastRow < len(availableRtpRxStreamList):
-                streamTableLastRow = len(availableRtpRxStreamList)
-
+            selectedStream -=1
+            # Bounds check
+            if selectedStream <0:
+                selectedStream = 0
             Message.addMessage("Cursor Up")
 
         if (keyPressed[0] == 'CursorDown'):
-            # Scroll the available stream list down
+            # Scroll the selected stream down
             keyPressed[0] = ''  # Clear key buffer
-            streamTableFirstRow += 1
-            if (streamTableLastRow - streamTableFirstRow) < noOfStreamTableRows:
-                streamTableFirstRow = 0
-                streamTableLastRow = len(availableRtpRxStreamList)
-            streamTableLastRow += 1
-            if streamTableLastRow > len (availableRtpRxStreamList):
-                streamTableLastRow = len (availableRtpRxStreamList)
+            selectedStream += 1
+            # Bounds check
+            if selectedStream > (len(availableRtpRxStreamList)-1):
+                selectedStream = len(availableRtpRxStreamList) -1
 
             Message.addMessage("Cursor Down")
 
@@ -1912,6 +1900,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
 
             #### Auto generate a table of the selected view based on the view[] definitions
+            # Specify the maximum no. of rows that can be displayed in the stream table - determined by the terminal height
+            noOfStreamTableRows = int(currentTermHeight/2)-12
+
             # Step 1) Establish the titles and key list for the table
             # Create a title row
             titleRow=[]
@@ -1933,7 +1924,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             #     streamTableLastRow=len(availableRtpRxStreamList)
 
             # Step 2) Populate the remaining table rows with data
-            for rxStream in availableRtpRxStreamList[streamTableFirstRow:streamTableLastRow]:
+            streamTableFirstRow = 0
+
+            for rxStream in availableRtpRxStreamList[streamTableFirstRow:]:
                 # Retrieve the stats dictionary for that key
                 rxStreamStats = rxStream[1].getRtpStreamStats()
                 # iterate over the keys list for each stream - this will list in a new tableData row per stream
@@ -1942,11 +1935,21 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                     # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
                     # which is stored as the third element of an rxStream tuple in the availableRxStreamsList
                     if key ==0:
-                        tableRow.append(rxStream[2])
+                        # Check to see if this is the currently selected stream
+                        # If so, highlight the row on the table
+                        if rxStream[2] == selectedStream:
+                            tableRow.append(Term.WhBla + str(rxStream[2]))
+                        else:
+                            tableRow.append(Term.BlaWh + str(rxStream[2]))
                     else:
                         try:
-                            # Retrieve the data from the rtpStream object by looking up it's key
-                            tableRow.append(rxStreamStats[key])
+                            # Check to see if this is the currently selected stream
+                            # If so, highlight the row on the table
+                            if rxStream[2] == selectedStream:
+                                # Retrieve the data from the rtpStream object by looking up it's key
+                                tableRow.append(Term.WhBla + str(rxStreamStats[key]))
+                            else:
+                                tableRow.append(Term.BlaWh + str(rxStreamStats[key]))
                         except Exception as e:
                             # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
                             tableRow.append("keyErr")
@@ -1979,8 +1982,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             ##################### Create table showing messages
 
             # Message table should fill lower half of window
-            yPos = int(currentTermHeight/2)
-            maxNoOfMessagesThatWillFitScreen = int(currentTermHeight/2) - 5
+            yPos = int(currentTermHeight/2) + 2
+            maxNoOfMessagesThatWillFitScreen = int(currentTermHeight/2) - 7
 
             # Get last x messages. Make a deep copy as we're going to add blankspace padding
             messages = deepcopy(Message.getMessages(maxNoOfMessagesThatWillFitScreen))
