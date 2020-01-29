@@ -1651,7 +1651,7 @@ def humanise(inputDictionary):
     # Return dictionary of humanised keys and values
     return newDictionary.items()
 
-def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict):
+def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict, rtpRxStreamsDictMutex):
     # This is a utility function for __displayThread
     # It's job is to compare the current working list inn use by __displayThread (currentStreamList[])
     # with the rtpRxStreamsDict{} dictionary of active rtpRxStreams (maintained by main())
@@ -1665,9 +1665,11 @@ def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict):
     # can manipulate them directly.
 
     # 1) Iterate over keys of rtpRxStreamsDict{} to get latest list of streams
+    rtpRxStreamsDictMutex.acquire()
     newStreamsList = []
     for k, v in rtpRxStreamsDict.items():
         newStreamsList.append(k)
+    rtpRxStreamsDictMutex.release()
 
     # 2) Create sublist of current known availableRtpRxStreamList
     currentStreamsList = []
@@ -1794,7 +1796,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                          Term.WHITE)
 
         # Update available streams list
-        __updateAvailableStreamsList(availableRtpRxStreamList,rtpRxStreamsDict)
+        __updateAvailableStreamsList(availableRtpRxStreamList,rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
         if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
             keyPressed[0]=''    # Clear key buffer
