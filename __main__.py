@@ -1737,16 +1737,78 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
             Term.printAt(str(currentTermWidth) + "," + str(currentTermHeight), 1, (currentTermHeight -1), Term.BLACK,
                          Term.WHITE)
 
+        # currentList=[]
+        # # Store current list of rtp streams
+        # for k in availableRtpRxStreamList:
+        #     currentList.append(k[0])
+        # Message.addMessage("currentList: "+str(currentList))
+        # # Fetch the latest list of streams contained within rtpRxStreamsDict
+        # # and create a new list
+        # newList = []
+        # for k, v in rtpRxStreamsDict.items():
+        #     newList.append(k)
+        # Message.addMessage("newList: " + str(newList))
+        # # Compare new and existing list
+        # symListDifference = set(currentList) ^ set(newList)
+        # Message.addMessage("symList What's different: "+str(symListDifference))
 
-        # Get dictionary of available rtpRxStreams as a list
-        # Flush existing contents of list
-        del availableRtpRxStreamList[:]
+        #Plan
+        # Iterate over symListDifference to pick up any new streams but check if the stream is
+        # already present in currentList (or availableRtpRxStreamList). If it is, delete it.
+        # That way currentList will be able to pick up additions and deletions
+        # 1) Iterate over keys of rtpRxStreamsDict{} to get latest list of streams
+        newStreamsList = []
         for k, v in rtpRxStreamsDict.items():
-            # Get keys and values from dictionary. Copy into a new tuple.
-            # The third element of the tuple will be an index no (which reflects the order in which the stream was added
-            rtpStreamAddedIndex +=1
-            temp = [k, v,rtpStreamAddedIndex]
-            availableRtpRxStreamList.append(temp)
+            newStreamsList.append(k)
+
+        # 2) Create sublist of current known availableRtpRxStreamList
+        currentStreamsList = []
+        for k in availableRtpRxStreamList:
+            currentStreamsList.append(k[0])
+
+        # 3) Do set(new)^set(current) to get difference between the two lists (as another list)
+        diff = set(currentStreamsList) ^ set(newStreamsList)
+        # 4) do set(new)&set(diff) to get add list
+        addList = set(newStreamsList) & set(diff)
+        # 5) do set (current)&set(diff) to get del list
+        deleteList = set(currentStreamsList) & set(diff)
+
+        # 6) Add new streams to availableRtpRxStreamList
+        for streamID in addList:
+            # Create tuple containing the stream id, the stream object itself and an index
+            x=[streamID,rtpRxStreamsDict[streamID],0]
+            # Append the new tuple to availableRtpRxStreamList[]
+            availableRtpRxStreamList.append(x)
+            Message.addMessage("Added "+str(x[0])+" to availableRtpRxStreamList[]")
+        # 7) Purge deleted streams from availableRtpRxStreamList[] according to deleteList
+        for streamID in deleteList:
+            #Iterate over tuples in availableRtpRxStreamList[] searching for a match
+            for x in availableRtpRxStreamList:
+                if x[0]==streamID:
+                    # If stream found, delete that tuple from the list
+                    Message.addMessage("Removing stream "+str(x[0]) + " from availableRtpRxStreamList[]")
+                    availableRtpRxStreamList.pop(x)
+        # 8) delete newStreamsList, currentStreamsList, diff, addList and deleteList
+        del newStreamsList
+        del currentStreamsList
+        del diff
+        del addList
+        del deleteList
+
+        # 9) Recalculate availableRtpRxStreamList indices
+
+
+
+        # # Get dictionary of available rtpRxStreams as a list
+        # # Flush existing contents of list
+        # del availableRtpRxStreamList[:]
+        # for k, v in rtpRxStreamsDict.items():
+        #     # Get keys and values from dictionary. Copy into a new tuple.
+        #     # The third element of the tuple will be an index no (which reflects the order in which the stream was added
+        #     # rtpStreamAddedIndex +=1
+        #     temp = [k, v,rtpStreamAddedIndex]
+        #     availableRtpRxStreamList.append(temp)
+
 
         if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
             keyPressed[0]=''    # Clear key buffer
