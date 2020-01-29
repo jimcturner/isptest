@@ -1977,18 +1977,20 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
 
             ##################### Create table showing messages
-            # Get last 10 messages
 
-            messages = deepcopy(Message.getMessages(10))
             # Message table should fill lower half of window
             yPos = int(currentTermHeight/2)
+            maxNoOfMessagesThatWillFitScreen = int(currentTermHeight/2) - 5
+
+            # Get last x messages. Make a deep copy as we're going to add blankspace padding
+            messages = deepcopy(Message.getMessages(maxNoOfMessagesThatWillFitScreen))
             # Now iterate over actual messages to make sure they're not too long for display
             # If they are, truncate them. (Terminal width - 12 chars) seems to work
             # If they're too short, make them longer (to fill the space)
             maxMessageDisplayLength=currentTermWidth - 12
             for message in messages:
                 if len(message[1])>maxMessageDisplayLength:
-                    message[1] = message [1][:maxMessageDisplayLength-2]
+                    message[1] = message[1][:maxMessageDisplayLength-2]
                 else:
                     paddingLength=(maxMessageDisplayLength-2) -len(message[1])
                     if paddingLength >0:
