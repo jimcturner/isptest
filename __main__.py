@@ -21,7 +21,7 @@ from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 import json
 from abc import ABCMeta, abstractmethod  # Used for event abstract class
-import textwrap # Used for formatting long messages
+from copy import deepcopy
 # Non standard libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
@@ -1978,18 +1978,28 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
             ##################### Create table showing messages
             # Get last 10 messages
-            messages = Message.getMessages(10)
 
+            messages = deepcopy(Message.getMessages(10))
+            # Message table should fill lower half of window
+            yPos = int(currentTermHeight/2)
             # Now iterate over actual messages to make sure they're not too long for display
-            # If they are, truncate them. Terminal width - 12 chars seems to work
-            maxMessageDisplayLength=currentTermWidth-12
+            # If they are, truncate them. (Terminal width - 12 chars) seems to work
+            # If they're too short, make them longer (to fill the space)
+            maxMessageDisplayLength=currentTermWidth - 12
             for message in messages:
                 if len(message[1])>maxMessageDisplayLength:
-                    message[1] = message [1][:maxMessageDisplayLength]
+                    message[1] = message [1][:maxMessageDisplayLength-2]
+                else:
+                    paddingLength=(maxMessageDisplayLength-2) -len(message[1])
+                    if paddingLength >0:
+                        paddingString = " " * paddingLength
+                        message[1] += paddingString
+
 
             if len(messages) > 0:
                 width, height, tableData = createTable(messages, "Messages")
-                Term.printTable(tableData,2,15,width,Term.BLACK,Term.WHITE)
+                Term.printTable(tableData,2,yPos,width,Term.BLACK,Term.WHITE)
+            del messages [:]
             redrawScreen =True
         time.sleep(1)
 
