@@ -1981,9 +1981,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             messages = Message.getMessages(10)
 
             # Now iterate over actual messages to make sure they're not too long for display
-            # If they are, truncate them
-            # maxMessageDisplayLength=66
-            maxMessageDisplayLength = 100
+            # If they are, truncate them. Terminal width - 12 chars seems to work
+            maxMessageDisplayLength=currentTermWidth-12
             for message in messages:
                 if len(message[1])>maxMessageDisplayLength:
                     message[1] = message [1][:maxMessageDisplayLength]
