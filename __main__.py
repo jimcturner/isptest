@@ -805,7 +805,7 @@ class RtpStream(object):
         self.__accessRtpStreamEventListMutex = threading.Lock()
 
         # Add a name field (which can be set with a friendly name (via a setter method) to identify the stream)
-        self.__stats["stream_friendly_name"] = ""
+        self.__stats["stream_friendly_name"] = " " * 12
 
         # Create empty list to hold rtp stream data as it is received by the socket
         self.rtpStreamData = []
@@ -1390,13 +1390,19 @@ class RtpStream(object):
     # Define setter methods
     def setFriendlyName(self, friendlyName):
         # Thread-safe method to set the friendly name field
+        maxNameLength = 12
+        # Truncate supplied name to 12 characters (truncated to preserve the screen layout) or else pad to 12 chars
+        if len(friendlyName) < maxNameLength:
+            # Too short, so Pad out name to 12 chars
+            friendlyName += (maxNameLength - len(friendlyName)) * " "
+        else:
+            # Too big, so truncate
+            friendlyName = friendlyName[:12]
 
-        # Truncate supplied name to 12 characters (truncated to preserve the screen layout)
-        truncatedName = friendlyName[:12]
         self.__accessRtpStreamStatsMutex.acquire()
-        self.__stats["stream_friendly_name"]=truncatedName
+        self.__stats["stream_friendly_name"]=friendlyName
         self.__accessRtpStreamStatsMutex.release()
-        return truncatedName
+        return friendlyName
 
     # Define getter methods
     def getRTPStreamID(self):
@@ -1745,6 +1751,19 @@ def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict, rtp
         # Write the list index value to the third element of the stream tuple
         stream[2]=index
 
+def format_timedelta(td):
+    # Utility function to make timedelta objects more readable
+    hours, remainder = divmod(td.total_seconds(), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    hours, minutes, seconds = int(hours), int(minutes), int(seconds)
+    if hours < 10:
+        hours = '0%s' % int(hours)
+    if minutes < 10:
+        minutes = '0%s' % minutes
+    if seconds < 10:
+        seconds = '0%s' % seconds
+    return '%s:%s:%s' % (hours, minutes, seconds)
+
 def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, rtpRxStreamsDictMutex):
 
     # define views, tables headings and keys
@@ -1758,12 +1777,13 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
     views.append(["Summary",
                   [["#",0], # Used as an index
                    ["Name", "stream_friendly_name"],
-                   ["Sync Source", "stream_syncSource"],
+                   ["Sync \nSrcID", "stream_syncSource"],
                    ["Src Addr", "stream_srcAddress"],
                    ["port", "stream_srcPort"],
                    ["bps", "packet_data_received_1S_bytes"],
                    ["Pkts\nlost", "glitch_packets_lost_total_count"],
-                   ["Loss\n %", "glitch_packets_lost_total_percent"]
+                   ["Loss\n %", "glitch_packets_lost_total_percent"],
+                   ["Last\nglitch","glitch_most_recent_timestamp"]
                    ]])
 
     views.append(["Stream",
@@ -1794,7 +1814,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
     # Print Status bar at bottom of screen
     Term.setBackgroundColourSingleLine(1,(currentTermHeight -1),Term.WHITE)
     Term.setBackgroundColourSingleLine(1, 25, Term.WHITE)
-    Term.printAt(str(currentTermWidth)+","+str(currentTermHeight),1,(currentTermHeight-1),Term.BLACK,Term.WHITE)
+    # Print Terminal dimensions at bottom right
+    Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight - 1), Term.BLACK,
+                             Term.WHITE)
 
 
 
@@ -1819,8 +1841,10 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
             Term.printAt(operationMode+" MODE", 1, 1, Term.BLACK, Term.WHITE)
             Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
-            Term.printAt(str(currentTermWidth) + "," + str(currentTermHeight), 1, (currentTermHeight -1), Term.BLACK,
+            # Print Terminal dimensions at bottom right
+            Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight -1), Term.BLACK,
                          Term.WHITE)
+            statusBarString=""
 
         # Update available streams list
         __updateAvailableStreamsList(availableRtpRxStreamList,rtpRxStreamsDict, rtpRxStreamsDictMutex)
@@ -1868,6 +1892,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                 newFriendlyName=keyPressed[1]
                 del keyPressed[1]  # Remove key buffer array now eve stored it
                 Message.addMessage("newFriendlyNameEntered: "+newFriendlyName)
+                # Attempt to modify the stream name
+                availableRtpRxStreamList[selectedStream][1].setFriendlyName(newFriendlyName)
+
             except Exception as e:
                 Message.addMessage(Term.FG((Term.RED))+"ERR: __displayThread() newFriendlyNameEntered: "+ str(e))
 
@@ -1931,33 +1958,47 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                 rxStreamStats = rxStream[1].getRtpStreamStats()
                 # iterate over the keys list for each stream - this will list in a new tableData row per stream
                 tableRow = []  # Create new row to hold the data
+###################################### These are the lines that actually populate the table
                 for key in keyList:
                     # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
                     # which is stored as the third element of an rxStream tuple in the availableRxStreamsList
                     if key ==0:
-                        # Check to see if this is the currently selected stream
-                        # If so, highlight the row on the table
-                        if rxStream[2] == selectedStream:
-                            tableRow.append(Term.WhBla + str(rxStream[2]))
-                        else:
-                            tableRow.append(Term.BlaWh + str(rxStream[2]))
+                        # Grab the index number and assign to table cell
+                        tableCell = str(rxStream[2])
+
                     else:
+                        # This is a normal cell with a lookup key specified in the view definition
                         try:
-                            # Check to see if this is the currently selected stream
-                            # If so, highlight the row on the table
-                            if rxStream[2] == selectedStream:
-                                # Retrieve the data from the rtpStream object by looking up it's key
-                                tableRow.append(Term.WhBla + str(rxStreamStats[key]))
-                            else:
-                                tableRow.append(Term.BlaWh + str(rxStreamStats[key]))
+                            # Retrieve the data from the rtpStream object by looking up it's key
+                            # Attempt to humanise the data based on object type or clues given by the key name
+                            tableCell=rxStreamStats[key]
+                            # Is it a datetime object?
+                            if type(tableCell) == datetime.datetime:
+                                tableCell = rxStreamStats[key].strftime("%D.%H:%M:%S")
+
+                            # elif key.find('byte') > 0:
+                            #     # If the key name contains the string 'byte'
+                            #     tableCell=bToMb(rxStreamStats[key])
+
                         except Exception as e:
                             # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
-                            tableRow.append("keyErr")
+                            tableCell="keyErr"
                             Message.addMessage("ERR: __displayThread (for key in keyList): "+str(e))
+
+                    # Check to see if this is the currently selected stream
+                    # If so, highlight the row on the table
+                    if rxStream[2] == selectedStream:
+                        # prefix tableCell with White-on-black ASCII code
+                        tableCell = Term.WhBla + str(tableCell)
+                    else:
+                        # Normal text: prefix tableCell with Black-on-White ASCII code
+                        tableCell = Term.BlaWh + str(tableCell)
+                    # Append the formatted table cell data to the tableRow list
+                    tableRow.append(tableCell)
                 # Now append this complete row to the tableData list (of lists)
                 tableData.append(tableRow)
                 del tableRow
-
+######################################
             # If the table isn't large enough yet, pad it out with blanks to the length set by noOfStreamTableRows
             if len(availableRtpRxStreamList)< noOfStreamTableRows:
 
