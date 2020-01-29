@@ -1708,7 +1708,7 @@ def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict):
         # Write the list index value to the third element of the stream tuple
         stream[2]=index
 
-def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
+def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, rtpRxStreamsDictMutex):
 
     # define views, tables headings and keys
     # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
@@ -2482,7 +2482,7 @@ class RtpGenerator(object):
                 pass
 
 
-def __diskLoggerThread(rtpRxStreamsDict):
+def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
     # Autonomous thread to iterate over rtpRxStreamsDict and poll RtpStream eventLists for new events
     # and write them  to disk
     Message.addMessage("diskLoggerThread starting")
@@ -2511,11 +2511,13 @@ def __diskLoggerThread(rtpRxStreamsDict):
         # Get dictionary of available rtpRxStreams as a list
         # This will return a list of tuples [0]= sync Source id, [1]=the actual RtpStream object
         availableRtpRxStreamList = []
-        temp =[]
+        # temp =[]
         # Iterate over tuples returned by items() to create a list of tuples
+        rtpRxStreamsDictMutex.acquire()
         for k,v in rtpRxStreamsDict.items():
             temp = [k, v]
             availableRtpRxStreamList.append(temp)
+        rtpRxStreamsDictMutex.release()
 
         if len(availableRtpRxStreamList) > 0:
             # Iterate over availableRtpRxStreamList looking for new events
@@ -2781,7 +2783,7 @@ def main(argv):
     catchKeyboardPresses.start()
 
     # Create a display thread
-    displayThread = threading.Thread(target=__displayThread, args=(MODE, rtpTxStreams, rtpRxStreamsDict, keyPressed, ))
+    displayThread = threading.Thread(target=__displayThread, args=(MODE, rtpTxStreams, rtpRxStreamsDict, keyPressed, rtpRxStreamsDictMutex,))
     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
     displayThread.start()
 
@@ -2806,7 +2808,7 @@ def main(argv):
             exit()
 
         # Create a diskLogging Thread - pass rtpStream object to it
-        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(rtpRxStreamsDict,))
+        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(rtpRxStreamsDict, rtpRxStreamsDictMutex,))
         diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
         diskLoggerThread.start()
 
