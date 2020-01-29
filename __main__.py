@@ -1542,15 +1542,15 @@ def bToMb(value):
     if value >= 1048576:
         # Convert bytes to Mb
         value = round(value / 1048576.0, 1)
-        return str(value) + " M"
+        return str(value) + "M"
     elif value >= 1024:
         # Convert bytes to kb
         value = value / 1024
-        return str(value) + " k"
+        return str(value) + "k"
     else:
         return str(value)
 
-def humanise(inputDictionary):
+def oldHumanise(inputDictionary):
     # This function will examine the key/value pairs of the stats dictionary and
     # prettify the values. It will return a list of tuples containing the value/key pairs
 
@@ -1751,9 +1751,37 @@ def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict, rtp
         # Write the list index value to the third element of the stream tuple
         stream[2]=index
 
-def humaniseValues(inputDictionary):
+def dtstrft(timeDelta):
+    # Formats a datetime.timedelta object as a simple string hh:mm:ss
+    total_seconds = int(timeDelta.total_seconds())
+    hours, remainder = divmod(total_seconds, 60 * 60)
+    minutes, seconds = divmod(remainder, 60)
+
+    return str(hours).zfill(2)+":"+str(minutes).zfill(2)+":"+str(seconds).zfill(2)
+
+def humanise(key,value):
     # This function tests the supplied key against a list, and formats the corresponding value to make it more readable
-    pass
+    if key=="packet_data_received_1S_bytes":
+        #We want this value in bps
+        # Convert bytes to bits
+        value *= 8
+        value=bToMb(value)
+        return value
+
+    # Render dates concisely
+    if type(value) == datetime.datetime:
+        value = value.strftime("%d/%m %H:%M:%S")
+        return value
+
+    if type(value) == datetime.timedelta:
+        # Message.addMessage("timedelta")
+        return dtstrft(value)
+
+
+
+    else:
+        return value
+
 
 def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, rtpRxStreamsDictMutex):
 
@@ -1774,7 +1802,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                    ["bps", "packet_data_received_1S_bytes"],
                    ["Pkts\nlost", "glitch_packets_lost_total_count"],
                    ["Loss\n %", "glitch_packets_lost_total_percent"],
-                   ["Last\nglitch","glitch_most_recent_timestamp"]
+                   ["Last\nglitch","glitch_most_recent_timestamp"],
+                   ["glitch\nperiod","glitch_mean_time_between_glitches"]
                    ]])
 
     views.append(["Stream",
@@ -1962,10 +1991,10 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                         try:
                             # Retrieve the data from the rtpStream object by looking up it's key
                             # Attempt to humanise the data based on object type or clues given by the key name
-                            tableCell=rxStreamStats[key]
-                            # Is it a datetime object?
-                            if type(tableCell) == datetime.datetime:
-                                tableCell = rxStreamStats[key].strftime("%D.%H:%M:%S")
+                            tableCell=humanise(key,rxStreamStats[key])
+                            # # Is it a datetime object?
+                            # if type(tableCell) == datetime.datetime:
+                            #     tableCell = rxStreamStats[key].strftime("%D.%H:%M:%S")
 
                             # elif key.find('byte') > 0:
                             #     # If the key name contains the string 'byte'
