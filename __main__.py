@@ -1751,18 +1751,9 @@ def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict, rtp
         # Write the list index value to the third element of the stream tuple
         stream[2]=index
 
-def format_timedelta(td):
-    # Utility function to make timedelta objects more readable
-    hours, remainder = divmod(td.total_seconds(), 3600)
-    minutes, seconds = divmod(remainder, 60)
-    hours, minutes, seconds = int(hours), int(minutes), int(seconds)
-    if hours < 10:
-        hours = '0%s' % int(hours)
-    if minutes < 10:
-        minutes = '0%s' % minutes
-    if seconds < 10:
-        seconds = '0%s' % seconds
-    return '%s:%s:%s' % (hours, minutes, seconds)
+def humaniseValues(key,value):
+    # This function tests the supplied key against a list, and formats the corresponding value to make it more readable
+    if
 
 def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, rtpRxStreamsDictMutex):
 
