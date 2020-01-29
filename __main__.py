@@ -1705,11 +1705,15 @@ def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict, rtp
     # 7) Purge deleted streams from availableRtpRxStreamList[] according to deleteList
     for streamID in deleteList:
         # Iterate over tuples in availableRtpRxStreamList[] searching for a match
-        for x in availableRtpRxStreamList:
-            if x[0] == streamID:
+        for index, stream in enumerate(availableRtpRxStreamList):
+            if stream[0] == streamID:
                 # If stream found, delete that tuple from the list
-                Message.addMessage("Removing stream " + str(x[0]) + " from availableRtpRxStreamList[]")
-                availableRtpRxStreamList.pop(x)
+                Message.addMessage("Removing stream " + str(stream[0]) + " from availableRtpRxStreamList[]")
+                try:
+                    availableRtpRxStreamList.pop(index)
+                except Exception as e:
+                    Message.addMessage("__updateAvailableStreamsList: "+str(e))
+                break
     # 8) delete newStreamsList, currentStreamsList, diff, addList and deleteList
     del newStreamsList
     del currentStreamsList
@@ -1861,6 +1865,12 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                 Message.addMessage("newFriendlyNameEntered: "+newFriendlyName)
             except Exception as e:
                 Message.addMessage(Term.FG((Term.RED))+"ERR: __displayThread() newFriendlyNameEntered: "+ str(e))
+
+        if keyPressed[0] == 'd':
+            keyPressed[0] = ''  # Clear key buffer
+            # Attempt to delete oldest stream
+            streamID=availableRtpRxStreamList[0][0]
+            removeRtpStreamFromDict(streamID, rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
         if not (keyPressed[0] == 'inhibit_redraw'):
             # Update clock on top RHS of screen
