@@ -1651,6 +1651,18 @@ def humanise(inputDictionary):
     # Return dictionary of humanised keys and values
     return newDictionary.items()
 
+def removeRtpStreamFromDict(streamID, rtpRxStreamsDict, rtpRxStreamsDictMutex):
+    # This function will delete the specified streamID from rtpRxStreamsDict{}
+    rtpRxStreamsDictMutex.acquire()
+    try:
+        # Attempt to remove the rtpStream from the dictionary
+        del rtpRxStreamsDict[streamID]
+    except Exception as e:
+        Message.addMessage("deleteRtpStreamObject(): ["+str(streamID)+"], "+str(e))
+
+    rtpRxStreamsDictMutex.release()
+
+
 def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict, rtpRxStreamsDictMutex):
     # This is a utility function for __displayThread
     # It's job is to compare the current working list inn use by __displayThread (currentStreamList[])
