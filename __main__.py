@@ -2006,17 +2006,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                 # No data to display, so padding out the table instead
                 streamTableBlankRowsToAdd = streamTableNoOfRows
 
-
-            Message.addMessage("NoOfRows: " + str(streamTableNoOfRows)+", "+
-                               "BlankRowsToAdd: "+ str(streamTableBlankRowsToAdd)+", "+
-                               "availStreams: "+str(streamTableNoOfStreamsAvailable)+", "+
-                               "selectedStream: "+str(selectedStream)+", "+
-                               "FirstRow: "+str(streamTableFirstRow)+", "+
-                               "LastRow: "+str(streamTableLastRow)+", "
-                               )
-
-
-
             # Cconfirm that there are some available streams
             if streamTableNoOfStreamsAvailable > 0:
                 # Iterate over a specified portion of the availableRtpRxStreamList[]
@@ -2074,6 +2063,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             # Remove all padding to save space on the screen
             table.padding_left = 0
             table.padding_right = 0
+            table.title = str(selectedStream + 1)+"/"+str(streamTableNoOfStreamsAvailable)
             tableWidth = table.table_width
             tableRowsRendered = table.table.splitlines()
             Term.printTable(tableRowsRendered, 2, 4, tableWidth, Term.BLACK, Term.WHITE)
