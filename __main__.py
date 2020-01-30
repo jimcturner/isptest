@@ -1845,10 +1845,15 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
     Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight - 1), Term.BLACK,
                              Term.WHITE)
 
-    while True:
+    # start elapsed timer for clock refresh
+    displayThread_clockTimer = timer()
 
-        # start elapsed timer
-        displayThread_clockTimer = timer()
+    # Redraw/refresh period for stream table
+    streamTableRefreshPeriod = 2
+    # start elapsed timer for streamTable refresh
+    displayThread_streamTableRefreshTimer = timer()
+
+    while True:
 
         # Check to see if terminal has been resized
         # NOTE: Safe max print area height seems to be currentTermHeight -1
@@ -1860,6 +1865,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             currentTermWidth = w
             currentTermHeight = h
             Message.addMessage("INFO: Terminal size has changed to "+str(currentTermWidth)+","+str(currentTermHeight))
+            redrawMessageTable = True
 
         if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
             # Clear flag
@@ -1883,6 +1889,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             # Prevent an 'out of range' view being selected
             if selectedView > (len(views)-1):
                 selectedView = len(views)-1
+            redrawScreen = True
 
         if (keyPressed[0]=='CursorLeft'):
             keyPressed[0] = ''  # Clear key buffer
@@ -1890,6 +1897,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             # Prevent an 'out of range' view being selected
             if selectedView < 0:
                 selectedView = 0
+            redrawScreen = True
 
         if (keyPressed[0]=='CursorUp'):
             # Scroll the highlight stream up the list
@@ -1898,6 +1906,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             # Bounds check
             if selectedStream <0:
                 selectedStream = 0
+            redrawScreen = True
 
         if (keyPressed[0] == 'CursorDown'):
             # Scroll the selected stream down
@@ -1906,7 +1915,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             # Bounds check
             if selectedStream > (len(availableRtpRxStreamList)-1):
                 selectedStream = len(availableRtpRxStreamList) -1
-
+            redrawScreen = True
 
         if (keyPressed[0] == 'Enter'):
             keyPressed[0] = ''  # Clear key buffer
@@ -1923,6 +1932,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
             except Exception as e:
                 Message.addMessage(Term.FG((Term.RED))+"ERR: __displayThread() newFriendlyNameEntered: "+ str(e))
+            redrawScreen = True
 
         if keyPressed[0] == 'd':
             keyPressed[0] = ''  # Clear key buffer
@@ -1932,150 +1942,164 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                 removeRtpStreamFromDict(streamID, rtpRxStreamsDict, rtpRxStreamsDictMutex)
             except Exception as e:
                 Message.addMessage("ERR: __displayThread::[d] Remove stream: "+str(e))
+            redrawScreen = True
 
         if not (keyPressed[0] == 'inhibit_redraw'):
-            if displayThread_clockTimer >= 1:
+            ######### Print clock on RHS of screen
+            if (timer() - displayThread_clockTimer) >= 1:
+                displayThread_clockTimer = timer() # reset timer
                 # Update clock on top RHS of screen
                 Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
 
-            ######### Print Navigation bar (shows the available views)
-            navigationBar = ""  # Clear navigation bar for next time
-            # Iterate over the views definition extracting the name of the view (view[0])
-            # and create a printable string with colour coding
-            # If the view is currently selected, black on white, otherwise black on cyan
-            for view in views:
-                if view[0] == views[selectedView][0]:
-                    # If this is the 'current' view, create black on white
-                    navigationBar += Term.BlaWh + " " + view[0] + " " + Term.WhiBlu + " "
-                else:
-                    # Otherwise create as dimmed white on cyan
-                    navigationBar += Term.BlaCy + " " + view[0] + " " + Term.WhiBlu + " "
-            # Print the rendered nav bar
-            Term.printAt(navigationBar,2,3)
+            ######### Print Navigation bar (shows the available views) - shouldn't change much, so only a periodic redraw
 
-
+                navigationBar = ""  # Clear navigation bar for next time
+                # Iterate over the views definition extracting the name of the view (view[0])
+                # and create a printable string with colour coding
+                # If the view is currently selected, black on white, otherwise black on cyan
+                for view in views:
+                    if view[0] == views[selectedView][0]:
+                        # If this is the 'current' view, create black on white
+                        navigationBar += Term.BlaWh + " " + view[0] + " " + Term.WhiBlu + " "
+                    else:
+                        # Otherwise create as dimmed white on cyan
+                        navigationBar += Term.BlaCy + " " + view[0] + " " + Term.WhiBlu + " "
+                # To avoid stale characters appearing on the second line, do a periodic clear of line 2
+                Term.setBackgroundColourSingleLine(1, 2, Term.BLUE)
+                # Print the rendered nav bar
+                Term.printAt(navigationBar,2,3)
 
             #### Auto generate a table of the selected view based on the view[] definitions
+            if (timer() - displayThread_streamTableRefreshTimer) >= streamTableRefreshPeriod:
+                # Reset displayThread_streamTableRefreshTimer
+                displayThread_streamTableRefreshTimer =timer()
 
-            # Step 1) Establish the titles and key list for the table
-            # Create a title row
-            titleRow=[]
-            # Create a list of keys that will be accessed for this view
-            keyList = []
-            # Extract the column titles and stats keys for the current view
-            for view in views:
-                if view[0] == views[selectedView][0]:
-                    # view[1] represents a tuple containing a column title and a key pair
-                    columns = view[1]
-                    for column in columns:
-                        titleRow.append(column[0])
-                        keyList.append(column[1])
+                # Step 1) Establish the titles and key list for the table
+                # Create a title row
+                titleRow=[]
+                # Create a list of keys that will be accessed for this view
+                keyList = []
+                # Extract the column titles and stats keys for the current view
+                for view in views:
+                    if view[0] == views[selectedView][0]:
+                        # view[1] represents a tuple containing a column title and a key pair
+                        columns = view[1]
+                        for column in columns:
+                            titleRow.append(column[0])
+                            keyList.append(column[1])
 
-            # Create a table data list with the title row at the head
-            tableData = [titleRow]
+                # Create a table data list with the title row at the head
+                tableData = [titleRow]
 
-            # Step 2) Populate the remaining table rows with data
-            # Calculate the maximum no. of rows that can be displayed in the stream table - determined by the terminal height
-            streamTableNoOfRows = int(currentTermHeight / 2) - 9
+                # Step 2) Populate the remaining table rows with data
+                # Calculate the maximum no. of rows that can be displayed in the stream table - determined by the terminal height
+                streamTableNoOfRows = int(currentTermHeight / 2) - 9
 
-            streamTableNoOfStreamsAvailable = len(availableRtpRxStreamList)
-            # streamTableBlankRowsToAdd = 0
+                streamTableNoOfStreamsAvailable = len(availableRtpRxStreamList)
+                # streamTableBlankRowsToAdd = 0
 
-            if streamTableNoOfStreamsAvailable >0:
-                if selectedStream ==0:
-                    streamTableFirstRow =0
-                # Are we about to scroll off the end of the currenty displayed rows?
-                if selectedStream > streamTableLastRow:
-                    # If so, increment the index of the first row
-                    streamTableFirstRow =selectedStream - streamTableNoOfRows + 1
+                if streamTableNoOfStreamsAvailable >0:
+                    if selectedStream ==0:
+                        streamTableFirstRow =0
+                    # Are we about to scroll off the end of the currenty displayed rows?
+                    if selectedStream > streamTableLastRow:
+                        # If so, increment the index of the first row
+                        streamTableFirstRow =selectedStream - streamTableNoOfRows + 1
 
-                # Are we about to scroll off the top of the currently displayed rows?
-                if selectedStream < streamTableFirstRow:
-                    # If so, decrement the index of the first row
-                    streamTableFirstRow=selectedStream
+                    # Are we about to scroll off the top of the currently displayed rows?
+                    if selectedStream < streamTableFirstRow:
+                        # If so, decrement the index of the first row
+                        streamTableFirstRow=selectedStream
 
-                # Calculate the last row to display based on the starting row and the height of the table
-                streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
+                    # Calculate the last row to display based on the starting row and the height of the table
+                    streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
 
-                # Will the last row be outside the actual range of available stream?
-                if streamTableLastRow > (streamTableNoOfStreamsAvailable -1):
-                    #If so, set streamTableLastRow to point to the last line of the available data array
-                    streamTableLastRow = streamTableNoOfStreamsAvailable - 1
-                    # And add appropriate padding if required
-                    streamTableBlankRowsToAdd = streamTableNoOfRows - (streamTableLastRow - streamTableFirstRow) - 1
+                    # Will the last row be outside the actual range of available stream?
+                    if streamTableLastRow > (streamTableNoOfStreamsAvailable -1):
+                        #If so, set streamTableLastRow to point to the last line of the available data array
+                        streamTableLastRow = streamTableNoOfStreamsAvailable - 1
+                        # And add appropriate padding if required
+                        streamTableBlankRowsToAdd = streamTableNoOfRows - (streamTableLastRow - streamTableFirstRow) - 1
+                    else:
+                        streamTableBlankRowsToAdd = 0
+
+
                 else:
-                    streamTableBlankRowsToAdd = 0
+                    # No data to display, so padding out the table instead
+                    streamTableBlankRowsToAdd = streamTableNoOfRows
+
+                # Cconfirm that there are some available streams
+                if streamTableNoOfStreamsAvailable > 0:
+                    # Iterate over a specified portion of the availableRtpRxStreamList[]
+                    for x in range(streamTableFirstRow, streamTableLastRow+1):
+                        # Isolate the stream from the availableRtpRxStreamList[]
+                        rxStream = availableRtpRxStreamList[x]
+                        # Retrieve the stats dictionary for that key
+                        rxStreamStats = rxStream[1].getRtpStreamStats()
+                        # rxStreamStats = rxStream[1].getRtpStreamStats()
+                        # iterate over the keys list for each stream - this will list in a new tableData row per stream
+                        tableRow = []  # Create new row to hold the data
+        ###################################### These are the lines that actually populate the table
+                        for key in keyList:
+                            # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
+                            # which is stored as the third element of an rxStream tuple in the availableRxStreamsList
+                            if key ==0:
+                                # Grab the index number and assign to table cell
+                                tableCell = str(rxStream[2])
+
+                            else:
+                                # This is a normal cell with a lookup key specified in the view definition
+                                try:
+                                    # Retrieve the data from the rtpStream object by looking up it's key
+                                    # Attempt to humanise the data based on object type or clues given by the key name
+                                    tableCell=humanise(key,rxStreamStats[key])
+                                except Exception as e:
+                                    # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
+                                    tableCell="keyErr"
+                                    Message.addMessage("ERR: __displayThread (for key in keyList): "+str(e))
+
+                            # Check to see if this is the currently selected stream
+                            # If so, highlight the row on the table
+                            if rxStream[2] == selectedStream:
+                                # prefix tableCell with White-on-black ASCII code
+                                tableCell = Term.WhBla + str(tableCell)
+                            else:
+                                # Normal text: prefix tableCell with Black-on-White ASCII code
+                                tableCell = Term.BlaWh + str(tableCell)
+                            # Append the formatted table cell data to the tableRow list
+                            tableRow.append(tableCell)
+                        # Now append this complete row to the tableData list (of lists)
+                        tableData.append(tableRow)
+                        del tableRow
+    ###################################### End of lines that actually add data
+                # If the table isn't large enough yet, pad it out with blanks to the length set by streamTableNoOfRows
+                if streamTableBlankRowsToAdd > 0:
+                    for x in range(0,streamTableBlankRowsToAdd):
+                        # Create a blank list with the same no. of blanks as there are table columns
+                        tableRow = []*len(titleRow)
+                        tableData.append(tableRow)
 
 
-            else:
-                # No data to display, so padding out the table instead
-                streamTableBlankRowsToAdd = streamTableNoOfRows
-
-            # Cconfirm that there are some available streams
-            if streamTableNoOfStreamsAvailable > 0:
-                # Iterate over a specified portion of the availableRtpRxStreamList[]
-                for x in range(streamTableFirstRow, streamTableLastRow+1):
-                    # Isolate the stream from the availableRtpRxStreamList[]
-                    rxStream = availableRtpRxStreamList[x]
-                    # Retrieve the stats dictionary for that key
-                    rxStreamStats = rxStream[1].getRtpStreamStats()
-                    # rxStreamStats = rxStream[1].getRtpStreamStats()
-                    # iterate over the keys list for each stream - this will list in a new tableData row per stream
-                    tableRow = []  # Create new row to hold the data
-    ###################################### These are the lines that actually populate the table
-                    for key in keyList:
-                        # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
-                        # which is stored as the third element of an rxStream tuple in the availableRxStreamsList
-                        if key ==0:
-                            # Grab the index number and assign to table cell
-                            tableCell = str(rxStream[2])
-
-                        else:
-                            # This is a normal cell with a lookup key specified in the view definition
-                            try:
-                                # Retrieve the data from the rtpStream object by looking up it's key
-                                # Attempt to humanise the data based on object type or clues given by the key name
-                                tableCell=humanise(key,rxStreamStats[key])
-                            except Exception as e:
-                                # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
-                                tableCell="keyErr"
-                                Message.addMessage("ERR: __displayThread (for key in keyList): "+str(e))
-
-                        # Check to see if this is the currently selected stream
-                        # If so, highlight the row on the table
-                        if rxStream[2] == selectedStream:
-                            # prefix tableCell with White-on-black ASCII code
-                            tableCell = Term.WhBla + str(tableCell)
-                        else:
-                            # Normal text: prefix tableCell with Black-on-White ASCII code
-                            tableCell = Term.BlaWh + str(tableCell)
-                        # Append the formatted table cell data to the tableRow list
-                        tableRow.append(tableCell)
-                    # Now append this complete row to the tableData list (of lists)
-                    tableData.append(tableRow)
-                    del tableRow
-######################################
-            # If the table isn't large enough yet, pad it out with blanks to the length set by streamTableNoOfRows
-            if streamTableBlankRowsToAdd > 0:
-                for x in range(0,streamTableBlankRowsToAdd):
-                    # Create a blank list with the same no. of blanks as there are table columns
-                    tableRow = []*len(titleRow)
-                    tableData.append(tableRow)
-
-
-            # Step 3) Render the table
-            table = SingleTable(tableData)
-            # Remove all padding to save space on the screen
-            table.padding_left = 0
-            table.padding_right = 0
-            table.title = str(selectedStream + 1)+"/"+str(streamTableNoOfStreamsAvailable)
-            tableWidth = table.table_width
-            tableRowsRendered = table.table.splitlines()
-            Term.printTable(tableRowsRendered, 2, 4, tableWidth, Term.BLACK, Term.WHITE)
+                # Step 3) Render the table
+                table = SingleTable(tableData)
+                # Remove all padding to save space on the screen
+                table.padding_left = 0
+                table.padding_right = 0
+                table.title = str(selectedStream + 1)+"/"+str(streamTableNoOfStreamsAvailable)
+                tableWidth = table.table_width
+                tableRowsRendered = table.table.splitlines()
+                xPos = 2
+                yPos = 4
+                tableHeight=len(tableRowsRendered)
+                # To stop the screen getting corrupted (by tables of different widths), clear the lines behind
+                # the table, just in case
+                for x in range (yPos,yPos+tableHeight+1):
+                    Term.setBackgroundColourSingleLine(1,x,Term.BLUE)
+                Term.printTable(tableRowsRendered, xPos, yPos, tableWidth, Term.BLACK, Term.WHITE)
 
 
 
-            ##################### Create table showing messages
+            ##################### Create table showing messages - only redraws if there are new messages
 
             # Message table should fill lower half of window
             yPos = int(currentTermHeight/2) + 2
@@ -2086,7 +2110,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             if lastMessageAdded != messages[-1][1]:
                 # New messages have been added, so set the redraw flag
                 redrawMessageTable=True
-                Term.printAt("gets here",2,(currentTermHeight-2))
             # Take a copy of the most recent message for next time around the loop
             lastMessageAdded = messages[-1][1]
 
@@ -2110,8 +2133,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                     width, height, tableData = createTable(messages, "Messages")
                     Term.printTable(tableData,2,yPos,width,Term.BLACK,Term.WHITE)
             del messages [:]
-            # redrawScreen =True
-        time.sleep(0.25)
+        redrawScreen =False
+        time.sleep(0.5)
 
 # Define a display thread that will run autonomously
 def __olddisplayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
