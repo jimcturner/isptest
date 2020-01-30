@@ -1786,6 +1786,11 @@ def humanise(key,value):
         value = int(value)
         return value
 
+    if key.find('_uS') > 0:
+        # Convert % value to an integer
+        value = str(value)+"uS"
+        return value
+
     else:
         return value
 
@@ -1807,7 +1812,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                    #["port", "stream_srcPort"],
                    ["bps", "packet_data_received_1S_bytes"],
                    ["Pkts\nlost", "glitch_packets_lost_total_count"],
-                   [" % ", "glitch_packets_lost_total_percent"],
+                   [" %\nloss", "glitch_packets_lost_total_percent"],
                    ["Last\nglitch","glitch_most_recent_timestamp"],
                    ["glitch\nperiod","glitch_mean_time_between_glitches"],
                    ["Count","glitch_counter_total_glitches"]
@@ -1819,39 +1824,44 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                    ["Sync \nSrcID", "stream_syncSource"],
                    ["Src Addr", "stream_srcAddress"],
                    ["Src\nport", "stream_srcPort"],
-                   ["Pkts\nRx'd","packet_data_received_total_bytes"],
+                   ["Bytes\nRcvd","packet_data_received_total_bytes"],
                    ["  Time\nelapsed","stream_time_elapsed_total"],
-                   ["CPU\ntime","stream_processor_utilisation_percent"]
+                   ["CPU\n %","stream_processor_utilisation_percent"]
                    ]])
 
     views.append(["Packet",
                   [["#",0], # Used as an index[]
-                   ["",""],
-                   ["",""],
-                   ["",""],
-                   ["",""],
-                   ["",""],
-                   ["",""],
+                   ["Name", "stream_friendly_name"],
+                   ["First Seen","packet_first_packet_received_timestamp"],
+                   ["Last seen","packet_last_seen_received_timestamp"],
+                   ["pack\np/s","packet_counter_1S"],
+                   ["Length\n(bytes)","packet_payload_size_mean_1S_bytes"],
+                   ["Recv\nperiod","packet_mean_receive_period_uS"],
+                   #["",""],
                    ]])
 
     views.append(["Glitch",
                   [["#", 0],  # Used as an index[]
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
+                   ["Name", "stream_friendly_name"],
+                   ["Mean\nloss", "glitch_packets_lost_per_glitch_mean"],
+                   ["Max\nloss", "glitch_packets_lost_per_glitch_max"],
+                   ["Total\nloss", "glitch_packets_lost_total_count"],
+                   ["Mean\nduration", "glitch_mean_glitch_duration"],
+                   ["Max\nduration", "glitch_max_glitch_duration"],
+                   ["Total\nGlitch", "glitch_counter_total_glitches"],
+                   ["Ignored", "glitch_glitches_ignored_counter"],
+                   ["Threshold", "glitch_Event_Trigger_Threshold_packets"],
                    ]])
 
     views.append(["Historic",
-                  [["#", 0],  # Used as an index[]
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
+                  [["#", 0],  # Used as an index[],
+                   ["Name", "stream_friendly_name"],
+                   ["24Hr", "historic_glitch_counter_last_24Hr"],
+                   ["1Hr", "historic_glitch_counter_last_1Hr"],
+                   ["10Min", "historic_glitch_counter_last_10Min"],
+                   ["1Min", "historic_glitch_counter_last_1Min"],
+                   ["10Sec", "historic_glitch_counter_last_10Sec"],
+                   #["", ""],
                    ]])
 
     views.append(["Jitter",
