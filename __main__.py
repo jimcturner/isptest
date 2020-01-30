@@ -1875,8 +1875,8 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             Term.printAt(operationMode+" MODE", 1, 1, Term.BLACK, Term.WHITE)
             Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
             # Print Terminal dimensions at bottom right
-            Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight -1), Term.BLACK,
-                         Term.WHITE)
+            # Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight -1), Term.BLACK,
+            #              Term.WHITE)
             statusBarString=""
 
         # Update available streams list
@@ -1935,9 +1935,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             # Re-render bottom status bar
             Term.setBackgroundColourSingleLine(1, (currentTermHeight - 1), Term.WHITE)
             # Print Terminal dimensions at bottom right
-            Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight - 1),
-                                     Term.BLACK,
-                                     Term.WHITE)
+            # Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight - 1),
+            #                          Term.BLACK,
+            #                          Term.WHITE)
             statusBarString = ""
 
         if keyPressed[0] == 'd':
