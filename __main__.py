@@ -1781,10 +1781,11 @@ def humanise(key,value):
         value = bToMb(value)+"B"
         return value
 
-    if key=="glitch_packets_lost_total_percent":
+    if key.find('percent') > 0:
         # Convert % value to an integer
         value = int(value)
         return value
+
     else:
         return value
 
@@ -1817,8 +1818,70 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                    ["Name", "stream_friendly_name"],
                    ["Sync \nSrcID", "stream_syncSource"],
                    ["Src Addr", "stream_srcAddress"],
-                   ["port", "stream_srcPort"],
-                   ["Pkts\n Rx'd","packet_data_received_total_bytes"]
+                   ["Src\nport", "stream_srcPort"],
+                   ["Pkts\nRx'd","packet_data_received_total_bytes"],
+                   ["  Time\nelapsed","stream_time_elapsed_total"],
+                   ["CPU\ntime","stream_processor_utilisation_percent"]
+                   ]])
+
+    views.append(["Packet",
+                  [["#",0], # Used as an index[]
+                   ["",""],
+                   ["",""],
+                   ["",""],
+                   ["",""],
+                   ["",""],
+                   ["",""],
+                   ]])
+
+    views.append(["Glitch",
+                  [["#", 0],  # Used as an index[]
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ]])
+
+    views.append(["Historic",
+                  [["#", 0],  # Used as an index[]
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ]])
+
+    views.append(["Jitter",
+                  [["#", 0],  # Used as an index[]
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ]])
+
+    views.append(["Misc",
+                  [["#", 0],  # Used as an index[]
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ]])
+
+    views.append(["Tx Streams",
+                  [["#", 0],  # Used as an index[]
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
+                   ["", ""],
                    ]])
 
     selectedView = 0  # Keeps track of which view is currently being displayed
@@ -2098,7 +2161,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                 tableHeight=len(tableRowsRendered)
                 # To stop the screen getting corrupted (by tables of different widths), clear the lines behind
                 # the table, just in case
-                for x in range (yPos,yPos+tableHeight+1):
+                for x in range (yPos,yPos+tableHeight+2):
                     Term.setBackgroundColourSingleLine(1,x,Term.BLUE)
                 Term.printTable(tableRowsRendered, xPos, yPos, tableWidth, Term.BLACK, Term.WHITE)
 
