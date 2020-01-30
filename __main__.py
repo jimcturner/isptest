@@ -1821,6 +1821,11 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
     streamTableLastRow = 0 # Tracks the current end row of the stream table data
     availableRtpRxStreamList = []
 
+    # store the most recent message - used to determine whether we need to redraw
+    # The message table
+    lastMessageAdded = ""
+    redrawMessageTable = False
+
     redrawScreen = True
 
     # Grab initial terminal dimensions
@@ -1840,9 +1845,10 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
     Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight - 1), Term.BLACK,
                              Term.WHITE)
 
-
-
     while True:
+
+        # start elapsed timer
+        displayThread_clockTimer = timer()
 
         # Check to see if terminal has been resized
         # NOTE: Safe max print area height seems to be currentTermHeight -1
@@ -1892,7 +1898,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             # Bounds check
             if selectedStream <0:
                 selectedStream = 0
-            Message.addMessage("Cursor Up")
 
         if (keyPressed[0] == 'CursorDown'):
             # Scroll the selected stream down
@@ -1902,7 +1907,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             if selectedStream > (len(availableRtpRxStreamList)-1):
                 selectedStream = len(availableRtpRxStreamList) -1
 
-            Message.addMessage("Cursor Down")
 
         if (keyPressed[0] == 'Enter'):
             keyPressed[0] = ''  # Clear key buffer
@@ -1930,8 +1934,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                 Message.addMessage("ERR: __displayThread::[d] Remove stream: "+str(e))
 
         if not (keyPressed[0] == 'inhibit_redraw'):
-            # Update clock on top RHS of screen
-            Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
+            if displayThread_clockTimer >= 1:
+                # Update clock on top RHS of screen
+                Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
 
             ######### Print Navigation bar (shows the available views)
             navigationBar = ""  # Clear navigation bar for next time
@@ -1974,7 +1979,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             streamTableNoOfRows = int(currentTermHeight / 2) - 9
 
             streamTableNoOfStreamsAvailable = len(availableRtpRxStreamList)
-            streamTableBlankRowsToAdd = 0
+            # streamTableBlankRowsToAdd = 0
 
             if streamTableNoOfStreamsAvailable >0:
                 if selectedStream ==0:
@@ -2078,29 +2083,35 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
             # Get last x messages. Make a deep copy as we're going to add blankspace padding
             messages = deepcopy(Message.getMessages(maxNoOfMessagesThatWillFitScreen))
-            # Now iterate over actual messages to make sure they're not too long for display
-            # If they are, truncate them. (Terminal width - 12 chars) seems to work
-            # If they're too short, make them longer (to fill the space)
-            maxMessageDisplayLength=currentTermWidth - 12
-            for message in messages:
-                if len(message[1])>maxMessageDisplayLength:
-                    message[1] = message[1][:maxMessageDisplayLength-2]
-                else:
-                    paddingLength=(maxMessageDisplayLength-2) -len(message[1])
-                    if paddingLength >0:
-                        paddingString = " " * paddingLength
-                        message[1] += paddingString
+            if lastMessageAdded != messages[-1][1]:
+                # New messages have been added, so set the redraw flag
+                redrawMessageTable=True
+                Term.printAt("gets here",2,(currentTermHeight-2))
+            # Take a copy of the most recent message for next time around the loop
+            lastMessageAdded = messages[-1][1]
+
+            if redrawMessageTable:
+                redrawMessageTable = False  # Clear flag
+                # Now iterate over actual messages to make sure they're not too long for display
+                # If they are, truncate them. (Terminal width - 12 chars) seems to work
+                # If they're too short, make them longer (to fill the space)
+                maxMessageDisplayLength=currentTermWidth - 12
+                for message in messages:
+                    if len(message[1])>maxMessageDisplayLength:
+                        message[1] = message[1][:maxMessageDisplayLength-2]
+                    else:
+                        paddingLength=(maxMessageDisplayLength-2) -len(message[1])
+                        if paddingLength >0:
+                            paddingString = " " * paddingLength
+                            message[1] += paddingString
 
 
-            if len(messages) > 0:
-                width, height, tableData = createTable(messages, "Messages")
-                Term.printTable(tableData,2,yPos,width,Term.BLACK,Term.WHITE)
+                if len(messages) > 0:
+                    width, height, tableData = createTable(messages, "Messages")
+                    Term.printTable(tableData,2,yPos,width,Term.BLACK,Term.WHITE)
             del messages [:]
-            redrawScreen =True
-        time.sleep(1)
-
-
-
+            # redrawScreen =True
+        time.sleep(0.25)
 
 # Define a display thread that will run autonomously
 def __olddisplayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
