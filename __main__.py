@@ -1985,6 +1985,15 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                     # streamTableFirstRow += (streamTableLastRow - selectedStream)
                     streamTableFirstRow += 1
                     debug+="A"
+
+                # Are we about to scroll off the top of the currently displayed rows?
+                if selectedStream < streamTableFirstRow:
+                    # If so, decrement the index of the first row
+
+                    streamTableFirstRow -= 1
+
+                    debug+="A"
+
                 # Calculate the last row to display based on the starting row and the height of the table
                 streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
 
