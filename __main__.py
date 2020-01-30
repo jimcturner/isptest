@@ -1869,8 +1869,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             displayThread_streamTableRefreshTimer = streamTableRefreshPeriod
 
         if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
-            # Clear flag
-            redrawScreen = False
             Term.clearTerminalScrollbackBuffer()
             Term.setBackgroundColour(Term.BLUE)
             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
