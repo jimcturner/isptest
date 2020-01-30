@@ -1866,6 +1866,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             currentTermHeight = h
             Message.addMessage("INFO: Terminal size has changed to "+str(currentTermWidth)+","+str(currentTermHeight))
             redrawMessageTable = True
+            displayThread_streamTableRefreshTimer = streamTableRefreshPeriod
 
         if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
             # Clear flag
@@ -1946,7 +1947,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
         if not (keyPressed[0] == 'inhibit_redraw'):
             ######### Print clock on RHS of screen
-            if (timer() - displayThread_clockTimer) >= 1:
+            if (timer() - displayThread_clockTimer) >= 1 or (redrawScreen is True):
                 displayThread_clockTimer = timer() # reset timer
                 # Update clock on top RHS of screen
                 Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
@@ -1970,7 +1971,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                 Term.printAt(navigationBar,2,3)
 
             #### Auto generate a table of the selected view based on the view[] definitions
-            if (timer() - displayThread_streamTableRefreshTimer) >= streamTableRefreshPeriod:
+            if ((timer() - displayThread_streamTableRefreshTimer) >= streamTableRefreshPeriod) or redrawScreen is True:
                 # Reset displayThread_streamTableRefreshTimer
                 displayThread_streamTableRefreshTimer =timer()
 
@@ -2028,7 +2029,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                     # No data to display, so padding out the table instead
                     streamTableBlankRowsToAdd = streamTableNoOfRows
 
-                # Cconfirm that there are some available streams
+                # Confirm that there are some available streams
                 if streamTableNoOfStreamsAvailable > 0:
                     # Iterate over a specified portion of the availableRtpRxStreamList[]
                     for x in range(streamTableFirstRow, streamTableLastRow+1):
@@ -2039,7 +2040,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                         # rxStreamStats = rxStream[1].getRtpStreamStats()
                         # iterate over the keys list for each stream - this will list in a new tableData row per stream
                         tableRow = []  # Create new row to hold the data
-        ###################################### These are the lines that actually populate the table
+                         ###################################### These are the lines that actually populate the table
                         for key in keyList:
                             # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
                             # which is stored as the third element of an rxStream tuple in the availableRxStreamsList
@@ -2071,7 +2072,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                         # Now append this complete row to the tableData list (of lists)
                         tableData.append(tableRow)
                         del tableRow
-    ###################################### End of lines that actually add data
+                ###################################### End of lines that actually add data
                 # If the table isn't large enough yet, pad it out with blanks to the length set by streamTableNoOfRows
                 if streamTableBlankRowsToAdd > 0:
                     for x in range(0,streamTableBlankRowsToAdd):
@@ -2113,7 +2114,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             # Take a copy of the most recent message for next time around the loop
             lastMessageAdded = messages[-1][1]
 
-            if redrawMessageTable:
+            if redrawMessageTable or redrawScreen:
                 redrawMessageTable = False  # Clear flag
                 # Now iterate over actual messages to make sure they're not too long for display
                 # If they are, truncate them. (Terminal width - 12 chars) seems to work
