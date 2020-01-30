@@ -1920,10 +1920,12 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
         if keyPressed[0] == 'd':
             keyPressed[0] = ''  # Clear key buffer
-            # Attempt to delete oldest stream
-            streamID=availableRtpRxStreamList[0][0]
-            removeRtpStreamFromDict(streamID, rtpRxStreamsDict, rtpRxStreamsDictMutex)
-
+            # Attempt to delete current stream
+            try:
+                streamID=availableRtpRxStreamList[selectedStream][0]
+                removeRtpStreamFromDict(streamID, rtpRxStreamsDict, rtpRxStreamsDictMutex)
+            except Exception as e:
+                Message.addMessage("ERR: __displayThread::[d] Remove stream: "+str(e))
 
         if not (keyPressed[0] == 'inhibit_redraw'):
             # Update clock on top RHS of screen
