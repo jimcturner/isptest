@@ -1774,11 +1774,17 @@ def humanise(key,value):
         return value
 
     if type(value) == datetime.timedelta:
-        # Message.addMessage("timedelta")
+        # Pass to (my) dtstrft() function to create a much shorter string
         return dtstrft(value)
 
+    if key=="packet_data_received_total_bytes":
+        value = bToMb(value)+"B"
+        return value
 
-
+    if key=="glitch_packets_lost_total_percent":
+        # Convert % value to an integer
+        value = int(value)
+        return value
     else:
         return value
 
@@ -1796,7 +1802,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
     views.append(["Summary",
                   [["#",0], # Used as an index
                    ["Name", "stream_friendly_name"],
-                   #["Sync \nSrcID", "stream_syncSource"],
                    ["Src Addr", "stream_srcAddress"],
                    #["port", "stream_srcPort"],
                    ["bps", "packet_data_received_1S_bytes"],
@@ -1810,6 +1815,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
     views.append(["Stream",
                   [["#",0], # Used as an index
                    ["Name", "stream_friendly_name"],
+                   ["Sync \nSrcID", "stream_syncSource"],
                    ["Src Addr", "stream_srcAddress"],
                    ["port", "stream_srcPort"],
                    ["Pkts\n Rx'd","packet_data_received_total_bytes"]
@@ -1874,10 +1880,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
             Term.printAt(operationMode+" MODE", 1, 1, Term.BLACK, Term.WHITE)
             Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
-            # Print Terminal dimensions at bottom right
-            # Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight -1), Term.BLACK,
-            #              Term.WHITE)
-            statusBarString=""
+
 
         # Update available streams list
         __updateAvailableStreamsList(availableRtpRxStreamList,rtpRxStreamsDict, rtpRxStreamsDictMutex)
@@ -1934,11 +1937,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             # redrawScreen = True
             # Re-render bottom status bar
             Term.setBackgroundColourSingleLine(1, (currentTermHeight - 1), Term.WHITE)
-            # Print Terminal dimensions at bottom right
-            # Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight - 1),
-            #                          Term.BLACK,
-            #                          Term.WHITE)
-            statusBarString = ""
 
         if keyPressed[0] == 'd':
             keyPressed[0] = ''  # Clear key buffer
@@ -2059,7 +2057,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                                 try:
                                     # Retrieve the data from the rtpStream object by looking up it's key
                                     # Attempt to humanise the data based on object type or clues given by the key name
-                                    tableCell=humanise(key,rxStreamStats[key])
+                                    tableCell=str(humanise(key,rxStreamStats[key]))
                                 except Exception as e:
                                     # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
                                     tableCell="keyErr"
