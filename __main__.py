@@ -1975,24 +1975,19 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
             streamTableNoOfStreamsAvailable = len(availableRtpRxStreamList)
             streamTableBlankRowsToAdd = 0
-            debug =""
+
             if streamTableNoOfStreamsAvailable >0:
                 if selectedStream ==0:
                     streamTableFirstRow =0
                 # Are we about to scroll off the end of the currenty displayed rows?
                 if selectedStream > streamTableLastRow:
                     # If so, increment the index of the first row
-                    # streamTableFirstRow += (streamTableLastRow - selectedStream)
-                    streamTableFirstRow += 1
-                    debug+="A"
+                    streamTableFirstRow =selectedStream - streamTableNoOfRows + 1
 
                 # Are we about to scroll off the top of the currently displayed rows?
                 if selectedStream < streamTableFirstRow:
                     # If so, decrement the index of the first row
-
-                    streamTableFirstRow -= 1
-
-                    debug+="A"
+                    streamTableFirstRow=selectedStream
 
                 # Calculate the last row to display based on the starting row and the height of the table
                 streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
@@ -2003,19 +1998,13 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                     streamTableLastRow = streamTableNoOfStreamsAvailable - 1
                     # And add appropriate padding if required
                     streamTableBlankRowsToAdd = streamTableNoOfRows - (streamTableLastRow - streamTableFirstRow) - 1
-                    debug+="B"
                 else:
                     streamTableBlankRowsToAdd = 0
-                    debug += "D"
 
-                # if streamTableNoOfStreamsAvailable < streamTableNoOfRows:
-                #     # Is there less data than the no of rows available in the table, if so add  padding
-                #     # streamTableBlankRowsToAdd = streamTableNoOfRows - streamTableNoOfStreamsAvailable
-                #     debug+="C"
+
             else:
                 # No data to display, so padding out the table instead
                 streamTableBlankRowsToAdd = streamTableNoOfRows
-                debug += "E"
 
 
             Message.addMessage("NoOfRows: " + str(streamTableNoOfRows)+", "+
@@ -2023,7 +2012,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                                "availStreams: "+str(streamTableNoOfStreamsAvailable)+", "+
                                "selectedStream: "+str(selectedStream)+", "+
                                "FirstRow: "+str(streamTableFirstRow)+", "+
-                               "LastRow: "+str(streamTableLastRow)+", "+debug
+                               "LastRow: "+str(streamTableLastRow)+", "
                                )
 
 
