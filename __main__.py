@@ -1866,7 +1866,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             currentTermHeight = h
             Message.addMessage("INFO: Terminal size has changed to "+str(currentTermWidth)+","+str(currentTermHeight))
             redrawMessageTable = True
-            displayThread_streamTableRefreshTimer = streamTableRefreshPeriod
+
 
         if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
             Term.clearTerminalScrollbackBuffer()
@@ -1931,7 +1931,14 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
             except Exception as e:
                 Message.addMessage(Term.FG((Term.RED))+"ERR: __displayThread() newFriendlyNameEntered: "+ str(e))
-            redrawScreen = True
+            # redrawScreen = True
+            # Re-render bottom status bar
+            Term.setBackgroundColourSingleLine(1, (currentTermHeight - 1), Term.WHITE)
+            # Print Terminal dimensions at bottom right
+            Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight - 1),
+                                     Term.BLACK,
+                                     Term.WHITE)
+            statusBarString = ""
 
         if keyPressed[0] == 'd':
             keyPressed[0] = ''  # Clear key buffer
@@ -1943,6 +1950,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                 Message.addMessage("ERR: __displayThread::[d] Remove stream: "+str(e))
             redrawScreen = True
 
+        # Redraw changine screen elements - but not if redrawing has been inhibited
         if not (keyPressed[0] == 'inhibit_redraw'):
             ######### Print clock on RHS of screen
             if (timer() - displayThread_clockTimer) >= 1 or (redrawScreen is True):
