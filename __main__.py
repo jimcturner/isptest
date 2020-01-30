@@ -1390,14 +1390,14 @@ class RtpStream(object):
     # Define setter methods
     def setFriendlyName(self, friendlyName):
         # Thread-safe method to set the friendly name field
-        maxNameLength = 12
+        maxNameLength = 10
         # Truncate supplied name to 12 characters (truncated to preserve the screen layout) or else pad to 12 chars
         if len(friendlyName) < maxNameLength:
             # Too short, so Pad out name to 12 chars
             friendlyName += (maxNameLength - len(friendlyName)) * " "
         else:
             # Too big, so truncate
-            friendlyName = friendlyName[:12]
+            friendlyName = friendlyName[:maxNameLength]
 
         self.__accessRtpStreamStatsMutex.acquire()
         self.__stats["stream_friendly_name"]=friendlyName
@@ -1796,14 +1796,15 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
     views.append(["Summary",
                   [["#",0], # Used as an index
                    ["Name", "stream_friendly_name"],
-                   ["Sync \nSrcID", "stream_syncSource"],
+                   #["Sync \nSrcID", "stream_syncSource"],
                    ["Src Addr", "stream_srcAddress"],
-                   ["port", "stream_srcPort"],
+                   #["port", "stream_srcPort"],
                    ["bps", "packet_data_received_1S_bytes"],
                    ["Pkts\nlost", "glitch_packets_lost_total_count"],
-                   ["Loss\n %", "glitch_packets_lost_total_percent"],
+                   [" % ", "glitch_packets_lost_total_percent"],
                    ["Last\nglitch","glitch_most_recent_timestamp"],
-                   ["glitch\nperiod","glitch_mean_time_between_glitches"]
+                   ["glitch\nperiod","glitch_mean_time_between_glitches"],
+                   ["Count","glitch_counter_total_glitches"]
                    ]])
 
     views.append(["Stream",
@@ -1815,8 +1816,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                    ]])
 
     selectedView = 0  # Keeps track of which view is currently being displayed
-    selectedStream =0 # Kepps track of which stream is currently highlighted in the streams table
-
+    selectedStream =0 # Keeps track of which stream is currently highlighted in the streams table
+    streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
+    streamTableLastRow = 0 # Tracks the current end row of the stream table data
     availableRtpRxStreamList = []
 
     redrawScreen = True
@@ -1947,8 +1949,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
 
             #### Auto generate a table of the selected view based on the view[] definitions
-            # Specify the maximum no. of rows that can be displayed in the stream table - determined by the terminal height
-            noOfStreamTableRows = int(currentTermHeight/2)-12
 
             # Step 1) Establish the titles and key list for the table
             # Create a title row
@@ -1967,63 +1967,103 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
             # Create a table data list with the title row at the head
             tableData = [titleRow]
 
-            # if len(availableRtpRxStreamList)< noOfStreamTableRows:
-            #     streamTableLastRow=len(availableRtpRxStreamList)
-
             # Step 2) Populate the remaining table rows with data
-            streamTableFirstRow = 0
+            # Calculate the maximum no. of rows that can be displayed in the stream table - determined by the terminal height
+            streamTableNoOfRows = int(currentTermHeight / 2) - 9
 
-            for rxStream in availableRtpRxStreamList[streamTableFirstRow:]:
-                # Retrieve the stats dictionary for that key
-                rxStreamStats = rxStream[1].getRtpStreamStats()
-                # iterate over the keys list for each stream - this will list in a new tableData row per stream
-                tableRow = []  # Create new row to hold the data
-###################################### These are the lines that actually populate the table
-                for key in keyList:
-                    # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
-                    # which is stored as the third element of an rxStream tuple in the availableRxStreamsList
-                    if key ==0:
-                        # Grab the index number and assign to table cell
-                        tableCell = str(rxStream[2])
+            streamTableNoOfStreamsAvailable = len(availableRtpRxStreamList)
+            streamTableBlankRowsToAdd = 0
+            debug =""
+            if streamTableNoOfStreamsAvailable >0:
+                if selectedStream ==0:
+                    streamTableFirstRow =0
+                # Are we about to scroll off the end of the currenty displayed rows?
+                if selectedStream > streamTableLastRow:
+                    # If so, increment the index of the first row
+                    # streamTableFirstRow += (streamTableLastRow - selectedStream)
+                    streamTableFirstRow += 1
+                    debug+="A"
+                # Calculate the last row to display based on the starting row and the height of the table
+                streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
 
-                    else:
-                        # This is a normal cell with a lookup key specified in the view definition
-                        try:
-                            # Retrieve the data from the rtpStream object by looking up it's key
-                            # Attempt to humanise the data based on object type or clues given by the key name
-                            tableCell=humanise(key,rxStreamStats[key])
-                            # # Is it a datetime object?
-                            # if type(tableCell) == datetime.datetime:
-                            #     tableCell = rxStreamStats[key].strftime("%D.%H:%M:%S")
+                # Will the last row be outside the actual range of available stream?
+                if streamTableLastRow > (streamTableNoOfStreamsAvailable -1):
+                    #If so, set streamTableLastRow to point to the last line of the available data array
+                    streamTableLastRow = streamTableNoOfStreamsAvailable - 1
+                    # And add appropriate padding if required
+                    streamTableBlankRowsToAdd = streamTableNoOfRows - (streamTableLastRow - streamTableFirstRow) - 1
+                    debug+="B"
+                else:
+                    streamTableBlankRowsToAdd = 0
+                    debug += "D"
 
-                            # elif key.find('byte') > 0:
-                            #     # If the key name contains the string 'byte'
-                            #     tableCell=bToMb(rxStreamStats[key])
+                # if streamTableNoOfStreamsAvailable < streamTableNoOfRows:
+                #     # Is there less data than the no of rows available in the table, if so add  padding
+                #     # streamTableBlankRowsToAdd = streamTableNoOfRows - streamTableNoOfStreamsAvailable
+                #     debug+="C"
+            else:
+                # No data to display, so padding out the table instead
+                streamTableBlankRowsToAdd = streamTableNoOfRows
+                debug += "E"
 
-                        except Exception as e:
-                            # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
-                            tableCell="keyErr"
-                            Message.addMessage("ERR: __displayThread (for key in keyList): "+str(e))
 
-                    # Check to see if this is the currently selected stream
-                    # If so, highlight the row on the table
-                    if rxStream[2] == selectedStream:
-                        # prefix tableCell with White-on-black ASCII code
-                        tableCell = Term.WhBla + str(tableCell)
-                    else:
-                        # Normal text: prefix tableCell with Black-on-White ASCII code
-                        tableCell = Term.BlaWh + str(tableCell)
-                    # Append the formatted table cell data to the tableRow list
-                    tableRow.append(tableCell)
-                # Now append this complete row to the tableData list (of lists)
-                tableData.append(tableRow)
-                del tableRow
+            Message.addMessage("NoOfRows: " + str(streamTableNoOfRows)+", "+
+                               "BlankRowsToAdd: "+ str(streamTableBlankRowsToAdd)+", "+
+                               "availStreams: "+str(streamTableNoOfStreamsAvailable)+", "+
+                               "selectedStream: "+str(selectedStream)+", "+
+                               "FirstRow: "+str(streamTableFirstRow)+", "+
+                               "LastRow: "+str(streamTableLastRow)+", "+debug
+                               )
+
+
+
+            # Cconfirm that there are some available streams
+            if streamTableNoOfStreamsAvailable > 0:
+                # Iterate over a specified portion of the availableRtpRxStreamList[]
+                for x in range(streamTableFirstRow, streamTableLastRow+1):
+                    # Isolate the stream from the availableRtpRxStreamList[]
+                    rxStream = availableRtpRxStreamList[x]
+                    # Retrieve the stats dictionary for that key
+                    rxStreamStats = rxStream[1].getRtpStreamStats()
+                    # rxStreamStats = rxStream[1].getRtpStreamStats()
+                    # iterate over the keys list for each stream - this will list in a new tableData row per stream
+                    tableRow = []  # Create new row to hold the data
+    ###################################### These are the lines that actually populate the table
+                    for key in keyList:
+                        # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
+                        # which is stored as the third element of an rxStream tuple in the availableRxStreamsList
+                        if key ==0:
+                            # Grab the index number and assign to table cell
+                            tableCell = str(rxStream[2])
+
+                        else:
+                            # This is a normal cell with a lookup key specified in the view definition
+                            try:
+                                # Retrieve the data from the rtpStream object by looking up it's key
+                                # Attempt to humanise the data based on object type or clues given by the key name
+                                tableCell=humanise(key,rxStreamStats[key])
+                            except Exception as e:
+                                # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
+                                tableCell="keyErr"
+                                Message.addMessage("ERR: __displayThread (for key in keyList): "+str(e))
+
+                        # Check to see if this is the currently selected stream
+                        # If so, highlight the row on the table
+                        if rxStream[2] == selectedStream:
+                            # prefix tableCell with White-on-black ASCII code
+                            tableCell = Term.WhBla + str(tableCell)
+                        else:
+                            # Normal text: prefix tableCell with Black-on-White ASCII code
+                            tableCell = Term.BlaWh + str(tableCell)
+                        # Append the formatted table cell data to the tableRow list
+                        tableRow.append(tableCell)
+                    # Now append this complete row to the tableData list (of lists)
+                    tableData.append(tableRow)
+                    del tableRow
 ######################################
-            # If the table isn't large enough yet, pad it out with blanks to the length set by noOfStreamTableRows
-            if len(availableRtpRxStreamList)< noOfStreamTableRows:
-
-                blankRowsToAdd=noOfStreamTableRows-len(availableRtpRxStreamList)
-                for x in range(0,blankRowsToAdd):
+            # If the table isn't large enough yet, pad it out with blanks to the length set by streamTableNoOfRows
+            if streamTableBlankRowsToAdd > 0:
+                for x in range(0,streamTableBlankRowsToAdd):
                     # Create a blank list with the same no. of blanks as there are table columns
                     tableRow = []*len(titleRow)
                     tableData.append(tableRow)
