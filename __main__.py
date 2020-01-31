@@ -1813,6 +1813,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     availableRtpRxStreamList = []
     availableRtpTxStreamList = []
 
+    selectedView = 0  # Keeps track of which view is currently being displayed
+    selectedRxStream = 0  # Keeps track of which Rx stream is currently highlighted in the streams table
+
     # define views, tables headings and keys
     # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
     # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
@@ -1833,6 +1836,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["glitch\nperiod","glitch_mean_time_between_glitches"],
                    ["Count","glitch_counter_total_glitches"]
                    ]])
+                   #],DATASET,ROW_SELECTOR])
 
     views.append(["Stream",
                   [["#",0], # Used as an index
@@ -1914,8 +1918,6 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                        ["", ""],
                        ]])
 
-    selectedView = 0  # Keeps track of which view is currently being displayed
-    selectedStream =0 # Keeps track of which stream is currently highlighted in the streams table
     streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
     streamTableLastRow = 0 # Tracks the current end row of the stream table data
 
@@ -1997,19 +1999,19 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
         if (keyPressed[0]=='CursorUp'):
             # Scroll the highlight stream up the list
             keyPressed[0] = ''  # Clear key buffer
-            selectedStream -=1
+            selectedRxStream -=1
             # Bounds check
-            if selectedStream <0:
-                selectedStream = 0
+            if selectedRxStream <0:
+                selectedRxStream = 0
             redrawScreen = True
 
         if (keyPressed[0] == 'CursorDown'):
             # Scroll the selected stream down
             keyPressed[0] = ''  # Clear key buffer
-            selectedStream += 1
+            selectedRxStream += 1
             # Bounds check
-            if selectedStream > (len(availableRtpRxStreamList)-1):
-                selectedStream = len(availableRtpRxStreamList) -1
+            if selectedRxStream > (len(availableRtpRxStreamList)-1):
+                selectedRxStream = len(availableRtpRxStreamList) -1
             redrawScreen = True
 
         if (keyPressed[0] == 'Enter'):
@@ -2023,7 +2025,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 del keyPressed[1]  # Remove key buffer array now eve stored it
                 Message.addMessage("newFriendlyNameEntered: "+newFriendlyName)
                 # Attempt to modify the stream name
-                availableRtpRxStreamList[selectedStream][1].setFriendlyName(newFriendlyName)
+                availableRtpRxStreamList[selectedRxStream][1].setFriendlyName(newFriendlyName)
 
             except Exception as e:
                 Message.addMessage(Term.FG((Term.RED))+"ERR: __displayThread() newFriendlyNameEntered: "+ str(e))
@@ -2035,7 +2037,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             keyPressed[0] = ''  # Clear key buffer
             # Attempt to delete current stream
             try:
-                streamID=availableRtpRxStreamList[selectedStream][0]
+                streamID=availableRtpRxStreamList[selectedRxStream][0]
                 removeRtpStreamFromDict(streamID, rtpRxStreamsDict, rtpRxStreamsDictMutex)
             except Exception as e:
                 Message.addMessage("ERR: __displayThread::[d] Remove stream: "+str(e))
@@ -2119,20 +2121,19 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 streamTableNoOfRows = int(currentTermHeight / 2) - 9
 
                 streamTableNoOfStreamsAvailable = len(availableRtpRxStreamList)
-                # streamTableBlankRowsToAdd = 0
-
+                selectedRow = selectedRxStream
                 if streamTableNoOfStreamsAvailable >0:
-                    if selectedStream ==0:
+                    if selectedRow ==0:
                         streamTableFirstRow =0
                     # Are we about to scroll off the end of the currenty displayed rows?
-                    if selectedStream > streamTableLastRow:
+                    if selectedRow > streamTableLastRow:
                         # If so, increment the index of the first row
-                        streamTableFirstRow =selectedStream - streamTableNoOfRows + 1
+                        streamTableFirstRow =selectedRow - streamTableNoOfRows + 1
 
                     # Are we about to scroll off the top of the currently displayed rows?
-                    if selectedStream < streamTableFirstRow:
+                    if selectedRow < streamTableFirstRow:
                         # If so, decrement the index of the first row
-                        streamTableFirstRow=selectedStream
+                        streamTableFirstRow=selectedRow
 
                     # Calculate the last row to display based on the starting row and the height of the table
                     streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
@@ -2183,7 +2184,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
                             # Check to see if this is the currently selected stream
                             # If so, highlight the row on the table
-                            if rxStream[2] == selectedStream:
+                            if rxStream[2] == selectedRow:
                                 # prefix tableCell with White-on-black ASCII code
                                 tableCell = Term.WhBla + str(tableCell)
                             else:
@@ -2208,7 +2209,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # Remove all padding to save space on the screen
                 table.padding_left = 0
                 table.padding_right = 0
-                table.title = str(selectedStream + 1)+"/"+str(streamTableNoOfStreamsAvailable)
+                table.title = str(selectedRow + 1)+"/"+str(streamTableNoOfStreamsAvailable)
                 tableWidth = table.table_width
                 tableRowsRendered = table.table.splitlines()
                 xPos = 2
