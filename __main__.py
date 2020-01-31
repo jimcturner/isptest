@@ -2039,7 +2039,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 del keyPressed[1]  # Remove key buffer array now eve stored it
                 Message.addMessage("newFriendlyNameEntered: "+newFriendlyName)
                 # Attempt to modify the stream name
-                availableRtpRxStreamList[selectedRxStream][1].setFriendlyName(newFriendlyName)
+                availableRtpRxStreamList[selectedRxStream[0]][1].setFriendlyName(newFriendlyName)
 
             except Exception as e:
                 Message.addMessage(Term.FG((Term.RED))+"ERR: __displayThread() newFriendlyNameEntered: "+ str(e))
@@ -2051,7 +2051,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             keyPressed[0] = ''  # Clear key buffer
             # Attempt to delete current stream
             try:
-                streamID=availableRtpRxStreamList[selectedRxStream][0]
+                streamID=availableRtpRxStreamList[selectedRxStream[0]][0]
                 removeRtpStreamFromDict(streamID, rtpRxStreamsDict, rtpRxStreamsDictMutex)
             except Exception as e:
                 Message.addMessage("ERR: __displayThread::[d] Remove stream: "+str(e))
@@ -2061,6 +2061,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             keyPressed[0] = ''  # Clear key buffer
             # Attempt to add a new tx stream (if we're in loopback or transmit mode
             if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
+
                 # Generate random seq id
                 seqID=random.randint(1000, 10000)
 
@@ -2069,6 +2070,19 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 rtpTxStreamsDictMutex.acquire()
                 rtpTxStreamsDict[seqID] = rtpGenerator
                 rtpTxStreamsDictMutex.release()
+
+        # if keyPressed[0] == 'm':
+        #     # Increase tx rate of selected stream
+        #     keyPressed[0] = ''  # Clear key buffer
+        #     # Get tx rate from currently selected stream
+        #     # Identify the streamID of the currently selected tx stream
+        #     streamID=availableRtpTxStreamList[selectedTxStream[0]]
+        #     # Get the stats dictionary from the RtpGenerator object
+        #     stats=rtpTxStreamsDict[streamID].getRtpStreamStats()
+        #     currentTxRate=int(stats['Tx Rate'])
+        #     if currentTxRate < 1048576:
+
+
 
         # Monitor keyPressed[] for a Ctrl-C
         if keyPressed[0] == 'Ctrl-C':
@@ -2488,9 +2502,7 @@ def __catchKeyboardPresses(keyPressed):
             # Esc
             keyPressed[0] = 'Enter'
 
-        elif ch == 't':
-            # 't' pressed. Add an additional tx stream
-            keyPressed[0] = 't'
+
         # Special case if 'i' pressed
         elif ch == 'i':
             ch == ''    # Clear keybuffer
