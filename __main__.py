@@ -1814,8 +1814,13 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     availableRtpTxStreamList = []
 
     selectedView = 0  # Keeps track of which view is currently being displayed
-    selectedRxStream = 0  # Keeps track of which Rx stream is currently highlighted in the streams table
-    selectedTxStream = 0  # Keeps track of which Tx stream is currently highlighted in the streams table
+    selectedRxStream = [0]  # Keeps track of which Rx stream is currently highlighted in the streams table
+                            # Note. It has to be used like a pointer because it is shared (mutable) therefore
+                            # declare it as single element list
+    selectedTxStream = [0]  # Keeps track of which Tx stream is currently highlighted in the streams table
+                            # Note. It has to be used like a pointer because it is shared (mutable) therefore
+                            # declare it as single element list
+
     # define views, tables headings and keys
     # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
     # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
@@ -2003,8 +2008,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             # Decrement the row selector associated with this view
             views[selectedView][3] -=1
             # Bounds check
-            if views[selectedView][3] < 0:
-                views[selectedView][3] = 0
+            if views[selectedView][3][0] < 0:
+                views[selectedView][3][0] = 0
 
             redrawScreen = True
 
@@ -2013,10 +2018,10 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             keyPressed[0] = ''  # Clear key buffer
 
             # Increment the row selector associated with this view
-            views[selectedView][3] += 1
+            views[selectedView][3][0] += 1
             # Bounds check the data set associated with this view
-            if views[selectedView][3] > (len(views[selectedView][2]) - 1):
-                views[selectedView][3] = len(views[selectedView][2]) - 1
+            if views[selectedView][3][0] > (len(views[selectedView][2]) - 1):
+                views[selectedView][3][0] = len(views[selectedView][2]) - 1
 
             redrawScreen = True
 
@@ -2126,10 +2131,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
                 # Get a handle on the dataset to be displayed in this particular table
                 dataSetToDisplay=views[selectedView][2]
- #################### GOT THIS FAR
                 streamTableNoOfStreamsAvailable = len(dataSetToDisplay)
                 # Get a handle on the row selector relevent to this data set
-                selectedRow = views[selectedView][3]
+                selectedRow = views[selectedView][3][0]
 
                 if streamTableNoOfStreamsAvailable >0:
                     if selectedRow ==0:
