@@ -1909,12 +1909,13 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
         views.append([Term.FG(Term.RED)+"Tx Streams",
                       [["#", 0],  # Used as an index[]
-                       ["", ""],
-                       ["", ""],
-                       ["", ""],
-                       ["", ""],
-                       ["", ""],
-                       ["", ""],
+                       ["Dest\n IP", 'Dest IP'],
+                       ["Dest\nPort", 'Dest Port'],
+                       ["Sync\nsrcID", 'Sync Source ID'],
+                       ["Tx Rate\n bps", 'Tx Rate'],
+                       ["Length\n(bytes)", 'Packet size'],
+                       ["Bytes\n tx'd", 'Bytes transmitted'],
+                       [" Time\nelapsed", 'Elapsed Time'],
                        ],availableRtpTxStreamList,selectedTxStream])
 
     streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
