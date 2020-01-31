@@ -1974,8 +1974,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
 
 
-        # Update available streams list
+        # Update available streams lists
         __updateAvailableStreamsList(availableRtpRxStreamList,rtpRxStreamsDict, rtpRxStreamsDictMutex)
+        __updateAvailableStreamsList(availableRtpTxStreamList,rtpTxStreamsDict, rtpTxStreamsDictMutex)
 
         if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
             keyPressed[0]=''    # Clear key buffer
@@ -2046,13 +2047,16 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
                 # Generate random seq id
                 seqID=random.randint(1000, 10000)
+
                 rtpGenerator = RtpGenerator(keyPressed, "127.0.0.1", 5004, 1048576, 1300, seqID)
                 # Add the new stream to the rtpStreams dictionary
+                rtpTxStreamsDictMutex.acquire()
                 rtpTxStreamsDict[seqID] = rtpGenerator
+                rtpTxStreamsDictMutex.release()
 
         x = ""
-        for y in rtpTxStreamsDict:
-            x += str(y)+", "
+        for y in availableRtpTxStreamList:
+            x += "["+str(y[0])+","+str(y[2])+"], "
         Message.addMessage("rtpTxStreamsDict: " + x)
 
         # Monitor keyPressed[] for a Ctrl-C
@@ -3098,8 +3102,9 @@ def main(argv):
         rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID)
 
         # Add the tx stream to the rtpStreams dictionary
+        rtpTxStreamsDictMutex.acquire()
         rtpTxStreamsDict[syncSourceID] = rtpGenerator
-
+        rtpTxStreamsDictMutex.release()
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
