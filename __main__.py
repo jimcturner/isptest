@@ -2062,6 +2062,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             # Attempt to add a new tx stream (if we're in loopback or transmit mode
             if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
 
+                # Identify the streamID of the last added  tx stream
+                streamID = availableRtpTxStreamList[-1][0]
+
                 # Generate random seq id
                 seqID=random.randint(1000, 10000)
 
@@ -2071,97 +2074,106 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 rtpTxStreamsDict[seqID] = rtpGenerator
                 rtpTxStreamsDictMutex.release()
 
+
         if keyPressed[0] == 'm':
             # Increase tx rate of selected stream
             keyPressed[0] = ''  # Clear key buffer
-            # Get tx rate from currently selected stream
-            # Identify the streamID of the currently selected tx stream
-            streamID=availableRtpTxStreamList[selectedTxStream[0]][0]
-            # Get the stats dictionary from the RtpGenerator object
-            txStream=rtpTxStreamsDict[streamID]
-            stats=txStream.getRtpStreamStats()
-            currentTxRate=int(stats['Tx Rate'])
-            # If less than 1Mbps increment by 256kbps
-            if currentTxRate < 1048576:
-                txStream.setTxRate(currentTxRate+262144)
-            # Otherwise increment by 500kbps
-            else:
-                txStream.setTxRate(currentTxRate + 524288)
+            # Confirm that a tx stream exists
+            if len(availableRtpTxStreamList)>0:
+                # Get tx rate from currently selected stream
+                # Identify the streamID of the currently selected tx stream
+                streamID=availableRtpTxStreamList[selectedTxStream[0]][0]
+                # Get the stats dictionary from the RtpGenerator object
+                txStream=rtpTxStreamsDict[streamID]
+                stats=txStream.getRtpStreamStats()
+                currentTxRate=int(stats['Tx Rate'])
+                # If less than 1Mbps increment by 256kbps
+                if currentTxRate < 1048576:
+                    txStream.setTxRate(currentTxRate+262144)
+                # Otherwise increment by 500kbps
+                else:
+                    txStream.setTxRate(currentTxRate + 524288)
 
         if keyPressed[0] == 'n':
             # Decrease tx rate of selected stream
             keyPressed[0] = ''  # Clear key buffer
-            # Get tx rate from currently selected stream
-            # Identify the streamID of the currently selected tx stream
-            streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
-            # Get the stats dictionary from the RtpGenerator object
-            txStream = rtpTxStreamsDict[streamID]
-            stats = txStream.getRtpStreamStats()
+            # Confirm that a tx stream exists
+            if len(availableRtpTxStreamList) > 0:
+                # Get tx rate from currently selected stream
+                # Identify the streamID of the currently selected tx stream
+                streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
+                # Get the stats dictionary from the RtpGenerator object
+                txStream = rtpTxStreamsDict[streamID]
+                stats = txStream.getRtpStreamStats()
 
-            currentTxRate = int(stats['Tx Rate'])
-            # If less than 1Mbps decrement by 256kbps
-            if currentTxRate < 1048576:
-                txStream.setTxRate(currentTxRate - 262144)
-            # Otherwise decrement by 512kbps
-            else:
-                txStream.setTxRate(currentTxRate - 524288)
-            stats = txStream.getRtpStreamStats()
+                currentTxRate = int(stats['Tx Rate'])
+                # If less than 1Mbps decrement by 256kbps
+                if currentTxRate < 1048576:
+                    txStream.setTxRate(currentTxRate - 262144)
+                # Otherwise decrement by 512kbps
+                else:
+                    txStream.setTxRate(currentTxRate - 524288)
+                stats = txStream.getRtpStreamStats()
 
         if keyPressed[0] == 'l':
             # Increase payload size of selected stream
             keyPressed[0] = ''  # Clear key buffer
-
-            # Get payload size from currently selected stream
-            # Identify the streamID of the currently selected tx stream
-            streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
-            # Get the stats dictionary from the RtpGenerator object
-            txStream = rtpTxStreamsDict[streamID]
-            stats = txStream.getRtpStreamStats()
-            # Get current payload size
-            currentTxPayloadSize = int(stats['Packet size'])
-            # Increment current size by 10 bytes
-            txStream.setPayloadLength(currentTxPayloadSize+10)
+            # Confirm that a tx stream exists
+            if len(availableRtpTxStreamList) > 0:
+                # Get payload size from currently selected stream
+                # Identify the streamID of the currently selected tx stream
+                streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
+                # Get the stats dictionary from the RtpGenerator object
+                txStream = rtpTxStreamsDict[streamID]
+                stats = txStream.getRtpStreamStats()
+                # Get current payload size
+                currentTxPayloadSize = int(stats['Packet size'])
+                # Increment current size by 10 bytes
+                txStream.setPayloadLength(currentTxPayloadSize+10)
 
         if keyPressed[0] == 'k':
             # Increase payload size of selected stream
             keyPressed[0] = ''  # Clear key buffer
-
-            # Get payload size from currently selected stream
-            # Identify the streamID of the currently selected tx stream
-            streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
-            # Get the stats dictionary from the RtpGenerator object
-            txStream = rtpTxStreamsDict[streamID]
-            stats = txStream.getRtpStreamStats()
-            # Get current payload size
-            currentTxPayloadSize = int(stats['Packet size'])
-            # Increment current size by 10 bytes
-            txStream.setPayloadLength(currentTxPayloadSize - 10)
+            # Confirm that a tx stream exists
+            if len(availableRtpTxStreamList) > 0:
+                # Get payload size from currently selected stream
+                # Identify the streamID of the currently selected tx stream
+                streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
+                # Get the stats dictionary from the RtpGenerator object
+                txStream = rtpTxStreamsDict[streamID]
+                stats = txStream.getRtpStreamStats()
+                # Get current payload size
+                currentTxPayloadSize = int(stats['Packet size'])
+                # Increment current size by 10 bytes
+                txStream.setPayloadLength(currentTxPayloadSize - 10)
 
         if keyPressed[0] == 'p':
             # Increase sync source ID of selected stream
             keyPressed[0] = ''  # Clear key buffer
-
-            # Get hold of the currently selected txStream object
-            txStream=rtpTxStreamsDict[availableRtpTxStreamList[selectedTxStream[0]][0]]
-            # Get the stats dictionary from the RtpGenerator object
-            stats = txStream.getRtpStreamStats()
-            # Get current Sync source ID
-            currentSyncSourceID = int(stats['Sync Source ID'])
-            # Increment sync source by 1
-            txStream.setSyncSourceIdentifier(currentSyncSourceID+1)
+            # Confirm that a tx stream exists
+            if len(availableRtpTxStreamList) > 0:
+                # Get hold of the currently selected txStream object
+                txStream=rtpTxStreamsDict[availableRtpTxStreamList[selectedTxStream[0]][0]]
+                # Get the stats dictionary from the RtpGenerator object
+                stats = txStream.getRtpStreamStats()
+                # Get current Sync source ID
+                currentSyncSourceID = int(stats['Sync Source ID'])
+                # Increment sync source by 1
+                txStream.setSyncSourceIdentifier(currentSyncSourceID+1)
 
         if keyPressed[0] == 'o':
             # Decrease sync source ID of selected stream
             keyPressed[0] = ''  # Clear key buffer
-
-            # Get hold of the currently selected txStream object
-            txStream=rtpTxStreamsDict[availableRtpTxStreamList[selectedTxStream[0]][0]]
-            # Get the stats dictionary from the RtpGenerator object
-            stats = txStream.getRtpStreamStats()
-            # Get current Sync source ID
-            currentSyncSourceID = int(stats['Sync Source ID'])
-            # Decrement sync source by 1
-            txStream.setSyncSourceIdentifier(currentSyncSourceID-1)
+            # Confirm that a tx stream exists
+            if len(availableRtpTxStreamList) > 0:
+                # Get hold of the currently selected txStream object
+                txStream=rtpTxStreamsDict[availableRtpTxStreamList[selectedTxStream[0]][0]]
+                # Get the stats dictionary from the RtpGenerator object
+                stats = txStream.getRtpStreamStats()
+                # Get current Sync source ID
+                currentSyncSourceID = int(stats['Sync Source ID'])
+                # Decrement sync source by 1
+                txStream.setSyncSourceIdentifier(currentSyncSourceID-1)
 
 
         # Monitor keyPressed[] for a Ctrl-C
@@ -2811,11 +2823,6 @@ class RtpGenerator(object):
                     enableJitter = False
                     Message.addMessage("[j] jitter disabled")
 
-
-            if self.keyPressed[0] == 'e':
-                # Increment sync source identifier
-                self.keyPressed[0] = ''
-                self.setSyncSourceIdentifier(self.syncSourceIdentifier+1)
 
             ###########
             # Increment rtp sequence number for next iteration of the loop
