@@ -1824,7 +1824,9 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                    ["Sync \nSrcID", "stream_syncSource"],
                    ["Src Addr", "stream_srcAddress"],
                    ["Src\nport", "stream_srcPort"],
-                   ["Bytes\nRcvd","packet_data_received_total_bytes"],
+                   ["Dst Addr", "stream_rxAddress"],
+                   ["Dst\nport", "stream_rxPort"],
+
                    ["  Time\nelapsed","stream_time_elapsed_total"],
                    ["CPU\n %","stream_processor_utilisation_percent"]
                    ]])
@@ -1837,6 +1839,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                    ["pack\np/s","packet_counter_1S"],
                    ["Length\n(bytes)","packet_payload_size_mean_1S_bytes"],
                    ["Recv\nperiod","packet_mean_receive_period_uS"],
+                   ["Bytes\nRcvd","packet_data_received_total_bytes"],
                    #["",""],
                    ]])
 
@@ -1855,44 +1858,45 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
 
     views.append(["Historic",
                   [["#", 0],  # Used as an index[],
-                   ["Name", "stream_friendly_name"],
-                   ["24Hr", "historic_glitch_counter_last_24Hr"],
-                   ["1Hr", "historic_glitch_counter_last_1Hr"],
-                   ["10Min", "historic_glitch_counter_last_10Min"],
-                   ["1Min", "historic_glitch_counter_last_1Min"],
-                   ["10Sec", "historic_glitch_counter_last_10Sec"],
+                   ["Name\n", "stream_friendly_name"],
+                   ["24Hr\n", "historic_glitch_counter_last_24Hr"],
+                   ["1Hr\n", "historic_glitch_counter_last_1Hr"],
+                   ["10Min\n", "historic_glitch_counter_last_10Min"],
+                   ["1Min\n", "historic_glitch_counter_last_1Min"],
+                   ["10Sec\n", "historic_glitch_counter_last_10Sec"],
                    #["", ""],
                    ]])
 
     views.append(["Jitter",
                   [["#", 0],  # Used as an index[]
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
+                   ["Name", "stream_friendly_name"],
+                   ["Long term\n  mean", "jitter_long_term_uS"],
+                   ["Min", "jitter_min_uS"],
+                   ["Max", "jitter_max_uS"],
+                   ["Range", "jitter_range_uS"],
+                   ["1S \nmean", "jitter_mean_1S_uS"],
                    ]])
 
-    views.append(["Misc",
-                  [["#", 0],  # Used as an index[]
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ]])
+    # views.append(["Misc",
+    #               [["#", 0],  # Used as an index[]
+    #                ["", ""],
+    #                ["", ""],
+    #                ["", ""],
+    #                ["", ""],
+    #                ["", ""],
+    #                ["", ""],
+    #                ]])
 
-    views.append(["Tx Streams",
-                  [["#", 0],  # Used as an index[]
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ["", ""],
-                   ]])
+    if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
+        views.append([Term.FG(Term.RED)+"Tx Streams",
+                      [["#", 0],  # Used as an index[]
+                       ["", ""],
+                       ["", ""],
+                       ["", ""],
+                       ["", ""],
+                       ["", ""],
+                       ["", ""],
+                       ]])
 
     selectedView = 0  # Keeps track of which view is currently being displayed
     selectedStream =0 # Keeps track of which stream is currently highlighted in the streams table
