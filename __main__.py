@@ -1391,9 +1391,9 @@ class RtpStream(object):
     def setFriendlyName(self, friendlyName):
         # Thread-safe method to set the friendly name field
         maxNameLength = 10
-        # Truncate supplied name to 12 characters (truncated to preserve the screen layout) or else pad to 12 chars
+        # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
         if len(friendlyName) < maxNameLength:
-            # Too short, so Pad out name to 12 chars
+            # Too short, so Pad out name to x chars
             friendlyName += (maxNameLength - len(friendlyName)) * " "
         else:
             # Too big, so truncate
@@ -1777,7 +1777,7 @@ def humanise(key,value):
         # Pass to (my) dtstrft() function to create a much shorter string
         return dtstrft(value)
 
-    if key=="packet_data_received_total_bytes":
+    if key=="packet_data_received_total_bytes" or key=="Bytes transmitted" or key=='Tx Rate':
         value = bToMb(value)+"B"
         return value
 
@@ -1790,6 +1790,8 @@ def humanise(key,value):
         # Convert % value to an integer
         value = str(value)+"uS"
         return value
+
+
 
     else:
         return value
@@ -1914,6 +1916,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
         views.append([Term.FG(Term.RED)+"Tx Streams",
                       [["#", 0],  # Used as an index[]
+                       ["Name", 'Friendly Name'],
                        ["Dest\n IP", 'Dest IP'],
                        ["Dest\nPort", 'Dest Port'],
                        ["Sync\nsrcID", 'Sync Source ID'],
@@ -2535,6 +2538,7 @@ class RtpGenerator(object):
         self.syncSourceIdentifier = syncSourceID
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
         self.elapsedTime = datetime.timedelta()
+        self.friendlyName = " "*10
 
         # Start the generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
@@ -2550,8 +2554,24 @@ class RtpGenerator(object):
                 'Packet size': self.payloadLength,
                 'Bytes transmitted': self.txCounter_bytes,
                 'Sync Source ID': self.syncSourceIdentifier,
-                'Elapsed Time': self.elapsedTime
+                'Elapsed Time': self.elapsedTime,
+                'Friendly Name': self.friendlyName
                 }
+
+    def setFriendlyName(self, friendlyName):
+        # Ultimately this name will be transmitted as part of the stream (so that the receiver
+        # can auto-set the friendly name of the stream at the rx end)
+        # Currently it just sets an instance variable
+        maxNameLength = 10
+        # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
+        if len(friendlyName) < maxNameLength:
+            # Too short, so Pad out name to x chars
+            friendlyName += (maxNameLength - len(friendlyName)) * " "
+        else:
+            # Too big, so truncate
+            friendlyName = friendlyName[:maxNameLength]
+        # assign to instance variable
+        self.friendlyName = friendlyName
 
     def generatePayload(self,length):
         # Generate random string of length 'length' to create a payload
