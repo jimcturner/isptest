@@ -2527,6 +2527,17 @@ class RtpGenerator(object):
         # Reset txBps_1s counter
         self.txBps_1s = 0
 
+    def setPayloadLength(self, payloadLength_bytes):
+        # Modifies the payload length of this RTP TX stream
+        if payloadLength_bytes > 1488:
+            payloadLength_bytes = 1488
+        if payloadLength_bytes < 20:
+            payloadLength_bytes =20
+        # Set instance variable
+        self.payloadLength = payloadLength_bytes
+        # Regenerate payload based on new payload length
+        self.generatePayload(self.payloadLength)
+
     # define a traffic generator method that will run as a thread
     # def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
     def __rtpGeneratorThread(self):
@@ -2662,28 +2673,14 @@ class RtpGenerator(object):
             if self.keyPressed[0] == 's':
                 # Increase payload length
                 self.keyPressed[0] = ''
-                self.payloadLength += 10
-                if self.payloadLength > 1488:
-                    self.payloadLength = 1488
-                    self.generatePayload(self.payloadLength)
-                    Message.addMessage("[s] Payload already at max size of 1488 bytes")
-                else:
-                    # Regenerate new payload based on the new length
-                    self.generatePayload(self.payloadLength)
-                    Message.addMessage("[s] Increasing payload size to "+str(self.payloadLength))
+                newPayloadLength=self.payloadLength + 10
+                self.setPayloadLength(newPayloadLength)
 
             if self.keyPressed[0] == 'a':
                 # Decrease payload length
                 self.keyPressed[0] = ''
-                self.payloadLength -= 10
-                if self.payloadLength <20:
-                    self.payloadLength = 20
-                    Message.addMessage("[s] Payload already at min size of 20 bytes")
-                    self.generatePayload(self.payloadLength)
-                else:
-                    # Regenerate new payload based on the new length
-                    self.generatePayload(self.payloadLength)
-                    Message.addMessage("[a] Decreasing payload size to " + str(self.payloadLength))
+                newPayloadLength = self.payloadLength - 10
+                self.setPayloadLength(newPayloadLength)
 
             ###########
             # Increment rtp sequence number for next iteration of the loop
