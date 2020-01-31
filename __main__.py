@@ -2628,10 +2628,13 @@ def __catchKeyboardPresses(keyPressed):
 # Define an RTP Generator that can run autonomously as a thread
 class RtpGenerator(object):
 
-    def __init__(self, keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID):
+    def __init__(self, keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, *srcPort):
+        # The last argument (*srcPort) is optional. it allows you to specify a source port on creation
+
         # Assign instance variables
         self.UDP_TX_IP = UDP_TX_IP
         self.UDP_TX_PORT = UDP_TX_PORT
+        self.UDP_TX_SRC_PORT = 0
         self.txRate = txRate
         self.txPeriod = 0  # Calculated from self.txRate
         self.payloadLength = payloadLength
@@ -2643,6 +2646,16 @@ class RtpGenerator(object):
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
         self.elapsedTime = datetime.timedelta()
         self.friendlyName = " "*10
+
+        # Test to see if a UDP source port was specified
+        if len(srcPort) > 0:
+            # Test to see if the supplied value is an int
+            try:
+                # check to see whether srcPort is a valid UDP port choice (has to be >1024)
+                if int(srcPort > 1024):
+                    self.UDP_TX_SRC_PORT = srcPort
+            except Exception as e:
+                Message.addMessage("INFO: RtpGenerator.__init(): Invalid UDP source port."+str(srcPort+", "+str(e)) )
 
         # Start the generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
@@ -2659,7 +2672,8 @@ class RtpGenerator(object):
                 'Bytes transmitted': self.txCounter_bytes,
                 'Sync Source ID': self.syncSourceIdentifier,
                 'Elapsed Time': self.elapsedTime,
-                'Friendly Name': self.friendlyName
+                'Friendly Name': self.friendlyName,
+                'Tx Source Port': self.UDP_TX_SRC_PORT
                 }
 
     def setFriendlyName(self, friendlyName):
@@ -2730,6 +2744,14 @@ class RtpGenerator(object):
         # Attempt to create UDP socket
         try:
             txSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
+            # If a UDP source port has been specified, use it
+            if self.UDP_TX_SRC_PORT >1024:
+                # Bind to the socket, allows you to specify the source port
+                try:
+                    txSock.bind(('0.0.0.0',int(self.UDP_TX_SRC_PORT)))
+                except Exception as e:
+                    Message.addMessage("ERR: RtpGenerator.__rtpGeneratorThread. txSock.bind. "+ str(e))
+
         except Exception as e:
             Message.addMessage("\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Exiting\x1B[0m" + self.UDP_TX_IP + ":" + \
                                str(self.UDP_TX_PORT) + ", " + str(e))
@@ -3044,6 +3066,7 @@ def main(argv):
         # -r receive mode usage: address:port
         # -b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps
         # -d udp packet size
+        # -s udp transmit source port (for transmit or loopback mode)
         # -i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4
 
         address = ""
@@ -3162,6 +3185,16 @@ def main(argv):
                     glitchEventTriggerThreshold = int(arg) +1 -1
                 except:
                     print ("Invalid glitch ignore threashold specified. Must be an integer: " + int(arg))
+                    exit()
+
+            elif opt in ("-s"):
+                # Specify source UDP port
+                # Test to see if supplied value is an int
+                try:
+                    # Simple test to see if arg is an integer. If it's a string, this will fail
+                    UDP_TX_SRC_PORT = int(arg) +1 -1
+                except:
+                    print ("Invalid -s UDP source port specified. Must be an integer > 1024: " + int(arg))
                     exit()
 
     except getopt.GetoptError:
