@@ -1545,7 +1545,7 @@ def bToMb(value):
         return str(value) + "M"
     elif value >= 1024:
         # Convert bytes to kb
-        value = value / 1024
+        value = round(value / 1024,1)
         return str(value) + "k"
     else:
         return str(value)
