@@ -1671,11 +1671,11 @@ def removeRtpStreamFromDict(streamID, rtpRxStreamsDict, rtpRxStreamsDictMutex):
     rtpRxStreamsDictMutex.release()
 
 
-def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict, rtpRxStreamsDictMutex):
+def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMutex):
     # This is a utility function for __displayThread
     # It's job is to compare the current working list inn use by __displayThread (currentStreamList[])
-    # with the rtpRxStreamsDict{} dictionary of active rtpRxStreams (maintained by main())
-    # If will replicate any additions/deletions to objects in rtpRxStreamsDict{} to currentStreamList[]
+    # with the rtpStreamDict{} dictionary of active rtpRxStreams or rtpTxStreams (maintained by main())
+    # If will replicate any additions/deletions to objects in rtpStreamDict{} to currentStreamList[]
     # Crucially, the order of currentStreamList[] will be maintained so that it will represent a
     # chronological record of the order in which streams were added. This is very useful for display purposes
     # because __displayThread relies upon the index no of the entries in currentStreamList[]
@@ -1684,16 +1684,16 @@ def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict, rtp
     # (a list and a dictionary) are mutable, and therefore act like pointers. Therefore this function
     # can manipulate them directly.
 
-    # 1) Iterate over keys of rtpRxStreamsDict{} to get latest list of streams
-    rtpRxStreamsDictMutex.acquire()
+    # 1) Iterate over keys of rtpStreamDict{} to get latest list of streams
+    rtpStreamDictMutex.acquire()
     newStreamsList = []
-    for k, v in rtpRxStreamsDict.items():
+    for k, v in rtpStreamDict.items():
         newStreamsList.append(k)
-    rtpRxStreamsDictMutex.release()
+    rtpStreamDictMutex.release()
 
-    # 2) Create sublist of current known availableRtpRxStreamList
+    # 2) Create sublist of current known rtpStreamList
     currentStreamsList = []
-    for k in availableRtpRxStreamList:
+    for k in rtpStreamList:
         currentStreamsList.append(k[0])
 
     # 3) Do set(new)^set(current) to get difference between the two lists (as another list)
@@ -1703,51 +1703,51 @@ def __updateAvailableStreamsList(availableRtpRxStreamList, rtpRxStreamsDict, rtp
     # 5) do set (current)&set(diff) to get del list
     deleteList = set(currentStreamsList) & set(diff)
 
-    # 6) Add new streams to availableRtpRxStreamList
+    # 6) Add new streams to rtpStreamList
     for streamID in addList:
         # Create tuple containing the stream id, the stream object itself and an index
-        x = [streamID, rtpRxStreamsDict[streamID], 0]
-        # Append the new tuple to availableRtpRxStreamList[]
-        availableRtpRxStreamList.append(x)
-        Message.addMessage("Added " + str(x[0]) + " to availableRtpRxStreamList[]")
-    # 7) Purge deleted streams from availableRtpRxStreamList[] according to deleteList
+        x = [streamID, rtpStreamDict[streamID], 0]
+        # Append the new tuple to rtpStreamList[]
+        rtpStreamList.append(x)
+        Message.addMessage("Added " + str(x[0]) + " to rtpStreamList[]")
+    # 7) Purge deleted streams from rtpStreamList[] according to deleteList
     for streamID in deleteList:
-        # Iterate over tuples in availableRtpRxStreamList[] searching for a match
-        for index, stream in enumerate(availableRtpRxStreamList):
+        # Iterate over tuples in rtpStreamList[] searching for a match
+        for index, stream in enumerate(rtpStreamList):
             if stream[0] == streamID:
                 # If stream found, delete that tuple from the list
-                Message.addMessage("Removing stream " + str(stream[0]) + " from availableRtpRxStreamList[]")
+                Message.addMessage("Removing stream " + str(stream[0]) + " from rtpStreamList[]")
                 try:
-                    availableRtpRxStreamList.pop(index)
+                    rtpStreamList.pop(index)
                 except Exception as e:
                     Message.addMessage("__updateAvailableStreamsList: "+str(e))
                 break
 
-    # 7.5) Check that availableRtpRxStreamList and rtpRxStreamsDict are actually looking at the same objects in memory
+    # 8) Check that rtpStreamList and rtpStreamDict are actually looking at the same objects in memory
     # It's possible that duplicate streams with the same stream ID can lead to orphan streams remaining
-    # in availableRtpRxStreamList.
+    # in rtpStreamList.
     # To check, we actually need to compare the objects in both lists of objects. Using the 'is' keyword
     # confirms that they are the same object (as opposed to the same type of object)
-    rtpRxStreamsDictMutex.acquire()
-    for stream in availableRtpRxStreamList:
+    rtpStreamDictMutex.acquire()
+    for stream in rtpStreamList:
         try:
-            if stream[1] is not rtpRxStreamsDict[stream[0]]:
+            if stream[1] is not rtpStreamDict[stream[0]]:
                 Message.addMessage("ERR:__updateAvailableStreamsList() Object mismatch for streamID "+str(stream[0])+". Repointing to correct object")
-                # Now re-point availableRtpRxStreamList to the correct version of that object
-                # by assigning the correct object to the entry in availableRtpRxStreamList[]
-                stream[1]=rtpRxStreamsDict[stream[0]]
+                # Now re-point rtpStreamList to the correct version of that object
+                # by assigning the correct object to the entry in rtpStreamList[]
+                stream[1]=rtpStreamDict[stream[0]]
         except Exception as e:
-            Message.addMessage("ERR:__updateAvailableStreamsList(), rtpRxStreamsDictkey error for stream "+str(stream[0])+", "+str(e))
-    rtpRxStreamsDictMutex.release()
-    # 8) delete newStreamsList, currentStreamsList, diff, addList and deleteList
+            Message.addMessage("ERR:__updateAvailableStreamsList(), rtpStreamDictkey error for stream "+str(stream[0])+", "+str(e))
+    rtpStreamDictMutex.release()
+    # 9) delete newStreamsList, currentStreamsList, diff, addList and deleteList
     del newStreamsList
     del currentStreamsList
     del diff
     del addList
     del deleteList
 
-    # 9) Optionally recalculate availableRtpRxStreamList indices - Note these shouldn't change unless a stream has been deleted
-    for index, stream in enumerate(availableRtpRxStreamList):
+    # 10) Optionally recalculate rtpStreamList indices - Note these shouldn't change unless a stream has been deleted
+    for index, stream in enumerate(rtpStreamList):
         # Write the list index value to the third element of the stream tuple
         stream[2]=index
 
@@ -1795,7 +1795,23 @@ def humanise(key,value):
         return value
 
 
-def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, rtpRxStreamsDictMutex):
+def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex, rtpRxStreamsDict, rtpRxStreamsDictMutex):
+
+    # Declare lists to hold list of available rx and tx streams that can be displayed
+    # These lists are a list of tuples [x,y,z] where
+    # [x=streamID (as a string), y=the tx/rx object itself, z=an index value]
+
+    # The array is populated by the use of the utility function __updateAvailableStreamsList()
+    # Meanwhile, main() is maintaining two dictionaries, rtpTxStreamsDict and rtpRxStreamsDict
+    # The issue with these dictionaries is that the order of them can change (when you iterate through them) making them
+    # unsuitable for __displayThread which needs to maintain a chronological order of streams added/removed for display
+    # and control purposes
+
+    # Therefore the job of __updateAvailableStreamsList() is to poll the supplied dictionary and synchronise any changes
+    # (additions or deletions) in the dictionaries to the corresponding lists
+
+    availableRtpRxStreamList = []
+    availableRtpTxStreamList = []
 
     # define views, tables headings and keys
     # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
@@ -1902,7 +1918,6 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
     selectedStream =0 # Keeps track of which stream is currently highlighted in the streams table
     streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
     streamTableLastRow = 0 # Tracks the current end row of the stream table data
-    availableRtpRxStreamList = []
 
     # store the most recent message - used to determine whether we need to redraw
     # The message table
@@ -3033,8 +3048,11 @@ def main(argv):
     # The first (and only) item of this 'list' will be our pointer
     keyPressed = ['']
 
-    # Create a list of txStreams
-    rtpTxStreams = []
+
+    # Create a dictionary of tx streams
+    rtpTxStreamsDict ={}
+    # Create a mutex lock for the tx streams dictionary (for deleting objects)
+    rtpTxStreamsDictMutex = threading.Lock()
 
     # Create a dictionary to hold the rx Streams
     rtpRxStreamsDict = {}
@@ -3051,7 +3069,8 @@ def main(argv):
     catchKeyboardPresses.start()
 
     # Create a display thread
-    displayThread = threading.Thread(target=__displayThread, args=(MODE, rtpTxStreams, rtpRxStreamsDict, keyPressed, rtpRxStreamsDictMutex,))
+    displayThread = threading.Thread(target=__displayThread,
+                                     args=(MODE, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex, rtpRxStreamsDict, rtpRxStreamsDictMutex,))
     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
     displayThread.start()
 
@@ -3060,8 +3079,9 @@ def main(argv):
         syncSourceID =123456890
         rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID)
 
-        # Add the tx stream to the rtpTxStreams list
-        rtpTxStreams.append(rtpGenerator)
+        # Add the tx stream to the rtpStreams dictionary
+        rtpTxStreamsDict[syncSourceID] = rtpGenerator
+
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
