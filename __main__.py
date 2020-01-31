@@ -2137,6 +2137,33 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             # Increment current size by 10 bytes
             txStream.setPayloadLength(currentTxPayloadSize - 10)
 
+        if keyPressed[0] == 'p':
+            # Increase sync source ID of selected stream
+            keyPressed[0] = ''  # Clear key buffer
+
+            # Get hold of the currently selected txStream object
+            txStream=rtpTxStreamsDict[availableRtpTxStreamList[selectedTxStream[0]][0]]
+            # Get the stats dictionary from the RtpGenerator object
+            stats = txStream.getRtpStreamStats()
+            # Get current Sync source ID
+            currentSyncSourceID = int(stats['Sync Source ID'])
+            # Increment sync source by 1
+            txStream.setSyncSourceIdentifier(currentSyncSourceID+1)
+
+        if keyPressed[0] == 'o':
+            # Decrease sync source ID of selected stream
+            keyPressed[0] = ''  # Clear key buffer
+
+            # Get hold of the currently selected txStream object
+            txStream=rtpTxStreamsDict[availableRtpTxStreamList[selectedTxStream[0]][0]]
+            # Get the stats dictionary from the RtpGenerator object
+            stats = txStream.getRtpStreamStats()
+            # Get current Sync source ID
+            currentSyncSourceID = int(stats['Sync Source ID'])
+            # Decrement sync source by 1
+            txStream.setSyncSourceIdentifier(currentSyncSourceID-1)
+
+
         # Monitor keyPressed[] for a Ctrl-C
         if keyPressed[0] == 'Ctrl-C':
             keyPressed[0] = ''  # Clear key buffer
@@ -2649,6 +2676,8 @@ class RtpGenerator(object):
         # Sets the self self.syncSourceIdentifier value
         # This is only allowed to be 32 bits long (specified by the RTP header)
         # so mask input value for safety
+        if value <0:
+            value = 0
         maskedValue = value & 0xFFFFFFFF
         self.syncSourceIdentifier=maskedValue
 
@@ -2782,47 +2811,11 @@ class RtpGenerator(object):
                     enableJitter = False
                     Message.addMessage("[j] jitter disabled")
 
-            if self.keyPressed[0] == 'w':
-                # Increase tx rate by 500kbps 'w'
-                # Clear keyboard buffer
-                self.keyPressed[0] = ''
-                newTxRate = self.txRate + (500 * 1024)
-                Message.addMessage("[w] pressed. Increasing txRate from "+
-                                   str(bToMb(self.txRate))+"ps to "+
-                                   str(bToMb(newTxRate))+"ps")
-                # Set tx period according to new rate
-                self.setTxRate(newTxRate)
-
-            if self.keyPressed[0] == 'q':
-                # Decrease tx rate by 500kbps 'w'
-                # Clear keyboard buffer
-                self.keyPressed[0] = ''
-                newTxRate = self.txRate - (500 * 1024)
-                # Set a minimum tx rate of 500kbps
-                if newTxRate < 500 * 1024:
-                    newTxRate = 500 * 1024
-                Message.addMessage("[q] pressed. Decreasing txRate from "+
-                                   str(bToMb(self.txRate))+"ps to "+
-                                   str(bToMb(newTxRate))+"ps")
-                # Set tx period according to new rate
-                self.setTxRate(newTxRate)
 
             if self.keyPressed[0] == 'e':
                 # Increment sync source identifier
                 self.keyPressed[0] = ''
                 self.setSyncSourceIdentifier(self.syncSourceIdentifier+1)
-
-            if self.keyPressed[0] == 's':
-                # Increase payload length
-                self.keyPressed[0] = ''
-                newPayloadLength=self.payloadLength + 10
-                self.setPayloadLength(newPayloadLength)
-
-            if self.keyPressed[0] == 'a':
-                # Decrease payload length
-                self.keyPressed[0] = ''
-                newPayloadLength = self.payloadLength - 10
-                self.setPayloadLength(newPayloadLength)
 
             ###########
             # Increment rtp sequence number for next iteration of the loop
