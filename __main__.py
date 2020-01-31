@@ -2040,6 +2040,21 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 Message.addMessage("ERR: __displayThread::[d] Remove stream: "+str(e))
             redrawScreen = True
 
+        if keyPressed[0] == 't':
+            keyPressed[0] = ''  # Clear key buffer
+            # Attempt to add a new tx stream (if we're in loopback or transmit mode
+            if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
+                # Generate random seq id
+                seqID=random.randint(1000, 10000)
+                rtpGenerator = RtpGenerator(keyPressed, "127.0.0.1", 5004, 1048576, 1300, seqID)
+                # Add the new stream to the rtpStreams dictionary
+                rtpTxStreamsDict[seqID] = rtpGenerator
+
+        x = ""
+        for y in rtpTxStreamsDict:
+            x += str(y)+", "
+        Message.addMessage("rtpTxStreamsDict: " + x)
+
         # Monitor keyPressed[] for a Ctrl-C
         if keyPressed[0] == 'Ctrl-C':
             keyPressed[0] = ''  # Clear key buffer
@@ -2450,6 +2465,9 @@ def __catchKeyboardPresses(keyPressed):
             # Esc
             keyPressed[0] = 'Enter'
 
+        elif ch == 't':
+            # 't' pressed. Add an additional tx stream
+            keyPressed[0] = 't'
         # Special case if 'i' pressed
         elif ch == 'i':
             ch == ''    # Clear keybuffer
