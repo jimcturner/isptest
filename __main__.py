@@ -2212,7 +2212,7 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                     Term.printTable(tableData,2,yPos,width,Term.BLACK,Term.WHITE)
             del messages [:]
         redrawScreen =False
-        time.sleep(0.5)
+        time.sleep(0.2)
 
 # Define a display thread that will run autonomously
 def __olddisplayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
@@ -2452,7 +2452,7 @@ def __catchKeyboardPresses(keyPressed):
                 pass
         else:
             keyPressed[0] = ch
-        time.sleep(0.2)
+        time.sleep(0.1)
 
 # Define an RTP Generator that can run autonomously as a thread
 class RtpGenerator(object):
@@ -3142,9 +3142,9 @@ def main(argv):
                 print (message)
                 Message.addMessage(message)
 
-    # Sit in endless loop
-    while True:
-        time.sleep(1)
+    # # Sit in endless loop
+    # while True:
+    #     time.sleep(1)
 
 # Invoke main() method (entry point for Python script)
 if __name__ == "__main__":
