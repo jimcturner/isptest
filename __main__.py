@@ -2071,18 +2071,71 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 rtpTxStreamsDict[seqID] = rtpGenerator
                 rtpTxStreamsDictMutex.release()
 
-        # if keyPressed[0] == 'm':
-        #     # Increase tx rate of selected stream
-        #     keyPressed[0] = ''  # Clear key buffer
-        #     # Get tx rate from currently selected stream
-        #     # Identify the streamID of the currently selected tx stream
-        #     streamID=availableRtpTxStreamList[selectedTxStream[0]]
-        #     # Get the stats dictionary from the RtpGenerator object
-        #     stats=rtpTxStreamsDict[streamID].getRtpStreamStats()
-        #     currentTxRate=int(stats['Tx Rate'])
-        #     if currentTxRate < 1048576:
+        if keyPressed[0] == 'm':
+            # Increase tx rate of selected stream
+            keyPressed[0] = ''  # Clear key buffer
+            # Get tx rate from currently selected stream
+            # Identify the streamID of the currently selected tx stream
+            streamID=availableRtpTxStreamList[selectedTxStream[0]][0]
+            # Get the stats dictionary from the RtpGenerator object
+            txStream=rtpTxStreamsDict[streamID]
+            stats=txStream.getRtpStreamStats()
+            currentTxRate=int(stats['Tx Rate'])
+            # If less than 1Mbps increment by 256kbps
+            if currentTxRate < 1048576:
+                txStream.setTxRate(currentTxRate+262144)
+            # Otherwise increment by 500kbps
+            else:
+                txStream.setTxRate(currentTxRate + 524288)
 
+        if keyPressed[0] == 'n':
+            # Decrease tx rate of selected stream
+            keyPressed[0] = ''  # Clear key buffer
+            # Get tx rate from currently selected stream
+            # Identify the streamID of the currently selected tx stream
+            streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
+            # Get the stats dictionary from the RtpGenerator object
+            txStream = rtpTxStreamsDict[streamID]
+            stats = txStream.getRtpStreamStats()
 
+            currentTxRate = int(stats['Tx Rate'])
+            # If less than 1Mbps decrement by 256kbps
+            if currentTxRate < 1048576:
+                txStream.setTxRate(currentTxRate - 262144)
+            # Otherwise decrement by 512kbps
+            else:
+                txStream.setTxRate(currentTxRate - 524288)
+            stats = txStream.getRtpStreamStats()
+
+        if keyPressed[0] == 'l':
+            # Increase payload size of selected stream
+            keyPressed[0] = ''  # Clear key buffer
+
+            # Get payload size from currently selected stream
+            # Identify the streamID of the currently selected tx stream
+            streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
+            # Get the stats dictionary from the RtpGenerator object
+            txStream = rtpTxStreamsDict[streamID]
+            stats = txStream.getRtpStreamStats()
+            # Get current payload size
+            currentTxPayloadSize = int(stats['Packet size'])
+            # Increment current size by 10 bytes
+            txStream.setPayloadLength(currentTxPayloadSize+10)
+
+        if keyPressed[0] == 'k':
+            # Increase payload size of selected stream
+            keyPressed[0] = ''  # Clear key buffer
+
+            # Get payload size from currently selected stream
+            # Identify the streamID of the currently selected tx stream
+            streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
+            # Get the stats dictionary from the RtpGenerator object
+            txStream = rtpTxStreamsDict[streamID]
+            stats = txStream.getRtpStreamStats()
+            # Get current payload size
+            currentTxPayloadSize = int(stats['Packet size'])
+            # Increment current size by 10 bytes
+            txStream.setPayloadLength(currentTxPayloadSize - 10)
 
         # Monitor keyPressed[] for a Ctrl-C
         if keyPressed[0] == 'Ctrl-C':
@@ -2605,6 +2658,10 @@ class RtpGenerator(object):
         return txPeriod
 
     def setTxRate(self, newTxRate_bps):
+        # Specify Minimum tx rate 100kbps
+        minimumRate=102400
+        if newTxRate_bps < minimumRate:
+            newTxRate_bps = minimumRate
         # Update instance variable
         self.txRate = newTxRate_bps
         # Calculates then set the new txPeriod for a given newTxRate_bps
