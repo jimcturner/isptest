@@ -2021,6 +2021,13 @@ def __displayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed, r
                 Message.addMessage("ERR: __displayThread::[d] Remove stream: "+str(e))
             redrawScreen = True
 
+        # Monitor keyPressed[] for a Ctrl-C
+        if keyPressed[0] == 'Ctrl-C':
+            keyPressed[0] = ''  # Clear key buffer
+            # Term.printAt("Ctrl-C pressed. Exiting",1,1,Term.FG(Term.RED))
+            # # Send exit signal to main thread (via keyPressed[0])
+            # keyPressed[0] = 'exit'
+
         # Redraw changine screen elements - but not if redrawing has been inhibited
         if not (keyPressed[0] == 'inhibit_redraw'):
             ######### Print clock on RHS of screen
@@ -2411,9 +2418,9 @@ def __catchKeyboardPresses(keyPressed):
             # Down cursor key
             keyPressed[0] = 'CursorDown'
 
-        elif ord(ch)==3:
-            # Ctrl-C
-            keyPressed[0] = 'Ctrl-C'
+        # elif ord(ch)==3:
+        #     # Ctrl-C
+        #     keyPressed[0] = 'Ctrl-C'
 
         # Not dependable because cursor keys also send '27'
         # elif ord(ch)==27:
@@ -3142,9 +3149,9 @@ def main(argv):
                 print (message)
                 Message.addMessage(message)
 
-    # # Sit in endless loop
-    # while True:
-    #     time.sleep(1)
+            # if keyPressed == 'exit':
+            #     Term.printAt("trying to quit",1,1)
+            #     exit()
 
 # Invoke main() method (entry point for Python script)
 if __name__ == "__main__":
