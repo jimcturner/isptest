@@ -2468,7 +2468,7 @@ def __catchKeyboardPresses(keyPressed):
 # Define an RTP Generator that can run autonomously as a thread
 class RtpGenerator(object):
 
-    def __init__(self, keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
+    def __init__(self, keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID):
         # Assign instance variables
         self.UDP_TX_IP = UDP_TX_IP
         self.UDP_TX_PORT = UDP_TX_PORT
@@ -2479,7 +2479,7 @@ class RtpGenerator(object):
         self.txCounter_bytes = 0
         self.txActualTxRate_bps = 0
         self.txBps_1s = 0               # Used to 'sample' the actual tx rate
-        self.syncSourceIdentifier =65534
+        self.syncSourceIdentifier = syncSourceID
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
         self.elapsedTime = datetime.timedelta()
 
@@ -3057,7 +3057,8 @@ def main(argv):
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
-        rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength)
+        syncSourceID =123456890
+        rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID)
 
         # Add the tx stream to the rtpTxStreams list
         rtpTxStreams.append(rtpGenerator)
