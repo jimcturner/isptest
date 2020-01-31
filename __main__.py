@@ -1999,19 +1999,25 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
         if (keyPressed[0]=='CursorUp'):
             # Scroll the highlight stream up the list
             keyPressed[0] = ''  # Clear key buffer
-            selectedRxStream -=1
+
+            # Decrement the row selector associated with this view
+            views[selectedView][3] -=1
             # Bounds check
-            if selectedRxStream <0:
-                selectedRxStream = 0
+            if views[selectedView][3] < 0:
+                views[selectedView][3] = 0
+
             redrawScreen = True
 
         if (keyPressed[0] == 'CursorDown'):
             # Scroll the selected stream down
             keyPressed[0] = ''  # Clear key buffer
-            selectedRxStream += 1
-            # Bounds check
-            if selectedRxStream > (len(availableRtpRxStreamList)-1):
-                selectedRxStream = len(availableRtpRxStreamList) -1
+
+            # Increment the row selector associated with this view
+            views[selectedView][3] += 1
+            # Bounds check the data set associated with this view
+            if views[selectedView][3] > (len(views[selectedView][2]) - 1):
+                views[selectedView][3] = len(views[selectedView][2]) - 1
+
             redrawScreen = True
 
         if (keyPressed[0] == 'Enter'):
@@ -2056,10 +2062,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 rtpTxStreamsDict[seqID] = rtpGenerator
                 rtpTxStreamsDictMutex.release()
 
-        x = ""
-        for y in availableRtpTxStreamList:
-            x += "["+str(y[0])+","+str(y[2])+"], "
-        Message.addMessage("rtpTxStreamsDict: " + x)
+        Message.addMessage(str(views[selectedView][0])+", "+str(views[selectedView][3]))
 
         # Monitor keyPressed[] for a Ctrl-C
         if keyPressed[0] == 'Ctrl-C':
