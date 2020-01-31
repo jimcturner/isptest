@@ -2006,7 +2006,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             keyPressed[0] = ''  # Clear key buffer
 
             # Decrement the row selector associated with this view
-            views[selectedView][3] -=1
+            views[selectedView][3][0] -=1
             # Bounds check
             if views[selectedView][3][0] < 0:
                 views[selectedView][3][0] = 0
@@ -2067,8 +2067,6 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 rtpTxStreamsDict[seqID] = rtpGenerator
                 rtpTxStreamsDictMutex.release()
 
-        Message.addMessage(str(views[selectedView][0])+", "+str(views[selectedView][3]))
-
         # Monitor keyPressed[] for a Ctrl-C
         if keyPressed[0] == 'Ctrl-C':
             keyPressed[0] = ''  # Clear key buffer
@@ -2115,6 +2113,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 keyList = []
                 # Extract the column titles and stats keys for the current view
                 for view in views:
+                    # Is this view the currently selected view?
                     if view[0] == views[selectedView][0]:
                         # view[1] represents a tuple containing a column title and a key pair
                         columns = view[1]
@@ -2130,12 +2129,14 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 streamTableNoOfRows = int(currentTermHeight / 2) - 9
 
                 # Get a handle on the dataset to be displayed in this particular table
+                # The dataset is pointed to by the 3rd element of each view array
                 dataSetToDisplay=views[selectedView][2]
-                streamTableNoOfStreamsAvailable = len(dataSetToDisplay)
+                streamTableDataSetLength = len(dataSetToDisplay)
                 # Get a handle on the row selector relevent to this data set
+                # view[3] represents a single element list (an int) keeping track of the currently selected row
                 selectedRow = views[selectedView][3][0]
 
-                if streamTableNoOfStreamsAvailable >0:
+                if streamTableDataSetLength >0:
                     if selectedRow ==0:
                         streamTableFirstRow =0
                     # Are we about to scroll off the end of the currenty displayed rows?
@@ -2152,9 +2153,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
 
                     # Will the last row be outside the actual range of available stream?
-                    if streamTableLastRow > (streamTableNoOfStreamsAvailable -1):
+                    if streamTableLastRow > (streamTableDataSetLength -1):
                         #If so, set streamTableLastRow to point to the last line of the available data array
-                        streamTableLastRow = streamTableNoOfStreamsAvailable - 1
+                        streamTableLastRow = streamTableDataSetLength - 1
                         # And add appropriate padding if required
                         streamTableBlankRowsToAdd = streamTableNoOfRows - (streamTableLastRow - streamTableFirstRow) - 1
                     else:
@@ -2166,30 +2167,31 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     streamTableBlankRowsToAdd = streamTableNoOfRows
 
                 # Confirm that there are some available streams
-                if streamTableNoOfStreamsAvailable > 0:
+                if streamTableDataSetLength > 0:
                     # Iterate over a specified portion of the dataSetToDisplay[]
                     for x in range(streamTableFirstRow, streamTableLastRow+1):
                         # Isolate the stream from the dataSetToDisplay[]
-                        rxStream = dataSetToDisplay[x]
+                        streamData = dataSetToDisplay[x]
                         # Retrieve the stats dictionary for that key
-                        rxStreamStats = rxStream[1].getRtpStreamStats()
-                        # rxStreamStats = rxStream[1].getRtpStreamStats()
+                        streamDataStats = streamData[1].getRtpStreamStats()
                         # iterate over the keys list for each stream - this will list in a new tableData row per stream
                         tableRow = []  # Create new row to hold the data
                          ###################################### These are the lines that actually populate the table
                         for key in keyList:
                             # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
-                            # which is stored as the third element of an rxStream tuple in the dataSetToDisplay[]
+                            # which is stored as the third element of a streamData tuple in the dataSetToDisplay[]
                             if key ==0:
                                 # Grab the index number and assign to table cell
-                                tableCell = str(rxStream[2])
+                                # The index stored in the array is zero indexed, but for useability, start the
+                                # displayed no starting from 1
+                                tableCell = str(streamData[2] + 1)
 
                             else:
                                 # This is a normal cell with a lookup key specified in the view definition
                                 try:
                                     # Retrieve the data from the rtpStream object by looking up it's key
                                     # Attempt to humanise the data based on object type or clues given by the key name
-                                    tableCell=str(humanise(key,rxStreamStats[key]))
+                                    tableCell=str(humanise(key,streamDataStats[key]))
                                 except Exception as e:
                                     # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
                                     tableCell="keyErr"
@@ -2197,7 +2199,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
                             # Check to see if this is the currently selected stream
                             # If so, highlight the row on the table
-                            if rxStream[2] == selectedRow:
+                            if streamData[2] == selectedRow:
                                 # prefix tableCell with White-on-black ASCII code
                                 tableCell = Term.WhBla + str(tableCell)
                             else:
@@ -2222,7 +2224,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # Remove all padding to save space on the screen
                 table.padding_left = 0
                 table.padding_right = 0
-                table.title = str(selectedRow + 1)+"/"+str(streamTableNoOfStreamsAvailable)
+                table.title = str(selectedRow + 1)+"/"+str(streamTableDataSetLength)
                 tableWidth = table.table_width
                 tableRowsRendered = table.table.splitlines()
                 xPos = 2
