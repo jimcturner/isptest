@@ -1838,6 +1838,20 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     # view [n][0] will be the name of the view (used to generate the navigation bar)
     # view [n][1] is a tuple containing [column title, the stats dictionary key relating to that parameter]
     views = []
+
+    if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
+        views.append([Term.FG(Term.RED)+"Tx Streams",
+                      [["#", 0],  # Used as an index[]
+                       ["Name", 'Friendly Name'],
+                       ["Dest\n IP", 'Dest IP'],
+                       ["Dest\nPort", 'Dest Port'],
+                       ["Sync\nsrcID", 'Sync Source ID'],
+                       ["Tx Rate\n bps", 'Tx Rate'],
+                       ["Length\n(bytes)", 'Packet size'],
+                       ["Bytes\n tx'd", 'Bytes transmitted'],
+                       [" Time\nelapsed", 'Elapsed Time'],
+                       ],availableRtpTxStreamList,selectedTxStream])
+
     views.append(["Summary",
                   [["#",0], # Used as an index
                    ["Name", "stream_friendly_name"],
@@ -1919,19 +1933,6 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     #                ["", ""],
     #                ["", ""],
     #                ],DATASET_TO_DISPLAY,ROW_SELECTOR])
-
-    if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
-        views.append([Term.FG(Term.RED)+"Tx Streams",
-                      [["#", 0],  # Used as an index[]
-                       ["Name", 'Friendly Name'],
-                       ["Dest\n IP", 'Dest IP'],
-                       ["Dest\nPort", 'Dest Port'],
-                       ["Sync\nsrcID", 'Sync Source ID'],
-                       ["Tx Rate\n bps", 'Tx Rate'],
-                       ["Length\n(bytes)", 'Packet size'],
-                       ["Bytes\n tx'd", 'Bytes transmitted'],
-                       [" Time\nelapsed", 'Elapsed Time'],
-                       ],availableRtpTxStreamList,selectedTxStream])
 
     streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
     streamTableLastRow = 0 # Tracks the current end row of the stream table data
