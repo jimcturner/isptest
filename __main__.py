@@ -1935,7 +1935,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     #                ],DATASET_TO_DISPLAY,ROW_SELECTOR])
 
     # Screen label showing the availablle key commands (depending upon mode)
-    keyCommandsString = "[<]/[>] cycle panes, [up]/[down] select stream, [d]elete, [i] set name"
+    keyCommandsString = "[<]/[>] cycle panes, [^]/[v] select stream, [d]elete, [i] set name"
 
     extraKeyCommandsString = "TX  modifier: [o/p] seq ID, [k/l] packet size, [n/m] tx bps, [T] add, [Y] del"
 
