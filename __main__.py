@@ -1790,8 +1790,12 @@ def humanise(key,value):
         return value
 
     if key.find('_uS') > 0:
-        # Convert % value to an integer
-        value = str(value)+"uS"
+        # If > 1000uS, express as a mS
+        if int(value) > 1000 or int(value) < -1000:
+            value = str(int(value/1000))+"mS"
+        else:
+            # Append _uS to the value
+            value = str(value)+"uS"
         return value
 
 
