@@ -1768,6 +1768,9 @@ def humanise(key,value):
         value=bToMb(value)
         return value
 
+    if key == "stream_syncSource" or key == 'Sync Source ID':
+        value = str(value).zfill(10)
+
     # Render dates concisely
     if type(value) == datetime.datetime:
         value = value.strftime("%d/%m %H:%M:%S")
