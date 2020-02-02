@@ -1934,6 +1934,11 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     #                ["", ""],
     #                ],DATASET_TO_DISPLAY,ROW_SELECTOR])
 
+    # Screen label showing the availablle key commands (depending upon mode)
+    keyCommandsString = "[<]/[>] cycle panes, [up]/[down] select stream, [d]elete, [i] set name"
+
+    extraKeyCommandsString = "TX  modifier: [o/p] seq ID, [k/l] packet size, [n/m] tx bps, [T] add, [Y] del"
+
     streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
     streamTableLastRow = 0 # Tracks the current end row of the stream table data
 
@@ -1948,18 +1953,6 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     currentTermWidth, currentTermHeight = Term.getTerminalSize()
     # Set up display window
     Term.initAlternateScreen()
-    # Set background colour
-    Term.setBackgroundColour(Term.BLUE)
-    # Print Title bar
-    Term.printTitleBar("IBEOO ISP Analyser V1.0", 3, Term.BLACK, Term.WHITE)
-    # Print operation mode in top LHS
-    Term.printAt(operationMode+" MODE",1,1,Term.BLACK, Term.WHITE)
-    # Print Status bar at bottom of screen
-    Term.setBackgroundColourSingleLine(1,(currentTermHeight -1),Term.WHITE)
-    Term.setBackgroundColourSingleLine(1, 25, Term.WHITE)
-    # Print Terminal dimensions at bottom right
-    Term.printRightJustified(str(currentTermWidth) + "," + str(currentTermHeight), (currentTermHeight - 1), Term.BLACK,
-                             Term.WHITE)
 
     # start elapsed timer for clock refresh
     displayThread_clockTimer = timer()
@@ -1983,13 +1976,20 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             Message.addMessage("INFO: Terminal size has changed to "+str(currentTermWidth)+","+str(currentTermHeight))
             redrawMessageTable = True
 
-
         if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
             Term.clearTerminalScrollbackBuffer()
             Term.setBackgroundColour(Term.BLUE)
             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
+            # Print operation mode
             Term.printAt(operationMode+" MODE", 1, 1, Term.BLACK, Term.WHITE)
+            # Print bottom strip, solid line
             Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
+            # Print list of key commands
+            Term.printAt(keyCommandsString, 1, (currentTermHeight -1), Term.BLACK, Term.WHITE)
+            # For tx mode, add an extra row of commands
+            if operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK':
+                Term.setBackgroundColourSingleLine(1, (currentTermHeight - 2), Term.WHITE)
+                Term.printAt(extraKeyCommandsString, 1, (currentTermHeight - 2), Term.BLACK, Term.WHITE)
 
 
         # Update available streams lists
