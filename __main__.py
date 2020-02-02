@@ -3277,9 +3277,7 @@ def main(argv):
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
-        # syncSourceID =123456890
         # If UDP source port specified
-        Message.addMessage("Gets here. src port: " + str(UDP_TX_SRC_PORT))
         if UDP_TX_SRC_PORT >0:
             rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate,
                                         payloadLength, SYNC_SOURCE_ID, UDP_TX_SRC_PORT)
@@ -3383,6 +3381,11 @@ def main(argv):
             # if keyPressed == 'exit':
             #     Term.printAt("trying to quit",1,1)
             #     exit()
+
+    # Infinite loop to sit in (if in TRANSMIT mode)
+    while True:
+        time.sleep(1)
+
 
 # Invoke main() method (entry point for Python script)
 if __name__ == "__main__":
