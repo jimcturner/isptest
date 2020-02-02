@@ -3074,10 +3074,9 @@ def main(argv):
         # Check for no no option supplied:
         if len (argv) < 1:
             print ("No options supplied. Use -h for help")
-            exit(
+            exit()
 
-            )
-        opts, args = getopt.getopt(argv, "hlt:r:i:t:b:d:")
+        opts, args = getopt.getopt(argv, "hlt:r:i:t:b:d:s:")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
@@ -3183,22 +3182,34 @@ def main(argv):
                 try:
                     # Simple test to see if arg is an integer. If it's a string, this will fail
                     glitchEventTriggerThreshold = int(arg) +1 -1
+                    print("glitch -i: "+str(glitchEventTriggerThreshold))
                 except:
-                    print ("Invalid glitch ignore threashold specified. Must be an integer: " + int(arg))
+                    print ("Invalid glitch ignore threshold specified. Must be an integer: " + str(int(arg)))
                     exit()
+
 
             elif opt in ("-s"):
                 # Specify source UDP port
                 # Test to see if supplied value is an int
+                # print ("new src port(a): " + str(int(arg)))
+                UDP_TX_SRC_PORT = arg
                 try:
                     # Simple test to see if arg is an integer. If it's a string, this will fail
-                    UDP_TX_SRC_PORT = int(arg) +1 -1
-                except:
-                    print ("Invalid -s UDP source port specified. Must be an integer > 1024: " + int(arg))
+                    UDP_TX_SRC_PORT +=1
+                except Exception as e:
+                    print ("Invalid -s UDP source port specified (" + str(arg) + "). Must be an integer > 1024: ")
                     exit()
+
+                print ("new src port: " + str(UDP_TX_SRC_PORT))
+                UDP_TX_PORT = arg
 
     except getopt.GetoptError:
         print ('invalid options supplied'+ str(argv))
+        exit()
+
+    # Check for no no option supplied:
+    if MODE=="":
+        print ("No mode option specified. Do you want Transmit/Receive mode?. Use -h for help")
         exit()
 
 
