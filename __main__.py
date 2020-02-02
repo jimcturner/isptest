@@ -3059,6 +3059,9 @@ def main(argv):
 
     UDP_TX_SRC_PORT = 0
 
+    # Default Sync Source identifier of first tx stream
+    SYNC_SOURCE_ID =random.randint(1000,2000)
+
     # print ('Argument List: '+ str(argv))
     try:
         # options are:
@@ -3070,6 +3073,7 @@ def main(argv):
         # -d udp packet size
         # -s udp transmit source port (for transmit or loopback mode)
         # -i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4
+        # -u sync source ID (for transmit or loopback mode)
 
         address = ""
 
@@ -3078,7 +3082,7 @@ def main(argv):
             print ("No options supplied. Use -h for help")
             exit()
 
-        opts, args = getopt.getopt(argv, "hlt:r:i:t:b:d:s:")
+        opts, args = getopt.getopt(argv, "hlt:r:i:t:b:d:s:u:")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
@@ -3088,6 +3092,8 @@ def main(argv):
                 print ("-h: help (this message)\r")
                 print ("-l: loopback mode\r")
                 print ("-t: transmit mode usage: address:port\r")
+                print ("-s udp transmit source port (for transmit or loopback mode)")
+                print ("-u sync source ID (for transmit or loopback mode)")
                 print ("-r receive mode usage: address:port\r")
                 print ("-b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps\r")
                 print ("-d rtp payload size (bytes). Default = 1300 bytes\r")
@@ -3209,6 +3215,24 @@ def main(argv):
                     exit()
                 print ("new src port: " + str(UDP_TX_SRC_PORT))
 
+            elif opt in ("-u"):
+                # Specify sync source identifier
+                # Test to see if supplied value is an int
+
+                try:
+                    # Simple test to see if arg is an integer. If it's a string, this will fail
+                    SYNC_SOURCE_ID = int(arg)
+                    SYNC_SOURCE_ID += 1
+                except Exception as e:
+                    print ("Invalid -u sync source id specified (" + str(arg) + "). Must be an integer < 2147483647: " + str(e))
+                    exit()
+
+                SYNC_SOURCE_ID = int(arg)
+                if SYNC_SOURCE_ID > 2147483647:
+                    print ("Invalid -u sync source id specified (" + str(arg) + "). Must be an integer < 2147483647: ")
+                    exit()
+                print ("sync source id: " + str(UDP_TX_SRC_PORT))
+
     except getopt.GetoptError:
         print ('invalid options supplied'+ str(argv))
         exit()
@@ -3253,19 +3277,19 @@ def main(argv):
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
-        syncSourceID =123456890
+        # syncSourceID =123456890
         # If UDP source port specified
         Message.addMessage("Gets here. src port: " + str(UDP_TX_SRC_PORT))
         if UDP_TX_SRC_PORT >0:
             rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate,
-                                        payloadLength, syncSourceID, UDP_TX_SRC_PORT)
+                                        payloadLength, SYNC_SOURCE_ID, UDP_TX_SRC_PORT)
         else:
             # Otherwise create a new RtpGenerator without specifiying thr source port (the OS will decide)
-            rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID)
+            rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID)
 
         # Add the tx stream to the rtpStreams dictionary
         rtpTxStreamsDictMutex.acquire()
-        rtpTxStreamsDict[syncSourceID] = rtpGenerator
+        rtpTxStreamsDict[SYNC_SOURCE_ID] = rtpGenerator
         rtpTxStreamsDictMutex.release()
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
