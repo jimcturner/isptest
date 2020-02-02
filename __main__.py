@@ -2652,10 +2652,10 @@ class RtpGenerator(object):
             # Test to see if the supplied value is an int
             try:
                 # check to see whether srcPort is a valid UDP port choice (has to be >1024)
-                if int(srcPort > 1024):
-                    self.UDP_TX_SRC_PORT = srcPort
+                if int(srcPort[0]) > 1024:
+                    self.UDP_TX_SRC_PORT = int(srcPort[0])
             except Exception as e:
-                Message.addMessage("INFO: RtpGenerator.__init(): Invalid UDP source port."+str(srcPort+", "+str(e)) )
+                Message.addMessage("INFO: RtpGenerator.__init(): Invalid UDP source port."+str(srcPort)+", "+str(e))
 
         # Start the generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
@@ -3057,6 +3057,8 @@ def main(argv):
     # Default level of packet loss that will generate an event
     glitchEventTriggerThreshold  = 4
 
+    UDP_TX_SRC_PORT = 0
+
     # print ('Argument List: '+ str(argv))
     try:
         # options are:
@@ -3192,16 +3194,20 @@ def main(argv):
                 # Specify source UDP port
                 # Test to see if supplied value is an int
                 # print ("new src port(a): " + str(int(arg)))
-                UDP_TX_SRC_PORT = arg
+
                 try:
                     # Simple test to see if arg is an integer. If it's a string, this will fail
-                    UDP_TX_SRC_PORT +=1
+                    UDP_TX_SRC_PORT = int(arg)
+                    UDP_TX_SRC_PORT += 1
                 except Exception as e:
-                    print ("Invalid -s UDP source port specified (" + str(arg) + "). Must be an integer > 1024: ")
+                    print ("Invalid -s UDP source port specified (" + str(arg) + "). Must be an integer > 1024: " + str(e))
                     exit()
 
+                UDP_TX_SRC_PORT = int(arg)
+                if UDP_TX_SRC_PORT < 1024:
+                    print ("Invalid -s UDP source port specified (" + str(arg) + "). Must be an integer > 1024: ")
+                    exit()
                 print ("new src port: " + str(UDP_TX_SRC_PORT))
-                UDP_TX_PORT = arg
 
     except getopt.GetoptError:
         print ('invalid options supplied'+ str(argv))
@@ -3248,7 +3254,14 @@ def main(argv):
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
         syncSourceID =123456890
-        rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID)
+        # If UDP source port specified
+        Message.addMessage("Gets here. src port: " + str(UDP_TX_SRC_PORT))
+        if UDP_TX_SRC_PORT >0:
+            rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate,
+                                        payloadLength, syncSourceID, UDP_TX_SRC_PORT)
+        else:
+            # Otherwise create a new RtpGenerator without specifiying thr source port (the OS will decide)
+            rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID)
 
         # Add the tx stream to the rtpStreams dictionary
         rtpTxStreamsDictMutex.acquire()
