@@ -1787,9 +1787,14 @@ def humanise(key,value):
         # Pass to (my) dtstrft() function to create a much shorter string
         return dtstrft(value)
 
-    if key=="packet_data_received_total_bytes" or key=="Bytes transmitted" or key=='Tx Rate':
+    if key=="packet_data_received_total_bytes" or key=="Bytes transmitted":
         value = bToMb(value)+"B"
         return value
+
+    if key == key=='Tx Rate':
+        value = bToMb(value)
+        return value
+
 
     if key.find('percent') > 0:
         # Convert % value to an integer
@@ -2919,7 +2924,7 @@ class RtpGenerator(object):
 
                 # Take copy of current actual tx rate
                 self.txActualTxRate_bps = self.txBps_1s
-                Message.addMessage("txActualTxRate_bps: "+str(bToMb((self.txActualTxRate_bps))))
+                # Message.addMessage("txActualTxRate_bps: "+str(bToMb((self.txActualTxRate_bps))))
                 # Clear counter
                 self.txBps_1s = 0
 
