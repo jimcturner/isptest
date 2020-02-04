@@ -1175,6 +1175,10 @@ class RtpStream(object):
         possibleLossOfStreamFlag = False
         lossOfStreamAlarmThreshold = 1
 
+        # Constants. Used in calculation of received data rate
+        UDP_HEADER_LENGTH_BYTES = 8
+        RTP_HEADER_LENGTH_BYTES = 12
+
         while True:
 
             # Lock the access mutex
@@ -1289,7 +1293,10 @@ class RtpStream(object):
                 self.__stats["stream_time_elapsed_total"] += datetime.timedelta(seconds=1)
                 # Take snapshots of running totals
                 self.__stats["packet_counter_1S"] = runningTotalPacketsPerSecond
-                self.__stats["packet_data_received_1S_bytes"] = runningTotalDataReceivedPerSecond
+                # Calculate rx data rate including UDP and RTP headers
+                bytesPerSecIncHeaders = runningTotalDataReceivedPerSecond + \
+                                        runningTotalPacketsPerSecond * (UDP_HEADER_LENGTH_BYTES+RTP_HEADER_LENGTH_BYTES)
+                self.__stats["packet_data_received_1S_bytes"] = bytesPerSecIncHeaders
 
                 # Calculate self.__stats["packet_payload_size_mean_1S_bytes"]
                 if self.__stats["packet_counter_1S"] > 0:
@@ -2716,8 +2723,11 @@ class RtpGenerator(object):
         self.syncSourceIdentifier=maskedValue
 
     def calculateTxPeriod(self, newTxRate_bps):
+        UDP_HEADER_LENGTH_BYTES = 8
+        RTP_HEADER_LENGTH_BYTES = 12
         # Calculates the required tx period for a given supplied txRate and payload length
-        txPeriod = self.payloadLength * 8.0 / newTxRate_bps
+        # Takes into account the UDP and RTP headers, to hopefully derive a true 'interface' rate
+        txPeriod = (self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES) * 8.0 / newTxRate_bps
         return txPeriod
 
     def setTxRate(self, newTxRate_bps):
@@ -2746,6 +2756,10 @@ class RtpGenerator(object):
     # define a traffic generator method that will run as a thread
     # def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
     def __rtpGeneratorThread(self):
+
+        # Constants. Used in calculation of transmitted data rate
+        UDP_HEADER_LENGTH_BYTES = 8
+        RTP_HEADER_LENGTH_BYTES = 12
 
         # Generate payload (consisting of a random string)
         self.generatePayload(self.payloadLength)
@@ -2832,14 +2846,14 @@ class RtpGenerator(object):
             if enablePacketGeneration == True and temporaryInhibit == False:
                 try:
                     txSock.sendto(MESSAGE, (self.UDP_TX_IP, self.UDP_TX_PORT))
-                    # Update tx bytes counter
-                    self.txCounter_bytes += len(self.rtpPayload)
+                    # Update tx bytes counter (taking packet headers into account)
+                    self.txCounter_bytes += self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES
                     # Update tx bps data counter (*8 converts bytes to bits)
-                    self.txBps_1s += len(self.rtpPayload) * 8
+                    self.txBps_1s += (self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES) * 8
+
                 except Exception as e:
                     Message.addMessage("\x1B[31m__rtpGenerator() txSock.sendto(). Exiting. \x1B[0m " + str(e))
-                    time.sleep(2)
-                    exit()
+                    time.sleep(1)  # Throttle rate of error messages from this thread
 
             if self.keyPressed[0] == 'j':
                 # Turn jitter on/off by pressing 'j'
@@ -2905,6 +2919,7 @@ class RtpGenerator(object):
 
                 # Take copy of current actual tx rate
                 self.txActualTxRate_bps = self.txBps_1s
+                Message.addMessage("txActualTxRate_bps: "+str(bToMb((self.txActualTxRate_bps))))
                 # Clear counter
                 self.txBps_1s = 0
 
