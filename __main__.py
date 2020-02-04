@@ -3031,6 +3031,30 @@ def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
                         del latestEvents[:]
                     except Exception as e:
                         Message.addMessage("__diskLoggerThread - appending to file" + str(e))
+
+        # Finally, iterate over lastWrittenEventNoDict{} to confirm that all the stream objects listed
+        # inside it still exist in rtpRxStreamsDict{} (in other words, synchronise the deletions within
+        # rtpRxStreamsDict{} to lastWrittenEventNoDict{}
+        # This will prevent lastWrittenEventNoDict from filling up with orphan streams
+        orphanStreamsToDelete =[]
+        rtpRxStreamsDictMutex.acquire()
+        for stream in lastWrittenEventNoDict:
+            # Check for existence of key[stream] within rtpRxStreamsDict
+            if stream in rtpRxStreamsDict:
+                # If it is, do nothing
+                pass
+            else:
+                # If key no longer exists, add it to the list to be purged from lastWrittenEventNoDict{}
+                orphanStreamsToDelete.append(stream)
+        rtpRxStreamsDictMutex.release()
+
+        # Now delete all keys listed in orphanStreamsToDelete[] from lastWrittenEventNoDict{}
+        for stream in orphanStreamsToDelete:
+            Message.addMessage("INFO: _diskLoggerThread: Deleting orphan stream " + str(stream) + " from lastWrittenEventNoDict")
+            del lastWrittenEventNoDict[stream]
+
+
+
         time.sleep(1)
 
 
@@ -3415,17 +3439,15 @@ def main(argv):
             # Compile list of orpham streams
             for stream in rtpRxStreamTempDict:
                 if (timer() - rtpRxStreamTempDict[stream]) > nonExistentStreamTimout_seconds:
-                    Message.addMessage("Deleting orphan stream: "+str(stream)+", "+str(rtpRxStreamTempDict))
                     # Add to list
                     streamsToPurge.append(stream)
 
             # If there are some streams to purge, purge them
             if len(streamsToPurge) >0:
                 for stream in streamsToPurge:
+                    Message.addMessage("INFO: Deleting orphan stream: " + str(stream) + " from rtpRxStreamTempDict{}")
                     # Delete the stream (key) from the dictionary as not wanted
                     rtpRxStreamTempDict.pop(stream, None)
-                    Message.addMessage("After: " +str(rtpRxStreamTempDict))
-
 
     # Infinite loop to sit in (if in TRANSMIT mode)
     while True:
