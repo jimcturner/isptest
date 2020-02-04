@@ -910,7 +910,7 @@ class RtpStream(object):
 
         # Keep prevRtpPacket value safe for later (because we'll be overwriting it as we iterate over self.rtpStream[])
         z = prevRtpPacket
-        # Iterate over packets recieved
+        # Iterate over packets received
         for y in self.rtpStream:
             # Calculate and write time delta into RtpData object
             y.timeDelta = y.timestamp - prevRtpPacket.timestamp
@@ -962,6 +962,7 @@ class RtpStream(object):
             # The meanRxPeriod is possible to deduce by comparing this new single packet with the last received
             self.__stats["jitter_instantaneous"] = self.rtpStream[-1].jitter - z.jitter
             self.__stats["packet_instantaneous_receive_period_uS"] = self.rtpStream[-1].timeDelta.microseconds
+
 
         ### Calculate long term mean packet receive period
         # Aggregate the time deltas for ever to calculate the long term average time between packets arriving
@@ -1268,6 +1269,10 @@ class RtpStream(object):
                     self.__stats["jitter_min_uS"] = 0
                     self.__stats["jitter_max_uS"] = 0
                     self.__stats["jitter_range_uS"] = 0
+
+                    # Think these should be cleared too, but there could be consequences
+                    self.__stats["jitter_instantaneous"] = 0
+                    self.__stats["packet_instantaneous_receive_period_uS"]
 
             # Calculate elapsed since last glitch
             # But only if there has actually been a glitch in the past to measure against
