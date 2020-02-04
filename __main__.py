@@ -1666,16 +1666,17 @@ def oldHumanise(inputDictionary):
     # Return dictionary of humanised keys and values
     return newDictionary.items()
 
-def removeRtpStreamFromDict(streamID, rtpRxStreamsDict, rtpRxStreamsDictMutex):
-    # This function will delete the specified streamID from rtpRxStreamsDict{}
-    rtpRxStreamsDictMutex.acquire()
+def removeRtpStreamFromDict(streamID, rtpStreamsDict, rtpStreamsDictMutex):
+    # This function will delete the specified streamID from an rtpRxStreamsDict{}
+    # It uses mutexes, so should be thread safe
+    rtpStreamsDictMutex.acquire()
     try:
         # Attempt to remove the rtpStream from the dictionary
-        del rtpRxStreamsDict[streamID]
+        del rtpStreamsDict[streamID]
     except Exception as e:
         Message.addMessage("deleteRtpStreamObject(): ["+str(streamID)+"], "+str(e))
 
-    rtpRxStreamsDictMutex.release()
+    rtpStreamsDictMutex.release()
 
 
 def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMutex):
@@ -2194,6 +2195,15 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 currentSyncSourceID = int(stats['Sync Source ID'])
                 # Decrement sync source by 1
                 txStream.setSyncSourceIdentifier(currentSyncSourceID-1)
+
+        if keyPressed[0] == 'y':
+            # Delete selected TX stream
+            keyPressed[0] = ''  # Clear key buffer
+            # Get hold of the id of the currently selected txStream object
+            txStreamSourceID = availableRtpTxStreamList[selectedTxStream[0]][0]
+            Message.addMessage("[y] Removing tx stream: " + str(txStreamSourceID))
+            # Remove the stream from the rtpTxStreamsDict dictionary
+            removeRtpStreamFromDict(txStreamSourceID,rtpTxStreamsDict,rtpTxStreamsDictMutex)
 
 
         # Monitor keyPressed[] for a Ctrl-C
