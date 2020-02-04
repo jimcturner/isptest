@@ -1859,6 +1859,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                             # Note. It has to be used like a pointer because it is shared (mutable) therefore
                             # declare it as single element list
 
+    selectedTableRow = 0
+
     # define views, tables headings and keys
     # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
     # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
@@ -1881,7 +1883,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                        ["Length\n(bytes)", 'Packet size'],
                        ["Bytes\n tx'd", 'Bytes transmitted'],
                        [" Time\nremain", 'Time to live'],
-                       ],availableRtpTxStreamList,selectedTxStream])
+                       ],availableRtpTxStreamList])
 
     views.append(["Summary",
                   [["#",0], # Used as an index
@@ -1894,7 +1896,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Last\nglitch","glitch_most_recent_timestamp"],
                    ["glitch\nperiod","glitch_mean_time_between_glitches"],
                    ["Count","glitch_counter_total_glitches"]
-                   ],availableRtpRxStreamList,selectedRxStream])
+                   ],availableRtpRxStreamList])
 
     views.append(["Stream",
                   [["#",0], # Used as an index
@@ -1907,7 +1909,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
                    ["  Time\nelapsed","stream_time_elapsed_total"],
                    ["CPU\n %","stream_processor_utilisation_percent"]
-                   ],availableRtpRxStreamList,selectedRxStream])
+                   ],availableRtpRxStreamList])
 
     views.append(["Packet",
                   [["#",0], # Used as an index[]
@@ -1919,7 +1921,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Recv\nperiod","packet_mean_receive_period_uS"],
                    ["Bytes\nRcvd","packet_data_received_total_bytes"],
                    #["",""],
-                   ],availableRtpRxStreamList,selectedRxStream])
+                   ],availableRtpRxStreamList])
 
     views.append(["Glitch",
                   [["#", 0],  # Used as an index[]
@@ -1932,7 +1934,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Total\nGlitch", "glitch_counter_total_glitches"],
                    ["Ignored", "glitch_glitches_ignored_counter"],
                    ["Threshold", "glitch_Event_Trigger_Threshold_packets"],
-                   ],availableRtpRxStreamList,selectedRxStream])
+                   ],availableRtpRxStreamList])
 
     views.append(["Historic",
                   [["#", 0],  # Used as an index[],
@@ -1943,7 +1945,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["1Min\n", "historic_glitch_counter_last_1Min"],
                    ["10Sec\n", "historic_glitch_counter_last_10Sec"],
                    #["", ""],
-                   ],availableRtpRxStreamList,selectedRxStream])
+                   ],availableRtpRxStreamList])
 
     views.append(["Jitter",
                   [["#", 0],  # Used as an index[]
@@ -1953,7 +1955,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Max", "jitter_max_uS"],
                    ["Range", "jitter_range_uS"],
                    ["1S \nmean", "jitter_mean_1S_uS"],
-                   ],availableRtpRxStreamList,selectedRxStream])
+                   ],availableRtpRxStreamList])
 
     # views.append(["Misc",
     #               [["#", 0],  # Used as an index[]
@@ -2048,10 +2050,10 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             keyPressed[0] = ''  # Clear key buffer
 
             # Decrement the row selector associated with this view
-            views[selectedView][3][0] -=1
+            selectedTableRow -= 1
             # Bounds check
-            if views[selectedView][3][0] < 0:
-                views[selectedView][3][0] = 0
+            if selectedTableRow < 0:
+                selectedTableRow = 0
 
             redrawScreen = True
 
@@ -2060,10 +2062,10 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             keyPressed[0] = ''  # Clear key buffer
 
             # Increment the row selector associated with this view
-            views[selectedView][3][0] += 1
+            selectedTableRow += 1
             # Bounds check the data set associated with this view
-            if views[selectedView][3][0] > (len(views[selectedView][2]) - 1):
-                views[selectedView][3][0] = len(views[selectedView][2]) - 1
+            if selectedTableRow > (len(views[selectedView][2]) - 1):
+                selectedTableRow = len(views[selectedView][2]) - 1
 
             redrawScreen = True
 
@@ -2303,34 +2305,34 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 streamTableDataSetLength = len(dataSetToDisplay)
                 # Get a handle on the row selector relevent to this data set
                 # view[3] represents a single element list (an int) keeping track of the currently selected row
-                selectedRow = views[selectedView][3][0]
+                # selectedRow = views[selectedView][3][0]
                 Message.addMessage("***")
                 Message.addMessage("selectedTxStream: "+str(selectedTxStream[0])+\
                                    ", selectedRxStream: "+str(selectedRxStream[0]))
                 Message.addMessage(
-                    "streamTableDataSetLength(" + str(streamTableDataSetLength) + "), selectedRow(" + str(
-                        selectedRow) + ")")
+                    "streamTableDataSetLength(" + str(streamTableDataSetLength) + "), selectedTableRow(" + str(
+                        selectedTableRow) + ")")
 
                 # Attempt to create the table data
                 if streamTableDataSetLength >0:
-                    if selectedRow ==0:
+                    if selectedTableRow ==0:
                         streamTableFirstRow =0
 
                     # Is the last selected row outside the range of data (this could happen if the
                     # data gets modified whilst the table is not being displayed
-                    if selectedRow > (streamTableDataSetLength - 1):
+                    if selectedTableRow > (streamTableDataSetLength - 1):
                         # If so, point the selector to the last item on the list
-                        selectedRow = (streamTableDataSetLength - 1)
+                        selectedTableRow = (streamTableDataSetLength - 1)
 
-                            # Are we about to scroll off the end of the currenty displayed rows?
-                    if selectedRow > streamTableLastRow:
+                    # Are we about to scroll off the end of the currenty displayed rows?
+                    if selectedTableRow > streamTableLastRow:
                         # If so, increment the index of the first row
-                        streamTableFirstRow =selectedRow - streamTableNoOfRows + 1
+                        streamTableFirstRow =selectedTableRow - streamTableNoOfRows + 1
 
                     # Are we about to scroll off the top of the currently displayed rows?
-                    if selectedRow < streamTableFirstRow:
+                    if selectedTableRow < streamTableFirstRow:
                         # If so, decrement the index of the first row
-                        streamTableFirstRow=selectedRow
+                        streamTableFirstRow=selectedTableRow
 
 
 
@@ -2385,7 +2387,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
                                 # Check to see if this is the currently selected stream
                                 # If so, highlight the row on the table
-                                if streamData[2] == selectedRow:
+                                if streamData[2] == selectedTableRow:
                                     # prefix tableCell with White-on-black ASCII code
                                     tableCell = Term.WhBla + str(tableCell)
                                 else:
@@ -2405,7 +2407,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                             tableData.append(tableRow)
 
                 except Exception as e:
-                    Message.addMessage("ERR: __displayThread. streamTable. selected row ("+str(selectedRow)+\
+                    Message.addMessage("ERR: __displayThread. streamTable. selected row ("+str(selectedTableRow)+\
                                        ") doesn't exist. (streamTableDataSetLength:"+str(streamTableDataSetLength)+"), " + str(e))
 
                 # Step 3) Render the table
@@ -2413,7 +2415,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # Remove all padding to save space on the screen
                 table.padding_left = 0
                 table.padding_right = 0
-                table.title = str(selectedRow + 1)+"/"+str(streamTableDataSetLength)
+                table.title = str(selectedTableRow + 1)+"/"+str(streamTableDataSetLength)
                 tableWidth = table.table_width
                 tableRowsRendered = table.table.splitlines()
                 xPos = 2
