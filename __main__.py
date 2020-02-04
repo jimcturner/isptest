@@ -2304,41 +2304,42 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # Get a handle on the row selector relevent to this data set
                 # view[3] represents a single element list (an int) keeping track of the currently selected row
                 selectedRow = views[selectedView][3][0]
-
+                Message.addMessage("streamTableDataSetLength("+str(streamTableDataSetLength)+"), selectedRow("+str(selectedRow)+")")
                 # Attempt to create the table data
-                try:
-                    if streamTableDataSetLength >0:
-                        if selectedRow ==0:
-                            streamTableFirstRow =0
-                        # Are we about to scroll off the end of the currenty displayed rows?
-                        if selectedRow > streamTableLastRow:
-                            # If so, increment the index of the first row
-                            streamTableFirstRow =selectedRow - streamTableNoOfRows + 1
 
-                        # Are we about to scroll off the top of the currently displayed rows?
-                        if selectedRow < streamTableFirstRow:
-                            # If so, decrement the index of the first row
-                            streamTableFirstRow=selectedRow
+                if streamTableDataSetLength >0:
+                    if selectedRow ==0:
+                        streamTableFirstRow =0
+                    # Are we about to scroll off the end of the currenty displayed rows?
+                    if selectedRow > streamTableLastRow:
+                        # If so, increment the index of the first row
+                        streamTableFirstRow =selectedRow - streamTableNoOfRows + 1
 
-                        # Calculate the last row to display based on the starting row and the height of the table
-                        streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
+                    # Are we about to scroll off the top of the currently displayed rows?
+                    if selectedRow < streamTableFirstRow:
+                        # If so, decrement the index of the first row
+                        streamTableFirstRow=selectedRow
 
-                        # Will the last row be outside the actual range of available stream?
-                        if streamTableLastRow > (streamTableDataSetLength -1):
-                            #If so, set streamTableLastRow to point to the last line of the available data array
-                            streamTableLastRow = streamTableDataSetLength - 1
-                            # And add appropriate padding if required
-                            streamTableBlankRowsToAdd = streamTableNoOfRows - (streamTableLastRow - streamTableFirstRow) - 1
-                        else:
-                            streamTableBlankRowsToAdd = 0
+                    # Calculate the last row to display based on the starting row and the height of the table
+                    streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
 
-
+                    # Will the last row be outside the actual range of available stream?
+                    if streamTableLastRow > (streamTableDataSetLength -1):
+                        #If so, set streamTableLastRow to point to the last line of the available data array
+                        streamTableLastRow = streamTableDataSetLength - 1
+                        # And add appropriate padding if required
+                        streamTableBlankRowsToAdd = streamTableNoOfRows - (streamTableLastRow - streamTableFirstRow) - 1
                     else:
-                        # No data to display, so padding out the table instead
-                        streamTableBlankRowsToAdd = streamTableNoOfRows
+                        streamTableBlankRowsToAdd = 0
 
+                else:
+                    # No data to display, so padding out the table instead
+                    streamTableBlankRowsToAdd = streamTableNoOfRows
+                try:
                     # Confirm that there are some available streams
                     if streamTableDataSetLength > 0:
+                        Message.addMessage("streamTableFirstRow: "+str(streamTableFirstRow)+", streamTableLastRow: "
+                                           +str(streamTableLastRow))
                         # Iterate over a specified portion of the dataSetToDisplay[]
                         for x in range(streamTableFirstRow, streamTableLastRow+1):
                             # Isolate the stream from the dataSetToDisplay[]
@@ -3180,7 +3181,7 @@ def main(argv):
     SYNC_SOURCE_ID =random.randint(1000,2000)
 
     # Default lifespan of a tx stream (default 1 hr)
-    txStreamTimeToLive_sec = 10
+    txStreamTimeToLive_sec = 3600
 
     # print ('Argument List: '+ str(argv))
     try:
