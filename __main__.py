@@ -3339,6 +3339,7 @@ def main(argv):
         while True:
             # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
             try:
+                # Wait for data (blocking function call)
                 data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
             except Exception as e:
                 Message.addMessage("\x1B[31m__main()sock.recvfrom(): Cannot read socket\x1B[0m" + UDP_RX_IP + ":" + \
@@ -3398,7 +3399,7 @@ def main(argv):
                         # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
                         # create a entry in the temporary list (with a timestamp)
                         Message.addMessage(Fore.RED+"Stream doesn't exist yet, adding to temp list: " + str(rtpSyncSourceIdentifier))
-                        rtpRxStreamTempDict[rtpSyncSourceIdentifier] = datetime.datetime.now()
+                        rtpRxStreamTempDict[rtpSyncSourceIdentifier] = timer()
 
             except Exception as e:
                 message = Fore.RED+"Cannot decode RTP headers. Is this an RTP packet? "+str(e)+ " Length:" + str(len(data))+\
@@ -3406,9 +3407,25 @@ def main(argv):
                 print (message)
                 Message.addMessage(message)
 
-            # if keyPressed == 'exit':
-            #     Term.printAt("trying to quit",1,1)
-            #     exit()
+            # Iterate over tpRxStreamTempDict to purge it of old, non-existant streams that never made it into rtpRxStreamTempDict
+            # If an RTP packet with the matching sync source id doesn;t appear within nonExistentStreamTimout_seconds seconds,
+            # the stream will be deleted from tpRxStreamTempDict{}
+            nonExistentStreamTimout_seconds = 5
+            streamsToPurge = []
+            # Compile list of orpham streams
+            for stream in rtpRxStreamTempDict:
+                if (timer() - rtpRxStreamTempDict[stream]) > nonExistentStreamTimout_seconds:
+                    Message.addMessage("Deleting orphan stream: "+str(stream)+", "+str(rtpRxStreamTempDict))
+                    # Add to list
+                    streamsToPurge.append(stream)
+
+            # If there are some streams to purge, purge them
+            if len(streamsToPurge) >0:
+                for stream in streamsToPurge:
+                    # Delete the stream (key) from the dictionary as not wanted
+                    rtpRxStreamTempDict.pop(stream, None)
+                    Message.addMessage("After: " +str(rtpRxStreamTempDict))
+
 
     # Infinite loop to sit in (if in TRANSMIT mode)
     while True:
