@@ -1263,16 +1263,17 @@ class RtpStream(object):
                     lossOfStreamFlag = True
                     # Add event to the list (but only do this once)
                     self.__eventList.append(StreamLost(self.__stats, lastReceivedRtpPacket))
+                    Message.addMessage("Stream Lost: "+str(["stream_syncSource"]))
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
-                    # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
-                    self.__stats["jitter_min_uS"] = 0
-                    self.__stats["jitter_max_uS"] = 0
-                    self.__stats["jitter_range_uS"] = 0
-
-                    # Think these should be cleared too, but there could be consequences
-                    self.__stats["jitter_instantaneous"] = 0
-                    self.__stats["packet_instantaneous_receive_period_uS"]
+                    # # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
+                    # self.__stats["jitter_min_uS"] = 0
+                    # self.__stats["jitter_max_uS"] = 0
+                    # self.__stats["jitter_range_uS"] = 0
+                    #
+                    # # Think these should be cleared too, but there could be consequences
+                    # self.__stats["jitter_instantaneous"] = 0
+                    # self.__stats["packet_instantaneous_receive_period_uS"]
 
             # Calculate elapsed since last glitch
             # But only if there has actually been a glitch in the past to measure against
@@ -1314,6 +1315,8 @@ class RtpStream(object):
                 # Calculate 1 second jitter
                 if self.__stats["packet_counter_1S"] > 0:
                     self.__stats["jitter_mean_1S_uS"] = self.sumOfJitter_1s / self.__stats["packet_counter_1S"]
+
+
                 # Reset self.sumOfJitter_1s
                 self.sumOfJitter_1s = 0
 
