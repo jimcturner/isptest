@@ -2304,13 +2304,25 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # Get a handle on the row selector relevent to this data set
                 # view[3] represents a single element list (an int) keeping track of the currently selected row
                 selectedRow = views[selectedView][3][0]
-                Message.addMessage("streamTableDataSetLength("+str(streamTableDataSetLength)+"), selectedRow("+str(selectedRow)+")")
-                # Attempt to create the table data
+                Message.addMessage("***")
+                Message.addMessage("selectedTxStream: "+str(selectedTxStream[0])+\
+                                   ", selectedRxStream: "+str(selectedRxStream[0]))
+                Message.addMessage(
+                    "streamTableDataSetLength(" + str(streamTableDataSetLength) + "), selectedRow(" + str(
+                        selectedRow) + ")")
 
+                # Attempt to create the table data
                 if streamTableDataSetLength >0:
                     if selectedRow ==0:
                         streamTableFirstRow =0
-                    # Are we about to scroll off the end of the currenty displayed rows?
+
+                    # Is the last selected row outside the range of data (this could happen if the
+                    # data gets modified whilst the table is not being displayed
+                    if selectedRow > (streamTableDataSetLength - 1):
+                        # If so, point the selector to the last item on the list
+                        selectedRow = (streamTableDataSetLength - 1)
+
+                            # Are we about to scroll off the end of the currenty displayed rows?
                     if selectedRow > streamTableLastRow:
                         # If so, increment the index of the first row
                         streamTableFirstRow =selectedRow - streamTableNoOfRows + 1
@@ -2319,6 +2331,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     if selectedRow < streamTableFirstRow:
                         # If so, decrement the index of the first row
                         streamTableFirstRow=selectedRow
+
+
 
                     # Calculate the last row to display based on the starting row and the height of the table
                     streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
