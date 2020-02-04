@@ -1,5 +1,5 @@
 # Create a single folder executable (run existing script)
-createSingleFileExecutable
+./createSingleFileExecutable
 
 # git commit chamges with a default name (Windows test....")
 git commit -am "Windows test...."
