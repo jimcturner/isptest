@@ -1263,9 +1263,10 @@ class RtpStream(object):
                     lossOfStreamFlag = True
                     # Add event to the list (but only do this once)
                     self.__eventList.append(StreamLost(self.__stats, lastReceivedRtpPacket))
-                    Message.addMessage("Stream Lost: "+str(["stream_syncSource"]))
+                    Message.addMessage("Stream Lost: "+str(self.__stats["stream_syncSource"]))
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
+    ######## POSSIBLY REVISIT THIS.....
                     # # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
                     # self.__stats["jitter_min_uS"] = 0
                     # self.__stats["jitter_max_uS"] = 0
