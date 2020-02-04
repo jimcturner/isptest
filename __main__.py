@@ -1811,7 +1811,9 @@ def humanise(key,value):
             value = str(value)+"uS"
         return value
 
-
+    if key == 'Time to live':
+        value=datetime.timedelta(seconds=value)
+        return value
 
     else:
         return value
@@ -1862,7 +1864,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                        ["Tx Rate\n bps", 'Tx Rate'],
                        ["Length\n(bytes)", 'Packet size'],
                        ["Bytes\n tx'd", 'Bytes transmitted'],
-                       [" Time\nelapsed", 'Elapsed Time'],
+                       [" Time\nremain", 'Time to live'],
                        ],availableRtpTxStreamList,selectedTxStream])
 
     views.append(["Summary",
@@ -2080,16 +2082,20 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
         if keyPressed[0] == 't':
             keyPressed[0] = ''  # Clear key buffer
-            # Attempt to add a new tx stream (if we're in loopback or transmit mode
+            # Attempt to add a new tx stream (if we're in loopback or transmit mode)
+            # If a tx stream already exists, the new stream will be created with an incremented
+            # source UDP port and an incremented seq no.
+            # If there are no current streams, the new stream will be created with a random
+            # UDP source port and a random sync source id
             if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
 
                 # Identify the streamID of the last added  tx stream
-                streamID = availableRtpTxStreamList[-1][0]
+                # streamID = availableRtpTxStreamList[-1][0]
 
                 # Generate random seq id
                 seqID=random.randint(1000, 10000)
 
-                rtpGenerator = RtpGenerator(keyPressed, "127.0.0.1", 5004, 1048576, 1300, seqID)
+                rtpGenerator = RtpGenerator(keyPressed, "127.0.0.1", 5004, 1048576, 1300, seqID, 60)
                 # Add the new stream to the rtpStreams dictionary
                 rtpTxStreamsDictMutex.acquire()
                 rtpTxStreamsDict[seqID] = rtpGenerator
@@ -2199,12 +2205,20 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
         if keyPressed[0] == 'y':
             # Delete selected TX stream
             keyPressed[0] = ''  # Clear key buffer
-            # Get hold of the id of the currently selected txStream object
-            txStreamSourceID = availableRtpTxStreamList[selectedTxStream[0]][0]
-            Message.addMessage("[y] Removing tx stream: " + str(txStreamSourceID))
-            # Remove the stream from the rtpTxStreamsDict dictionary
-            removeRtpStreamFromDict(txStreamSourceID,rtpTxStreamsDict,rtpTxStreamsDictMutex)
 
+            try:
+                # Get hold of the id of the currently selected txStream object
+                txStreamSourceID = availableRtpTxStreamList[selectedTxStream[0]][0]
+                Message.addMessage("[y] Removing tx stream: " + str(txStreamSourceID))
+
+                # Kill the stream by invoking the RtpGenerator.killStream() method
+                # Get a handle on the tx stream object
+                txStream = availableRtpTxStreamList[selectedTxStream[0]][1]
+                txStream.killStream()
+                # Remove the stream from the rtpTxStreamsDict dictionary
+                removeRtpStreamFromDict(txStreamSourceID,rtpTxStreamsDict,rtpTxStreamsDictMutex)
+            except:
+                Message.addMessage("ERR: __diaplayThread: No stream to availble to delete ")
 
         # Monitor keyPressed[] for a Ctrl-C
         if keyPressed[0] == 'Ctrl-C':
@@ -2275,88 +2289,92 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # view[3] represents a single element list (an int) keeping track of the currently selected row
                 selectedRow = views[selectedView][3][0]
 
-                if streamTableDataSetLength >0:
-                    if selectedRow ==0:
-                        streamTableFirstRow =0
-                    # Are we about to scroll off the end of the currenty displayed rows?
-                    if selectedRow > streamTableLastRow:
-                        # If so, increment the index of the first row
-                        streamTableFirstRow =selectedRow - streamTableNoOfRows + 1
+                # Attempt to create the table data
+                try:
+                    if streamTableDataSetLength >0:
+                        if selectedRow ==0:
+                            streamTableFirstRow =0
+                        # Are we about to scroll off the end of the currenty displayed rows?
+                        if selectedRow > streamTableLastRow:
+                            # If so, increment the index of the first row
+                            streamTableFirstRow =selectedRow - streamTableNoOfRows + 1
 
-                    # Are we about to scroll off the top of the currently displayed rows?
-                    if selectedRow < streamTableFirstRow:
-                        # If so, decrement the index of the first row
-                        streamTableFirstRow=selectedRow
+                        # Are we about to scroll off the top of the currently displayed rows?
+                        if selectedRow < streamTableFirstRow:
+                            # If so, decrement the index of the first row
+                            streamTableFirstRow=selectedRow
 
-                    # Calculate the last row to display based on the starting row and the height of the table
-                    streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
+                        # Calculate the last row to display based on the starting row and the height of the table
+                        streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
 
-                    # Will the last row be outside the actual range of available stream?
-                    if streamTableLastRow > (streamTableDataSetLength -1):
-                        #If so, set streamTableLastRow to point to the last line of the available data array
-                        streamTableLastRow = streamTableDataSetLength - 1
-                        # And add appropriate padding if required
-                        streamTableBlankRowsToAdd = streamTableNoOfRows - (streamTableLastRow - streamTableFirstRow) - 1
+                        # Will the last row be outside the actual range of available stream?
+                        if streamTableLastRow > (streamTableDataSetLength -1):
+                            #If so, set streamTableLastRow to point to the last line of the available data array
+                            streamTableLastRow = streamTableDataSetLength - 1
+                            # And add appropriate padding if required
+                            streamTableBlankRowsToAdd = streamTableNoOfRows - (streamTableLastRow - streamTableFirstRow) - 1
+                        else:
+                            streamTableBlankRowsToAdd = 0
+
+
                     else:
-                        streamTableBlankRowsToAdd = 0
+                        # No data to display, so padding out the table instead
+                        streamTableBlankRowsToAdd = streamTableNoOfRows
 
+                    # Confirm that there are some available streams
+                    if streamTableDataSetLength > 0:
+                        # Iterate over a specified portion of the dataSetToDisplay[]
+                        for x in range(streamTableFirstRow, streamTableLastRow+1):
+                            # Isolate the stream from the dataSetToDisplay[]
+                            streamData = dataSetToDisplay[x]
+                            # Retrieve the stats dictionary for that key
+                            streamDataStats = streamData[1].getRtpStreamStats()
+                            # iterate over the keys list for each stream - this will list in a new tableData row per stream
+                            tableRow = []  # Create new row to hold the data
+                             ###################################### These are the lines that actually populate the table
+                            for key in keyList:
+                                # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
+                                # which is stored as the third element of a streamData tuple in the dataSetToDisplay[]
+                                if key ==0:
+                                    # Grab the index number and assign to table cell
+                                    # The index stored in the array is zero indexed, but for useability, start the
+                                    # displayed no starting from 1
+                                    tableCell = str(streamData[2] + 1)
 
-                else:
-                    # No data to display, so padding out the table instead
-                    streamTableBlankRowsToAdd = streamTableNoOfRows
+                                else:
+                                    # This is a normal cell with a lookup key specified in the view definition
+                                    try:
+                                        # Retrieve the data from the rtpStream object by looking up it's key
+                                        # Attempt to humanise the data based on object type or clues given by the key name
+                                        tableCell=str(humanise(key,streamDataStats[key]))
+                                    except Exception as e:
+                                        # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
+                                        tableCell="keyErr"
+                                        Message.addMessage("ERR: __displayThread (for key in keyList): "+str(e))
 
-                # Confirm that there are some available streams
-                if streamTableDataSetLength > 0:
-                    # Iterate over a specified portion of the dataSetToDisplay[]
-                    for x in range(streamTableFirstRow, streamTableLastRow+1):
-                        # Isolate the stream from the dataSetToDisplay[]
-                        streamData = dataSetToDisplay[x]
-                        # Retrieve the stats dictionary for that key
-                        streamDataStats = streamData[1].getRtpStreamStats()
-                        # iterate over the keys list for each stream - this will list in a new tableData row per stream
-                        tableRow = []  # Create new row to hold the data
-                         ###################################### These are the lines that actually populate the table
-                        for key in keyList:
-                            # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
-                            # which is stored as the third element of a streamData tuple in the dataSetToDisplay[]
-                            if key ==0:
-                                # Grab the index number and assign to table cell
-                                # The index stored in the array is zero indexed, but for useability, start the
-                                # displayed no starting from 1
-                                tableCell = str(streamData[2] + 1)
+                                # Check to see if this is the currently selected stream
+                                # If so, highlight the row on the table
+                                if streamData[2] == selectedRow:
+                                    # prefix tableCell with White-on-black ASCII code
+                                    tableCell = Term.WhBla + str(tableCell)
+                                else:
+                                    # Normal text: prefix tableCell with Black-on-White ASCII code
+                                    tableCell = Term.BlaWh + str(tableCell)
+                                # Append the formatted table cell data to the tableRow list
+                                tableRow.append(tableCell)
+                            # Now append this complete row to the tableData list (of lists)
+                            tableData.append(tableRow)
+                            del tableRow
+                    ###################################### End of lines that actually add data
+                    # If the table isn't large enough yet, pad it out with blanks to the length set by streamTableNoOfRows
+                    if streamTableBlankRowsToAdd > 0:
+                        for x in range(0,streamTableBlankRowsToAdd):
+                            # Create a blank list with the same no. of blanks as there are table columns
+                            tableRow = []*len(titleRow)
+                            tableData.append(tableRow)
 
-                            else:
-                                # This is a normal cell with a lookup key specified in the view definition
-                                try:
-                                    # Retrieve the data from the rtpStream object by looking up it's key
-                                    # Attempt to humanise the data based on object type or clues given by the key name
-                                    tableCell=str(humanise(key,streamDataStats[key]))
-                                except Exception as e:
-                                    # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
-                                    tableCell="keyErr"
-                                    Message.addMessage("ERR: __displayThread (for key in keyList): "+str(e))
-
-                            # Check to see if this is the currently selected stream
-                            # If so, highlight the row on the table
-                            if streamData[2] == selectedRow:
-                                # prefix tableCell with White-on-black ASCII code
-                                tableCell = Term.WhBla + str(tableCell)
-                            else:
-                                # Normal text: prefix tableCell with Black-on-White ASCII code
-                                tableCell = Term.BlaWh + str(tableCell)
-                            # Append the formatted table cell data to the tableRow list
-                            tableRow.append(tableCell)
-                        # Now append this complete row to the tableData list (of lists)
-                        tableData.append(tableRow)
-                        del tableRow
-                ###################################### End of lines that actually add data
-                # If the table isn't large enough yet, pad it out with blanks to the length set by streamTableNoOfRows
-                if streamTableBlankRowsToAdd > 0:
-                    for x in range(0,streamTableBlankRowsToAdd):
-                        # Create a blank list with the same no. of blanks as there are table columns
-                        tableRow = []*len(titleRow)
-                        tableData.append(tableRow)
-
+                except Exception as e:
+                    Message.addMessage("ERR: __displayThread. streamTable. selected row data doesn't exist. " + str(e))
 
                 # Step 3) Render the table
                 table = SingleTable(tableData)
@@ -2658,7 +2676,7 @@ def __catchKeyboardPresses(keyPressed):
 # Define an RTP Generator that can run autonomously as a thread
 class RtpGenerator(object):
 
-    def __init__(self, keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, *srcPort):
+    def __init__(self, keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, *srcPort):
         # The last argument (*srcPort) is optional. it allows you to specify a source port on creation
 
         # Assign instance variables
@@ -2676,6 +2694,7 @@ class RtpGenerator(object):
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
         self.elapsedTime = datetime.timedelta()
         self.friendlyName = " "*10
+        self.timeToLive = timeToLive
 
         # Test to see if a UDP source port was specified
         if len(srcPort) > 0:
@@ -2703,7 +2722,8 @@ class RtpGenerator(object):
                 'Sync Source ID': self.syncSourceIdentifier,
                 'Elapsed Time': self.elapsedTime,
                 'Friendly Name': self.friendlyName,
-                'Tx Source Port': self.UDP_TX_SRC_PORT
+                'Tx Source Port': self.UDP_TX_SRC_PORT,
+                'Time to live': self.timeToLive
                 }
 
     def setFriendlyName(self, friendlyName):
@@ -2732,7 +2752,7 @@ class RtpGenerator(object):
         # Sets the self self.syncSourceIdentifier value
         # This is only allowed to be 32 bits long (specified by the RTP header)
         # so mask input value for safety
-        if value <0:
+        if value < 0:
             value = 0
         maskedValue = value & 0xFFFFFFFF
         self.syncSourceIdentifier=maskedValue
@@ -2767,6 +2787,16 @@ class RtpGenerator(object):
         self.payloadLength = payloadLength_bytes
         # Regenerate payload based on new payload length
         self.generatePayload(self.payloadLength)
+
+    def setTimeToLive(self, newTimeToLive):
+        # Modifies the existing time to live value
+        # Setting this to a -ve value will mean the tx stream object last for ever
+        self.timeToLive = newTimeToLive
+
+    def killStream(self):
+        # Kills the stream by setting the time to live to zero. This will cause the main thread to exit
+        self.setTimeToLive(0)
+
 
     # define a traffic generator method that will run as a thread
     # def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
@@ -2938,6 +2968,11 @@ class RtpGenerator(object):
                 # Clear counter
                 self.txBps_1s = 0
 
+                # Decrement timeToLive seconds counter but only if current value is +ve
+                # A -ve value is used to denote 'live for ever'
+                if self.timeToLive > 0:
+                    self.timeToLive -= 1
+
             # The calculation time will be deducted from the sleep time, which should make the generator
             # output less jittery (because the calculation time is taken into account)
             calculationPeriod = timer() - calculationStartTime
@@ -2951,6 +2986,9 @@ class RtpGenerator(object):
                 # print "__rtpGenerator() - non-positive compensatedTxPeriod value",compensatedTxPeriod,"\r"
                 pass
 
+            # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
+            if self.timeToLive ==0:
+                break
 
 def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
     # Autonomous thread to iterate over rtpRxStreamsDict and poll RtpStream eventLists for new events
@@ -3123,6 +3161,9 @@ def main(argv):
 
     # Default Sync Source identifier of first tx stream
     SYNC_SOURCE_ID =random.randint(1000,2000)
+
+    # Default lifespan of a tx stream (default 1 hr)
+    txStreamTimeToLive_sec = 10
 
     # print ('Argument List: '+ str(argv))
     try:
@@ -3337,15 +3378,16 @@ def main(argv):
     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
     displayThread.start()
 
+
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Start traffic generator thread
         # If UDP source port specified
         if UDP_TX_SRC_PORT >0:
             rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate,
-                                        payloadLength, SYNC_SOURCE_ID, UDP_TX_SRC_PORT)
+                                        payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec, UDP_TX_SRC_PORT)
         else:
             # Otherwise create a new RtpGenerator without specifiying thr source port (the OS will decide)
-            rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID)
+            rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec)
 
         # Add the tx stream to the rtpStreams dictionary
         rtpTxStreamsDictMutex.acquire()
