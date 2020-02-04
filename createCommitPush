@@ -1,0 +1,8 @@
+# Create a single folder executable (run existing script)
+createSingleFileExecutable
+
+# git commit chamges with a default name (Windows test....")
+git commit -am "Windows test...."
+
+# push to remote repo
+git push
