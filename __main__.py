@@ -1355,32 +1355,32 @@ class RtpStream(object):
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
-            try:
-                # Take the calculation time in microseconds and combine with the period between
-                # packets arriving multiplied by the no of packets in this batch of rtpStream
-                # to work out how much processor headroom there is (as a ratio of times).
-                # If the total calculation time for rtpStream[] is > than the gap between packets
-                # arriving then the the processor can't keep up, so generate an event
-                # This is to guard against false-positives
-                # Calculate calculationDuration (in uS)
-                #   the %1 throws away the whole number part, *1000000 converts from s to uS
-                self.__stats["calculate_thread_calculation_duration_uS"] = \
-                    ((calculationEndTime - calculationStartTime) % 1) * 1000000
+            # Take the calculation time in microseconds and combine with the period between
+            # packets arriving multiplied by the no of packets in this batch of rtpStream
+            # to work out how much processor headroom there is (as a ratio of times).
+            # If the total calculation time for rtpStream[] is > than the gap between packets
+            # arriving then the the processor can't keep up, so generate an event
+            # This is to guard against false-positives
+            # Calculate calculationDuration (in uS)
+            #   the %1 throws away the whole number part, *1000000 converts from s to uS
+            self.__stats["calculate_thread_calculation_duration_uS"] = \
+                ((calculationEndTime - calculationStartTime) % 1) * 1000000
 
+            if len(self.rtpStream) > 0 and self.__stats["packet_instantaneous_receive_period_uS"] > 0:
                 # Calculate processorUtilisationPercent. All time values in uS
                 self.__stats["stream_processor_utilisation_percent"] = \
                     self.__stats["calculate_thread_calculation_duration_uS"] * 100.0 / (
                             self.__stats["packet_instantaneous_receive_period_uS"] * len(self.rtpStream))
+            else:
+                self.__stats["stream_processor_utilisation_percent"] = 0
 
-                # If the CPU is >99% utilised, add event to the list (but only do this once)
-                if self.__stats["stream_processor_utilisation_percent"] > 99:
-                    self.__eventList.append(ProcessorOverload(self.__stats, lastReceivedRtpPacket))
-                    # Increment the all_events counter
-                    self.__stats["stream_all_events_counter"] += 1
-                    pass
-            except Exception as e:
-                # print str(e),"\r"
-                pass
+            # If the CPU is >99% utilised, add event to the list (but only do this once)
+            if self.__stats["stream_processor_utilisation_percent"] > 99:
+                self.__eventList.append(ProcessorOverload(self.__stats, lastReceivedRtpPacket))
+                # Increment the all_events counter
+                self.__stats["stream_all_events_counter"] += 1
+
+
 
             # Unlock  self.__stats and self.__eventList mutexes
             self.__accessRtpStreamStatsMutex.release()
@@ -1812,7 +1812,12 @@ def humanise(key,value):
         return value
 
     if key == 'Time to live':
-        value=datetime.timedelta(seconds=value)
+        # If this is am endless stream (created with a negative time to live)
+        if value < 0:
+            value="forever"
+        else:
+            value=datetime.timedelta(seconds=value)
+
         return value
 
     else:
@@ -2095,7 +2100,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # Generate random seq id
                 seqID=random.randint(1000, 10000)
 
-                rtpGenerator = RtpGenerator(keyPressed, "127.0.0.1", 5004, 1048576, 1300, seqID, 60)
+                rtpGenerator = RtpGenerator(keyPressed, "127.0.0.1", 5004, 1048576, 1300, seqID, -1)
                 # Add the new stream to the rtpStreams dictionary
                 rtpTxStreamsDictMutex.acquire()
                 rtpTxStreamsDict[seqID] = rtpGenerator
