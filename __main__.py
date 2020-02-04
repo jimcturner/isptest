@@ -1863,9 +1863,11 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
     # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
     # views =[name of view 1, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],
-    #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]]]
+    #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],dataSet[],rowSelector(int)]
     # view [n][0] will be the name of the view (used to generate the navigation bar)
     # view [n][1] is a tuple containing [column title, the stats dictionary key relating to that parameter]
+    # view [n][2] is a reference to the dataset for this view
+    # view [n][3] is a reference to a ingle element list (an int) storing the current selected row of the dataset in view [n][2]
     views = []
 
     if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
@@ -2388,7 +2390,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                             tableData.append(tableRow)
 
                 except Exception as e:
-                    Message.addMessage("ERR: __displayThread. streamTable. selected row data doesn't exist. " + str(e))
+                    Message.addMessage("ERR: __displayThread. streamTable. selected row ("+str(selectedRow)+\
+                                       ") doesn't exist. (streamTableDataSetLength:"+str(streamTableDataSetLength)+"), " + str(e))
 
                 # Step 3) Render the table
                 table = SingleTable(tableData)
