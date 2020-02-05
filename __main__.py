@@ -1999,22 +1999,6 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             Message.addMessage("INFO: Terminal size has changed to "+str(currentTermWidth)+","+str(currentTermHeight))
             redrawMessageTable = True
 
-        if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
-            Term.clearTerminalScrollbackBuffer()
-            Term.setBackgroundColour(Term.BLUE)
-            Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
-            # Print operation mode
-            Term.printAt(operationMode+" MODE", 1, 1, Term.BLACK, Term.WHITE)
-            # Print bottom strip, solid line
-            Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
-            # Print list of key commands
-            Term.printAt(keyCommandsString, 1, (currentTermHeight -1), Term.BLACK, Term.WHITE)
-            # For tx mode, add an extra row of commands
-            if operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK':
-                Term.setBackgroundColourSingleLine(1, (currentTermHeight - 2), Term.WHITE)
-                Term.printAt(extraKeyCommandsString, 1, (currentTermHeight - 2), Term.BLACK, Term.WHITE)
-
-
         # Update available streams lists
         __updateAvailableStreamsList(availableRtpRxStreamList,rtpRxStreamsDict, rtpRxStreamsDictMutex)
         __updateAvailableStreamsList(availableRtpTxStreamList,rtpTxStreamsDict, rtpTxStreamsDictMutex)
@@ -2083,6 +2067,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             # Re-render bottom status bar
             Term.setBackgroundColourSingleLine(1, (currentTermHeight - 1), Term.WHITE)
 
+            # Force redraw
+            redrawScreen = True
+
 
         if keyPressed[0] == 'a':
             keyPressed[0] = ''  # Clear key buffer
@@ -2105,6 +2092,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 rtpTxStreamsDict[seqID] = rtpGenerator
                 rtpTxStreamsDictMutex.release()
 
+                # Force redraw
+                redrawScreen = True
+
 
         if keyPressed[0] == 'm':
             # Increase tx rate of selected stream
@@ -2125,26 +2115,31 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     else:
                         streamToBeModified.setTxRate(currentTxRate + 524288)
 
+                    # Force redraw
+                    redrawScreen = True
+
         if keyPressed[0] == 'n':
             # Decrease tx rate of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
             if len(availableRtpTxStreamList) > 0:
-                # Get tx rate from currently selected stream
-                # Identify the streamID of the currently selected tx stream
-                streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
-                # Get the stats dictionary from the RtpGenerator object
-                txStream = rtpTxStreamsDict[streamID]
-                stats = txStream.getRtpStreamStats()
+                # Get handle on selected stream
+                streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                # Now check that this is a generator object
+                if type(streamToBeModified) == RtpGenerator:
+                    # Get tx rate from currently selected stream
+                    stats = streamToBeModified.getRtpStreamStats()
+                    currentTxRate = int(stats['Tx Rate'])
 
-                currentTxRate = int(stats['Tx Rate'])
-                # If less than 1Mbps decrement by 256kbps
-                if currentTxRate < 1048576:
-                    txStream.setTxRate(currentTxRate - 262144)
-                # Otherwise decrement by 512kbps
-                else:
-                    txStream.setTxRate(currentTxRate - 524288)
-                stats = txStream.getRtpStreamStats()
+                    # If less than 1Mbps decrement by 256kbps
+                    if currentTxRate < 1048576:
+                        streamToBeModified.setTxRate(currentTxRate - 262144)
+                    # Otherwise decrement by 512kbps
+                    else:
+                        streamToBeModified.setTxRate(currentTxRate - 524288)
+                    # Force redraw
+                    redrawScreen = True
+
 
         if keyPressed[0] == 'l':
             # Increase payload size of selected stream
@@ -2228,6 +2223,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     Message.addMessage("Deleting Rx Stream: " + str(idOfStreamToBeDeleted))
                     removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
+                # Force redraw
+                redrawScreen = True
+
             except Exception as e:
                 Message.addMessage("[ERR: __displayThread. Delete Stream request failed: "+str(idOfStreamToBeDeleted)+
                                    ", "+str(e))
@@ -2239,6 +2237,23 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             # Term.printAt("Ctrl-C pressed. Exiting",1,1,Term.FG(Term.RED))
             # # Send exit signal to main thread (via keyPressed[0])
             # keyPressed[0] = 'exit'
+
+        ############################# Screen drawing starts here
+
+        if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
+            Term.clearTerminalScrollbackBuffer()
+            Term.setBackgroundColour(Term.BLUE)
+            Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
+            # Print operation mode
+            Term.printAt(operationMode+" MODE", 1, 1, Term.BLACK, Term.WHITE)
+            # Print bottom strip, solid line
+            Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
+            # Print list of key commands
+            Term.printAt(keyCommandsString, 1, (currentTermHeight -1), Term.BLACK, Term.WHITE)
+            # For tx mode, add an extra row of commands
+            if operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK':
+                Term.setBackgroundColourSingleLine(1, (currentTermHeight - 2), Term.WHITE)
+                Term.printAt(extraKeyCommandsString, 1, (currentTermHeight - 2), Term.BLACK, Term.WHITE)
 
         # Redraw changing screen elements - but not if redrawing has been inhibited
         if not (keyPressed[0] == 'inhibit_redraw'):
