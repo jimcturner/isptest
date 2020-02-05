@@ -2314,12 +2314,43 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 try:
                     # Get handle on selected stream
                     stream = views[selectedView][2][selectedTableRow][1]
-                    idOfStream = views[selectedView][2][selectedTableRow][0]
+                    # idOfStream = views[selectedView][2][selectedTableRow][0]
 
                     # Confirm that the stream is an RtpGenerator
                     if type(stream) == RtpGenerator:
-                        # Get current glitch threshold
-                        glitchLength_packets=5
+                        # Get current glitch threshold from first available rx stream
+                        if len(availableRtpRxStreamList)>0:
+                            rtpRxStream=availableRtpRxStreamList[0][1]
+                            glitchLength_packets=rtpRxStream.getRtpStreamStats()["glitch_Event_Trigger_Threshold_packets"]
+                        else:
+                            # If not available set a default value of 1 packet
+                            glitchLength_packets = 1
+                        # Simulate packet loss
+                        stream.simulatePacketLoss(glitchLength_packets)
+
+                except Exception as e:
+                    Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
+
+        if keyPressed[0] == 'v':
+            # Insert significant packet loss for the selected stream (>= glitch threshold)
+            keyPressed[0] = ''  # Clear key buffer
+            # Confirm that the current view has any streams within its data set
+            if len(views[selectedView][2]) > 0:
+                try:
+                    # Get handle on selected stream
+                    stream = views[selectedView][2][selectedTableRow][1]
+                    # idOfStream = views[selectedView][2][selectedTableRow][0]
+
+                    # Confirm that the stream is an RtpGenerator
+                    if type(stream) == RtpGenerator:
+                        # Get current glitch threshold from first available rx stream
+                        if len(availableRtpRxStreamList)>0:
+                            rtpRxStream=availableRtpRxStreamList[0][1]
+                            glitchLength_packets=rtpRxStream.getRtpStreamStats()["glitch_Event_Trigger_Threshold_packets"] + 1
+                        else:
+                            # If not available set a default value of 20 packets
+                            glitchLength_packets = 20
+                        # Simulate packet loss
                         stream.simulatePacketLoss(glitchLength_packets)
 
                 except Exception as e:
