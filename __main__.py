@@ -1726,18 +1726,17 @@ def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMute
         x = [streamID, rtpStreamDict[streamID], 0]
         # Append the new tuple to rtpStreamList[]
         rtpStreamList.append(x)
-        Message.addMessage("Added " + str(x[0]) + " to rtpStreamList[]")
-    # 7) Purge deleted streams from rtpStreamList[] according to deleteList
+        Message.addMessage("INFO: __updateAvailableStreamsList() Added stream: " + str(x[0]) + ", " + str(type(x[1])))
     for streamID in deleteList:
         # Iterate over tuples in rtpStreamList[] searching for a match
         for index, stream in enumerate(rtpStreamList):
             if stream[0] == streamID:
                 # If stream found, delete that tuple from the list
-                Message.addMessage("Removing stream " + str(stream[0]) + " from rtpStreamList[]")
+                Message.addMessage("INFO: __updateAvailableStreamsList() Removing stream " + str(stream[0]) + ", " + str(type(stream[1])))
                 try:
                     rtpStreamList.pop(index)
                 except Exception as e:
-                    Message.addMessage("__updateAvailableStreamsList: "+str(e))
+                    Message.addMessage("ERR: __updateAvailableStreamsList: "+str(e))
                 break
 
     # 8) Check that rtpStreamList and rtpStreamDict are actually looking at the same objects in memory
@@ -1898,7 +1897,6 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Src\nport", "stream_srcPort"],
                    ["Dst Addr", "stream_rxAddress"],
                    ["Dst\nport", "stream_rxPort"],
-
                    ["  Time\nelapsed","stream_time_elapsed_total"],
                    ["CPU\n %","stream_processor_utilisation_percent"]
                    ],availableRtpRxStreamList])
@@ -2075,7 +2073,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # Capture name string from keyPressed[] (second element)
                 newFriendlyName=keyPressed[1]
                 del keyPressed[1]  # Remove key buffer array now eve stored it
-                Message.addMessage("Info: newFriendlyNameEntered: "+newFriendlyName + " for stream " + str(idOfStreamToBeModified))
+                Message.addMessage("INFO: new friendlyNameEntered: "+newFriendlyName + " for stream " + str(idOfStreamToBeModified))
                 # Attempt to modify the stream name
                 streamToBeModified.setFriendlyName(newFriendlyName)
 
@@ -2113,19 +2111,19 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
             if len(availableRtpTxStreamList)>0:
-                # Get tx rate from currently selected stream
-                # Identify the streamID of the currently selected tx stream
-                streamID=availableRtpTxStreamList[selectedTxStream[0]][0]
-                # Get the stats dictionary from the RtpGenerator object
-                txStream=rtpTxStreamsDict[streamID]
-                stats=txStream.getRtpStreamStats()
-                currentTxRate=int(stats['Tx Rate'])
-                # If less than 1Mbps increment by 256kbps
-                if currentTxRate < 1048576:
-                    txStream.setTxRate(currentTxRate+262144)
-                # Otherwise increment by 500kbps
-                else:
-                    txStream.setTxRate(currentTxRate + 524288)
+                # Get handle on selected stream
+                streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                # Now check that this is a generator object
+                if type(streamToBeModified) == RtpGenerator:
+                    # Get tx rate from currently selected stream
+                    stats=streamToBeModified.getRtpStreamStats()
+                    currentTxRate=int(stats['Tx Rate'])
+                    # If less than 1Mbps increment by 256kbps
+                    if currentTxRate < 1048576:
+                        streamToBeModified.setTxRate(currentTxRate+262144)
+                    # Otherwise increment by 500kbps
+                    else:
+                        streamToBeModified.setTxRate(currentTxRate + 524288)
 
         if keyPressed[0] == 'n':
             # Decrease tx rate of selected stream
