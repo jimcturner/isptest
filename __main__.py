@@ -682,7 +682,7 @@ class Glitch(Event):
         self.actualReceivedSequenceNo = self.endOfGap.rtpSequenceNo
 
     def getSummary(self):
-        optionalFields = ". Duration:, " + str(self.glitchLength) + ", " + str(self.packetsLost) + ", packet(s) lost. "+\
+        optionalFields = ". Dur:, " + str(self.glitchLength) + ", " + str(self.packetsLost) + ", packet(s) lost. "+\
             "Expected seq no "+str(self.expectedSequenceNo)+" but received "+ str(self.actualReceivedSequenceNo)
         summary = "[" + str(self.eventNo) + "]," + \
                   "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
@@ -986,6 +986,8 @@ class RtpStream(object):
                     self.__eventList.append(ExcessiveJitter(self.__stats, self.rtpStream[-1]))
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
+                    Message.addMessage("["+str(self.__stats["stream_syncSource"])+"]. Excessive jitter. "+\
+                        str(int(self.__stats["jitter_mean_1S_uS"]))+"/"+str(int(self.__stats["jitter_long_term_uS"]))+"uS")
 
                 # Update the event counter for Excess Jitter
                 self.__stats["jitter_excess_jitter_events_total"] += 1
@@ -1099,7 +1101,7 @@ class RtpStream(object):
                 # Post a message
                 Message.addMessage(glitch.getSummary()['summary'])
             else:
-                Message.addMessage("Insignificant glitch (ignored): " + glitch.getSummary()['summary'])
+                Message.addMessage("Glitch (ignored): " + glitch.getSummary()['summary'])
             # update glitch stats
             self.__updateGlitchStats(glitch)
 
@@ -1206,6 +1208,7 @@ class RtpStream(object):
                     self.__stats["packet_first_packet_received_timestamp"] = self.rtpStream[0].timestamp
                     # Add a StreamStarted event to the event list
                     self.__eventList.append(StreamStarted(self.__stats, self.rtpStream[0]))
+                    Message.addMessage("["+str(self.__stats["stream_syncSource"])+"]. Stream started. ")
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
 
@@ -1264,7 +1267,7 @@ class RtpStream(object):
                     lossOfStreamFlag = True
                     # Add event to the list (but only do this once)
                     self.__eventList.append(StreamLost(self.__stats, lastReceivedRtpPacket))
-                    Message.addMessage("Stream Lost: "+str(self.__stats["stream_syncSource"]))
+                    Message.addMessage("[" + str(self.__stats["stream_syncSource"]) + "]. Stream lost. ")
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
     ######## POSSIBLY REVISIT THIS.....
@@ -1966,6 +1969,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     keyCommandsString = "[<]/[>] cycle panes, [^]/[v] select stream, [d]elete, [s]et name"
 
     extraKeyCommandsString = "TX  modifier: [o/p] seq ID, [k/l] packet size, [n/m] tx bps, [a]dd"
+    txStreamModifierCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
 
     streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
     streamTableLastRow = 0 # Tracks the current end row of the stream table data
@@ -2086,7 +2090,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
 
                 # Identify the streamID of the last added  tx stream
-                # streamID = availableRtpTxStreamList[-1][0]
+                if len(availableRtpTxStreamList) > 0:
+                    streamID = availableRtpTxStreamList[-1][0]
 
                 # Generate random seq id
                 seqID=random.randint(1000, 10000)
@@ -2371,6 +2376,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             if operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK':
                 Term.setBackgroundColourSingleLine(1, (currentTermHeight - 2), Term.WHITE)
                 Term.printAt(extraKeyCommandsString, 1, (currentTermHeight - 2), Term.BLACK, Term.WHITE)
+                Term.setBackgroundColourSingleLine(1, (currentTermHeight - 3), Term.WHITE)
+                Term.printAt(txStreamModifierCommandsString, 1, (currentTermHeight - 3), Term.BLACK, Term.WHITE)
 
         # Redraw changing screen elements - but not if redrawing has been inhibited
         if not (keyPressed[0] == 'inhibit_redraw'):
@@ -2554,7 +2561,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
             # Message table should fill lower half of window
             yPos = int(currentTermHeight/2) + 2
-            maxNoOfMessagesThatWillFitScreen = int(currentTermHeight/2) - 7
+            # Every toolbar at the bottom of the screen will allow less room for messages
+            maxNoOfMessagesThatWillFitScreen = int(currentTermHeight/2) - 9
 
             # Get last x messages. Make a deep copy as we're going to add blankspace padding
             messages = deepcopy(Message.getMessages(maxNoOfMessagesThatWillFitScreen))
