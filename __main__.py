@@ -1960,9 +1960,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     #                ],DATASET_TO_DISPLAY,ROW_SELECTOR])
 
     # Screen label showing the availablle key commands (depending upon mode)
-    keyCommandsString = "[<]/[>] cycle panes, [^]/[v] select stream, [d]elete, [i] set name"
+    keyCommandsString = "[<]/[>] cycle panes, [^]/[v] select stream, [d]elete, [s]et name"
 
-    extraKeyCommandsString = "TX  modifier: [o/p] seq ID, [k/l] packet size, [n/m] tx bps, [T] add, [Y] del"
+    extraKeyCommandsString = "TX  modifier: [o/p] seq ID, [k/l] packet size, [n/m] tx bps, [a]dd"
 
     streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
     streamTableLastRow = 0 # Tracks the current end row of the stream table data
@@ -2080,17 +2080,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             # Re-render bottom status bar
             Term.setBackgroundColourSingleLine(1, (currentTermHeight - 1), Term.WHITE)
 
-        if keyPressed[0] == 'd':
-            keyPressed[0] = ''  # Clear key buffer
-            # Attempt to delete current stream
-            try:
-                streamID=availableRtpRxStreamList[selectedRxStream[0]][0]
-                removeRtpStreamFromDict(streamID, rtpRxStreamsDict, rtpRxStreamsDictMutex)
-            except Exception as e:
-                Message.addMessage("ERR: __displayThread::[d] Remove stream: "+str(e))
-            redrawScreen = True
 
-        if keyPressed[0] == 't':
+        if keyPressed[0] == 'a':
             keyPressed[0] = ''  # Clear key buffer
             # Attempt to add a new tx stream (if we're in loopback or transmit mode)
             # If a tx stream already exists, the new stream will be created with an incremented
@@ -2212,25 +2203,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # Decrement sync source by 1
                 txStream.setSyncSourceIdentifier(currentSyncSourceID-1)
 
-        if keyPressed[0] == 'y':
-            # Delete selected TX stream
-            keyPressed[0] = ''  # Clear key buffer
-
-            try:
-                # Get hold of the id of the currently selected txStream object
-                txStreamSourceID = availableRtpTxStreamList[selectedTxStream[0]][0]
-                Message.addMessage("[y] Removing tx stream: " + str(txStreamSourceID))
-
-                # Kill the stream by invoking the RtpGenerator.killStream() method
-                # Get a handle on the tx stream object
-                txStream = availableRtpTxStreamList[selectedTxStream[0]][1]
-                txStream.killStream()
-                # Remove the stream from the rtpTxStreamsDict dictionary
-                removeRtpStreamFromDict(txStreamSourceID,rtpTxStreamsDict,rtpTxStreamsDictMutex)
-            except:
-                Message.addMessage("ERR: __diaplayThread: No stream to availble to delete ")
-
-        if keyPressed[0] == 'f':
+        if keyPressed[0] == 'd':
             # Delete selected stream (selected table row)
             keyPressed[0] = ''  # Clear key buffer
             # Get handle on selected stream
@@ -2253,7 +2226,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
             except Exception as e:
-                Message.addMessage("[ERR: __displayThread. Delete Stream request: "+str(idOfStreamToBeDeleted)+
+                Message.addMessage("[ERR: __displayThread. Delete Stream request failed: "+str(idOfStreamToBeDeleted)+
                                    ", "+str(e))
 
 
@@ -2322,6 +2295,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # The dataset is pointed to by the 3rd element of each view array
                 dataSetToDisplay=views[selectedView][2]
                 streamTableDataSetLength = len(dataSetToDisplay)
+
+                if streamTableDataSetLength == 0:
+                    selectedTableRow = 0
 
                 # Attempt to create the table data
                 if streamTableDataSetLength >0:
@@ -2422,7 +2398,10 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # Remove all padding to save space on the screen
                 table.padding_left = 0
                 table.padding_right = 0
-                table.title = str(selectedTableRow + 1)+"/"+str(streamTableDataSetLength)
+                if streamTableDataSetLength >0:
+                    table.title = str(selectedTableRow + 1)+"/"+str(streamTableDataSetLength)
+                else:
+                    table.title = "0/0"
                 tableWidth = table.table_width
                 tableRowsRendered = table.table.splitlines()
                 xPos = 2
@@ -2685,7 +2664,7 @@ def __catchKeyboardPresses(keyPressed):
 
 
         # Special case if 'i' pressed
-        elif ch == 'i':
+        elif ch == 's':
             ch == ''    # Clear keybuffer
             # provide input prompt -used to edit a stream name
 
