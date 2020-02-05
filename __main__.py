@@ -2146,32 +2146,37 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
             if len(availableRtpTxStreamList) > 0:
-                # Get payload size from currently selected stream
-                # Identify the streamID of the currently selected tx stream
-                streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
-                # Get the stats dictionary from the RtpGenerator object
-                txStream = rtpTxStreamsDict[streamID]
-                stats = txStream.getRtpStreamStats()
-                # Get current payload size
-                currentTxPayloadSize = int(stats['Packet size'])
-                # Increment current size by 10 bytes
-                txStream.setPayloadLength(currentTxPayloadSize+10)
+                # Get handle on selected stream
+                streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                # Now check that this is a generator object
+                if type(streamToBeModified) == RtpGenerator:
+                    # Get the stats dictionary from the RtpGenerator object
+                    stats = streamToBeModified.getRtpStreamStats()
+                    # Get current payload size
+                    currentTxPayloadSize = int(stats['Packet size'])
+                    # Increment current size by 10 bytes
+                    streamToBeModified.setPayloadLength(currentTxPayloadSize+10)
+
+                    # Force redraw
+                    redrawScreen = True
 
         if keyPressed[0] == 'k':
-            # Increase payload size of selected stream
+            # Decrease payload size of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
             if len(availableRtpTxStreamList) > 0:
-                # Get payload size from currently selected stream
-                # Identify the streamID of the currently selected tx stream
-                streamID = availableRtpTxStreamList[selectedTxStream[0]][0]
-                # Get the stats dictionary from the RtpGenerator object
-                txStream = rtpTxStreamsDict[streamID]
-                stats = txStream.getRtpStreamStats()
-                # Get current payload size
-                currentTxPayloadSize = int(stats['Packet size'])
-                # Increment current size by 10 bytes
-                txStream.setPayloadLength(currentTxPayloadSize - 10)
+                # Get handle on selected stream
+                streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                # Now check that this is a generator object
+                if type(streamToBeModified) == RtpGenerator:
+                    # Get the stats dictionary from the RtpGenerator object
+                    stats = streamToBeModified.getRtpStreamStats()
+                    # Get current payload size
+                    currentTxPayloadSize = int(stats['Packet size'])
+                    # Increment current size by 10 bytes
+                    streamToBeModified.setPayloadLength(currentTxPayloadSize - 10)
+                    # Force redraw
+                    redrawScreen = True
 
         if keyPressed[0] == 'p':
             # Increase sync source ID of selected stream
@@ -2239,7 +2244,6 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             # keyPressed[0] = 'exit'
 
         ############################# Screen drawing starts here
-
         if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
             Term.clearTerminalScrollbackBuffer()
             Term.setBackgroundColour(Term.BLUE)
