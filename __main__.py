@@ -1561,7 +1561,7 @@ def bToMb(value):
         return str(value) + "M"
     elif value >= 1024:
         # Convert bytes to kb
-        value = round(value / 1024,1)
+        value = int(value / 1024)
         return str(value) + "k"
     else:
         return str(value)
@@ -2183,28 +2183,36 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
             if len(availableRtpTxStreamList) > 0:
-                # Get hold of the currently selected txStream object
-                txStream=rtpTxStreamsDict[availableRtpTxStreamList[selectedTxStream[0]][0]]
-                # Get the stats dictionary from the RtpGenerator object
-                stats = txStream.getRtpStreamStats()
-                # Get current Sync source ID
-                currentSyncSourceID = int(stats['Sync Source ID'])
-                # Increment sync source by 1
-                txStream.setSyncSourceIdentifier(currentSyncSourceID+1)
+                # Get handle on selected stream
+                streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                # Now check that this is a generator object
+                if type(streamToBeModified) == RtpGenerator:
+                    # Get the stats dictionary from the RtpGenerator object
+                    stats = streamToBeModified.getRtpStreamStats()
+                    # Get current Sync source ID
+                    currentSyncSourceID = int(stats['Sync Source ID'])
+                    # Increment sync source by 1
+                    streamToBeModified.setSyncSourceIdentifier(currentSyncSourceID+1)
+                    # Force redraw
+                    redrawScreen = True
 
         if keyPressed[0] == 'o':
             # Decrease sync source ID of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
             if len(availableRtpTxStreamList) > 0:
-                # Get hold of the currently selected txStream object
-                txStream=rtpTxStreamsDict[availableRtpTxStreamList[selectedTxStream[0]][0]]
-                # Get the stats dictionary from the RtpGenerator object
-                stats = txStream.getRtpStreamStats()
-                # Get current Sync source ID
-                currentSyncSourceID = int(stats['Sync Source ID'])
-                # Decrement sync source by 1
-                txStream.setSyncSourceIdentifier(currentSyncSourceID-1)
+                # Get handle on selected stream
+                streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                # Now check that this is a generator object
+                if type(streamToBeModified) == RtpGenerator:
+                    # Get the stats dictionary from the RtpGenerator object
+                    stats = streamToBeModified.getRtpStreamStats()
+                    # Get current Sync source ID
+                    currentSyncSourceID = int(stats['Sync Source ID'])
+                    # Decrement sync source by 1
+                    streamToBeModified.setSyncSourceIdentifier(currentSyncSourceID-1)
+                    # Force redraw
+                    redrawScreen = True
 
         if keyPressed[0] == 'd':
             # Delete selected stream (selected table row)
