@@ -521,7 +521,7 @@ class StreamStarted(Event):
         optionalFields = "firstRtpSequenceNo,"+str(self.firstPacketReceived.rtpSequenceNo)
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
               ",Event no," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              "," + optionalFields
+              ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
         return csv
 
     def getJSON(self):
@@ -560,7 +560,7 @@ class StreamLost(Event):
         optionalFields = "lastRtpSequenceNo,"+str(self.lastPacketReceived.rtpSequenceNo)
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
               ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              "," + optionalFields
+              ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
         return csv
 
     def getJSON(self):
@@ -599,7 +599,7 @@ class ExcessiveJitter(Event):
             ",jitter_long_term_uS,"+str(int(self.stats["jitter_long_term_uS"]))
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
               ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              "," + optionalFields
+              ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
         return csv
 
     def getJSON(self):
@@ -639,7 +639,7 @@ class ProcessorOverload(Event):
             ",lastRtpSequenceNo," + str(self.lastPacketReceived.rtpSequenceNo)
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
               ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              "," + optionalFields
+              ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
         return csv
 
     def getJSON(self):
@@ -695,7 +695,7 @@ class Glitch(Event):
             ",Expected seq no"+str(self.expectedSequenceNo)+",Actual received seq no,"+ str(self.actualReceivedSequenceNo)
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
               ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              "," + optionalFields
+              ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
         return csv
 
     def getJSON(self):
@@ -2102,7 +2102,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     packetLength = latestTxStreamStats['Packet size']
 
                     # As a default, set time to live to be infinite
-                    timeToLive = 60
+                    timeToLive = -1
                     # As a default, set tx rate to be 1 Mbps
                     txRate = 1048576
 
