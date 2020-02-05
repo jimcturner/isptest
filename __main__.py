@@ -2517,6 +2517,14 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                                         # Retrieve the data from the rtpStream object by looking up it's key
                                         # Attempt to humanise the data based on object type or clues given by the key name
                                         tableCell=str(humanise(key,streamDataStats[key]))
+
+                                        # Now attempt to colour code the table based on some tests
+                                        # is it a receive stream?
+                                        if type(streamData[1]) == RtpStream:
+                                            # If so, test the stream stats
+                                            if streamDataStats["historic_glitch_counter_last_10Sec"]> 0:
+                                                # If so, make the row red
+                                                tableCell=Term.FG(Term.RED)+tableCell
                                     except Exception as e:
                                         # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
                                         tableCell="keyErr"
