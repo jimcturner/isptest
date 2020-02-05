@@ -2281,7 +2281,31 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                             stream.enableStream()
                             Message.addMessage("[z] Stream " + str(idOfStream) + " enabled")
                 except Exception as e:
-                    Message.addMessage("ERR: __displayThread [z] enabled/disable stream. " + str(e))
+                    Message.addMessage("ERR: __displayThread [z] enable/disable stream. " + str(e))
+
+        if keyPressed[0] == 'x':
+            # Toggle packet jitter simulation on/off for the selected stream
+            keyPressed[0] = ''  # Clear key buffer
+            # Confirm that the current view has any streams within its data set
+            if len(views[selectedView][2]) > 0:
+                try:
+                    # Get handle on selected stream
+                    stream = views[selectedView][2][selectedTableRow][1]
+                    idOfStream = views[selectedView][2][selectedTableRow][0]
+
+                    # Confirm that the stream is an RtpGenerator
+                    if type(stream) == RtpGenerator:
+                        if stream.getJitterStatus():
+                            # if jitter simulation currently enabled, disable it
+                            stream.disableJitter()
+                            Message.addMessage("[x] Stream " + str(idOfStream) + " jitter simulation disabled")
+                        else:
+                            stream.enableJitter()
+                            Message.addMessage("[x] Stream " + str(idOfStream) + " jitter simulation enabled")
+
+
+                except Exception as e:
+                    Message.addMessage("ERR: __displayThread [x] enabled/disable jitter simulation. " + str(e))
 
         ############################# Screen drawing starts here
         if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
@@ -2976,23 +3000,6 @@ class RtpGenerator(object):
                                       self.syncSourceIdentifier)
             MESSAGE = txRtpHeader + self.rtpPayload.encode('ascii')
 
-            # If 'z' pressed, toggle packet generation on/off
-            # if self.keyPressed[0] == 'z':
-            #     if enablePacketGeneration == True:
-            #         # Empty keyboard buffer
-            #         self.keyPressed[0] = ''
-            #         # Clear enable flag
-            #         enablePacketGeneration = False
-            #         Message.addMessage(" 'z' Inhibiting packet generator")
-            #     else:
-            #         # Empty keyboard buffer
-            #         self.keyPressed[0] = ''
-            #         # Set enable flag
-            #         enablePacketGeneration = True
-            #         Message.addMessage(" 'z' Enabling packet generator\r")
-            #         # Restart the 1 second timer used for txData averaging
-            #         startTime = timer()
-
             # Spacebar will introduce a single packet loss
             # If temporaryInhibit was set, clear it
             temporaryInhibit = False
@@ -3015,17 +3022,17 @@ class RtpGenerator(object):
                     Message.addMessage("\x1B[31m__rtpGenerator() txSock.sendto(). Exiting. \x1B[0m " + str(e))
                     time.sleep(1)  # Throttle rate of error messages from this thread
 
-            if self.keyPressed[0] == 'j':
-                # Turn jitter on/off by pressing 'j'
-                # Clear keyboard buffer
-                self.keyPressed[0] = ''
-                if enableJitter == False:
-                    enableJitter = True
-                    Message.addMessage("[j] jitter enabled")
-
-                else:
-                    enableJitter = False
-                    Message.addMessage("[j] jitter disabled")
+            # if self.keyPressed[0] == 'j':
+            #     # Turn jitter on/off by pressing 'j'
+            #     # Clear keyboard buffer
+            #     self.keyPressed[0] = ''
+            #     if enableJitter == False:
+            #         enableJitter = True
+            #         Message.addMessage("[j] jitter enabled")
+            #
+            #     else:
+            #         enableJitter = False
+            #         Message.addMessage("[j] jitter disabled")
 
 
             ###########
@@ -3036,7 +3043,7 @@ class RtpGenerator(object):
                 rtpSequenceNo = 0
                 Message.addMessage("rtpGenerator. Seq no wrapping to zero")
             # If flag set, generate random delay centred around self.txPeriod (0.01 = 10mS period)
-            if enableJitter == True:
+            if self.jitterGenerationFlag == True:
                 jitter = random.uniform(-1 * maxDeviation, maxDeviation)
             else:
                 jitter = 0
