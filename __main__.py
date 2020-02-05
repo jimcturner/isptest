@@ -2084,26 +2084,38 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             keyPressed[0] = ''  # Clear key buffer
             # Attempt to add a new tx stream (if we're in loopback or transmit mode)
             # If a tx stream already exists, the new stream will be created with an incremented
-            # source UDP port and an incremented seq no.
+            # source UDP port and an incremented sync source id.
             # If there are no current streams, the new stream will be created with a random
             # UDP source port and a random sync source id
             if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
 
-                # Identify the streamID of the last added  tx stream
+                # Grab the stats of the latest added tx stream
                 if len(availableRtpTxStreamList) > 0:
-                    streamID = availableRtpTxStreamList[-1][0]
+                    latestTxStream = availableRtpTxStreamList[-1][1]
+                    latestTxStreamStats=latestTxStream.getRtpStreamStats()
 
-                # Generate random seq id
-                seqID=random.randint(1000, 10000)
+                    # Use stats of existing tx stream to derive setup parameters for new stream
+                    syncSourceID = latestTxStreamStats['Sync Source ID'] + 1
+                    sourcePort = latestTxStreamStats['Tx Source Port'] + 1
+                    destPort = latestTxStreamStats['Dest Port']
+                    destAddr = latestTxStreamStats['Dest IP']
+                    packetLength = latestTxStreamStats['Packet size']
 
-                rtpGenerator = RtpGenerator(keyPressed, "127.0.0.1", 5004, 1048576, 1300, seqID, -1)
-                # Add the new stream to the rtpStreams dictionary
-                rtpTxStreamsDictMutex.acquire()
-                rtpTxStreamsDict[seqID] = rtpGenerator
-                rtpTxStreamsDictMutex.release()
+                    # As a default, set time to live to be infinite
+                    timeToLive = 60
+                    # As a default, set tx rate to be 1 Mbps
+                    txRate = 1048576
 
-                # Force redraw
-                redrawScreen = True
+                    rtpGenerator = RtpGenerator(keyPressed, destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, sourcePort)
+                    # Add the new stream to the rtpStreams dictionary
+                    rtpTxStreamsDictMutex.acquire()
+                    rtpTxStreamsDict[syncSourceID] = rtpGenerator
+                    rtpTxStreamsDictMutex.release()
+
+                    # Force redraw
+                    redrawScreen = True
+                else:
+                    Message.addMessage("No Tx stream to copy from. New stream not added")
 
 
         if keyPressed[0] == 'm':
