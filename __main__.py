@@ -2259,6 +2259,30 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             # # Send exit signal to main thread (via keyPressed[0])
             # keyPressed[0] = 'exit'
 
+        if keyPressed[0] == 'z':
+            # Toggle packet generation on/off for the selected stream
+            keyPressed[0] = ''  # Clear key buffer
+            # Confirm that the current view has any streams within its data set
+            if len(views[selectedView][2]) > 0:
+                try:
+                    # Get handle on selected stream
+                    stream = views[selectedView][2][selectedTableRow][1]
+                    idOfStream = views[selectedView][2][selectedTableRow][0]
+
+                    # Confirm that the stream is an RtpGenerator
+                    if type(stream) == RtpGenerator:
+                        # Get current transit status and toggle accordingly
+                        if stream.getEnableStreamStatus():
+                            # If currently enabled, disable it
+                            stream.disableStream()
+                            Message.addMessage("[z] Stream "+str(idOfStream)+" disabled")
+                        else:
+                            # otherwise, enable it
+                            stream.enableStream()
+                            Message.addMessage("[z] Stream " + str(idOfStream) + " enabled")
+                except Exception as e:
+                    Message.addMessage("ERR: __displayThread [z] enabled/disable stream. " + str(e))
+
         ############################# Screen drawing starts here
         if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
             Term.clearTerminalScrollbackBuffer()
@@ -2754,6 +2778,9 @@ class RtpGenerator(object):
         self.maxNameLength = 10
         self.friendlyName = " "*self.maxNameLength
         self.timeToLive = timeToLive
+        self.enablePacketGeneration = True
+        self.packetsToSkip = 0 # Set by simulatePacketLoss()
+        self.jitterGenerationFlag = False
 
         # Test to see if a UDP source port was specified
         if len(srcPort) > 0:
@@ -2856,8 +2883,36 @@ class RtpGenerator(object):
         # Kills the stream by setting the time to live to zero. This will cause the main thread to exit
         self.setTimeToLive(0)
 
+    def disableStream(self):
+        # Disables transmission of packets to simulate packet loss by clearing flag
+        # Sequence numbers incrementing will continue even during inhibiting of stream
+        self.enablePacketGeneration = False
 
-    # define a traffic generator method that will run as a thread
+    def enableStream(self):
+        # Enables transmission of packets to simulate packet loss by setting flag
+        self.enablePacketGeneration = True
+
+    def getEnableStreamStatus(self):
+        # Returns the current status of self.enablePacketGeneration
+        return self.enablePacketGeneration
+
+    def simulatePacketLoss(self, packetsToSkip):
+        # Used to simulate packet loss by skipping x packets (whilst incrementing the seq no internally)
+        self.packetsToSkip = packetsToSkip
+
+    def enableJitter(self):
+        # Turns on simulated jitter on tx stream
+        self.jitterGenerationFlag = True
+
+    def disableJitter(self):
+        # Disables simulated jitter on tx stream
+        self.jitterGenerationFlag = False
+
+    def getJitterStatus(self):
+        # Returns the status of self.jitterGenerationFlag
+        return self.jitterGenerationFlag
+
+        # define a traffic generator method that will run as a thread
     # def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
     def __rtpGeneratorThread(self):
 
@@ -2892,7 +2947,7 @@ class RtpGenerator(object):
         rtpPayloadType = 0b00000000
         rtpSequenceNo = 0
 
-        enablePacketGeneration = True
+        # enablePacketGeneration = True
         enableJitter = False
 
         # Calculate tx period required to provide supplied txRate for a given stringLength
@@ -2922,21 +2977,22 @@ class RtpGenerator(object):
             MESSAGE = txRtpHeader + self.rtpPayload.encode('ascii')
 
             # If 'z' pressed, toggle packet generation on/off
-            if self.keyPressed[0] == 'z':
-                if enablePacketGeneration == True:
-                    # Empty keyboard buffer
-                    self.keyPressed[0] = ''
-                    # Clear enable flag
-                    enablePacketGeneration = False
-                    Message.addMessage(" 'z' Inhibiting packet generator")
-                else:
-                    # Empty keyboard buffer
-                    self.keyPressed[0] = ''
-                    # Set enable flag
-                    enablePacketGeneration = True
-                    Message.addMessage(" 'z' Enabling packet generator\r")
-                    # Restart the 1 second timer used for txData averaging
-                    startTime = timer()
+            # if self.keyPressed[0] == 'z':
+            #     if enablePacketGeneration == True:
+            #         # Empty keyboard buffer
+            #         self.keyPressed[0] = ''
+            #         # Clear enable flag
+            #         enablePacketGeneration = False
+            #         Message.addMessage(" 'z' Inhibiting packet generator")
+            #     else:
+            #         # Empty keyboard buffer
+            #         self.keyPressed[0] = ''
+            #         # Set enable flag
+            #         enablePacketGeneration = True
+            #         Message.addMessage(" 'z' Enabling packet generator\r")
+            #         # Restart the 1 second timer used for txData averaging
+            #         startTime = timer()
+
             # Spacebar will introduce a single packet loss
             # If temporaryInhibit was set, clear it
             temporaryInhibit = False
@@ -2947,7 +3003,7 @@ class RtpGenerator(object):
                 Message.addMessage("[Spacebar] - Inhibit single packet")
 
             # If all tx flags are set then transmit the rtp packet
-            if enablePacketGeneration == True and temporaryInhibit == False:
+            if self.enablePacketGeneration == True and temporaryInhibit == False:
                 try:
                     txSock.sendto(MESSAGE, (self.UDP_TX_IP, self.UDP_TX_PORT))
                     # Update tx bytes counter (taking packet headers into account)
@@ -2991,7 +3047,7 @@ class RtpGenerator(object):
             # 1 second timer
 
             # Has 1 second elapsed?
-            if (timer() - startTime) >= 1 and enablePacketGeneration == True:
+            if (timer() - startTime) >= 1 and self.enablePacketGeneration == True:
                 # Reset elapsed timer (for 1 second timer)
                 startTime = timer()
 
