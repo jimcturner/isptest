@@ -3228,14 +3228,17 @@ def main(argv):
     try:
         # options are:
         # -h: help
-        # -l: loopback mode
+        # -x: loopback mode
         # -t: transmit mode usage: address:port
+        # -l: duration of transmission (in seconds. Default 1hr (3600 sec)
         # -r receive mode usage: address:port
         # -b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps
         # -d udp packet size
         # -s udp transmit source port (for transmit or loopback mode)
         # -i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4
         # -u sync source ID (for transmit or loopback mode)
+
+
 
         address = ""
 
@@ -3244,25 +3247,26 @@ def main(argv):
             print ("No options supplied. Use -h for help")
             exit()
 
-        opts, args = getopt.getopt(argv, "hlt:r:i:t:b:d:s:u:")
+        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
             if opt == '-h':
-                print ("Version 0.5\r")
+                print ("Version 1.1\r")
                 print ("options are:\r")
                 print ("-h: help (this message)\r")
-                print ("-l: loopback mode\r")
+                print ("-x: loopback mode\r")
                 print ("-t: transmit mode usage: address:port\r")
                 print ("-s udp transmit source port (for transmit or loopback mode)")
                 print ("-u sync source ID (for transmit or loopback mode)")
+                print ("-l: duration of transmission (in seconds. Default 1hr (3600 sec). A value of -1 means 'forever'\r")
                 print ("-r receive mode usage: address:port\r")
                 print ("-b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps\r")
                 print ("-d rtp payload size (bytes). Default = 1300 bytes\r")
                 print ("-i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4\r")
                 exit()
 
-            elif opt == '-l':
+            elif opt == '-x':
                 MODE = "LOOPBACK"
                 print (MODE)
                 UDP_RX_IP = "127.0.0.1"
@@ -3365,8 +3369,7 @@ def main(argv):
 
                 try:
                     # Simple test to see if arg is an integer. If it's a string, this will fail
-                    UDP_TX_SRC_PORT = int(arg)
-                    UDP_TX_SRC_PORT += 1
+                    UDP_TX_SRC_PORT = int(arg) + 1 -1
                 except Exception as e:
                     print ("Invalid -s UDP source port specified (" + str(arg) + "). Must be an integer > 1024: " + str(e))
                     exit()
@@ -3383,8 +3386,7 @@ def main(argv):
 
                 try:
                     # Simple test to see if arg is an integer. If it's a string, this will fail
-                    SYNC_SOURCE_ID = int(arg)
-                    SYNC_SOURCE_ID += 1
+                    SYNC_SOURCE_ID = int(arg) + 1 - 1
                 except Exception as e:
                     print ("Invalid -u sync source id specified (" + str(arg) + "). Must be an integer < 2147483647: " + str(e))
                     exit()
@@ -3394,6 +3396,20 @@ def main(argv):
                     print ("Invalid -u sync source id specified (" + str(arg) + "). Must be an integer < 2147483647: ")
                     exit()
                 print ("sync source id: " + str(UDP_TX_SRC_PORT))
+
+            elif opt in ("-l"):
+                # Specify duraion (or 'time to live' for tx stream)
+                # Test to see if supplied value is an int
+
+                try:
+                    # Simple test to see if arg is an integer. If it's a string, this will fail
+                    txStreamTimeToLive_sec = int(arg)  + 1 - 1
+                except Exception as e:
+                    print ("Invalid -l duration specified (" + str(arg) + "). Must be an integer. Use -1 for 'forever': " + str(e))
+                    exit()
+
+                print ("Tx time to live duration : " + str(txStreamTimeToLive_sec))
+
 
     except getopt.GetoptError:
         print ('invalid options supplied'+ str(argv))
