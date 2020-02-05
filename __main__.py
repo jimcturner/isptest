@@ -2222,32 +2222,34 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
         if keyPressed[0] == 'd':
             # Delete selected stream (selected table row)
             keyPressed[0] = ''  # Clear key buffer
-            try:
-                # Get handle on selected stream
-                streamToBeDeleted = views[selectedView][2][selectedTableRow][1]
-                idOfStreamToBeDeleted = views[selectedView][2][selectedTableRow][0]
-                Message.addMessage("streamToDelete: "+str(idOfStreamToBeDeleted))
+            # Confirm that the dataset associated with this view actually has some data in it
+            if len(views[selectedView][2]) > 0:
+                try:
+                    # Get handle on selected stream
+                    streamToBeDeleted = views[selectedView][2][selectedTableRow][1]
+                    idOfStreamToBeDeleted = views[selectedView][2][selectedTableRow][0]
+                    Message.addMessage("streamToDelete: "+str(idOfStreamToBeDeleted))
 
-                # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
-                if type(streamToBeDeleted) == RtpGenerator:
-                    # It is a generator object
-                    Message.addMessage("Deleting Tx Stream: " + str(idOfStreamToBeDeleted))
-                    # Remove the stream from the rtpTxStreamsDict dictionary
-                    removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamsDict, rtpTxStreamsDictMutex)
-                    # Instruct the RtpGenerator object to die
-                    streamToBeDeleted.killStream()
+                    # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
+                    if type(streamToBeDeleted) == RtpGenerator:
+                        # It is a generator object
+                        Message.addMessage("Deleting Tx Stream: " + str(idOfStreamToBeDeleted))
+                        # Remove the stream from the rtpTxStreamsDict dictionary
+                        removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamsDict, rtpTxStreamsDictMutex)
+                        # Instruct the RtpGenerator object to die
+                        streamToBeDeleted.killStream()
 
-                elif type(streamToBeDeleted) == RtpStream:
-                    # It is an RtpStream (receiver) object
-                    Message.addMessage("Deleting Rx Stream: " + str(idOfStreamToBeDeleted))
-                    removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpRxStreamsDict, rtpRxStreamsDictMutex)
+                    elif type(streamToBeDeleted) == RtpStream:
+                        # It is an RtpStream (receiver) object
+                        Message.addMessage("Deleting Rx Stream: " + str(idOfStreamToBeDeleted))
+                        removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
-                # Force redraw
-                redrawScreen = True
+                    # Force redraw
+                    redrawScreen = True
 
-            except Exception as e:
-                Message.addMessage("[ERR: __displayThread. Delete Stream request failed: "+str(idOfStreamToBeDeleted)+
-                                   ", "+str(e))
+                except Exception as e:
+                    Message.addMessage("[ERR: __displayThread. Delete Stream request failed: "+str(idOfStreamToBeDeleted)+
+                                       ", "+str(e))
 
 
         # Monitor keyPressed[] for a Ctrl-C
