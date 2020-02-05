@@ -203,6 +203,8 @@ class Term(object):
     # White on black
     WhBla = "\033[37m"+"\033[40m"
 
+    DIM = "\033[2m"
+
     # Ascii seq to move the cursor to 1,1 (the origin)
     HOME = "\033[0;0H"
 
@@ -2518,13 +2520,24 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                                         # Attempt to humanise the data based on object type or clues given by the key name
                                         tableCell=str(humanise(key,streamDataStats[key]))
 
-                                        # Now attempt to colour code the table based on some tests
-                                        # is it a receive stream?
-                                        if type(streamData[1]) == RtpStream:
-                                            # If so, test the stream stats
-                                            if streamDataStats["historic_glitch_counter_last_10Sec"]> 0:
-                                                # If so, make the row red
-                                                tableCell=Term.FG(Term.RED)+tableCell
+                                        try:
+                                            # Now attempt to colour code the table based on some tests
+                                            # is it a receive stream?
+                                            if type(streamData[1]) == RtpStream:
+                                                # If so, test the stream stats
+                                                if streamDataStats["historic_glitch_counter_last_10Min"]> 0 or \
+                                                        streamDataStats["packet_data_received_1S_bytes"] == 0:
+                                                    # If so, make the row red
+                                                    tableCell=Term.FG(Term.RED)+tableCell
+
+                                            # is it a transmit stream?
+                                            if type(streamData[1]) == RtpGenerator:
+                                                if streamDataStats["Time to live"] == 0:
+                                                    # If tx stream has 'died', dim
+                                                    tableCell = Term.DIM+tableCell
+                                        except Exception as e:
+                                            Message.addMessage("ERR: __displayThread: (colour coding of stream tables) "+str(e))
+
                                     except Exception as e:
                                         # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
                                         tableCell="keyErr"
