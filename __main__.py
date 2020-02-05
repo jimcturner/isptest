@@ -3179,6 +3179,13 @@ class RtpGenerator(object):
             # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
             if self.timeToLive ==0:
                 break
+class ResultsReceiver(object):
+    # An object that will act as a UDP receiver. It will receive server reports
+    def __init__(self,rxPort):
+        self.rxPort = rxPort
+
+    def __receiverThread(self):
+        pass
 
 def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
     # Autonomous thread to iterate over rtpRxStreamsDict and poll RtpStream eventLists for new events
