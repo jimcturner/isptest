@@ -2303,9 +2303,27 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                             stream.enableJitter()
                             Message.addMessage("[x] Stream " + str(idOfStream) + " jitter simulation enabled")
 
-
                 except Exception as e:
                     Message.addMessage("ERR: __displayThread [x] enabled/disable jitter simulation. " + str(e))
+
+        if keyPressed[0] == 'c':
+            # Insert minor packet loss for the selected stream (< glitch threshold)
+            keyPressed[0] = ''  # Clear key buffer
+            # Confirm that the current view has any streams within its data set
+            if len(views[selectedView][2]) > 0:
+                try:
+                    # Get handle on selected stream
+                    stream = views[selectedView][2][selectedTableRow][1]
+                    idOfStream = views[selectedView][2][selectedTableRow][0]
+
+                    # Confirm that the stream is an RtpGenerator
+                    if type(stream) == RtpGenerator:
+                        # Get current glitch threshold
+                        glitchLength_packets=5
+                        stream.simulatePacketLoss(glitchLength_packets)
+
+                except Exception as e:
+                    Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
 
         ############################# Screen drawing starts here
         if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
@@ -2971,9 +2989,6 @@ class RtpGenerator(object):
         rtpPayloadType = 0b00000000
         rtpSequenceNo = 0
 
-        # enablePacketGeneration = True
-        enableJitter = False
-
         # Calculate tx period required to provide supplied txRate for a given stringLength
         # Note: This is an estimate because time.sleep() is inherently unreliable so we have
         # to recalculate once the generator is running by averaging over a 1 sec period
@@ -3000,17 +3015,8 @@ class RtpGenerator(object):
                                       self.syncSourceIdentifier)
             MESSAGE = txRtpHeader + self.rtpPayload.encode('ascii')
 
-            # Spacebar will introduce a single packet loss
-            # If temporaryInhibit was set, clear it
-            temporaryInhibit = False
-            if self.keyPressed[0] == ' ':
-                # Clear keyboard buffer
-                self.keyPressed[0] = ''
-                temporaryInhibit = True
-                Message.addMessage("[Spacebar] - Inhibit single packet")
-
             # If all tx flags are set then transmit the rtp packet
-            if self.enablePacketGeneration == True and temporaryInhibit == False:
+            if self.enablePacketGeneration == True and self.packetsToSkip < 1:
                 try:
                     txSock.sendto(MESSAGE, (self.UDP_TX_IP, self.UDP_TX_PORT))
                     # Update tx bytes counter (taking packet headers into account)
@@ -3021,19 +3027,9 @@ class RtpGenerator(object):
                 except Exception as e:
                     Message.addMessage("\x1B[31m__rtpGenerator() txSock.sendto(). Exiting. \x1B[0m " + str(e))
                     time.sleep(1)  # Throttle rate of error messages from this thread
-
-            # if self.keyPressed[0] == 'j':
-            #     # Turn jitter on/off by pressing 'j'
-            #     # Clear keyboard buffer
-            #     self.keyPressed[0] = ''
-            #     if enableJitter == False:
-            #         enableJitter = True
-            #         Message.addMessage("[j] jitter enabled")
-            #
-            #     else:
-            #         enableJitter = False
-            #         Message.addMessage("[j] jitter disabled")
-
+            else:
+                # Decrement self.packetsToSkip. Once this var reaches zero, packet generation will resume
+                self.packetsToSkip -= 1
 
             ###########
             # Increment rtp sequence number for next iteration of the loop
