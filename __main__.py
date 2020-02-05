@@ -3184,8 +3184,16 @@ class ResultsReceiver(object):
     def __init__(self,rxPort):
         self.rxPort = rxPort
 
-    def __receiverThread(self):
-        pass
+        # Start the listener thread
+        self.resultsReceiverThread = threading.Thread(target=self.__resultsReceiverThread(), args=())
+        self.resultsReceiverThread.daemon = True
+        self.resultsReceiverThread.start()
+
+    def __resultsReceiverThread(self):
+        while True:
+            Message.addMessage("ResultsReceiver.__receiverThread()"+\
+                               str(self.rxPort)+", "+str(datetime.datetime.now()))
+            time.sleep(1)
 
 def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
     # Autonomous thread to iterate over rtpRxStreamsDict and poll RtpStream eventLists for new events
@@ -3606,6 +3614,10 @@ def main(argv):
         rtpTxStreamsDictMutex.acquire()
         rtpTxStreamsDict[SYNC_SOURCE_ID] = rtpGenerator
         rtpTxStreamsDictMutex.release()
+
+        # create a UDP Server results receiver object
+        resultsReceiver = ResultsReceiver(1234)
+
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
