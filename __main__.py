@@ -2222,11 +2222,12 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
         if keyPressed[0] == 'd':
             # Delete selected stream (selected table row)
             keyPressed[0] = ''  # Clear key buffer
-            # Get handle on selected stream
-            streamToBeDeleted = views[selectedView][2][selectedTableRow][1]
-            idOfStreamToBeDeleted = views[selectedView][2][selectedTableRow][0]
-            Message.addMessage("streamToDelete: "+str(idOfStreamToBeDeleted))
             try:
+                # Get handle on selected stream
+                streamToBeDeleted = views[selectedView][2][selectedTableRow][1]
+                idOfStreamToBeDeleted = views[selectedView][2][selectedTableRow][0]
+                Message.addMessage("streamToDelete: "+str(idOfStreamToBeDeleted))
+
                 # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
                 if type(streamToBeDeleted) == RtpGenerator:
                     # It is a generator object
