@@ -805,7 +805,8 @@ class RtpStream(object):
         self.__accessRtpStreamEventListMutex = threading.Lock()
 
         # Add a name field (which can be set with a friendly name (via a setter method) to identify the stream)
-        self.__stats["stream_friendly_name"] = " " * 12
+        self.maxNameLength = 10
+        self.__stats["stream_friendly_name"] = " " * self.maxNameLength
 
         # Create empty list to hold rtp stream data as it is received by the socket
         self.rtpStreamData = []
@@ -1406,14 +1407,14 @@ class RtpStream(object):
     # Define setter methods
     def setFriendlyName(self, friendlyName):
         # Thread-safe method to set the friendly name field
-        maxNameLength = 10
+
         # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
-        if len(friendlyName) < maxNameLength:
+        if len(friendlyName) < self.maxNameLength:
             # Too short, so Pad out name to x chars
-            friendlyName += (maxNameLength - len(friendlyName)) * " "
+            friendlyName += (self.maxNameLength - len(friendlyName)) * " "
         else:
             # Too big, so truncate
-            friendlyName = friendlyName[:maxNameLength]
+            friendlyName = friendlyName[:self.maxNameLength]
 
         self.__accessRtpStreamStatsMutex.acquire()
         self.__stats["stream_friendly_name"]=friendlyName
@@ -1785,7 +1786,7 @@ def humanise(key,value):
         return value
 
     if key == "stream_syncSource" or key == 'Sync Source ID':
-        value = str(value).zfill(10)
+        value = str(value).rjust(10)
 
     # Render dates concisely
     if type(value) == datetime.datetime:
@@ -1825,7 +1826,11 @@ def humanise(key,value):
             value="forever"
         else:
             value=datetime.timedelta(seconds=value)
+        return value
 
+    if key == "stream_srcAddress" or key == "stream_rxAddress" or key == 'Dest IP':
+        # Should pad ip addresses to the max no of characters aaa.bbb.ccc.ddd
+        value =value.ljust(15)
         return value
 
     else:
@@ -1886,7 +1891,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    [" %\nloss", "glitch_packets_lost_total_percent"],
                    ["Last\nglitch","glitch_most_recent_timestamp"],
                    ["glitch\nperiod","glitch_mean_time_between_glitches"],
-                   ["Count","glitch_counter_total_glitches"]
+                   ["Count","glitch_counter_total_glitches"],
+                   ["CPU\n %","stream_processor_utilisation_percent"]
                    ],availableRtpRxStreamList])
 
     views.append(["Stream",
@@ -1897,8 +1903,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Src\nport", "stream_srcPort"],
                    ["Dst Addr", "stream_rxAddress"],
                    ["Dst\nport", "stream_rxPort"],
-                   ["  Time\nelapsed","stream_time_elapsed_total"],
-                   ["CPU\n %","stream_processor_utilisation_percent"]
+                   ["  Time\nelapsed","stream_time_elapsed_total"]
                    ],availableRtpRxStreamList])
 
     views.append(["Packet",
@@ -2743,7 +2748,8 @@ class RtpGenerator(object):
         self.syncSourceIdentifier = syncSourceID
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
         self.elapsedTime = datetime.timedelta()
-        self.friendlyName = " "*10
+        self.maxNameLength = 10
+        self.friendlyName = " "*self.maxNameLength
         self.timeToLive = timeToLive
 
         # Test to see if a UDP source port was specified
@@ -2780,14 +2786,14 @@ class RtpGenerator(object):
         # Ultimately this name will be transmitted as part of the stream (so that the receiver
         # can auto-set the friendly name of the stream at the rx end)
         # Currently it just sets an instance variable
-        maxNameLength = 10
+
         # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
-        if len(friendlyName) < maxNameLength:
+        if len(friendlyName) < self.maxNameLength:
             # Too short, so Pad out name to x chars
-            friendlyName += (maxNameLength - len(friendlyName)) * " "
+            friendlyName += (self.maxNameLength - len(friendlyName)) * " "
         else:
             # Too big, so truncate
-            friendlyName = friendlyName[:maxNameLength]
+            friendlyName = friendlyName[:self.maxNameLength]
         # assign to instance variable
         self.friendlyName = friendlyName
 
