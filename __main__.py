@@ -1852,24 +1852,16 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     availableRtpTxStreamList = []
 
     selectedView = 0  # Keeps track of which view is currently being displayed
-    selectedRxStream = [0]  # Keeps track of which Rx stream is currently highlighted in the streams table
-                            # Note. It has to be used like a pointer because it is shared (mutable) therefore
-                            # declare it as single element list
-    selectedTxStream = [0]  # Keeps track of which Tx stream is currently highlighted in the streams table
-                            # Note. It has to be used like a pointer because it is shared (mutable) therefore
-                            # declare it as single element list
-
-    selectedTableRow = 0
+    selectedTableRow = 0    # Keeps track of the selected row on the stream table
 
     # define views, tables headings and keys
     # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
     # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
     # views =[name of view 1, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],
-    #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],dataSet[],rowSelector(int)]
+    #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],dataSet[]]
     # view [n][0] will be the name of the view (used to generate the navigation bar)
     # view [n][1] is a tuple containing [column title, the stats dictionary key relating to that parameter]
     # view [n][2] is a reference to the dataset for this view
-    # view [n][3] is a reference to a ingle element list (an int) storing the current selected row of the dataset in view [n][2]
     views = []
 
     if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
@@ -1914,8 +1906,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     views.append(["Packet",
                   [["#",0], # Used as an index[]
                    ["Name", "stream_friendly_name"],
-                   ["First Seen","packet_first_packet_received_timestamp"],
-                   ["Last seen","packet_last_seen_received_timestamp"],
+                   ["First Seen\npacket","packet_first_packet_received_timestamp"],
+                   ["Last seen\npacket","packet_last_seen_received_timestamp"],
                    ["pack\np/s","packet_counter_1S"],
                    ["Length\n(bytes)","packet_payload_size_mean_1S_bytes"],
                    ["Recv\nperiod","packet_mean_receive_period_uS"],
@@ -2238,6 +2230,33 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             except:
                 Message.addMessage("ERR: __diaplayThread: No stream to availble to delete ")
 
+        if keyPressed[0] == 'f':
+            # Delete selected stream (selected table row)
+            keyPressed[0] = ''  # Clear key buffer
+            # Get handle on selected stream
+            streamToBeDeleted = views[selectedView][2][selectedTableRow][1]
+            idOfStreamToBeDeleted = views[selectedView][2][selectedTableRow][0]
+            Message.addMessage("streamToDelete: "+str(idOfStreamToBeDeleted))
+            try:
+                # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
+                if type(streamToBeDeleted) == RtpGenerator:
+                    # It is a generator object
+                    Message.addMessage("Deleting Tx Stream: " + str(idOfStreamToBeDeleted))
+                    # Remove the stream from the rtpTxStreamsDict dictionary
+                    removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamsDict, rtpTxStreamsDictMutex)
+                    # Instruct the RtpGenerator object to die
+                    streamToBeDeleted.killStream()
+
+                elif type(streamToBeDeleted) == RtpStream:
+                    # It is an RtpStream (receiver) object
+                    Message.addMessage("Deleting Rx Stream: " + str(idOfStreamToBeDeleted))
+                    removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpRxStreamsDict, rtpRxStreamsDictMutex)
+
+            except Exception as e:
+                Message.addMessage("[ERR: __displayThread. Delete Stream request: "+str(idOfStreamToBeDeleted)+
+                                   ", "+str(e))
+
+
         # Monitor keyPressed[] for a Ctrl-C
         if keyPressed[0] == 'Ctrl-C':
             keyPressed[0] = ''  # Clear key buffer
@@ -2303,15 +2322,6 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # The dataset is pointed to by the 3rd element of each view array
                 dataSetToDisplay=views[selectedView][2]
                 streamTableDataSetLength = len(dataSetToDisplay)
-                # Get a handle on the row selector relevent to this data set
-                # view[3] represents a single element list (an int) keeping track of the currently selected row
-                # selectedRow = views[selectedView][3][0]
-                Message.addMessage("***")
-                Message.addMessage("selectedTxStream: "+str(selectedTxStream[0])+\
-                                   ", selectedRxStream: "+str(selectedRxStream[0]))
-                Message.addMessage(
-                    "streamTableDataSetLength(" + str(streamTableDataSetLength) + "), selectedTableRow(" + str(
-                        selectedTableRow) + ")")
 
                 # Attempt to create the table data
                 if streamTableDataSetLength >0:
@@ -2335,7 +2345,6 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                         streamTableFirstRow=selectedTableRow
 
 
-
                     # Calculate the last row to display based on the starting row and the height of the table
                     streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
 
@@ -2354,8 +2363,6 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 try:
                     # Confirm that there are some available streams
                     if streamTableDataSetLength > 0:
-                        Message.addMessage("streamTableFirstRow: "+str(streamTableFirstRow)+", streamTableLastRow: "
-                                           +str(streamTableLastRow))
                         # Iterate over a specified portion of the dataSetToDisplay[]
                         for x in range(streamTableFirstRow, streamTableLastRow+1):
                             # Isolate the stream from the dataSetToDisplay[]
