@@ -2067,12 +2067,17 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
         if (keyPressed[0] == 'newFriendlyNameEntered'):
             keyPressed[0] = ''  # Clear key buffer
+            # Get handle on selected stream
+            streamToBeModified = views[selectedView][2][selectedTableRow][1]
+            idOfStreamToBeModified = views[selectedView][2][selectedTableRow][0]
+
             try:
+                # Capture name string from keyPressed[] (second element)
                 newFriendlyName=keyPressed[1]
                 del keyPressed[1]  # Remove key buffer array now eve stored it
-                Message.addMessage("newFriendlyNameEntered: "+newFriendlyName)
+                Message.addMessage("Info: newFriendlyNameEntered: "+newFriendlyName + " for stream " + str(idOfStreamToBeModified))
                 # Attempt to modify the stream name
-                availableRtpRxStreamList[selectedRxStream[0]][1].setFriendlyName(newFriendlyName)
+                streamToBeModified.setFriendlyName(newFriendlyName)
 
             except Exception as e:
                 Message.addMessage(Term.FG((Term.RED))+"ERR: __displayThread() newFriendlyNameEntered: "+ str(e))
