@@ -3045,12 +3045,13 @@ class RtpGenerator(object):
                 # Bind to the socket, allows you to specify the source port
                 try:
                     txSock.bind(('0.0.0.0',int(self.UDP_TX_SRC_PORT)))
-
                 except Exception as e:
-                    Message.addMessage("ERR: RtpGenerator.__rtpGeneratorThread. txSock.bind. "+ str(e))
+                    Message.addMessage("ERR: RtpGenerator.__rtpGeneratorThread. txSock.bind (User supplied source port). "+ str(e))
             else:
                 # Let the OS determine the source port
                 txSock.bind(('0.0.0.0', 0))
+                # Store the OS generated source port in the instance var
+                self.UDP_TX_SRC_PORT = txSock.getsockname()[1]
         except Exception as e:
             Message.addMessage("\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Exiting\x1B[0m" + self.UDP_TX_IP + ":" + \
                                str(self.UDP_TX_PORT) + ", " + str(e))
@@ -3060,6 +3061,7 @@ class RtpGenerator(object):
         msg = "Traffic Generator thread started. Sending to " + self.UDP_TX_IP + ":" + str(self.UDP_TX_PORT) + \
               ", txRate:" + str(self.txRate) + "bps, payloadLength:" + str(self.payloadLength)
         Message.addMessage(msg)
+        Message.addMessage(str(txSock.getsockname()) + ", " + str(self.UDP_TX_SRC_PORT))
 
         rtpParams = 0b01000000
         rtpPayloadType = 0b00000000
