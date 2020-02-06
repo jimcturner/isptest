@@ -22,6 +22,7 @@ import math
 import json
 from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
+import pickle
 # Non standard libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
@@ -3243,7 +3244,14 @@ class ResultsReceiver(object):
                 try:
                     # Wait for data (blocking function call)
                     data, addr = self.udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
-                    Message.addMessage("ResultsReceiver.__receiverThread()" + ", " + str(data))
+                    # Message.addMessage("ResultsReceiver.__receiverThread()" + ", " + str(data))
+                    # attempt to unpickle the received data to yield a stats dictionary
+                    try:
+                        stats = pickle.loads(data)
+                        Message.addMessage(str(stats["stream_syncSource"])+": Bytes received: " + str(stats["packet_data_received_total_bytes"]))
+                    except Exception as e:
+                        Message.addMessage("ERR: __resultsReceiverThread: pickle.loads: " + str(e))
+
                 except Exception as e:
                     Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
             else:
@@ -3256,7 +3264,7 @@ class ResultsTransmitter(object):
     # It is designed as a counterpart to class ResultsReceiver
     # Note. This will reply from the same UDP binding as used in main() socket.recvfrom
     def __init__(self, rtpStream):
-        self.relatedRtpRxStreamObject = rtpStream
+        self.parentRtpRxStream = rtpStream
         self.udpSocket = 0
         self.destAddr = 0
         self.destPort = 0
@@ -3267,7 +3275,7 @@ class ResultsTransmitter(object):
 
         # Get the destination addr and src port from the supplied rtpStream object
         self.syncSource, self.destAddr, self.destPort, self.friendlyName =\
-            self.relatedRtpRxStreamObject.getRTPStreamID()
+            self.parentRtpRxStream.getRTPStreamID()
 
         # Start the transmitter thread
         self.resultsTransmitterThread = threading.Thread(target=self.__resultsTransmitterThread, args=())
@@ -3282,15 +3290,19 @@ class ResultsTransmitter(object):
     def __resultsTransmitterThread(self):
         Message.addMessage(" __resultsTransmitterThread started: "+str(self.udpSocket))
         while self.transmitterActiveFlag:
-            self.udpSocket = self.relatedRtpRxStreamObject.getSocket()
+            self.udpSocket = self.parentRtpRxStream.getSocket()
             if self.udpSocket != 0:
                 # Get the destination addr and src port from the supplied rtpStream object
                 self.syncSource, self.destAddr, self.destPort, self.friendlyName = \
-                    self.relatedRtpRxStreamObject.getRTPStreamID()
+                    self.parentRtpRxStream.getRTPStreamID()
                 try:
-                    # Message.addMessage("ResultsTransmitter " + str(datetime.datetime.now()))
-                    self.udpSocket.sendto("Reply from [" + str(self.syncSource) + "] "+\
-                                          str(datetime.datetime.now().strftime("%H:%M:%S")),(self.destAddr, self.destPort))
+                    # We have a valid socket binding we can use, so transmit the data
+                    # Use pickle to serialise the stats dictionary
+                    stats = self.parentRtpRxStream.getRtpStreamStats()
+                    pickledStats=pickle.dumps(stats)
+                    # self.udpSocket.sendto("Reply from [" + str(self.syncSource) + "] "+\
+                    #                       str(datetime.datetime.now().strftime("%H:%M:%S")),(self.destAddr, self.destPort))
+                    self.udpSocket.sendto(pickledStats,(self.destAddr, self.destPort))
                 except Exception as e:
                     Message.addMessage("__resultsTransmitterThread sendto() "+ str(datetime.datetime.now()) + ", " + str(e))
             time.sleep(3)
