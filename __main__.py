@@ -3039,14 +3039,18 @@ class RtpGenerator(object):
         # Attempt to create UDP socket
         try:
             txSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
+            # Message.addMessage(str(txSock.get))
             # If a UDP source port has been specified, use it
             if self.UDP_TX_SRC_PORT >1024:
                 # Bind to the socket, allows you to specify the source port
                 try:
                     txSock.bind(('0.0.0.0',int(self.UDP_TX_SRC_PORT)))
+
                 except Exception as e:
                     Message.addMessage("ERR: RtpGenerator.__rtpGeneratorThread. txSock.bind. "+ str(e))
-
+            else:
+                # Let the OS determine the source port
+                txSock.bind(('0.0.0.0', 0))
         except Exception as e:
             Message.addMessage("\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Exiting\x1B[0m" + self.UDP_TX_IP + ":" + \
                                str(self.UDP_TX_PORT) + ", " + str(e))
@@ -3191,8 +3195,8 @@ class ResultsReceiver(object):
 
     def __resultsReceiverThread(self):
         while True:
-            Message.addMessage("ResultsReceiver.__receiverThread()"+\
-                               str(self.rxPort)+", "+str(datetime.datetime.now()))
+            # Message.addMessage("ResultsReceiver.__receiverThread()"+\
+            #                    str(self.rxPort)+", "+str(datetime.datetime.now()))
             time.sleep(1)
 
 def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
@@ -3616,7 +3620,7 @@ def main(argv):
         rtpTxStreamsDictMutex.release()
 
         # create a UDP Server results receiver object
-        resultsReceiver = ResultsReceiver(1234)
+        # resultsReceiver = ResultsReceiver(1234)
 
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
