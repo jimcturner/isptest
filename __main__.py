@@ -2127,7 +2127,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     # As a default, set tx rate to be 1 Mbps
                     txRate = 1048576
 
-                    rtpGenerator = RtpGenerator(keyPressed, destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, sourcePort)
+                    rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, sourcePort)
                     # Add the new stream to the rtpStreams dictionary
                     rtpTxStreamsDictMutex.acquire()
                     rtpTxStreamsDict[syncSourceID] = rtpGenerator
@@ -2895,7 +2895,7 @@ def __catchKeyboardPresses(keyPressed):
 # Define an RTP Generator that can run autonomously as a thread
 class RtpGenerator(object):
 
-    def __init__(self, keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, *srcPort):
+    def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, *srcPort):
         # The last argument (*srcPort) is optional. it allows you to specify a source port on creation
 
         # Assign instance variables
@@ -2905,7 +2905,6 @@ class RtpGenerator(object):
         self.txRate = txRate
         self.txPeriod = 0  # Calculated from self.txRate
         self.payloadLength = payloadLength
-        self.keyPressed = keyPressed
         self.txCounter_bytes = 0
         self.txActualTxRate_bps = 0
         self.txBps_1s = 0               # Used to 'sample' the actual tx rate
@@ -3052,9 +3051,6 @@ class RtpGenerator(object):
     def getJitterStatus(self):
         # Returns the status of self.jitterGenerationFlag
         return self.jitterGenerationFlag
-
-        # define a traffic generator method that will run as a thread
-    # def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
 
     def getUDPSocket(self):
         # returns a reference to the socket created by __rtpGeneratorThread
@@ -3717,11 +3713,11 @@ def main(argv):
         # Start traffic generator thread
         # If UDP source port specified
         if UDP_TX_SRC_PORT >0:
-            rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate,
+            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
                                         payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec, UDP_TX_SRC_PORT)
         else:
             # Otherwise create a new RtpGenerator without specifiying thr source port (the OS will decide)
-            rtpGenerator = RtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec)
+            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec)
 
         # Add the tx stream to the rtpStreams dictionary
         rtpTxStreamsDictMutex.acquire()
