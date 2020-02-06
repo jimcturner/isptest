@@ -788,7 +788,7 @@ class RtpStream(object):
     # Constructor method.
     # The RtpStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
-    def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold):
+    def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold, rxSocket):
 
         # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
         self.__stats = {}
@@ -799,6 +799,11 @@ class RtpStream(object):
         self.__stats["stream_rxAddress"] = rxAddress
         self.__stats["stream_rxPort"] = rxPort
         Message.addMessage("Creating RtpStream with syncSource: " + str(self.__stats["stream_syncSource"]))
+
+        # This is a reference to the UDP listening socket created in main() (to receive all incoming streams)
+        # We need it, because we want to be able to reply to the sending end using the same src/dest UDP ports
+        # that were used in sending the data to us (by the corresponding RtpGenerator at the far end
+        self.socket = rxSocket
 
         # Create a mutex lock to be used by the a thread
         # To set the lock use: __accessRtpDataMutex.acquire(), To release use: __accessRtpDataMutex.release()
@@ -904,6 +909,13 @@ class RtpStream(object):
         self.calculateThread = threading.Thread(target=self.__calculateThread, args=())
         self.calculateThread.daemon = True  # Thread will auto shutdown when the prog ends
         self.calculateThread.start()
+
+        # create a stream results transmitter object for this rx stream
+        resultsTransmitter = ResultsTransmitter(self)
+
+    def getSocket(self):
+        # Returns the receive UDP socket associated with this stream
+        return self.socket
 
     def __calculateJitter(self, prevRtpPacket):
         # Iterate over self.rtpStream to get total count of data received in this batch of data, no. of packets and also calculate
@@ -3230,10 +3242,39 @@ class ResultsReceiver(object):
 class ResultsTransmitter(object):
     # An object that will transmit stream results back from the receiving end to to the sender
     # It is designed as a counterpart to class ResultsReceiver
-    # Note. This will reply from the same
-    def __init__(self, udpSocket):
-        self.txAddress = txAddress
-        self.txPort = txPort
+    # Note. This will reply from the same UDP binding as used in main() socket.recvfrom
+    def __init__(self, rtpStream):
+        self.relatedRtpRxStreamObject = rtpStream
+        self.udpSocket = 0
+        self.destAddr = 0
+        self.destPort = 0
+        self.syncSource = 0
+        self.friendlyName = ""
+
+
+        # Get the destination addr and src port from the supplied rtpStream object
+        self.syncSource, self.destAddr, self.destPort, self.friendlyName =\
+            self.relatedRtpRxStreamObject.getRTPStreamID()
+
+        # Start the transmitter thread
+        self.resultsTransmitterThread = threading.Thread(target=self.__resultsTransmitterThread, args=())
+        self.resultsTransmitterThread.daemon = True
+        self.resultsTransmitterThread.start()
+
+    def __resultsTransmitterThread(self):
+        Message.addMessage(" __resultsTransmitterThread started: "+str(self.udpSocket))
+        while True:
+            self.udpSocket = self.relatedRtpRxStreamObject.getSocket()
+            if self.udpSocket != 0:
+                # Get the destination addr and src port from the supplied rtpStream object
+                self.syncSource, self.destAddr, self.destPort, self.friendlyName = \
+                    self.relatedRtpRxStreamObject.getRTPStreamID()
+                try:
+                    # Message.addMessage("ResultsTransmitter " + str(datetime.datetime.now()))
+                    self.udpSocket.sendto("Reply!!" + ,(self.destAddr, self.destPort))
+                except Exception as e:
+                    Message.addMessage("__resultsTransmitterThread sendto() "+ str(datetime.datetime.now()) + ", " + str(e))
+            time.sleep(1)
 
 
 def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
@@ -3656,7 +3697,7 @@ def main(argv):
         rtpTxStreamsDict[SYNC_SOURCE_ID] = rtpGenerator
         rtpTxStreamsDictMutex.release()
 
-        # create a UDP Server results receiver object
+        # create a stream results receiver object for this tx stream
         resultsReceiver = ResultsReceiver(rtpGenerator)
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
@@ -3731,7 +3772,7 @@ def main(argv):
                         rtpRxStreamsDictMutex.acquire()
                         rtpRxStreamsDict[rtpSyncSourceIdentifier] = \
                             RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP,
-                                      UDP_RX_PORT, glitchEventTriggerThreshold)
+                                      UDP_RX_PORT, glitchEventTriggerThreshold, sock)
                         rtpRxStreamsDictMutex.release()
                         # Now delete the entry from the temporary dict
                         rtpRxStreamTempDict.pop(rtpSyncSourceIdentifier,None)
