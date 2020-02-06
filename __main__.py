@@ -1719,7 +1719,6 @@ def addRtpStreamToDict(rtpStreamID, rtpStream, rtpStreamsDict, rtpStreamsDictMut
     rtpStreamsDict[rtpStreamID] = rtpStream
     rtpStreamsDictMutex.release()
 
-
 def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMutex):
     # This is a utility function for __displayThread
     # It's job is to compare the current working list inn use by __displayThread (currentStreamList[])
@@ -3306,7 +3305,7 @@ class ResultsTransmitter(object):
                     self.udpSocket.sendto(pickledStats,(self.destAddr, self.destPort))
                 except Exception as e:
                     Message.addMessage("__resultsTransmitterThread sendto() "+ str(datetime.datetime.now()) + ", " + str(e))
-            time.sleep(3)
+            time.sleep(0.5)
 
 
 def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
