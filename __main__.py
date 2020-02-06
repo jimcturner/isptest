@@ -2136,9 +2136,6 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
                     rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, sourcePort)
                     # Add the new stream to the rtpStreams dictionary
-                    # rtpTxStreamsDictMutex.acquire()
-                    # rtpTxStreamsDict[syncSourceID] = rtpGenerator
-                    # rtpTxStreamsDictMutex.release()
                     addRtpStreamToDict(syncSourceID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
 
                     # Force redraw
@@ -3732,9 +3729,7 @@ def main(argv):
             rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec)
 
         # Add the tx stream to the rtpStreams dictionary
-        rtpTxStreamsDictMutex.acquire()
-        rtpTxStreamsDict[SYNC_SOURCE_ID] = rtpGenerator
-        rtpTxStreamsDictMutex.release()
+        addRtpStreamToDict(SYNC_SOURCE_ID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
 
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
@@ -3805,12 +3800,12 @@ def main(argv):
                         # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
                         Message.addMessage(Fore.GREEN + str(rtpSyncSourceIdentifier) +
                                            " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
-                        # Add new stream to the rtpRxStreamsDict
-                        rtpRxStreamsDictMutex.acquire()
-                        rtpRxStreamsDict[rtpSyncSourceIdentifier] = \
-                            RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP,
+                        # Create and add the new stream to the rtpRxStreamsDict
+                        newRtpStream = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP,\
                                       UDP_RX_PORT, glitchEventTriggerThreshold, sock)
-                        rtpRxStreamsDictMutex.release()
+
+                        addRtpStreamToDict(rtpSyncSourceIdentifier, newRtpStream, rtpRxStreamsDict, rtpRxStreamsDictMutex)
+
                         # Now delete the entry from the temporary dict
                         rtpRxStreamTempDict.pop(rtpSyncSourceIdentifier,None)
 
