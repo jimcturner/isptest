@@ -1709,7 +1709,14 @@ def removeRtpStreamFromDict(streamID, rtpStreamsDict, rtpStreamsDictMutex):
         del rtpStreamsDict[streamID]
     except Exception as e:
         Message.addMessage("deleteRtpStreamObject(): ["+str(streamID)+"], "+str(e))
+    rtpStreamsDictMutex.release()
 
+def addRtpStreamToDict(rtpStreamID, rtpStream, rtpStreamsDict, rtpStreamsDictMutex):
+    # A shortcut function that will create a new entry in the supplied dictionary
+    # It is used to (safely) populate rtpTxStreamsDict, rtpRxStreamsDict and rtpStreamResultsDict
+    rtpStreamsDictMutex.acquire()
+    # Add the object to the specified dictionary with using rtpStreamID as the key
+    rtpStreamsDict[rtpStreamID] = rtpStream
     rtpStreamsDictMutex.release()
 
 
@@ -2129,9 +2136,10 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
                     rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, sourcePort)
                     # Add the new stream to the rtpStreams dictionary
-                    rtpTxStreamsDictMutex.acquire()
-                    rtpTxStreamsDict[syncSourceID] = rtpGenerator
-                    rtpTxStreamsDictMutex.release()
+                    # rtpTxStreamsDictMutex.acquire()
+                    # rtpTxStreamsDict[syncSourceID] = rtpGenerator
+                    # rtpTxStreamsDictMutex.release()
+                    addRtpStreamToDict(syncSourceID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
 
                     # Force redraw
                     redrawScreen = True
@@ -3683,7 +3691,7 @@ def main(argv):
     keyPressed = ['']
 
 
-    # Create a dictionary of tx streams
+    # Create a dictionaries for all streams
     rtpTxStreamsDict ={}
     # Create a mutex lock for the tx streams dictionary (for deleting objects)
     rtpTxStreamsDictMutex = threading.Lock()
@@ -3695,6 +3703,10 @@ def main(argv):
 
     # Create a mutex lock to be used when writing to the rtpRxStreamsDict (or deleting objects)
     rtpRxStreamsDictMutex = threading.Lock()
+
+    # Create a dictionary for the streams picked up by the ResultsReceiver threads
+    rtpStreamResultsDict = {}
+    rtpStreamResultsDictMutex = threading.Lock()
 
 
     # Start keyboard monitoring thread
