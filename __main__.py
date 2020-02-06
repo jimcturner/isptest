@@ -2895,6 +2895,7 @@ class RtpGenerator(object):
         self.enablePacketGeneration = True
         self.packetsToSkip = 0 # Set by simulatePacketLoss()
         self.jitterGenerationFlag = False
+        self.udpTxSocket = 0 # This is pointer to the socket created by __rtpGeneratorThread
 
         # Test to see if a UDP source port was specified
         if len(srcPort) > 0:
@@ -3028,6 +3029,10 @@ class RtpGenerator(object):
 
         # define a traffic generator method that will run as a thread
     # def __rtpGenerator(keyPressed, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength):
+
+    def getUDPSocket(self):
+        # returns a reference to the socket created by __rtpGeneratorThread
+        return self.udpTxSocket
     def __rtpGeneratorThread(self):
 
         # Constants. Used in calculation of transmitted data rate
@@ -3045,23 +3050,25 @@ class RtpGenerator(object):
                 # Bind to the socket, allows you to specify the source port
                 try:
                     txSock.bind(('0.0.0.0',int(self.UDP_TX_SRC_PORT)))
+                    self.udpTxSocket = txSock
                 except Exception as e:
                     Message.addMessage("ERR: RtpGenerator.__rtpGeneratorThread. txSock.bind (User supplied source port). "+ str(e))
             else:
                 # Let the OS determine the source port
                 txSock.bind(('0.0.0.0', 0))
-                # Store the OS generated source port in the instance var
+
+                # Store the socket and OS generated source port in the instance var
+                self.udpTxSocket = txSock
                 self.UDP_TX_SRC_PORT = txSock.getsockname()[1]
         except Exception as e:
-            Message.addMessage("\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Exiting\x1B[0m" + self.UDP_TX_IP + ":" + \
+            Message.addMessage("ERR:\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Exiting\x1B[0m" + self.UDP_TX_IP + ":" + \
                                str(self.UDP_TX_PORT) + ", " + str(e))
             time.sleep(2)
             exit()
 
-        msg = "Traffic Generator thread started. Sending to " + self.UDP_TX_IP + ":" + str(self.UDP_TX_PORT) + \
-              ", txRate:" + str(self.txRate) + "bps, payloadLength:" + str(self.payloadLength)
+        msg = "INFO: TX stream thread started. Sending to " + self.UDP_TX_IP + ":" + str(self.UDP_TX_PORT) + \
+              ", " + str(self.txRate) + "bps, Length:" + str(self.payloadLength) +" bytes, src Port: "+ str(self.UDP_TX_SRC_PORT)
         Message.addMessage(msg)
-        Message.addMessage(str(txSock.getsockname()) + ", " + str(self.UDP_TX_SRC_PORT))
 
         rtpParams = 0b01000000
         rtpPayloadType = 0b00000000
@@ -3186,20 +3193,48 @@ class RtpGenerator(object):
             if self.timeToLive ==0:
                 break
 class ResultsReceiver(object):
-    # An object that will act as a UDP receiver. It will receive server reports
-    def __init__(self,rxPort):
-        self.rxPort = rxPort
+    # An object that will act as a UDP receiver. It will receive server reports from ResultsTransmitter
+    # It is designed as a counterpart to class ResultsTransmitter
+    # It sets up a listener on the source port used by it's related RtpGenerator tx stream.
+    # Because you can't bind to the same addr/port twice, it therefore needs a reference to the
+    # UDP socket created within the RtpGenerator itself. This is obtained using the
+    # RtpGenerator.getUDPSocket() method
+    def __init__(self,rtpGeneratorObject):
+        self.relatedRtpGenerator = rtpGeneratorObject
+        self.udpSocket = 0
 
         # Start the listener thread
-        self.resultsReceiverThread = threading.Thread(target=self.__resultsReceiverThread(), args=())
+        self.resultsReceiverThread = threading.Thread(target=self.__resultsReceiverThread, args=())
         self.resultsReceiverThread.daemon = True
         self.resultsReceiverThread.start()
 
     def __resultsReceiverThread(self):
+        Message.addMessage("INFO: ResultsReceiver thread starting")
+
         while True:
-            # Message.addMessage("ResultsReceiver.__receiverThread()"+\
-            #                    str(self.rxPort)+", "+str(datetime.datetime.now()))
+            # Wait for relatedRtpGenerator object to set up a socket binding
+            self.udpSocket = self.relatedRtpGenerator.getUDPSocket()
+            if self.udpSocket != 0:
+                Message.addMessage("INFO: __resultsReceiverThread.udpSocket: " + str(self.udpSocket))
+                try:
+                    # Wait for data (blocking function call)
+                    data, addr = self.udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
+                    Message.addMessage("ResultsReceiver.__receiverThread()" + ", " + str(data))
+                except Exception as e:
+                    Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
+            else:
+                # Message.addMessage("INFO: __resultsReceiverThread: "+str(datetime.datetime.now()))
+                pass
             time.sleep(1)
+
+class ResultsTransmitter(object):
+    # An object that will transmit stream results back from the receiving end to to the sender
+    # It is designed as a counterpart to class ResultsReceiver
+    # Note. This will reply from the same
+    def __init__(self, udpSocket):
+        self.txAddress = txAddress
+        self.txPort = txPort
+
 
 def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
     # Autonomous thread to iterate over rtpRxStreamsDict and poll RtpStream eventLists for new events
@@ -3622,8 +3657,7 @@ def main(argv):
         rtpTxStreamsDictMutex.release()
 
         # create a UDP Server results receiver object
-        # resultsReceiver = ResultsReceiver(1234)
-
+        resultsReceiver = ResultsReceiver(rtpGenerator)
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
