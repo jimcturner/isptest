@@ -3984,8 +3984,8 @@ def main(argv):
                                         rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_TX_SRC_PORT)
         else:
             # Otherwise create a new RtpGenerator without specifiying thr source port (the OS will decide)
-            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, \
-                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, rtpRxStreamsDictMutex)
+            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,\
+                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex)
 
         # Add the tx stream to the rtpStreams dictionary
         addRtpStreamToDict(SYNC_SOURCE_ID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
