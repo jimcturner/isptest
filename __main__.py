@@ -3237,6 +3237,8 @@ class ResultsReceiver(object):
     def __resultsReceiverThread(self):
         Message.addMessage("INFO: ResultsReceiver thread starting")
 
+        rxMssage = ""  # Array (string) to store the reconstructed message
+        lastReceivedFragment = 0  # Tracks the most recently received fragment
         while True:
             # Wait for relatedRtpGenerator object to set up a socket binding
             self.udpSocket = self.relatedRtpGenerator.getUDPSocket()
@@ -3246,18 +3248,120 @@ class ResultsReceiver(object):
                     data, addr = self.udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
                     # Message.addMessage("ResultsReceiver.__receiverThread()" + ", " + str(data))
                     # attempt to unpickle the received data to yield a stats dictionary
+
+                    stats = {}
+
+                    # First round of unpickling - extract the fragment
                     try:
-                        stats = pickle.loads(data)
-                        Message.addMessage(str(stats["stream_syncSource"])+": Bytes received: " + str(stats["packet_data_received_total_bytes"]))
+                        fragment = pickle.loads(data)
+                        # Message.addMessage(str(len(rxMssage)) + ": " + str(fragment))
+                        # detect first fragment
+                        if fragment[0] == 0:
+                            # Clear away any existing contents of rxMessage
+                            rxMssage = ""
+                            # Append the message portion of this fragment to rxMessage
+                            rxMssage += fragment[3]
+                            # Record the index no of the last received fragment
+                            lastReceivedFragment = fragment[0]
+
+                        # Detect next expected fragment
+                        if fragment[0] == (lastReceivedFragment +1):
+                            # Append the message portion of this fragment to rxMessage
+                            rxMssage += fragment[3]
+                            # Record the index no of the last received fragment
+                            lastReceivedFragment = fragment[0]
+
+                        # Detect final fragment of message
+                        if fragment[0] == (fragment[1] - 1):
+                            # Append the final message portion of this fragment to rxMessage
+                            rxMssage += fragment[3]
+                            # Whole message has hopefully been reassembled
+                            # Now unpickle (for a second time) to reconstruct the originally pickled and tx'd Python object
+                            try:
+                                stats = pickle.loads(rxMssage)
+                            except Exception as e:
+                                Message.addMessage("unpickle 2: "+str(e))
+
+                        # Detect too many fragments
+                        if fragment[0] > (fragment[1] - 1):
+                            # More fragments than expected
+                            Message.addMessage("ERR: __resultsReceiverThread. More fragments received than expected")
+
                     except Exception as e:
-                        Message.addMessage("ERR: __resultsReceiverThread: pickle.loads: " + str(e))
+                            Message.addMessage("unpickle 1: " + str(e))
+
+                    # Check if we have some new data
+                    if len(stats) > 0:
+                        Message.addMessage(str(stats["stream_syncSource"]) + ": Bytes received: " + \
+                                           str(stats["packet_data_received_total_bytes"]))
 
                 except Exception as e:
                     Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
             else:
                 # Message.addMessage("INFO: __resultsReceiverThread: "+str(datetime.datetime.now()))
-                pass
-            time.sleep(1)
+                # Wait 1 second before checking to see if self.udpSocket is now valid
+                time.sleep(1)
+
+
+def fragmentString(inputString, maxLength):
+    # This function will break a string into a list of tuples containing smaller strings (portions).
+    # Each tuple will be of the form [a,b,c,d,e] where
+    # a = the index no of this portion,
+    # b = the total no of portions
+    # c = total length of reconstructed string
+    # d is the portion itself
+
+    inputLength=len(inputString)
+    # Determine whether input string is long enough to need fragmenting
+    if maxLength <2:
+        # The routine below breaks if maxLength = 1
+        return -1
+    if inputLength <= maxLength:
+        return [[0, 1, inputLength, inputString]] # Notice it's a tuple within a list [[ ]]
+
+    else:
+        # input string does need fragmenting
+        noOfCompleteFragments = int(inputLength / maxLength)
+        remainderLength = inputLength % maxLength
+
+        if remainderLength == 0:
+            totalNumberOfFragments = noOfCompleteFragments
+        else:
+            totalNumberOfFragments = noOfCompleteFragments + 1
+            outputList = []
+            startIndex = 0
+
+            for x in range(0,totalNumberOfFragments):
+                endIndex = startIndex + maxLength
+                if endIndex < inputLength:
+                    portion = inputString[startIndex:endIndex]
+                else:
+                    portion = inputString[startIndex:]
+                outputList.append([x,totalNumberOfFragments, inputLength, portion])
+                startIndex += maxLength
+            return outputList
+
+def unfragmentString(fragments):
+    # Takes a list of tuples created by fragmentString() and reassembles them into a complete string
+
+    output = ""
+    try:
+        # Check that the first fragment in the supplied list is actually the first message of the sent list by checking the index no
+        if fragments[0][0] == 0:
+            for fragment in fragments:
+                # print (str(fragment))
+                output += str(fragment[3])
+            #Check no part of the message has been lost by comapring decoded message length with total length value within the fragment.
+            if len(output) == fragments[0][2]:
+                return output
+            else:
+                # The assembled string is a different length to that suggested by the length indicator (fragment[2]
+                return -2
+        else:
+            # The list didn't start with the first fragment
+            return -1
+    except Exception as e:
+        Message.addMessage("ERR: unfragmentString() "+ str(e))
 
 class ResultsTransmitter(object):
     # An object that will transmit stream results back from the receiving end to to the sender
@@ -3287,8 +3391,10 @@ class ResultsTransmitter(object):
         # to end
         self.transmitterActiveFlag =False
 
+
+
     def __resultsTransmitterThread(self):
-        Message.addMessage(" __resultsTransmitterThread started: "+str(self.udpSocket))
+        Message.addMessage("INFO: __resultsTransmitterThread started: "+str(self.udpSocket))
         while self.transmitterActiveFlag:
             self.udpSocket = self.parentRtpRxStream.getSocket()
             if self.udpSocket != 0:
@@ -3300,11 +3406,23 @@ class ResultsTransmitter(object):
                     # Use pickle to serialise the stats dictionary
                     stats = self.parentRtpRxStream.getRtpStreamStats()
                     pickledStats=pickle.dumps(stats)
-                    # self.udpSocket.sendto("Reply from [" + str(self.syncSource) + "] "+\
-                    #                       str(datetime.datetime.now().strftime("%H:%M:%S")),(self.destAddr, self.destPort))
-                    self.udpSocket.sendto(pickledStats,(self.destAddr, self.destPort))
+                    # pickledStats = "the quick brown fox"
+                    # Set max safe UDP tx size to 576 (based on this:-
+                    # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
+                    MAX_UDP_TX_LENGTH = 512
+                    # Split the message up
+                    fragmentedMessage = fragmentString(pickledStats, MAX_UDP_TX_LENGTH)
+
+                    # iterate over fragments
+                    for fragment in fragmentedMessage:
+                        # Pickle and send each fragment one at a time
+                        txMessage = pickle.dumps(fragment)
+                        # Message.addMessage("tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
+                        self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
+
+
                 except Exception as e:
-                    Message.addMessage("__resultsTransmitterThread sendto() "+ str(datetime.datetime.now()) + ", " + str(e))
+                    Message.addMessage("ERR:__resultsTransmitterThread sendto() "+ str(datetime.datetime.now()) + ", " + str(e))
             time.sleep(0.5)
 
 
@@ -3460,7 +3578,13 @@ def main(argv):
     #     else:
     #         print (ord(x))
     #
-
+    # input = "The quick brown fox jumps over the lazy dog"
+    # output = fragmentString(input,1)
+    # print (str(output))
+    # reassembled = unfragmentString(output)
+    # print(reassembled)
+    #
+    # exit()
 
 
     init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
