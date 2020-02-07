@@ -3418,11 +3418,11 @@ class ResultsReceiver(object):
                                            str(stats["packet_data_received_total_bytes"]))
 
                         try:
-                            # Presume a stream exists in rtpRxStreamsDict{} and update the stats
-                            self.rtpRxStreamsDict[stats["stream_syncSource"]].updateStats(stats)
-                        except:
+                            # Presume a stream exists in rtpRxStreamsDict{} and update the stats for that stream
+                            self.rtpTxStreamResultsDict[stats["stream_syncSource"]].updateStats(stats)
+                        except Exception as e:
                             Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
-                                               + str(stats["stream_syncSource"]))
+                                               + str(stats["stream_syncSource"]) + ", " + str(e))
                             # Create new RtpStreamResults object
                             rtpStreamResults = RtpStreamResults()
                             # Immediately update the stats
