@@ -3237,7 +3237,7 @@ class ResultsReceiver(object):
     def __resultsReceiverThread(self):
         Message.addMessage("INFO: ResultsReceiver thread starting")
 
-        rxMssage = ""  # Array (string) to store the reconstructed message
+        rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
         lastReceivedFragment = 0  # Tracks the most recently received fragment
         while True:
             # Wait for relatedRtpGenerator object to set up a socket binding
@@ -3257,25 +3257,30 @@ class ResultsReceiver(object):
                         # detect first fragment
                         if fragment[0] == 0:
                             # Clear away any existing contents of rxMessage
-                            rxMssage = ""
+                            rxMssage = b""
                             # Append the message portion of this fragment to rxMessage
-                            rxMssage += fragment[3]
+                            # rxMssage += fragment[3]
+                            rxMssage =b"".join([rxMssage,fragment[3]])
+
                             # Record the index no of the last received fragment
                             lastReceivedFragment = fragment[0]
 
                         # Detect next expected fragment
                         if fragment[0] == (lastReceivedFragment +1):
                             # Append the message portion of this fragment to rxMessage
-                            rxMssage += fragment[3]
+                            # rxMssage += fragment[3]
+                            rxMssage =b"".join([rxMssage,fragment[3]])
                             # Record the index no of the last received fragment
                             lastReceivedFragment = fragment[0]
 
                         # Detect final fragment of message
                         if fragment[0] == (fragment[1] - 1):
                             # Append the final message portion of this fragment to rxMessage
-                            rxMssage += fragment[3]
+                            # rxMssage += fragment[3]
+                            rxMssage =b"".join([rxMssage,fragment[3]])
                             # Whole message has hopefully been reassembled
                             # Now unpickle (for a second time) to reconstruct the originally pickled and tx'd Python object
+                            # Message.addMessage("Final: " + str())
                             try:
                                 stats = pickle.loads(rxMssage)
                             except Exception as e:
