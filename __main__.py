@@ -3414,8 +3414,8 @@ class ResultsReceiver(object):
 
                     # Check if we have some new data
                     if len(stats) > 0:
-                        Message.addMessage(str(stats["stream_syncSource"]) + ": Bytes received: " + \
-                                           str(stats["packet_data_received_total_bytes"]))
+                        # Message.addMessage(str(stats["stream_syncSource"]) + ": Bytes received: " + \
+                        #                    str(stats["packet_data_received_total_bytes"]))
 
                         try:
                             # Presume a stream exists in rtpRxStreamsDict{} and update the stats for that stream
@@ -3429,7 +3429,10 @@ class ResultsReceiver(object):
                             rtpStreamResults.updateStats(stats)
                             # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
                             addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
-                        Message.addMessage("INFO:_resultsReceiverThread() rtpTxStreamResultsDict{} " + str(self.rtpTxStreamResultsDict))
+                        x =""
+                        for k,v in self.rtpTxStreamResultsDict.items():
+                            x+= str(k) + ", "
+                        Message.addMessage("INFO:_resultsReceiverThread() rtpTxStreamResultsDict{} " + x)
                 except Exception as e:
                     Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
             else:
