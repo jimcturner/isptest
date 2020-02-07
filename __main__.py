@@ -1977,7 +1977,7 @@ def humanise(key,value):
         return value
 
 
-def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex, rtpRxStreamsDict, rtpRxStreamsDictMutex):
+def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex, rtpRxStreamsDict, rtpRxStreamsDictMutex, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex):
 
     # Declare lists to hold list of available rx and tx streams that can be displayed
     # These lists are a list of tuples [x,y,z] where
@@ -3424,11 +3424,11 @@ class ResultsReceiver(object):
                             Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
                                                + str(stats["stream_syncSource"]))
                             # Create new RtpStreamResults object
-                            # rtpStreamResults = RtpStreamResults()
+                            rtpStreamResults = RtpStreamResults()
                             # Immediately update the stats
-                            # rtpStreamResults.updateStats(stats)
+                            rtpStreamResults.updateStats(stats)
                             # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
-                            # addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+                            addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
                         Message.addMessage("INFO:_resultsReceiverThread() rtpTxStreamResultsDict{} " + str(self.rtpTxStreamResultsDict))
                 except Exception as e:
                     Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
@@ -3970,7 +3970,7 @@ def main(argv):
 
     # Create a display thread
     displayThread = threading.Thread(target=__displayThread,
-                                     args=(MODE, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex, rtpRxStreamsDict, rtpRxStreamsDictMutex,))
+                                     args=(MODE, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex, rtpRxStreamsDict, rtpRxStreamsDictMutex, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,))
     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
     displayThread.start()
 
