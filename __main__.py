@@ -1529,6 +1529,116 @@ class RtpStream(object):
         # Now we've added the newData object to the list rtpStreamData[] we cab delete the newData object
         del newData
 
+# Define a class to encompass the results sent back from the receiving to the transmitting side (via the
+# ResultsTransmitter and ResultsReceiver objects)
+# It does't perform any calculations itself (unlike RtpStream) but it does have similar getter methods for results,
+# which should allow displayThread to treat this like an RtpStream object without any additional code alteration
+class RtpStreamResults(object):
+    def __init__(self):
+        # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
+        self.__stats = {}
+
+        # Create private empty list to hold Events for this RtpStream object. Accessible via a getter method
+        self.__eventList = []
+
+        # Create mutex lock for data access
+        self.__accessRtpStreamStatsMutex = threading.Lock()
+        # self.__stats["stream_syncSource"] = syncSource
+
+    def updateStats(self, statsDict):
+        # Will copy statsDict into self.__stats
+        self.__accessRtpStreamStatsMutex.acquire()
+        # Empty the current contents of the dictionary
+        self.__stats.clear()
+        # Copy supplied Dict contents into self.__stats{}
+        self.__stats = deepcopy(statsDict)
+        # Release the mutex
+        self.__accessRtpStreamStatsMutex.release()
+
+    def setFriendlyName(self, friendlyName):
+        # Thread-safe method to set the friendly name field
+
+        # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
+        if len(friendlyName) < self.maxNameLength:
+            # Too short, so Pad out name to x chars
+            friendlyName += (self.maxNameLength - len(friendlyName)) * " "
+        else:
+            # Too big, so truncate
+            friendlyName = friendlyName[:self.maxNameLength]
+
+        self.__accessRtpStreamStatsMutex.acquire()
+        self.__stats["stream_friendly_name"]=friendlyName
+        self.__accessRtpStreamStatsMutex.release()
+        return friendlyName
+
+    # Define getter methods
+    def getRTPStreamID(self):
+        # Thread-safe method to access stream syncSource, src address, src port and name fields
+        self.__accessRtpStreamStatsMutex.acquire()
+        stats = self.__stats.copy()
+        self.__accessRtpStreamStatsMutex.release()
+        return stats["stream_syncSource"], stats["stream_srcAddress"], \
+               stats["stream_srcPort"], self.__stats["stream_friendly_name"]
+
+    # Thread-safe method for accessing all RtpStream stats
+    def getRtpStreamStats(self):
+        self.__accessRtpStreamStatsMutex.acquire()
+        stats = self.__stats.copy()
+        self.__accessRtpStreamStatsMutex.release()
+        return stats
+
+    def getRtpStreamStatsByFilter(self, keyFilter):
+        # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
+        # Returns a list of tuples
+        self.__accessRtpStreamStatsMutex.acquire()
+        stats = self.__stats.copy()
+        self.__accessRtpStreamStatsMutex.release()
+        # Filter keys of stats by startswith('filter') into a new dictionary
+        filteredStats = {k: v for k, v in stats.items() if k.startswith(keyFilter)}
+        return filteredStats
+
+    # Thread-safe method for accessing realtime RtpStream eventList
+    # No args: Returns the entire list
+    # 1 arg: Returns the last n events
+    # 2 args: returns the range specified (inclusive)
+    def getRTPStreamEventList(self, *args):
+        self.__accessRtpStreamEventListMutex.acquire()
+        # Create copy of events list
+        eventList = list(self.__eventList)
+        self.__accessRtpStreamEventListMutex.release()
+
+        if len(args) == 2:
+            # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
+            try:
+                # Slice the list
+                return eventList[args[0]:args[1] + 1]
+            except Exception as e:
+                Message.addMessage("RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
+                                   str(args[1]) + ") requested start and end indexes out of range: " + str(e))
+        elif len(args) == 1:
+            # If one arg supplied, return the last n events.
+            # IF event list not as long as n, return what does exist
+            try:
+                return eventList[(args[0] * -1):]
+            except:
+                return eventList
+        else:
+            return eventList
+
+    # Method to strip off the oldest events from the eventList once the threshold is reached
+    # Note **this does not** set mutex locks itself, so should only be called from another method that
+    # already has guaranteed exclusive access
+    def __houseKeepEventList(self):
+        # Check size of self.__eventList[]
+        noOfMessagesToPurge = len(self.__eventList) - self.historicEventsLimit
+        if noOfMessagesToPurge > 0:
+            # Remove first x events
+            # oldSize = len(self.__eventList)
+            del self.__eventList[:noOfMessagesToPurge]
+            # newSize = len(self.__eventList)
+            # Message.addMessage("__houseKeepEventList() "+str(noOfMessagesToPurge)+
+            #                    " events removed"+str(oldSize)+">>"+str(newSize))
+
 
 def createTable(inputDictionary, title):
     # This function will take a dictionary and turn it into a two column table using terminaltables.Singletable
@@ -2134,7 +2244,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     txRate = 1048576
 
                     rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, \
-                                                rtpRxStreamsDict, rtpRxStreamsDictMutex, sourcePort)
+                                                rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, sourcePort)
                     # Add the new stream to the rtpStreams dictionary
                     addRtpStreamToDict(syncSourceID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
 
@@ -2901,7 +3011,7 @@ def __catchKeyboardPresses(keyPressed):
 class RtpGenerator(object):
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
-                 rtpRxStreamsDict, rtpRxStreamsDictMutex, *srcPort):
+                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, *srcPort):
         # The last argument (*srcPort) is optional. it allows you to specify a source port on creation
 
         # Assign instance variables
@@ -2924,6 +3034,8 @@ class RtpGenerator(object):
         self.packetsToSkip = 0 # Set by simulatePacketLoss()
         self.jitterGenerationFlag = False
         self.udpTxSocket = 0 # This is pointer to the socket created by __rtpGeneratorThread
+        self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
+        self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
 
         # Test to see if a UDP source port was specified
         if len(srcPort) > 0:
@@ -3231,10 +3343,14 @@ class ResultsReceiver(object):
         self.relatedRtpGenerator = rtpGeneratorObject
         self.udpSocket = 0
 
+        self.rtpTxStreamResultsDict = rtpGeneratorObject.rtpTxStreamResultsDict
+        self.rtpTxStreamResultsDictMutex = rtpGeneratorObject.rtpTxStreamResultsDictMutex
+
         # Start the listener thread
         self.resultsReceiverThread = threading.Thread(target=self.__resultsReceiverThread, args=())
         self.resultsReceiverThread.daemon = True
         self.resultsReceiverThread.start()
+
 
     def __resultsReceiverThread(self):
         Message.addMessage("INFO: ResultsReceiver thread starting")
@@ -3301,6 +3417,19 @@ class ResultsReceiver(object):
                         Message.addMessage(str(stats["stream_syncSource"]) + ": Bytes received: " + \
                                            str(stats["packet_data_received_total_bytes"]))
 
+                        try:
+                            # Presume a stream exists in rtpRxStreamsDict{} and update the stats
+                            self.rtpRxStreamsDict[stats["stream_syncSource"]].updateStats(stats)
+                        except:
+                            Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
+                                               + str(stats["stream_syncSource"]))
+                            # Create new RtpStreamResults object
+                            # rtpStreamResults = RtpStreamResults()
+                            # Immediately update the stats
+                            # rtpStreamResults.updateStats(stats)
+                            # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
+                            # addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+                        Message.addMessage("INFO:_resultsReceiverThread() rtpTxStreamResultsDict{} " + str(self.rtpTxStreamResultsDict))
                 except Exception as e:
                     Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
             else:
@@ -3829,8 +3958,10 @@ def main(argv):
     # Create a mutex lock to be used when writing to the rtpRxStreamsDict (or deleting objects)
     rtpRxStreamsDictMutex = threading.Lock()
 
-
-
+    # Create a dictionary to hold the server reports/results of the tx streams
+    rtpTxStreamResultsDict = {}
+    # Create an associated mutex
+    rtpTxStreamResultsDictMutex = threading.Lock()
 
     # Start keyboard monitoring thread
     catchKeyboardPresses = threading.Thread(target=__catchKeyboardPresses, args=(keyPressed,))
@@ -3850,11 +3981,11 @@ def main(argv):
         if UDP_TX_SRC_PORT >0:
             rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
                                         payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec, \
-                                        rtpRxStreamsDict, rtpRxStreamsDictMutex, UDP_TX_SRC_PORT)
+                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_TX_SRC_PORT)
         else:
             # Otherwise create a new RtpGenerator without specifiying thr source port (the OS will decide)
             rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, \
-                                        txStreamTimeToLive_sec, rtpRxStreamsDict, rtpRxStreamsDictMutex)
+                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, rtpRxStreamsDictMutex)
 
         # Add the tx stream to the rtpStreams dictionary
         addRtpStreamToDict(SYNC_SOURCE_ID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
