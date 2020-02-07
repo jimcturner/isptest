@@ -2133,7 +2133,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     # As a default, set tx rate to be 1 Mbps
                     txRate = 1048576
 
-                    rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, sourcePort)
+                    rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, \
+                                                rtpRxStreamsDict, rtpRxStreamsDictMutex, sourcePort)
                     # Add the new stream to the rtpStreams dictionary
                     addRtpStreamToDict(syncSourceID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
 
@@ -2899,7 +2900,8 @@ def __catchKeyboardPresses(keyPressed):
 # Define an RTP Generator that can run autonomously as a thread
 class RtpGenerator(object):
 
-    def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, *srcPort):
+    def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
+                 rtpRxStreamsDict, rtpRxStreamsDictMutex, *srcPort):
         # The last argument (*srcPort) is optional. it allows you to specify a source port on creation
 
         # Assign instance variables
@@ -3827,9 +3829,7 @@ def main(argv):
     # Create a mutex lock to be used when writing to the rtpRxStreamsDict (or deleting objects)
     rtpRxStreamsDictMutex = threading.Lock()
 
-    # Create a dictionary for the streams picked up by the ResultsReceiver threads
-    rtpStreamResultsDict = {}
-    rtpStreamResultsDictMutex = threading.Lock()
+
 
 
     # Start keyboard monitoring thread
@@ -3849,10 +3849,12 @@ def main(argv):
         # If UDP source port specified
         if UDP_TX_SRC_PORT >0:
             rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
-                                        payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec, UDP_TX_SRC_PORT)
+                                        payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec, \
+                                        rtpRxStreamsDict, rtpRxStreamsDictMutex, UDP_TX_SRC_PORT)
         else:
             # Otherwise create a new RtpGenerator without specifiying thr source port (the OS will decide)
-            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec)
+            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, \
+                                        txStreamTimeToLive_sec, rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
         # Add the tx stream to the rtpStreams dictionary
         addRtpStreamToDict(SYNC_SOURCE_ID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
