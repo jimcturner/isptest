@@ -3419,7 +3419,7 @@ class ResultsTransmitter(object):
                     # iterate over fragments
                     for fragment in fragmentedMessage:
                         # Pickle and send each fragment one at a time
-                        txMessage = pickle.dumps(fragment).encode('ascii')
+                        txMessage = pickle.dumps(fragment)
                         # Message.addMessage("tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
                         self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
 
