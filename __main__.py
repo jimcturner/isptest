@@ -3254,7 +3254,6 @@ class ResultsReceiver(object):
                     # First round of unpickling - extract the fragment
                     try:
                         fragment = pickle.loads(data)
-                        # Message.addMessage(str(len(rxMssage)) + ": " + str(fragment))
                         # detect first fragment
                         if fragment[0] == 0:
                             # Clear away any existing contents of rxMessage
@@ -3280,7 +3279,7 @@ class ResultsReceiver(object):
                             try:
                                 stats = pickle.loads(rxMssage)
                             except Exception as e:
-                                Message.addMessage("unpickle 2: "+str(e))
+                                Message.addMessage("ERR: __resultsReceiverThread(2): "+str(e))
 
                         # Detect too many fragments
                         if fragment[0] > (fragment[1] - 1):
@@ -3288,7 +3287,7 @@ class ResultsReceiver(object):
                             Message.addMessage("ERR: __resultsReceiverThread. More fragments received than expected")
 
                     except Exception as e:
-                            Message.addMessage("unpickle 1: " + str(e))
+                            Message.addMessage("ERR: __resultsReceiverThread(1): " + str(e))
 
                     # Check if we have some new data
                     if len(stats) > 0:
@@ -3298,7 +3297,6 @@ class ResultsReceiver(object):
                 except Exception as e:
                     Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
             else:
-                # Message.addMessage("INFO: __resultsReceiverThread: "+str(datetime.datetime.now()))
                 # Wait 1 second before checking to see if self.udpSocket is now valid
                 time.sleep(1)
 
@@ -3416,7 +3414,7 @@ class ResultsTransmitter(object):
                     # iterate over fragments
                     for fragment in fragmentedMessage:
                         # Pickle and send each fragment one at a time
-                        txMessage = pickle.dumps(fragment)
+                        txMessage = pickle.dumps(fragment).encode('ascii')
                         # Message.addMessage("tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
                         self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
 
