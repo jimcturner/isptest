@@ -1994,6 +1994,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
     availableRtpRxStreamList = []
     availableRtpTxStreamList = []
+    availableRtpTxResultsList = []
 
     selectedView = 0  # Keeps track of which view is currently being displayed
     selectedTableRow = 0    # Keeps track of the selected row on the stream table
@@ -2020,6 +2021,14 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                        ["Bytes\n tx'd", 'Bytes transmitted'],
                        [" Time\nremain", 'Time to live'],
                        ],availableRtpTxStreamList])
+    # If actually the receiving end, use availableRtpRxStreamList[] as a source for the stream tables
+    if operationMode == 'RECEIVE': #or operationMode == 'LOOPBACK':
+        streamResultsDataSet = availableRtpRxStreamList
+
+    # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
+    else:
+        streamResultsDataSet = availableRtpTxResultsList
+
 
     views.append(["Summary",
                   [["#",0], # Used as an index
@@ -2033,7 +2042,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["glitch\nperiod","glitch_mean_time_between_glitches"],
                    ["Count","glitch_counter_total_glitches"],
                    ["CPU\n %","stream_processor_utilisation_percent"]
-                   ],availableRtpRxStreamList])
+                   ],streamResultsDataSet])
 
     views.append(["Stream",
                   [["#",0], # Used as an index
@@ -2044,7 +2053,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Dst Addr", "stream_rxAddress"],
                    ["Dst\nport", "stream_rxPort"],
                    ["  Time\nelapsed","stream_time_elapsed_total"]
-                   ],availableRtpRxStreamList])
+                   ],streamResultsDataSet])
 
     views.append(["Packet",
                   [["#",0], # Used as an index[]
@@ -2056,7 +2065,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Recv\nperiod","packet_mean_receive_period_uS"],
                    ["Bytes\nRcvd","packet_data_received_total_bytes"],
                    #["",""],
-                   ],availableRtpRxStreamList])
+                   ],streamResultsDataSet])
 
     views.append(["Glitch",
                   [["#", 0],  # Used as an index[]
@@ -2069,7 +2078,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Total\nGlitch", "glitch_counter_total_glitches"],
                    ["Ignored", "glitch_glitches_ignored_counter"],
                    ["Threshold", "glitch_Event_Trigger_Threshold_packets"],
-                   ],availableRtpRxStreamList])
+                   ],streamResultsDataSet])
 
     views.append(["Historic",
                   [["#", 0],  # Used as an index[],
@@ -2080,7 +2089,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["1Min\n", "historic_glitch_counter_last_1Min"],
                    ["10Sec\n", "historic_glitch_counter_last_10Sec"],
                    #["", ""],
-                   ],availableRtpRxStreamList])
+                   ],streamResultsDataSet])
 
     views.append(["Jitter",
                   [["#", 0],  # Used as an index[]
@@ -2090,7 +2099,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Max", "jitter_max_uS"],
                    ["Range", "jitter_range_uS"],
                    ["1S \nmean", "jitter_mean_1S_uS"],
-                   ],availableRtpRxStreamList])
+                   ],streamResultsDataSet])
 
     # views.append(["Misc",
     #               [["#", 0],  # Used as an index[]
@@ -2148,7 +2157,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
         # Update available streams lists
         __updateAvailableStreamsList(availableRtpRxStreamList,rtpRxStreamsDict, rtpRxStreamsDictMutex)
         __updateAvailableStreamsList(availableRtpTxStreamList,rtpTxStreamsDict, rtpTxStreamsDictMutex)
-
+        __updateAvailableStreamsList(availableRtpTxResultsList,rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex)
         if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
             keyPressed[0]=''    # Clear key buffer
             selectedView += 1
@@ -3429,10 +3438,10 @@ class ResultsReceiver(object):
                             rtpStreamResults.updateStats(stats)
                             # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
                             addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
-                        x =""
-                        for k,v in self.rtpTxStreamResultsDict.items():
-                            x+= str(k) + ", "
-                        Message.addMessage("INFO:_resultsReceiverThread() rtpTxStreamResultsDict{} " + x)
+                        # x =""
+                        # for stream in self.rtpTxStreamResultsDict:
+                        #     x+= str(k) + ", "
+                        # Message.addMessage("INFO:_resultsReceiverThread() rtpTxStreamResultsDict{} " + x)
                 except Exception as e:
                     Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
             else:
