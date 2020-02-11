@@ -3581,7 +3581,8 @@ class ResultsTransmitter(object):
                     # Use pickle to serialise the stats dictionary
                     stats = self.parentRtpRxStream.getRtpStreamStats()
                     pickledStats=pickle.dumps(stats)
-                    # pickledStats = "the quick brown fox"
+
+                    eventsList = self.parentRtpRxStream.
                     # Set max safe UDP tx size to 576 (based on this:-
                     # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
                     MAX_UDP_TX_LENGTH = 512
