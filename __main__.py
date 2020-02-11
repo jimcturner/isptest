@@ -3403,7 +3403,10 @@ class ResultsReceiver(object):
                     # Message.addMessage("ResultsReceiver.__receiverThread()" + ", " + str(data))
                     # attempt to unpickle the received data to yield a stats dictionary
 
+                    # Create empty dictionary to hold incoming stats updates
                     stats = {}
+                    # Create empty list to store incoming events list updates
+                    eventsList =[]
 
                     # First round of unpickling - extract the fragment
                     try:
@@ -3435,10 +3438,21 @@ class ResultsReceiver(object):
                             # Whole message has hopefully been reassembled
                             # Now unpickle (for a second time) to reconstruct the originally pickled and tx'd Python object
                             # Message.addMessage("Final: " + str())
+                            # We're expecting a dictionary containing a stats dictionary{} and an eventsList{} containing the
+                            # last 5 events
                             try:
-                                stats = pickle.loads(rxMssage)
+                                unPickledMessage = pickle.loads(rxMssage)
+
+                                # Attempt to extract the stats dictionary and eventsList list
+                                try:
+                                    stats = unPickledMessage["stats"]
+                                    eventsList = unPickledMessage["eventList"]
+                                except Exception as e:
+                                    Message.addMessage(
+                                        "ERR: __resultsReceiverThread (error unpacking stats and eventList): " + str(e))
+
                             except Exception as e:
-                                Message.addMessage("ERR: __resultsReceiverThread(2): "+str(e))
+                                Message.addMessage("ERR: __resultsReceiverThread(pickle.loads(all fragments)): "+str(e))
 
                         # Detect too many fragments
                         if fragment[0] > (fragment[1] - 1):
@@ -3446,9 +3460,9 @@ class ResultsReceiver(object):
                             Message.addMessage("ERR: __resultsReceiverThread. More fragments received than expected")
 
                     except Exception as e:
-                            Message.addMessage("ERR: __resultsReceiverThread(1): " + str(e))
+                            Message.addMessage("ERR: __resultsReceiverThread(single fragment): " + str(e))
 
-                    # Check if we have some new data
+                    # Check if we have some new stats data
                     if len(stats) > 0:
                         # Message.addMessage(str(stats["stream_syncSource"]) + ": Bytes received: " + \
                         #                    str(stats["packet_data_received_total_bytes"]))
@@ -3465,10 +3479,10 @@ class ResultsReceiver(object):
                             rtpStreamResults.updateStats(stats)
                             # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
                             addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
-                        # x =""
-                        # for stream in self.rtpTxStreamResultsDict:
-                        #     x+= str(k) + ", "
-                        # Message.addMessage("INFO:_resultsReceiverThread() rtpTxStreamResultsDict{} " + x)
+
+                    # Check to see if this is an eventList
+                    if len(eventsList) > 0:
+                        Message.addMessage("INFO:_resultsReceiverThread(): " + str(eventsList))
 
                 # Catch all other exceptions
                 except Exception as e:
@@ -3570,6 +3584,7 @@ class ResultsTransmitter(object):
 
     def __resultsTransmitterThread(self):
         Message.addMessage("INFO: __resultsTransmitterThread started: "+str(self.udpSocket))
+        # mostRecentlySentEventNo = 0 # Tracks the eventNo of the most recently sent event
         while self.transmitterActiveFlag:
             self.udpSocket = self.parentRtpRxStream.getSocket()
             if self.udpSocket != 0:
@@ -3578,16 +3593,30 @@ class ResultsTransmitter(object):
                     self.parentRtpRxStream.getRTPStreamID()
                 try:
                     # We have a valid socket binding we can use, so transmit the data
-                    # Use pickle to serialise the stats dictionary
+                    # Use pickle to serialise the data we want to send
                     stats = self.parentRtpRxStream.getRtpStreamStats()
-                    pickledStats=pickle.dumps(stats)
 
-                    eventsList = self.parentRtpRxStream.
+
+                    # Get the last 5 events for this stream
+                    eventsList = self.parentRtpRxStream.getRTPStreamEventList(5)
+
+                    # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
+                    pickledMessage = pickle.dumps({"stats": stats, "eventList": eventsList})
+
+
+                    # if len(eventsList) > 0:
+                    #     # Get event no of most recent event in the list
+                    #     mostRecentEventNo = eventsList[-1].eventNo
+                    #     noOfNewEventsToSend = mostRecentEventNo - mostRecentlySentEventNo
+                    #     if noOfNewEventsToSend >0:
+                    #         # Obtain a sublist of just the unsent events
+                    #         newEventsToSend = self.parentRtpRxStream.getRTPStreamEventList(noOfNewEventsToSend)
+
                     # Set max safe UDP tx size to 576 (based on this:-
                     # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
                     MAX_UDP_TX_LENGTH = 512
                     # Split the message up
-                    fragmentedMessage = fragmentString(pickledStats, MAX_UDP_TX_LENGTH)
+                    fragmentedMessage = fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
 
                     # iterate over fragments
                     for fragment in fragmentedMessage:
