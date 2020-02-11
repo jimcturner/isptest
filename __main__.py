@@ -2021,6 +2021,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                        ["Bytes\n tx'd", 'Bytes transmitted'],
                        [" Time\nremain", 'Time to live'],
                        ],availableRtpTxStreamList])
+
     # If actually the receiving end, use availableRtpRxStreamList[] as a source for the stream tables
     if operationMode == 'RECEIVE': #or operationMode == 'LOOPBACK':
         streamResultsDataSet = availableRtpRxStreamList
@@ -2670,10 +2671,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                                         try:
                                             # Now attempt to colour code the table based on some tests
                                             # is it a receive stream?
-                                            if type(streamData[1]) == RtpStream:
+                                            if type(streamData[1]) == RtpStream or type(streamData[1]) == RtpStreamResults:
                                                 # If so, test the stream stats
-                                                if streamDataStats["historic_glitch_counter_last_10Min"]> 0 or \
-                                                        streamDataStats["packet_data_received_1S_bytes"] == 0:
+                                                if streamDataStats["packet_data_received_1S_bytes"] == 0:
                                                     # If so, make the row red
                                                     tableCell=Term.FG(Term.RED)+tableCell
 
@@ -2683,7 +2683,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                                                     # If tx stream has 'died', dim
                                                     tableCell = Term.DIM+tableCell
                                         except Exception as e:
-                                            Message.addMessage("ERR: __displayThread: (colour coding of stream tables) "+str(e))
+                                            Message.addMessage("ERR: __displayThread: (colour coding of stream tables) "+str(e)+"**")
 
                                     except Exception as e:
                                         # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
