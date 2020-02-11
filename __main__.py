@@ -3062,7 +3062,7 @@ class RtpGenerator(object):
         self.rtpGeneratorThread.start()
 
         # create a stream results receiver object for this tx stream
-        resultsReceiver = ResultsReceiver(self)
+        self.rtpStreamResultsReceiver = ResultsReceiver(self)
 
     def getRtpStreamStats(self):
         # Returns a dictionary of useful stats
@@ -3149,6 +3149,8 @@ class RtpGenerator(object):
     def killStream(self):
         # Kills the stream by setting the time to live to zero. This will cause the main thread to exit
         self.setTimeToLive(0)
+        # Now kill corresponding RtpResultsReceiver object
+        self.rtpStreamResultsReceiver.kill()
 
     def disableStream(self):
         # Disables transmission of packets to simulate packet loss by clearing flag
@@ -3355,10 +3357,20 @@ class ResultsReceiver(object):
         self.rtpTxStreamResultsDict = rtpGeneratorObject.rtpTxStreamResultsDict
         self.rtpTxStreamResultsDictMutex = rtpGeneratorObject.rtpTxStreamResultsDictMutex
 
+        # Used a signal flag to shut the __resultsReceiverThread down
+        self.receiverActiveFlag = True
+
         # Start the listener thread
         self.resultsReceiverThread = threading.Thread(target=self.__resultsReceiverThread, args=())
         self.resultsReceiverThread.daemon = True
         self.resultsReceiverThread.start()
+
+
+    def kill(self):
+        # This method will kill the receiver thread by setting the self.receiverActiveFlag to false
+        self.receiverActiveFlag = False
+        Message.addMessage("INFO: ResultsReceiver.kill()")
+
 
 
     def __resultsReceiverThread(self):
@@ -3366,7 +3378,8 @@ class ResultsReceiver(object):
 
         rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
         lastReceivedFragment = 0  # Tracks the most recently received fragment
-        while True:
+
+        while self.receiverActiveFlag:
             # Wait for relatedRtpGenerator object to set up a socket binding
             self.udpSocket = self.relatedRtpGenerator.getUDPSocket()
             if self.udpSocket != 0:
@@ -3442,12 +3455,14 @@ class ResultsReceiver(object):
                         # for stream in self.rtpTxStreamResultsDict:
                         #     x+= str(k) + ", "
                         # Message.addMessage("INFO:_resultsReceiverThread() rtpTxStreamResultsDict{} " + x)
+
+                # Catch all other exceptions
                 except Exception as e:
                     Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
             else:
                 # Wait 1 second before checking to see if self.udpSocket is now valid
                 time.sleep(1)
-
+        Message.addMessage("INFO: ResultsReceiver:__resultsReceiverThread ended")
 
 def fragmentString(inputString, maxLength):
     # This function will break a string into a list of tuples containing smaller strings (portions).
