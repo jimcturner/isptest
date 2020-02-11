@@ -1541,9 +1541,10 @@ class RtpStreamResults(object):
         # Create private empty list to hold Events for this RtpStream object. Accessible via a getter method
         self.__eventList = []
 
-        # Create mutex lock for data access
-        self.__accessRtpStreamStatsMutex = threading.Lock()
-        # self.__stats["stream_syncSource"] = syncSource
+        # Create mutex locks for data access
+        self.__accessRtpStreamStatsMutex = threading.Lock()         # for the stats dictionary
+        self.__accessRtpStreamEventListMutex = threading.Lock()     # for the eventsList
+
 
     def updateStats(self, statsDict):
         # Will copy statsDict into self.__stats
@@ -1554,6 +1555,18 @@ class RtpStreamResults(object):
         self.__stats = deepcopy(statsDict)
         # Release the mutex
         self.__accessRtpStreamStatsMutex.release()
+
+    def updateEventsList(self, eventsList):
+        # Will take a list of new events and append them to the existing eventsList list
+        # NOTE: It won't check for duplicate entries. It will blindly just append to what's already there
+        # Take control of the mutex
+        self.__accessRtpStreamEventListMutex.acquire()
+        # Append the new events to the list
+        self.__eventList.append(eventsList)
+        # Release the mutex
+        self.__accessRtpStreamEventListMutex.release()
+
+
 
     def setFriendlyName(self, friendlyName):
         # Thread-safe method to set the friendly name field
@@ -3406,7 +3419,7 @@ class ResultsReceiver(object):
                     # Create empty dictionary to hold incoming stats updates
                     stats = {}
                     # Create empty list to store incoming events list updates
-                    eventsList =[]
+                    latestEventsList =[]
 
                     # First round of unpickling - extract the fragment
                     try:
@@ -3437,16 +3450,17 @@ class ResultsReceiver(object):
                             rxMssage =b"".join([rxMssage,fragment[3]])
                             # Whole message has hopefully been reassembled
                             # Now unpickle (for a second time) to reconstruct the originally pickled and tx'd Python object
-                            # Message.addMessage("Final: " + str())
+
                             # We're expecting a dictionary containing a stats dictionary{} and an eventsList{} containing the
                             # last 5 events
                             try:
+                                # Attempt to reconsctruct the original message sent by ResultsTransmitter
                                 unPickledMessage = pickle.loads(rxMssage)
 
                                 # Attempt to extract the stats dictionary and eventsList list
                                 try:
                                     stats = unPickledMessage["stats"]
-                                    eventsList = unPickledMessage["eventList"]
+                                    latestEventsList = unPickledMessage["eventList"]
                                 except Exception as e:
                                     Message.addMessage(
                                         "ERR: __resultsReceiverThread (error unpacking stats and eventList): " + str(e))
@@ -3464,25 +3478,63 @@ class ResultsReceiver(object):
 
                     # Check if we have some new stats data
                     if len(stats) > 0:
-                        # Message.addMessage(str(stats["stream_syncSource"]) + ": Bytes received: " + \
-                        #                    str(stats["packet_data_received_total_bytes"]))
-
                         try:
-                            # Presume a stream exists in rtpRxStreamsDict{} and update the stats for that stream
-                            self.rtpTxStreamResultsDict[stats["stream_syncSource"]].updateStats(stats)
-                        except Exception as e:
-                            Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
-                                               + str(stats["stream_syncSource"]) + ", " + str(e))
-                            # Create new RtpStreamResults object
-                            rtpStreamResults = RtpStreamResults()
-                            # Immediately update the stats
-                            rtpStreamResults.updateStats(stats)
-                            # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
-                            addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+                            # Firstly check to see a stream object with this id exists in self.rtpTxStreamResultsDict
+                            if stats["stream_syncSource"] in self.rtpTxStreamResultsDict:
+                                # If it does, add the new data
+                                self.rtpTxStreamResultsDict[stats["stream_syncSource"]].updateStats(stats)
 
-                    # Check to see if this is an eventList
-                    if len(eventsList) > 0:
-                        Message.addMessage("INFO:_resultsReceiverThread(): " + str(eventsList))
+                            else:
+                                # Otherwise that stream object doesn't exist yet, so create it
+                                Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
+                                                   + str(stats["stream_syncSource"]))
+                                # Create new RtpStreamResults object
+                                rtpStreamResults = RtpStreamResults()
+                                # Immediately update the stats
+                                rtpStreamResults.updateStats(stats)
+                                # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
+                                addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults,
+                                                   self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+                        except Exception as e:
+                            Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict or can't add new stream to rtpTxStreamResultsDict. " + str(e))
+
+                    # Check to see if the new eventList contains any data and also that there exists a stream object to add the data to
+                    if len(latestEventsList) > 0:
+                        try:
+                            Message.addMessage("**latestEventsList: " + str(latestEventsList[-1].eventNo))
+                            # Get handle on an (existing) rtpStreamResults object
+                            rtpStreamResults = self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
+                            # Work out whether the eventList contains any new events that we haven't already seen
+                            firstEventNoInNewList = latestEventsList[0].eventNo
+                            # Message.addMessage("firstEventNoInNewList: " + str(firstEventNoInNewList))
+                            # # Get latest known event no from the rtpStreamResults stream object
+                            existingEventsList = []
+                            try:
+                                existingEventsList = rtpStreamResults.getRTPStreamEventList(1) # Request last event in the list
+
+                                if len(existingEventsList) > 0:
+                                    # Extract the event no from the last know event
+                                    lastKnownEventNo = existingEventsList[-1].eventNo
+
+                                    # Check if the first item in the new list is more recent than the last item of the known list
+                                    if firstEventNoInNewList > lastKnownEventNo:
+                                        # Calculate how many new events have arrived
+                                        eventsToAdd = firstEventNoInNewList - lastKnownEventNo
+                                        # append the last n new events to the existing eventList
+                                        rtpStreamResults.updateEventsList(latestEventsList[(eventsToAdd * -1):])
+                                        Message.addMessage("adding event: " + str(latestEventsList[-1].getSummary()))
+                                else:
+                                    # existingEventsList is empty so append the entirety of latestEventsList
+                                    rtpStreamResults.updateEventsList(latestEventsList)
+                                Message.addMessage("**" + str(rtpStreamResults.getRTPStreamEventList(1)))
+                            except Exception as e:
+                                Message.addMessage(
+                                    "ERR:_resultsReceiverThread(). rtpStreamResults.getRTPStreamEventList(1) " + str(e))
+                        except Exception as e:
+                            Message.addMessage("ERR:_resultsReceiverThread(): rtpStreamResults.updateEventsList() " + str(e))
+
+
+
 
                 # Catch all other exceptions
                 except Exception as e:
