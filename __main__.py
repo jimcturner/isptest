@@ -1561,8 +1561,8 @@ class RtpStreamResults(object):
         # NOTE: It won't check for duplicate entries. It will blindly just append to what's already there
         # Take control of the mutex
         self.__accessRtpStreamEventListMutex.acquire()
-        # Append the new events to the list
-        self.__eventList.append(eventsList)
+        # Append the new events list to the existing list
+        self.__eventList.extend(eventsList)
         # Release the mutex
         self.__accessRtpStreamEventListMutex.release()
 
@@ -2575,6 +2575,34 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 displayThread_clockTimer = timer() # reset timer
                 # Update clock on top RHS of screen
                 Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
+                x = "availableRtpTxResultsList.events: "
+
+                # if len(rtpTxStreamResultsDict) > 0:
+                #     try:
+                #         # Iterate over rtpTxStreamResultsDict
+                #         for stream in rtpTxStreamResultsDict:
+                #             y = rtpTxStreamResultsDict[stream]
+                #             eventList = y.getRTPStreamEventList(1)
+                #             event = eventList[-1]
+                #             z=event.type
+                #             x += str(z) + ", "
+                #     except:
+                #         pass
+                #     Message.addMessage(x)
+
+                s=""
+                if len(availableRtpTxResultsList) > 0:
+                    # Iterate over availableRtpTxResultsList
+                    for stream in availableRtpTxResultsList:
+                        # We want to display: [streamID], eventNo:Type, eventNo:Type....
+                        eventList = stream[1].getRTPStreamEventList(5) # get last 5 events
+                        s += "[" + str(stream[0]) + "] "    # Prefix with stream id
+                        for event in eventList:
+                            s+= str(event.eventNo) + ":" + str(event.type) + ", "
+                        Message.addMessage(s)
+                        s =""
+
+
 
             ######### Print Navigation bar (shows the available views) - shouldn't change much, so only a periodic redraw
 
@@ -3499,42 +3527,60 @@ class ResultsReceiver(object):
                             Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict or can't add new stream to rtpTxStreamResultsDict. " + str(e))
 
                     # Check to see if the new eventList contains any data and also that there exists a stream object to add the data to
-                    if len(latestEventsList) > 0:
+                    if len(latestEventsList) > 0 and len(stats) > 0:
                         try:
-                            Message.addMessage("**latestEventsList: " + str(latestEventsList[-1].eventNo))
+                            # Message.addMessage("**latestEventsList: " + str(latestEventsList[-1].eventNo))
                             # Get handle on an (existing) rtpStreamResults object
                             rtpStreamResults = self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
                             # Work out whether the eventList contains any new events that we haven't already seen
                             firstEventNoInNewList = latestEventsList[0].eventNo
-                            # Message.addMessage("firstEventNoInNewList: " + str(firstEventNoInNewList))
+                            lastEventNoInNewList = latestEventsList[-1].eventNo
+
                             # # Get latest known event no from the rtpStreamResults stream object
                             existingEventsList = []
                             try:
                                 existingEventsList = rtpStreamResults.getRTPStreamEventList(1) # Request last event in the list
 
                                 if len(existingEventsList) > 0:
-                                    # Extract the event no from the last know event
+                                    # rtpStreamResults.updateEventsList(latestEventsList)
+                                    # # Extract the event no from the last known event
                                     lastKnownEventNo = existingEventsList[-1].eventNo
+                                    # Message.addMessage("firstEventNoInNewList: " + str(firstEventNoInNewList) + \
+                                    #                    ", lastEventNoInNewList: " + str(lastEventNoInNewList) + \
+                                    #                    ", lastKnownEventNo: " + str(lastKnownEventNo))
 
-                                    # Check if the first item in the new list is more recent than the last item of the known list
-                                    if firstEventNoInNewList > lastKnownEventNo:
+                                    # Check if the latest item in the new list is more recent than the last item of the known list
+                                    if lastEventNoInNewList > lastKnownEventNo:
                                         # Calculate how many new events have arrived
-                                        eventsToAdd = firstEventNoInNewList - lastKnownEventNo
+                                        eventsToAdd = lastEventNoInNewList - lastKnownEventNo
+
                                         # append the last n new events to the existing eventList
-                                        rtpStreamResults.updateEventsList(latestEventsList[(eventsToAdd * -1):])
-                                        Message.addMessage("adding event: " + str(latestEventsList[-1].getSummary()))
+                                        # check to see if the no of new events since last update exceeds
+                                        # length of latestEventsList[]
+                                        if eventsToAdd > len(latestEventsList):
+                                            eventsToAdd = len (latestEventsList)
+                                        # Slice latestEventsList to get a sublist of just the new events
+                                        newEvents = latestEventsList[(eventsToAdd * -1):]
+                                        # and append to existing events list
+                                        rtpStreamResults.updateEventsList(newEvents)
                                 else:
                                     # existingEventsList is empty so append the entirety of latestEventsList
                                     rtpStreamResults.updateEventsList(latestEventsList)
-                                Message.addMessage("**" + str(rtpStreamResults.getRTPStreamEventList(1)))
+                                # Message.addMessage("**" + str(rtpStreamResults.getRTPStreamEventList(1)))
                             except Exception as e:
                                 Message.addMessage(
                                     "ERR:_resultsReceiverThread(). rtpStreamResults.getRTPStreamEventList(1) " + str(e))
                         except Exception as e:
                             Message.addMessage("ERR:_resultsReceiverThread(): rtpStreamResults.updateEventsList() " + str(e))
 
-
-
+                    # if len(stats) > 0:
+                    #     try:
+                    #         stream= self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
+                    #         x=stream.getRTPStreamEventList(1)
+                    #         if len(x) > 0:
+                    #             Message.addMessage("Last known event: " + str(x[-1].type))
+                    #     except Exception as e:
+                    #         Message.addMessage("wtf " + str(e))
 
                 # Catch all other exceptions
                 except Exception as e:
