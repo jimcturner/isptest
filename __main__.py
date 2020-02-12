@@ -789,8 +789,10 @@ class RtpStream(object):
     # Constructor method.
     # The RtpStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
-    def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold, rxSocket):
+    def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold, rxSocket, rtpRxStreamsDict, rtpRxStreamsDictMutex):
 
+        self.rtpRxStreamsDict = rtpRxStreamsDict
+        self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
         # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
         self.__stats = {}
         # Assign to instance variable
@@ -915,7 +917,7 @@ class RtpStream(object):
         # DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL in order to conserve CPU cycles
         # Otherwise previous high rate streams (with correspondingly small stats["calculate_thread_sampling_interval_S"] sleep
         # values will needlessly tie up the cpu
-        self.streamIsDeadThreshold_s = 5
+        self.streamIsDeadThreshold_s = 30
 
         # Create a __calculateThread
         self.calculateThreadActiveFlag = True # Used as a signal to shut down the calculateThread
@@ -1406,15 +1408,17 @@ class RtpStream(object):
                 self.__houseKeepEventList()
 
                 # Check to see if this is a truly dead receive stream. If so, kill the associated this calculateThread and
-                # also the corresponding ResultsTransmitter.__resultsTransmitterThread
-                # NOTE: it won't actually delete this object though, or remove it from rtpRxStreamsDict{} so it will remain
-                # as an orphan in the streams window
+                # also the corresponding ResultsTransmitter.__resultsTransmitterThread. Finally, remove this RtpStream object
+                # from the dictionary
                 if (datetime.datetime.now() - self.__stats["packet_last_seen_received_timestamp"]) > \
                         datetime.timedelta(seconds = self.streamIsDeadThreshold_s):
 
                     Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + " believed dead.")
                     # Kill itself
                     self.killStream()
+
+                    # Finally remove itself from the rtpRxStreamsDict
+                    removeRtpStreamFromDict(self.__stats["stream_syncSource"], self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
@@ -4292,7 +4296,7 @@ def main(argv):
                                            " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
                         # Create and add the new stream to the rtpRxStreamsDict
                         newRtpStream = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP,\
-                                      UDP_RX_PORT, glitchEventTriggerThreshold, sock)
+                                      UDP_RX_PORT, glitchEventTriggerThreshold, sock, rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
                         addRtpStreamToDict(rtpSyncSourceIdentifier, newRtpStream, rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
@@ -4316,7 +4320,7 @@ def main(argv):
             # the stream will be deleted from tpRxStreamTempDict{}
             nonExistentStreamTimout_seconds = 5
             streamsToPurge = []
-            # Compile list of orpham streams
+            # Compile list of orphan streams
             for stream in rtpRxStreamTempDict:
                 if (timer() - rtpRxStreamTempDict[stream]) > nonExistentStreamTimout_seconds:
                     # Add to list
