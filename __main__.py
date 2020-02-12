@@ -1218,7 +1218,7 @@ class RtpStream(object):
         RTP_HEADER_LENGTH_BYTES = 12
 
 
-        # Endless loop whilst
+        # Endless loop whilst permitted by the flag
         while self.calculateThreadActiveFlag == True:
 
             # Lock the access mutex
@@ -1316,7 +1316,7 @@ class RtpStream(object):
                     #
                     # # Think these should be cleared too, but there could be consequences
                     # self.__stats["jitter_instantaneous"] = 0
-                    self.__stats["packet_instantaneous_receive_period_uS"] = 0
+                    # self.__stats["packet_instantaneous_receive_period_uS"] = 0
 
             # Calculate elapsed since last glitch
             # But only if there has actually been a glitch in the past to measure against
@@ -1405,17 +1405,16 @@ class RtpStream(object):
                 # Purge __eventList[] to remove the oldest events
                 self.__houseKeepEventList()
 
-                # Check to see if this is a truly dead receive stream. If so, reset self.__stats["calculate_thread_sampling_interval_S"]
-                # back to a minimal value top save CPU time
+                # Check to see if this is a truly dead receive stream. If so, kill the associated this calculateThread and
+                # also the corresponding ResultsTransmitter.__resultsTransmitterThread
+                # NOTE: it won't actually delete this object though, or remove it from rtpRxStreamsDict{} so it will remain
+                # as an orphan in the streams window
                 if (datetime.datetime.now() - self.__stats["packet_last_seen_received_timestamp"]) > \
                         datetime.timedelta(seconds = self.streamIsDeadThreshold_s):
-                    # self.streamIsDeadThreshold_s has been reached
-                    if self.__stats["calculate_thread_sampling_interval_S"] != \
-                            self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL:
-                        self.__stats["calculate_thread_sampling_interval_S"] = self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL
-                        Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
-                                           " believed dead. Resetting calculate_thread_sampling_interval to default " +\
-                                           str(self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL))
+
+                    Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + " believed dead.")
+                    # Kill itself
+                    self.killStream()
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
@@ -1569,7 +1568,7 @@ class RtpStreamResults(object):
         self.__eventList = []
 
         # No of historic events to keep in memory (before housekeeping)
-        self.historicEventsLimit  = 10
+        self.historicEventsLimit  = 50
 
         # Create mutex locks for data access
         self.__accessRtpStreamStatsMutex = threading.Lock()         # for the stats dictionary
@@ -1604,21 +1603,21 @@ class RtpStreamResults(object):
         self.lastUpdatedTimestamp = datetime.datetime.now()
 
 
-    def setFriendlyName(self, friendlyName):
-        # Thread-safe method to set the friendly name field
-
-        # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
-        if len(friendlyName) < self.maxNameLength:
-            # Too short, so Pad out name to x chars
-            friendlyName += (self.maxNameLength - len(friendlyName)) * " "
-        else:
-            # Too big, so truncate
-            friendlyName = friendlyName[:self.maxNameLength]
-
-        self.__accessRtpStreamStatsMutex.acquire()
-        self.__stats["stream_friendly_name"]=friendlyName
-        self.__accessRtpStreamStatsMutex.release()
-        return friendlyName
+    # def setFriendlyName(self, friendlyName):
+    #     # Thread-safe method to set the friendly name field
+    #
+    #     # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
+    #     if len(friendlyName) < self.maxNameLength:
+    #         # Too short, so Pad out name to x chars
+    #         friendlyName += (self.maxNameLength - len(friendlyName)) * " "
+    #     else:
+    #         # Too big, so truncate
+    #         friendlyName = friendlyName[:self.maxNameLength]
+    #
+    #     self.__accessRtpStreamStatsMutex.acquire()
+    #     self.__stats["stream_friendly_name"]=friendlyName
+    #     self.__accessRtpStreamStatsMutex.release()
+    #     return friendlyName
 
     # Define getter methods
     def getRTPStreamID(self):
@@ -1677,8 +1676,8 @@ class RtpStreamResults(object):
     # Method to strip off the oldest events from the eventList once the threshold is reached
     # Unlike the similar method in RtpStream, this does actually set/release mutex locks itself
     def houseKeepEventList(self):
-        # Check size of self.__eventList[]
         self.__accessRtpStreamEventListMutex.acquire()
+        # Check size of self.__eventList[] and therefore no of events to purge
         noOfMessagesToPurge = len(self.__eventList) - self.historicEventsLimit
         if noOfMessagesToPurge > 0:
             # Remove first x events
@@ -3430,13 +3429,11 @@ class RtpGenerator(object):
             try:
                 # Get a handle on the rtpTxStreamResults object
                 rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-
-                # Invoke the housekeeping method to purge any really old events
-                rtpTxStreamResults.houseKeepEventList()
+                if type(rtpTxStreamResults) == RtpStreamResults:
+                    # Invoke the housekeeping method to purge any really old events
+                    rtpTxStreamResults.houseKeepEventList()
             except Exception as e:
                 Message.addMessage("ERR: __rtpGenerator rtpTxStreamResults.houseKeepEventList(): " + str(e))
-
-
 
             # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
             if self.timeToLive ==0:
