@@ -904,7 +904,18 @@ class RtpStream(object):
 
         # Initially, __CalculateThread loop will execute every 10mS (but will then be modified dynamically
         # based on the packet Rx period)
-        self.__stats["calculate_thread_sampling_interval_S"] = 0.01
+        self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL = 0.01
+        self.__stats["calculate_thread_sampling_interval_S"] = self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL
+
+        # Amount of time to elapse before a lossOfStream alarm event is triggered
+        self.lossOfStreamAlarmThreshold_s = 1
+
+        # Amount of time to elapse before a stream is believed completely dead (used to reset the
+        # self.__stats["calculate_thread_sampling_interval_S"] value back to it's default value
+        # DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL in order to conserve CPU cycles
+        # Otherwise previous high rate streams (with correspondingly small stats["calculate_thread_sampling_interval_S"] sleep
+        # values will needlessly tie up the cpu
+        self.streamIsDeadThreshold_s = 5
 
         # Create a __calculateThread
         self.calculateThreadActiveFlag = True # Used as a signal to shut down the calculateThread
@@ -1187,8 +1198,6 @@ class RtpStream(object):
         # Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
         lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(), self.__stats["stream_syncSource"])
 
-        # General Counters
-        loopCounter = 0
         # Start the loop timer (used to provide a 1sec interval)
         loopTimerStart = timer()
         # Timer used to detect loss of streams against an alarm threshold
@@ -1203,7 +1212,6 @@ class RtpStream(object):
         # Declare flags
         lossOfStreamFlag = True
         possibleLossOfStreamFlag = False
-        lossOfStreamAlarmThreshold = 1
 
         # Constants. Used in calculation of received data rate
         UDP_HEADER_LENGTH_BYTES = 8
@@ -1279,6 +1287,8 @@ class RtpStream(object):
                 # Take timestamp of last packet in this batch
                 self.__stats["packet_last_seen_received_timestamp"] = lastReceivedRtpPacket.timestamp
 
+
+
             else:
                 # No data, so set lossOfStreamFlag (unless it's already been set)
                 # Check for changes and that we also have an active stream. If so, set the flag and add an event to the eventlist
@@ -1289,7 +1299,7 @@ class RtpStream(object):
                     # And start the lossOfStream Timer
                     lossOfStreamTimerStart = timer()
 
-                if (timer() - lossOfStreamTimerStart) >= lossOfStreamAlarmThreshold \
+                if (timer() - lossOfStreamTimerStart) >= self.lossOfStreamAlarmThreshold_s \
                         and lossOfStreamFlag == False and self.__stats["packet_counter_received_total"] > 0:
                     # Set flag
                     lossOfStreamFlag = True
@@ -1298,7 +1308,7 @@ class RtpStream(object):
                     Message.addMessage("[" + str(self.__stats["stream_syncSource"]) + "]. Stream lost. ")
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
-    ######## POSSIBLY REVISIT THIS.....
+                    ######## POSSIBLY REVISIT THIS.....
                     # # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
                     # self.__stats["jitter_min_uS"] = 0
                     # self.__stats["jitter_max_uS"] = 0
@@ -1306,7 +1316,7 @@ class RtpStream(object):
                     #
                     # # Think these should be cleared too, but there could be consequences
                     # self.__stats["jitter_instantaneous"] = 0
-                    # self.__stats["packet_instantaneous_receive_period_uS"]
+                    self.__stats["packet_instantaneous_receive_period_uS"] = 0
 
             # Calculate elapsed since last glitch
             # But only if there has actually been a glitch in the past to measure against
@@ -1391,8 +1401,21 @@ class RtpStream(object):
                     self.__stats[name] = movingTotal
                     self.__stats[name + "_events"] = events
 
-                ######### Now housekeep __eventList[] to remove the oldest events
+                ######### Now housekeep
+                # Purge __eventList[] to remove the oldest events
                 self.__houseKeepEventList()
+
+                # Check to see if this is a truly dead receive stream. If so, reset self.__stats["calculate_thread_sampling_interval_S"]
+                # back to a minimal value top save CPU time
+                if (datetime.datetime.now() - self.__stats["packet_last_seen_received_timestamp"]) > \
+                        datetime.timedelta(seconds = self.streamIsDeadThreshold_s):
+                    # self.streamIsDeadThreshold_s has been reached
+                    if self.__stats["calculate_thread_sampling_interval_S"] != \
+                            self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL:
+                        self.__stats["calculate_thread_sampling_interval_S"] = self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL
+                        Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
+                                           " believed dead. Resetting calculate_thread_sampling_interval to default " +\
+                                           str(self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL))
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
@@ -1426,9 +1449,6 @@ class RtpStream(object):
             # Unlock  self.__stats and self.__eventList mutexes
             self.__accessRtpStreamStatsMutex.release()
             self.__accessRtpStreamEventListMutex.release()
-
-            # Increment loop counter
-            loopCounter += 1
 
             # Empty the self.rtpStream list
             del self.rtpStream
