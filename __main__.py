@@ -3729,12 +3729,18 @@ class ResultsTransmitter(object):
             time.sleep(0.5)
 
 
-def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
-    # Autonomous thread to iterate over rtpRxStreamsDict and poll RtpStream eventLists for new events
+def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
+    # Autonomous thread to iterate over rtpStreamsDict and poll RtpStream eventLists for new events
     # and write them  to disk
     Message.addMessage("diskLoggerThread starting")
-    filename_csv = "eventLog_" + datetime.datetime.now().strftime("%H%M%S") + ".csv"
-    filename_json = "eventLog_" + datetime.datetime.now().strftime("%H%M%S") + ".json"
+    # Prefix the filenames created when in RECEIVE mode
+    if operationMode == 'RECEIVE':
+        prefix = "receiver_report_"
+    else:
+        prefix = ""
+
+    filename_csv = prefix + "eventLog_" + datetime.datetime.now().strftime("%H-%M-%S") + ".csv"
+    filename_json = prefix + "eventLog_" + datetime.datetime.now().strftime("%H-%M-%S") + ".json"
     lastWrittenEventNoDict = {} # Dictionary to hold the last written event no for each stream
     latestEvents = []
 
@@ -3760,11 +3766,11 @@ def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
         availableRtpRxStreamList = []
         # temp =[]
         # Iterate over tuples returned by items() to create a list of tuples
-        rtpRxStreamsDictMutex.acquire()
-        for k,v in rtpRxStreamsDict.items():
+        rtpStreamsDictMutex.acquire()
+        for k,v in rtpStreamsDict.items():
             temp = [k, v]
             availableRtpRxStreamList.append(temp)
-        rtpRxStreamsDictMutex.release()
+        rtpStreamsDictMutex.release()
 
         if len(availableRtpRxStreamList) > 0:
             # Iterate over availableRtpRxStreamList looking for new events
@@ -3820,20 +3826,20 @@ def __diskLoggerThread(rtpRxStreamsDict, rtpRxStreamsDictMutex):
                         Message.addMessage("__diskLoggerThread - appending to file" + str(e))
 
         # Finally, iterate over lastWrittenEventNoDict{} to confirm that all the stream objects listed
-        # inside it still exist in rtpRxStreamsDict{} (in other words, synchronise the deletions within
-        # rtpRxStreamsDict{} to lastWrittenEventNoDict{}
+        # inside it still exist in rtpStreamsDict{} (in other words, synchronise the deletions within
+        # rtpStreamsDict{} to lastWrittenEventNoDict{}
         # This will prevent lastWrittenEventNoDict from filling up with orphan streams
         orphanStreamsToDelete =[]
-        rtpRxStreamsDictMutex.acquire()
+        rtpStreamsDictMutex.acquire()
         for stream in lastWrittenEventNoDict:
-            # Check for existence of key[stream] within rtpRxStreamsDict
-            if stream in rtpRxStreamsDict:
+            # Check for existence of key[stream] within rtpStreamsDict
+            if stream in rtpStreamsDict:
                 # If it is, do nothing
                 pass
             else:
                 # If key no longer exists, add it to the list to be purged from lastWrittenEventNoDict{}
                 orphanStreamsToDelete.append(stream)
-        rtpRxStreamsDictMutex.release()
+        rtpStreamsDictMutex.release()
 
         # Now delete all keys listed in orphanStreamsToDelete[] from lastWrittenEventNoDict{}
         for stream in orphanStreamsToDelete:
@@ -4159,6 +4165,11 @@ def main(argv):
         # Add the tx stream to the rtpStreams dictionary
         addRtpStreamToDict(SYNC_SOURCE_ID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
 
+        # Create a diskLogging Thread - pass rtpStream object to it
+        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,))
+        diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
+        diskLoggerThread.start()
+
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
@@ -4174,7 +4185,7 @@ def main(argv):
             exit()
 
         # Create a diskLogging Thread - pass rtpStream object to it
-        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(rtpRxStreamsDict, rtpRxStreamsDictMutex,))
+        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpRxStreamsDict, rtpRxStreamsDictMutex,))
         diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
         diskLoggerThread.start()
 
