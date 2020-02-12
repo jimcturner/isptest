@@ -3689,39 +3689,44 @@ class ResultsTransmitter(object):
                 # Get the destination addr and src port from the supplied rtpStream object
                 self.syncSource, self.destAddr, self.destPort, self.friendlyName = \
                     self.parentRtpRxStream.getRTPStreamID()
+
                 try:
                     # We have a valid socket binding we can use, so transmit the data
                     # Use pickle to serialise the data we want to send
                     stats = self.parentRtpRxStream.getRtpStreamStats()
 
+                    # To save bandwidth, only send results back to the transmitting end if we are actually still
+                    # receiving data at the sending end
+                    if stats["packet_data_received_1S_bytes"] > 0:
 
-                    # Get the last 5 events for this stream
-                    eventsList = self.parentRtpRxStream.getRTPStreamEventList(5)
+                        # Get the last 5 events for this stream
+                        NO_OF_PREV_EVENTS_TO_SEND = 5
+                        eventsList = self.parentRtpRxStream.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
 
-                    # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
-                    pickledMessage = pickle.dumps({"stats": stats, "eventList": eventsList})
+                        # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
+                        pickledMessage = pickle.dumps({"stats": stats, "eventList": eventsList})
 
 
-                    # if len(eventsList) > 0:
-                    #     # Get event no of most recent event in the list
-                    #     mostRecentEventNo = eventsList[-1].eventNo
-                    #     noOfNewEventsToSend = mostRecentEventNo - mostRecentlySentEventNo
-                    #     if noOfNewEventsToSend >0:
-                    #         # Obtain a sublist of just the unsent events
-                    #         newEventsToSend = self.parentRtpRxStream.getRTPStreamEventList(noOfNewEventsToSend)
+                        # if len(eventsList) > 0:
+                        #     # Get event no of most recent event in the list
+                        #     mostRecentEventNo = eventsList[-1].eventNo
+                        #     noOfNewEventsToSend = mostRecentEventNo - mostRecentlySentEventNo
+                        #     if noOfNewEventsToSend >0:
+                        #         # Obtain a sublist of just the unsent events
+                        #         newEventsToSend = self.parentRtpRxStream.getRTPStreamEventList(noOfNewEventsToSend)
 
-                    # Set max safe UDP tx size to 576 (based on this:-
-                    # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
-                    MAX_UDP_TX_LENGTH = 512
-                    # Split the message up
-                    fragmentedMessage = fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
+                        # Set max safe UDP tx size to 576 (based on this:-
+                        # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
+                        MAX_UDP_TX_LENGTH = 512
+                        # Split the message up
+                        fragmentedMessage = fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
 
-                    # iterate over fragments
-                    for fragment in fragmentedMessage:
-                        # Pickle and send each fragment one at a time
-                        txMessage = pickle.dumps(fragment)
-                        # Message.addMessage("tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
-                        self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
+                        # iterate over fragments
+                        for fragment in fragmentedMessage:
+                            # Pickle and send each fragment one at a time
+                            txMessage = pickle.dumps(fragment)
+                            # Message.addMessage("tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
+                            self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
 
 
                 except Exception as e:
