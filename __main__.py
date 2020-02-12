@@ -907,8 +907,10 @@ class RtpStream(object):
         self.__stats["calculate_thread_sampling_interval_S"] = 0.01
 
         # Create a __calculateThread
+        self.calculateThreadActiveFlag = True # Used as a signal to shut down the calculateThread
         self.calculateThread = threading.Thread(target=self.__calculateThread, args=())
         self.calculateThread.daemon = True  # Thread will auto shutdown when the prog ends
+        self.calculateThread.setName(str(self.__stats["stream_syncSource"]) + ":calculateThread")
         self.calculateThread.start()
 
         # create a stream results transmitter object for this rx stream
@@ -1204,7 +1206,9 @@ class RtpStream(object):
         UDP_HEADER_LENGTH_BYTES = 8
         RTP_HEADER_LENGTH_BYTES = 12
 
-        while True:
+
+        # Endless loop whilst
+        while self.calculateThreadActiveFlag == True:
 
             # Lock the access mutex
             self.__accessRtpDataMutex.acquire()
@@ -2575,21 +2579,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 displayThread_clockTimer = timer() # reset timer
                 # Update clock on top RHS of screen
                 Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
-                x = "availableRtpTxResultsList.events: "
 
-                # if len(rtpTxStreamResultsDict) > 0:
-                #     try:
-                #         # Iterate over rtpTxStreamResultsDict
-                #         for stream in rtpTxStreamResultsDict:
-                #             y = rtpTxStreamResultsDict[stream]
-                #             eventList = y.getRTPStreamEventList(1)
-                #             event = eventList[-1]
-                #             z=event.type
-                #             x += str(z) + ", "
-                #     except:
-                #         pass
-                #     Message.addMessage(x)
-
+                # Display last five events (in descending order)
                 s=""
                 if len(availableRtpTxResultsList) > 0:
                     # Iterate over availableRtpTxResultsList
@@ -2597,12 +2588,20 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                         # We want to display: [streamID], eventNo:Type, eventNo:Type....
                         eventList = stream[1].getRTPStreamEventList(5) # get last 5 events
                         s += "[" + str(stream[0]) + "] "    # Prefix with stream id
-                        for event in eventList:
-                            s+= str(event.eventNo) + ":" + str(event.type) + ", "
+                        # for event in eventList:
+                        for x in range(len(eventList)-1,-1,-1):
+                            # s+= str(event.eventNo) + ":" + str(event.type) + ", "
+                            s += str(eventList[x].eventNo) + ":" + str(eventList[x].type) + ", "
                         Message.addMessage(s)
                         s =""
 
-
+                # Display current threads
+                # Get list of current threads
+                activeThreads = threading.enumerate()
+                s = ""
+                for x in activeThreads:
+                    s += str(x.getName()) + ", "
+                Message.addMessage("Current threads: " + s)
 
             ######### Print Navigation bar (shows the available views) - shouldn't change much, so only a periodic redraw
 
@@ -3114,6 +3113,7 @@ class RtpGenerator(object):
         # Start the generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
         self.rtpGeneratorThread.daemon = True # Thread will auto shutdown when the prog ends
+        self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
         self.rtpGeneratorThread.start()
 
         # create a stream results receiver object for this tx stream
@@ -3418,6 +3418,7 @@ class ResultsReceiver(object):
         # Start the listener thread
         self.resultsReceiverThread = threading.Thread(target=self.__resultsReceiverThread, args=())
         self.resultsReceiverThread.daemon = True
+        self.resultsReceiverThread.setName(str(self.relatedRtpGenerator.syncSourceIdentifier) + ":ResultsReceiver")
         self.resultsReceiverThread.start()
 
 
@@ -3671,6 +3672,7 @@ class ResultsTransmitter(object):
         # Start the transmitter thread
         self.resultsTransmitterThread = threading.Thread(target=self.__resultsTransmitterThread, args=())
         self.resultsTransmitterThread.daemon = True
+        self.resultsTransmitterThread.setName(str(self.syncSource) + ":ResultsTransmitter")
         self.resultsTransmitterThread.start()
 
     def kill(self):
@@ -4146,12 +4148,14 @@ def main(argv):
     # Start keyboard monitoring thread
     catchKeyboardPresses = threading.Thread(target=__catchKeyboardPresses, args=(keyPressed,))
     catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
+    catchKeyboardPresses.setName("__catchKeyboardPresses")
     catchKeyboardPresses.start()
 
     # Create a display thread
     displayThread = threading.Thread(target=__displayThread,
                                      args=(MODE, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex, rtpRxStreamsDict, rtpRxStreamsDictMutex, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,))
     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
+    displayThread.setName("__displayThread")
     displayThread.start()
 
 
@@ -4173,6 +4177,7 @@ def main(argv):
         # Create a diskLogging Thread - pass rtpStream object to it
         diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,))
         diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
+        diskLoggerThread.setName("__diskLoggerThread")
         diskLoggerThread.start()
 
 
@@ -4192,6 +4197,7 @@ def main(argv):
         # Create a diskLogging Thread - pass rtpStream object to it
         diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpRxStreamsDict, rtpRxStreamsDictMutex,))
         diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
+        diskLoggerThread.setName("__diskLoggerThread")
         diskLoggerThread.start()
 
         while True:
