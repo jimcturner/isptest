@@ -1568,9 +1568,15 @@ class RtpStreamResults(object):
         # Create private empty list to hold Events for this RtpStream object. Accessible via a getter method
         self.__eventList = []
 
+        # No of historic events to keep in memory (before housekeeping)
+        self.historicEventsLimit  = 10
+
         # Create mutex locks for data access
         self.__accessRtpStreamStatsMutex = threading.Lock()         # for the stats dictionary
         self.__accessRtpStreamEventListMutex = threading.Lock()     # for the eventsList
+
+        # Used to record when this object last received updated stats
+        self.lastUpdatedTimestamp = datetime.timedelta()
 
 
     def updateStats(self, statsDict):
@@ -1582,6 +1588,8 @@ class RtpStreamResults(object):
         self.__stats = deepcopy(statsDict)
         # Release the mutex
         self.__accessRtpStreamStatsMutex.release()
+        # update the lastUpdated timestamp
+        self.lastUpdatedTimestamp = datetime.datetime.now()
 
     def updateEventsList(self, eventsList):
         # Will take a list of new events and append them to the existing eventsList list
@@ -1592,7 +1600,8 @@ class RtpStreamResults(object):
         self.__eventList.extend(eventsList)
         # Release the mutex
         self.__accessRtpStreamEventListMutex.release()
-
+        # update the lastUpdated timestamp
+        self.lastUpdatedTimestamp = datetime.datetime.now()
 
 
     def setFriendlyName(self, friendlyName):
@@ -1666,18 +1675,16 @@ class RtpStreamResults(object):
             return eventList
 
     # Method to strip off the oldest events from the eventList once the threshold is reached
-    # Note **this does not** set mutex locks itself, so should only be called from another method that
-    # already has guaranteed exclusive access
-    def __houseKeepEventList(self):
+    # Unlike the similar method in RtpStream, this does actually set/release mutex locks itself
+    def houseKeepEventList(self):
         # Check size of self.__eventList[]
+        self.__accessRtpStreamEventListMutex.acquire()
         noOfMessagesToPurge = len(self.__eventList) - self.historicEventsLimit
         if noOfMessagesToPurge > 0:
             # Remove first x events
-            # oldSize = len(self.__eventList)
             del self.__eventList[:noOfMessagesToPurge]
-            # newSize = len(self.__eventList)
-            # Message.addMessage("__houseKeepEventList() "+str(noOfMessagesToPurge)+
-            #                    " events removed"+str(oldSize)+">>"+str(newSize))
+        self.__accessRtpStreamEventListMutex.release()
+
 
 
 def createTable(inputDictionary, title):
@@ -3417,6 +3424,19 @@ class RtpGenerator(object):
             else:
                 # print "__rtpGenerator() - non-positive compensatedTxPeriod value",compensatedTxPeriod,"\r"
                 pass
+
+            # Now housekeep the associated rtpTxStreamResults object for this stream
+
+            try:
+                # Get a handle on the rtpTxStreamResults object
+                rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+
+                # Invoke the housekeeping method to purge any really old events
+                rtpTxStreamResults.houseKeepEventList()
+            except Exception as e:
+                Message.addMessage("ERR: __rtpGenerator rtpTxStreamResults.houseKeepEventList(): " + str(e))
+
+
 
             # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
             if self.timeToLive ==0:
