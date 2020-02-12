@@ -922,6 +922,9 @@ class RtpStream(object):
         # Therefore unless we kill it, this RtpStream object will never be allowed to die
         self.resultsTransmitter.kill()
 
+        # Also kill the __calculateThread associated with this receive stream
+        self.calculateThreadActiveFlag = False
+
     def getSocket(self):
         # Returns the receive UDP socket associated with this stream
         return self.socket
