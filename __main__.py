@@ -2024,7 +2024,9 @@ def humanise(key,value):
         return value
 
 
-def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex, rtpRxStreamsDict, rtpRxStreamsDictMutex, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex):
+def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
+                    rtpRxStreamsDict, rtpRxStreamsDictMutex,
+                    rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT):
 
     # Declare lists to hold list of available rx and tx streams that can be displayed
     # These lists are a list of tuples [x,y,z] where
@@ -2592,8 +2594,14 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             Term.clearTerminalScrollbackBuffer()
             Term.setBackgroundColour(Term.BLUE)
             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
-            # Print operation mode
-            Term.printAt(operationMode+" MODE", 1, 1, Term.BLACK, Term.WHITE)
+            # Print operation mode (plus receive IP:Port if in Receive mode)
+            if operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK':
+                Term.printAt(operationMode+" MODE", 1, 1, Term.BLACK, Term.WHITE)
+            elif operationMode == 'RECEIVE':
+                Term.printAt(operationMode + " " + str(UDP_RX_IP) + ":" +\
+                             str(UDP_RX_PORT), 1, 1, Term.BLACK, Term.WHITE)
+
+
             # Print bottom strip, solid line
             Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
             # Print list of key commands
@@ -3969,6 +3977,8 @@ def main(argv):
     glitchEventTriggerThreshold  = 4
 
     UDP_TX_SRC_PORT = 0
+    UDP_RX_IP = ""
+    UDP_RX_PORT = 0
 
     # Default Sync Source identifier of first tx stream
     SYNC_SOURCE_ID =random.randint(1000,2000)
@@ -4206,7 +4216,9 @@ def main(argv):
 
     # Create a display thread
     displayThread = threading.Thread(target=__displayThread,
-                                     args=(MODE, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex, rtpRxStreamsDict, rtpRxStreamsDictMutex, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,))
+                                     args=(MODE, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
+                                           rtpRxStreamsDict, rtpRxStreamsDictMutex,
+                                           rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT,))
     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
     displayThread.setName("__displayThread")
     displayThread.start()
