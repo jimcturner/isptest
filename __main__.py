@@ -816,7 +816,10 @@ class RtpStream(object):
 
         # Add a name field (which can be set with a friendly name (via a setter method) to identify the stream)
         self.maxNameLength = 10
-        self.__stats["stream_friendly_name"] = " " * self.maxNameLength
+        # self.__stats["stream_friendly_name"] = " " * self.maxNameLength
+        # On init, set friendly name to be the same as the sync source ID
+        self.__stats["stream_friendly_name"] = \
+            str(str(self.__stats["stream_syncSource"])[0:self.maxNameLength]).ljust(self.maxNameLength, " ")
 
         # Create empty list to hold rtp stream data as it is received by the socket
         self.rtpStreamData = []
@@ -3143,7 +3146,9 @@ class RtpGenerator(object):
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
         self.elapsedTime = datetime.timedelta()
         self.maxNameLength = 10
-        self.friendlyName = " "*self.maxNameLength
+        # self.friendlyName = " "*self.maxNameLength
+        # On init, set friendly name to be the same as the ID
+        self.friendlyName = str(str(self.syncSourceIdentifier)[0:self.maxNameLength]).ljust(self.maxNameLength," ")
         self.timeToLive = timeToLive
         self.enablePacketGeneration = True
         self.packetsToSkip = 0 # Set by simulatePacketLoss()
@@ -3151,6 +3156,8 @@ class RtpGenerator(object):
         self.udpTxSocket = 0 # This is pointer to the socket created by __rtpGeneratorThread
         self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
+
+
 
         # Test to see if a UDP source port was specified
         if len(srcPort) > 0:
