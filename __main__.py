@@ -2005,7 +2005,7 @@ def humanise(key,value):
         else:
             # Append _uS to the value
             value = str(int(value))+"uS"
-        return int(value)
+        return value
 
     if key == 'Time to live':
         # If this is am endless stream (created with a negative time to live)
