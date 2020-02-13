@@ -2310,7 +2310,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     txRate = 1048576
 
                     rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, \
-                                                rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, sourcePort)
+                                                rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, "", sourcePort)
                     # Add the new stream to the rtpStreams dictionary
                     addRtpStreamToDict(syncSourceID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
 
@@ -3129,7 +3129,7 @@ def __catchKeyboardPresses(keyPressed):
 class RtpGenerator(object):
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
-                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, *srcPort):
+                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, friendlyName, *srcPort):
         # The last argument (*srcPort) is optional. it allows you to specify a source port on creation
 
         # Assign instance variables
@@ -3147,8 +3147,13 @@ class RtpGenerator(object):
         self.elapsedTime = datetime.timedelta()
         self.maxNameLength = 10
         # self.friendlyName = " "*self.maxNameLength
-        # On init, set friendly name to be the same as the ID
-        self.friendlyName = str(str(self.syncSourceIdentifier)[0:self.maxNameLength]).ljust(self.maxNameLength," ")
+        # On init, if no name supplied, set friendly name to be the same as the ID
+        if friendlyName == "":
+            self.setFriendlyName(self.syncSourceIdentifier)
+        else:
+            # if a friendly name is supplied, use it
+            self.setFriendlyName(friendlyName)
+
         self.timeToLive = timeToLive
         self.enablePacketGeneration = True
         self.packetsToSkip = 0 # Set by simulatePacketLoss()
@@ -3198,6 +3203,8 @@ class RtpGenerator(object):
         # can auto-set the friendly name of the stream at the rx end)
         # Currently it just sets an instance variable
 
+        # convert friendlyName into a string
+        friendlyName=str(friendlyName)
         # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
         if len(friendlyName) < self.maxNameLength:
             # Too short, so Pad out name to x chars
@@ -4006,6 +4013,9 @@ def main(argv):
     # Default lifespan of a tx stream (default 1 hr)
     txStreamTimeToLive_sec = 3600
 
+    # Default friendly name of Tx stream (if not overridden, sync source ID is used instead)
+    RTP_TX_STREAM_FRIENDLY_NAME = ""
+
     # print ('Argument List: '+ str(argv))
     try:
         # options are:
@@ -4250,11 +4260,12 @@ def main(argv):
         if UDP_TX_SRC_PORT >0:
             rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
                                         payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec, \
-                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_TX_SRC_PORT)
+                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
+                                        RTP_TX_STREAM_FRIENDLY_NAME, UDP_TX_SRC_PORT)
         else:
             # Otherwise create a new RtpGenerator without specifiying thr source port (the OS will decide)
             rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,\
-                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex)
+                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, RTP_TX_STREAM_FRIENDLY_NAME)
 
         # Add the tx stream to the rtpStreams dictionary
         addRtpStreamToDict(SYNC_SOURCE_ID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
