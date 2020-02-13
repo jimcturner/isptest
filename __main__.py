@@ -2261,8 +2261,12 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 newFriendlyName=keyPressed[1]
                 del keyPressed[1]  # Remove key buffer array now eve stored it
                 Message.addMessage("INFO: new friendlyNameEntered: "+newFriendlyName + " for stream " + str(idOfStreamToBeModified))
-                # Attempt to modify the stream name
-                streamToBeModified.setFriendlyName(newFriendlyName)
+                # Attempt to modify the stream name (but only if this is an RtpStream (a receiver) or RtpGenerstor object
+                # (RtpStreamResults objects are just display versions of the RtpStream objects created at the receiver)
+                if type(streamToBeModified) == RtpStream or type(streamToBeModified) == RtpGenerator:
+                    streamToBeModified.setFriendlyName(newFriendlyName)
+                if type(streamToBeModified) == RtpStreamResults:
+                    Message.addMessage("You can't change the name of a Results Stream. Modify name in the Tx tab instea")
 
             except Exception as e:
                 Message.addMessage(Term.FG((Term.RED))+"ERR: __displayThread() newFriendlyNameEntered: "+ str(e))
