@@ -2761,6 +2761,16 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                                                     # If so, make the row red
                                                     tableCell=Term.FG(Term.RED)+tableCell
 
+                                                if type(streamData[1]) == RtpStreamResults:
+                                                    # If so, check to see that the data is fresh by looking at the
+                                                    # timestamp inside RtpStreamResults
+                                                    # If no fresh data received after 5 seconds, assume there's a problem
+                                                    # and colour code the stream red
+                                                    if (datetime.datetime.now() - streamData[1].lastUpdatedTimestamp) >\
+                                                            datetime.timedelta(seconds = 5):
+                                                        tableCell = Term.FG(Term.RED) + tableCell
+
+
                                             # is it a transmit stream?
                                             if type(streamData[1]) == RtpGenerator:
                                                 if streamDataStats["Time to live"] == 0:
