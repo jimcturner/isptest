@@ -3767,7 +3767,15 @@ class ResultsTransmitter(object):
                     eventsList = self.parentRtpRxStream.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
 
                     # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
-                    pickledMessage = pickle.dumps({"stats": stats, "eventList": eventsList})
+                    # Python2 and Python3 aren't automatically interchangeable unless you specify the
+                    # encoding='bytes' option. Unfortunately this option isn't present in Python2
+                    # Therfore we have to try both attempts
+                    try:
+                        # Try Python3 version of pickle first
+                        pickledMessage = pickle.dumps({"stats": stats, "eventList": eventsList}, encoding='bytes')
+                    except:
+                        # If that fails, try Python 2's version
+                        pickledMessage = pickle.dumps({"stats": stats, "eventList": eventsList})
 
 
                     # if len(eventsList) > 0:
