@@ -3440,8 +3440,8 @@ class RtpGenerator(object):
                 pass
 
             # Now housekeep the associated rtpTxStreamResults object for this stream
-            # Check to see that rtpTxStreamResultsDict contains some stream objects
-            if len (self.rtpTxStreamResultsDict) > 0:
+            # Check to see that rtpTxStreamResultsDict contains this stream objects
+            if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
                 try:
                     # Get a handle on the rtpTxStreamResults object
                     rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
