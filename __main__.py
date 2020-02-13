@@ -2004,8 +2004,8 @@ def humanise(key,value):
             value = str(int(value/1000))+"mS"
         else:
             # Append _uS to the value
-            value = str(value)+"uS"
-        return value
+            value = str(int(value))+"uS"
+        return int(value)
 
     if key == 'Time to live':
         # If this is am endless stream (created with a negative time to live)
