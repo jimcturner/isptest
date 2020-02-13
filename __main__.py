@@ -264,45 +264,45 @@ class Term(object):
         # Revert to original terminal screen
         print ("\033[?1049l")
 
-    @classmethod
-    def oldPrintAt(cls,text, xPos, yPos, *args):
-        # Prints text at screen position xPos, yPos (NOTE: 1,1 is top left)
-        # Last argument is an optional colour [foreground],
-        # or [foreground, background]
-        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
-
-        try:
-            # For the benefit of Python3, just in case, convert supplied values to ints
-            xPos=int(xPos)
-            yPos=int(yPos)
-
-            if len(args) == 1:
-                try:
-                    # Foreground Colour parameter supplied
-                    print ("\033[3"+str(int(args[0]))+"m"+
-                           "\033[" + str(yPos) + ";" + str(xPos)
-                           + "H" + str(text) + "\033[1;1H")
-                except:
-                    # invalid colour parameter supplied
-                    print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\033[1;1H")
-
-            elif len(args) == 2:
-                try:
-                    # Foreground and background colour parameter supplied
-                    print ("\033[3"+str(int(args[0]))+"m"+      # Foreground
-                           "\033[4" + str(int(args[1])) + "m" + # Background
-                           "\033[" + str(yPos) + ";" + str(xPos) +
-                           "H" + str(text) + "\033[1;1H")
-                except:
-                    # invalid colour parameter supplied
-                    print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\033[1;1H")
-            else:
-                # No colour parameter supplied
-                print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\033[1;1H")
-
-        except:
-            # Failing everything else, do a plain old print with a CR at the end
-            print(str(text)+"\r")
+    # @classmethod
+    # def oldPrintAt(cls,text, xPos, yPos, *args):
+    #     # Prints text at screen position xPos, yPos (NOTE: 1,1 is top left)
+    #     # Last argument is an optional colour [foreground],
+    #     # or [foreground, background]
+    #     # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+    #
+    #     try:
+    #         # For the benefit of Python3, just in case, convert supplied values to ints
+    #         xPos=int(xPos)
+    #         yPos=int(yPos)
+    #
+    #         if len(args) == 1:
+    #             try:
+    #                 # Foreground Colour parameter supplied
+    #                 print ("\033[3"+str(int(args[0]))+"m"+
+    #                        "\033[" + str(yPos) + ";" + str(xPos)
+    #                        + "H" + str(text) + "\033[1;1H")
+    #             except:
+    #                 # invalid colour parameter supplied
+    #                 print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\033[1;1H")
+    #
+    #         elif len(args) == 2:
+    #             try:
+    #                 # Foreground and background colour parameter supplied
+    #                 print ("\033[3"+str(int(args[0]))+"m"+      # Foreground
+    #                        "\033[4" + str(int(args[1])) + "m" + # Background
+    #                        "\033[" + str(yPos) + ";" + str(xPos) +
+    #                        "H" + str(text) + "\033[1;1H")
+    #             except:
+    #                 # invalid colour parameter supplied
+    #                 print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\033[1;1H")
+    #         else:
+    #             # No colour parameter supplied
+    #             print ("\033[" + str(yPos) + ";" + str(xPos) + "H" + str(text) + "\033[1;1H")
+    #
+    #     except:
+    #         # Failing everything else, do a plain old print with a CR at the end
+    #         print(str(text)+"\r")
 
     @classmethod
     def printAt(cls,text, xPos, yPos, *args):
@@ -394,9 +394,6 @@ class Term(object):
         width, height = cls.getTerminalSize()
         for lineNo in range (1,height):
             cls.setBackgroundColourSingleLine(1,lineNo,colour)
-
-
-
 
     @classmethod
     def printTitleBar(cls,text,row, fgColour, bgColour):
@@ -1750,6 +1747,20 @@ def bToMb(value):
         return str(value) + "k"
     else:
         return str(value)
+
+def get_ip():
+    # Returns the IP address of the network interface currently used as the default route to the internet
+    # Lifted from here https://stackoverflow.com/questions/166506/finding-local-ip-addresses-using-pythons-stdlib
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
 
 def oldHumanise(inputDictionary):
     # This function will examine the key/value pairs of the stats dictionary and
@@ -3989,9 +4000,11 @@ def main(argv):
     # print(reassembled)
     #
     # exit()
+    # print ("ip addr: " + str(get_ip()))
+    # exit()
 
-
-    init(autoreset=True)  # Invoke colorama to allow ansi escape sequences to work on Windows
+    # Invoke colorama init() method to allow ansi escape sequences to work on Windows
+    init(autoreset=True)
 
     MODE = ""
     # Specify a default txRate of 1Mbps if no rate specified
@@ -4004,11 +4017,12 @@ def main(argv):
     glitchEventTriggerThreshold  = 4
 
     UDP_TX_SRC_PORT = 0
+
     UDP_RX_IP = ""
     UDP_RX_PORT = 0
 
     # Default Sync Source identifier of first tx stream
-    SYNC_SOURCE_ID =random.randint(1000,2000)
+    SYNC_SOURCE_ID =random.randint(1000, 2000)
 
     # Default lifespan of a tx stream (default 1 hr)
     txStreamTimeToLive_sec = 3600
@@ -4052,7 +4066,7 @@ def main(argv):
                 print ("-s udp transmit source port (for transmit or loopback mode)")
                 print ("-u sync source ID (for transmit or loopback mode)")
                 print ("-l: duration of transmission (in seconds. Default 1hr (3600 sec). A value of -1 means 'forever'\r")
-                print ("-r receive mode usage: address:port\r")
+                print ("-r receive mode usage: -r [port] or -r [address:port]\r")
                 print ("-b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps\r")
                 print ("-d rtp payload size (bytes). Default = 1300 bytes\r")
                 print ("-i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4\r")
@@ -4097,8 +4111,20 @@ def main(argv):
                         exit()
                     print (MODE+", "+str(UDP_RX_IP)+", "+str(UDP_RX_PORT))
                 else:
-                    print ("Invalid RECEIVE IP address:port combination supplied: " + str(arg))
-                    exit()
+                    # If only a single parameter supplied, use the 'OS supplied' address
+                    # and the supplied value as a UDP receive port
+                    # Get the ip address of the host machine
+                    UDP_RX_IP = get_ip()
+                    try:
+                        arg = int(arg) + 1 - 1
+                        if arg < 1024:
+                            print ("Invalid RECEIVE port supplied. Should be an integer > 1024: " + str(arg))
+                            exit()
+                        UDP_RX_PORT = arg
+                        print (MODE + ", " + str(UDP_RX_IP) + ", " + str(UDP_RX_PORT))
+                    except:
+                        print ("Invalid RECEIVE port supplied. Should be an integer > 1024: " + str(arg))
+                        exit()
 
             elif opt in ("-b"):
                 try:
