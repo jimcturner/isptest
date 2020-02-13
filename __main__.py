@@ -912,11 +912,8 @@ class RtpStream(object):
         # Amount of time to elapse before a lossOfStream alarm event is triggered
         self.lossOfStreamAlarmThreshold_s = 1
 
-        # Amount of time to elapse before a stream is believed completely dead (used to reset the
-        # self.__stats["calculate_thread_sampling_interval_S"] value back to it's default value
-        # DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL in order to conserve CPU cycles
-        # Otherwise previous high rate streams (with correspondingly small stats["calculate_thread_sampling_interval_S"] sleep
-        # values will needlessly tie up the cpu
+        # Amount of time to elapse before a stream is believed completely dead (and automatically
+        # destroyed)
         self.streamIsDeadThreshold_s = 30
 
         # Create a __calculateThread
@@ -3429,15 +3426,17 @@ class RtpGenerator(object):
                 pass
 
             # Now housekeep the associated rtpTxStreamResults object for this stream
+            # Check to see that rtpTxStreamResultsDict contains some stream objects
+            if len (self.rtpTxStreamResultsDict) > 0:
+                try:
+                    # Get a handle on the rtpTxStreamResults object
+                    rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                    if type(rtpTxStreamResults) == RtpStreamResults:
+                        # Invoke the housekeeping method to purge any really old events
+                        rtpTxStreamResults.houseKeepEventList()
+                except Exception as e:
+                    Message.addMessage("ERR: __rtpGenerator rtpTxStreamResults.houseKeepEventList(): " + str(e))
 
-            try:
-                # Get a handle on the rtpTxStreamResults object
-                rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                if type(rtpTxStreamResults) == RtpStreamResults:
-                    # Invoke the housekeeping method to purge any really old events
-                    rtpTxStreamResults.houseKeepEventList()
-            except Exception as e:
-                Message.addMessage("ERR: __rtpGenerator rtpTxStreamResults.houseKeepEventList(): " + str(e))
 
             # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
             if self.timeToLive ==0:
@@ -3741,38 +3740,34 @@ class ResultsTransmitter(object):
                     # Use pickle to serialise the data we want to send
                     stats = self.parentRtpRxStream.getRtpStreamStats()
 
-                    # To save bandwidth, only send results back to the transmitting end if we are actually still
-                    # receiving data at the sending end
-                    if stats["packet_data_received_1S_bytes"] > 0:
+                    # Get the last 5 events for this stream
+                    NO_OF_PREV_EVENTS_TO_SEND = 5
+                    eventsList = self.parentRtpRxStream.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
 
-                        # Get the last 5 events for this stream
-                        NO_OF_PREV_EVENTS_TO_SEND = 5
-                        eventsList = self.parentRtpRxStream.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
-
-                        # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
-                        pickledMessage = pickle.dumps({"stats": stats, "eventList": eventsList})
+                    # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
+                    pickledMessage = pickle.dumps({"stats": stats, "eventList": eventsList})
 
 
-                        # if len(eventsList) > 0:
-                        #     # Get event no of most recent event in the list
-                        #     mostRecentEventNo = eventsList[-1].eventNo
-                        #     noOfNewEventsToSend = mostRecentEventNo - mostRecentlySentEventNo
-                        #     if noOfNewEventsToSend >0:
-                        #         # Obtain a sublist of just the unsent events
-                        #         newEventsToSend = self.parentRtpRxStream.getRTPStreamEventList(noOfNewEventsToSend)
+                    # if len(eventsList) > 0:
+                    #     # Get event no of most recent event in the list
+                    #     mostRecentEventNo = eventsList[-1].eventNo
+                    #     noOfNewEventsToSend = mostRecentEventNo - mostRecentlySentEventNo
+                    #     if noOfNewEventsToSend >0:
+                    #         # Obtain a sublist of just the unsent events
+                    #         newEventsToSend = self.parentRtpRxStream.getRTPStreamEventList(noOfNewEventsToSend)
 
-                        # Set max safe UDP tx size to 576 (based on this:-
-                        # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
-                        MAX_UDP_TX_LENGTH = 512
-                        # Split the message up
-                        fragmentedMessage = fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
+                    # Set max safe UDP tx size to 576 (based on this:-
+                    # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
+                    MAX_UDP_TX_LENGTH = 512
+                    # Split the message up
+                    fragmentedMessage = fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
 
-                        # iterate over fragments
-                        for fragment in fragmentedMessage:
-                            # Pickle and send each fragment one at a time
-                            txMessage = pickle.dumps(fragment)
-                            # Message.addMessage("tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
-                            self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
+                    # iterate over fragments
+                    for fragment in fragmentedMessage:
+                        # Pickle and send each fragment one at a time
+                        txMessage = pickle.dumps(fragment)
+                        # Message.addMessage("tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
+                        self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
 
 
                 except Exception as e:
