@@ -2143,7 +2143,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     # Screen label showing the availablle key commands (depending upon mode)
     keyCommandsString = "[<]/[>] cycle panes, [^]/[v] select stream, [d]elete, [s]et name"
 
-    extraKeyCommandsString = "TX  modifier: [o/p] seq ID, [k/l] packet size, [n/m] tx bps, [a]dd"
+    extraKeyCommandsString = "TX  modifier: [o/p] seq ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
     txStreamModifierCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
 
     streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
@@ -2339,6 +2339,54 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                         streamToBeModified.setTxRate(currentTxRate - 524288)
                     # Force redraw
                     redrawScreen = True
+
+        if keyPressed[0] == 'h' or keyPressed[0] == 'j':
+            # Decrease/Increase time to live of selected stream
+            modifier = 0
+            if keyPressed[0] == 'h':
+                # Decrease time to live
+                modifier = -1
+            else:
+                # Increase time to live
+                modifier = 1
+
+            keyPressed[0] = ''  # Clear key buffer
+
+            # Confirm that a tx stream exists
+            if len(availableRtpTxStreamList) > 0:
+                # Get handle on selected stream
+                streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                streamID = views[selectedView][2][selectedTableRow][0]
+                # Now check that this is a generator object
+                if type(streamToBeModified) == RtpGenerator:
+                    # Get time to live rate from currently selected stream
+                    stats = streamToBeModified.getRtpStreamStats()
+                    currentTTL = int(stats['Time to live']) # Retrieve time to live (in seconds)
+                    if modifier < 0:
+                        # Decrease time to live by 1hr (3600 secs), or else make 'forever' by setting as -1
+                        newTTL = currentTTL - 3600
+                        # If the new calculated value is -ve, interpret as 'forever'
+                        if newTTL < 0:
+                            # Set stream TTL to 'forever'
+                            streamToBeModified.setTimeToLive(-1)
+                            Message.addMessage("[h] Setting stream " + str(streamID) + " time to live to 'forever'")
+                        else:
+                            # Otherwise update the stream with the new calculated TTL
+                            streamToBeModified.setTimeToLive(newTTL)
+                            Message.addMessage("[h] Setting stream " + str(streamID) + " time to live to dur " + dtstrft(datetime.timedelta(seconds=newTTL)))
+
+                    elif modifier > 0:
+                        # Increase time to live by 1hr (3600 secs)
+                        newTTL = currentTTL + 3600
+                        # Update the stream with the new calculated TTL
+                        streamToBeModified.setTimeToLive(newTTL)
+                        Message.addMessage("[j] Setting stream " + str(streamID) + " time to live to dur " + dtstrft(
+                            datetime.timedelta(seconds=newTTL)))
+
+
+        if keyPressed[0] == 'h':
+            # Decrease time to live of selected stream
+            keyPressed[0] = ''  # Clear key buffer
 
 
         if keyPressed[0] == 'l':
