@@ -731,7 +731,7 @@ class Glitch(Event):
 
     def getSummary(self):
         optionalFields = " " + dtstrft(self.glitchLength) + ", " + str(self.packetsLost) + " lost. "+\
-                "Exptd: " +str(self.expectedSequenceNo)+", Got: "+ str(self.actualReceivedSequenceNo)
+                "Exptd." +str(self.expectedSequenceNo)+", Got."+ str(self.actualReceivedSequenceNo)
         summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
                   "[" + str(self.eventNo) + "] " + self.type + optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
@@ -1185,7 +1185,7 @@ class RtpStream(object):
                 # Post a message
                 Message.addMessage(glitch.getSummary()['summary'])
             else:
-                Message.addMessage(glitch.getSummary()['summary'] + " (ignored)")
+                Message.addMessage(glitch.getSummary()['summary'] + " (ignore)")
             # update glitch stats
             self.__updateGlitchStats(glitch)
 
@@ -1221,7 +1221,7 @@ class RtpStream(object):
                     # Post a message
                     Message.addMessage(glitch.getSummary()['summary'])
                 else:
-                    Message.addMessage(glitch.getSummary()['summary'] + " (ignored)")
+                    Message.addMessage(glitch.getSummary()['summary'] + " (ignore)")
 
                 # update glitch stats
                 self.__updateGlitchStats(glitch)
