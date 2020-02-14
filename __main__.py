@@ -1066,12 +1066,12 @@ class RtpStream(object):
                 if self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >= \
                         self.__stats["jitter_alarm_event_timeout_S"] or \
                         self.__stats["jitter_excess_jitter_events_total"] == 0:
+                    excessiveJitterEvent = ExcessiveJitter(self.__stats, self.rtpStream[-1])
                     # Add the event to the event list
-                    self.__eventList.append(ExcessiveJitter(self.__stats, self.rtpStream[-1]))
+                    self.__eventList.append(excessiveJitterEvent)
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
-                    Message.addMessage("["+str(self.__stats["stream_syncSource"])+"]. Excessive jitter. "+\
-                        str(uTom(self.__stats["jitter_mean_1S_uS"]))+"/"+str(uTom(self.__stats["jitter_long_term_uS"]))+"S")
+                    Message.addMessage(excessiveJitterEvent.getSummary()['summary'])
 
                 # Update the event counter for Excess Jitter
                 self.__stats["jitter_excess_jitter_events_total"] += 1
@@ -1239,7 +1239,7 @@ class RtpStream(object):
     # Define a private calculation method that will run autonomously as a thread
     # This thread will
     def __calculateThread(self):
-        Message.addMessage("Starting __calculateThread with sync Source: " + \
+        Message.addMessage("DBUG: Starting __calculateThread with sync Source: " + \
                            str(self.__stats["stream_syncSource"]))
 
         # Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
@@ -1290,10 +1290,11 @@ class RtpStream(object):
                 if self.__stats["packet_counter_received_total"] < 1:
                     self.__stats["packet_first_packet_received_timestamp"] = self.rtpStream[0].timestamp
                     # Add a StreamStarted event to the event list
-                    self.__eventList.append(StreamStarted(self.__stats, self.rtpStream[0]))
-                    Message.addMessage("["+str(self.__stats["stream_syncSource"])+"]. Stream started. ")
+                    streamStartedEvent = StreamStarted(self.__stats, self.rtpStream[0])
+                    self.__eventList.append(streamStartedEvent)
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
+                    Message.addMessage(streamStartedEvent.getSummary()['summary'])
 
                 # Stream now being received so clear flag
                 if lossOfStreamFlag == True:
@@ -1351,10 +1352,11 @@ class RtpStream(object):
                     # Set flag
                     lossOfStreamFlag = True
                     # Add event to the list (but only do this once)
-                    self.__eventList.append(StreamLost(self.__stats, lastReceivedRtpPacket))
-                    Message.addMessage("[" + str(self.__stats["stream_syncSource"]) + "]. Stream lost. ")
+                    streamLostEvent = StreamLost(self.__stats, lastReceivedRtpPacket)
+                    self.__eventList.append(streamLostEvent)
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
+                    Message.addMessage(streamLostEvent.getSummary()['summary'])
                     ######## POSSIBLY REVISIT THIS.....
                     # # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
                     # self.__stats["jitter_min_uS"] = 0
@@ -1458,7 +1460,9 @@ class RtpStream(object):
                 if (datetime.datetime.now() - self.__stats["packet_last_seen_received_timestamp"]) > \
                         datetime.timedelta(seconds = self.streamIsDeadThreshold_s):
 
-                    Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + " believed dead.")
+                    Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) +\
+                                       "(" + str(self.__stats["stream_friendly_name"]).rstrip() +\
+                                       ") believed dead, removing from list")
                     # Kill itself
                     self.killStream()
 
@@ -1562,7 +1566,7 @@ class RtpStream(object):
                 # Slice the list
                 return eventList[args[0]:args[1] + 1]
             except Exception as e:
-                Message.addMessage("RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
+                Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
                                    str(args[1]) + ") requested start and end indexes out of range: " + str(e))
         elif len(args) == 1:
             # If one arg supplied, return the last n events.
@@ -1585,7 +1589,7 @@ class RtpStream(object):
             # oldSize = len(self.__eventList)
             del self.__eventList[:noOfMessagesToPurge]
             # newSize = len(self.__eventList)
-            # Message.addMessage("__houseKeepEventList() "+str(noOfMessagesToPurge)+
+            # Message.addMessage("DBUG: __houseKeepEventList() "+str(noOfMessagesToPurge)+
             #                    " events removed"+str(oldSize)+">>"+str(newSize))
 
     # Define setter methods
@@ -1710,7 +1714,7 @@ class RtpStreamResults(object):
                 # Slice the list
                 return eventList[args[0]:args[1] + 1]
             except Exception as e:
-                Message.addMessage("RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
+                Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
                                    str(args[1]) + ") requested start and end indexes out of range: " + str(e))
         elif len(args) == 1:
             # If one arg supplied, return the last n events.
@@ -1831,116 +1835,6 @@ def listCurrentThreads():
         s += str(x.getName()) + ", "
     return s
 
-
-def oldHumanise(inputDictionary):
-    # This function will examine the key/value pairs of the stats dictionary and
-    # prettify the values. It will return a list of tuples containing the value/key pairs
-
-    # You're not allowed to modify a dictionary whilst iterating over it, therefore create a new dictionary that will
-    # hold the modified values
-
-    # List of prefixes to be removed from the key names
-    prefixes = ["stream_", "glitch_", "historic_", "jitter_", "packet_"]
-    # List of suffixes to be removed from the key names
-    suffixes = ["_percent", "_uS", "_timestamp", "_S", "_bytes"]
-
-    # Create a list to hold the humanised output
-    newDictionary = {}
-    for key, value in inputDictionary:
-        # Next, Scan 'keys' to see if they contain any of the prefix or suffix terms. If they do, replace them with ""
-        # Take a copy of the key to be examined
-        tempKeyName = key
-        # Iterate over prefixes
-        for prefix in prefixes:
-            tempKeyName = str(key).replace(prefix, "", 1)
-            # Check to see if tempKeyName has been modified?
-            if tempKeyName != key:
-                break
-        # Take a copy of the key with the prefix removed
-        keyWithoutPrefix = tempKeyName
-
-        # Now iterate over suffixes list
-        tempKeyName = keyWithoutPrefix
-        for suffix in suffixes:
-            tempKeyName = str(keyWithoutPrefix).replace(suffix, "", 1)
-            # Check to see if tempKeyName has been modified?
-            if tempKeyName != keyWithoutPrefix:
-                break
-        # Take a copy of the key with the suffix removed
-        keyWithoutSuffix = tempKeyName
-
-        # To improve readability, remove underscore characters
-        tempKeyName = keyWithoutSuffix.replace("_", " ")
-
-        # Now capitalise
-        # tempKeyName=tempKeyName.title()
-        # Now capture the finished 'humanised' key name
-        humanisedKey = tempKeyName
-
-        # Scan the (original) key name for clues about the format of the corresponding value
-
-        if str(key).find("uS") > 0:
-            # Create human readable value
-            humanisedValue = str(int(value)) + "uS"
-
-        elif str(key).find("percent") > 0:
-            # Create human readable value
-            # Format to two decimal places
-            value = round(value, 2)
-            humanisedValue = str(value) + "%"
-
-        elif str(key).find("_S") > 0:
-            # Create human readable value
-            humanisedValue = str(value) + "s"
-
-        # elif str(key).find("data_received_1S_bytes") > 0:
-        elif key == "packet_data_received_1S_bytes":
-            # Convert bytes/sec to bps
-            bps = value * 8
-            if bps >= 1048576:
-                # Convert bps to Mbps
-                Mbps = round(bps / 1048576.0, 1)
-                humanisedValue = str(Mbps) + " Mbps"
-
-            elif bps >= 1024:
-                # Convert bps to kbps
-                kbps = bps / 1024
-                humanisedValue = str(kbps) + " kbps"
-
-            else:
-                humanisedValue = str(bps) + " bps"
-
-        elif key == "packet_data_received_total_bytes":
-            if value >= 1048576:
-                # Convert bytes to Mb
-                value = round(value / 1048576.0,1)
-                humanisedValue = str(value) + " Mb"
-            elif value >= 1024:
-                # Convert bytes to kb
-                value = value / 1024
-                humanisedValue = str(value) + " kb"
-            else:
-                humanisedValue = str(value) + " bytes"
-
-        elif key == "packet_payload_size_mean_1S_bytes":
-            humanisedValue = str(value) + " bytes"
-
-        elif key == "packet_counter_1S":
-            humanisedValue = str(value) + " packets/s"
-
-        elif key == "packet_counter_received_total":
-            humanisedValue = str(value) + " packets"
-
-        else:
-            # Otherwise, keep the original value
-            humanisedValue = value
-
-        # Assign existing value to the new dictionary key
-        newDictionary[humanisedKey] = humanisedValue
-
-    # Return dictionary of humanised keys and values
-    return newDictionary.items()
-
 def removeRtpStreamFromDict(streamID, rtpStreamsDict, rtpStreamsDictMutex):
     # This function will delete the specified streamID from an rtpRxStreamsDict{}
     # It uses mutexes, so should be thread safe
@@ -1949,7 +1843,7 @@ def removeRtpStreamFromDict(streamID, rtpStreamsDict, rtpStreamsDictMutex):
         # Attempt to remove the rtpStream from the dictionary
         del rtpStreamsDict[streamID]
     except Exception as e:
-        Message.addMessage("deleteRtpStreamObject(): ["+str(streamID)+"], "+str(e))
+        Message.addMessage("ERR: deleteRtpStreamObject(): ["+str(streamID)+"], "+str(e))
     rtpStreamsDictMutex.release()
 
 def addRtpStreamToDict(rtpStreamID, rtpStream, rtpStreamsDict, rtpStreamsDictMutex):
@@ -2565,7 +2459,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     redrawScreen = True
 
                 except Exception as e:
-                    Message.addMessage("[ERR: __displayThread. Delete Stream request failed: "+str(idOfStreamToBeDeleted)+
+                    Message.addMessage("ERR: __displayThread. [d] Delete Stream request failed: "+str(idOfStreamToBeDeleted)+
                                        ", "+str(e))
 
 
@@ -2718,7 +2612,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                         for x in range(len(eventList)-1,-1,-1):
                             # s+= str(event.eventNo) + ":" + str(event.type) + ", "
                             s += str(eventList[x].eventNo) + ":" + str(eventList[x].type) + ", "
-                        Message.addMessage(s)
+                        Message.addMessage("INFO: Last five events: " + s)
                         s =""
 
                 # Message.addMessage("DBUG: Current threads: " + str(listCurrentThreads()))
@@ -2965,184 +2859,10 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
         redrawScreen =False
         time.sleep(0.2)
 
-# Define a display thread that will run autonomously
-def __olddisplayThread(operationMode, rtpTxStreams, rtpRxStreamsDict, keyPressed):
-    # Currently only decoding a single stream
-    Message.addMessage("Starting __displayThread")
-
-    padding = 1  # Gap between tables
-    margin = 2
-    nextUsableLine = 4  # Takes into account the title
-    nextUseableLineWholeWidth = nextUsableLine
-
-    columns, rows = Term.getTerminalSize()
-    Message.addMessage("Terminal size: " + str(columns) + ", " + str(rows))
-    selectedStream = 0 # Keeps track of the currently selected stream (from the list of available rtpRxStreams)
-    while True:
-        # Clear screen and move cursor to origin
-        print ("\033[2J\r")
-        print ("\033[0;0HIBEOO ISP Analyser V1.0---------------------------------------------------------------------------------------------------\r")
-
-        nextUsableLine = 3  # Takes into account the title
-        nextUseableLineWholeWidth=nextUsableLine
-        nextUsableColumn = 0
-
-        # Get dictionary of available rtpRxStreams as a list
-        availableRtpRxStreamList = []
-        temp = []
-        for k,v in rtpRxStreamsDict.items():
-            temp=[k,v]
-            availableRtpRxStreamList.append(temp)
-
-        # Check operation mode and also check to see if a valid rtpRxStream currently exists in the array
-        if (operationMode == 'RECEIVE' or operationMode == 'LOOPBACK') and len(availableRtpRxStreamList) > 0:
-            try:
-                # Check for [n] having been pressed. If so, cycle through the available streams
-                if keyPressed[0] == 'n':
-                    # Clear keyboard buffer
-                    keyPressed[0] = ''
-                    selectedStream +=1
-                    if selectedStream > (len(availableRtpRxStreamList) - 1):
-                        # If already on the last available stream, cycle back to the first
-                        selectedStream = 0
-            except Exception as e:
-                Message.addMessage("__displayThread: keyPressed " + str(e))
-
-            try:
-                # Get latest keys/values from rtpStream
-                currentRtpRxStream = availableRtpRxStreamList[selectedStream][1]
-                stats = currentRtpRxStream.getRtpStreamStats()
-            except Exception as e:
-                Message.addMessage("__displayThread: Get current stream " + str(e))
-            try:
-                # Create a table of stream stats
-                width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("stream").items()),
-                                                   "Stream info")
-                printTable(margin, nextUsableLine, table)
-                nextUsableLine += (height + padding)
-                if (width + padding + margin) > nextUsableColumn:
-                    nextUsableColumn = width + padding + margin
-                # Create a Glitch Stats table
-                width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("glitch").items()),
-                                                   "Glitch Stats")
-                printTable(margin, nextUsableLine, table)
-                nextUsableLine += (height + padding)
-                if (width + padding + margin) > nextUsableColumn:
-                    nextUsableColumn = width + padding + margin
-
-                # Create a table of historic glitch stats
-                width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("historic").items()),
-                                                   "Historic glitch stats")
-                printTable(margin, nextUsableLine, table)
-                nextUsableLine += (height + padding)
-                nextUseableLineWholeWidth = nextUsableLine
-                # if (width + padding + margin) > nextUseableColumn:
-                #     nextUseableColumn = width + padding + margin
-
-                # Now create tables on the RHS of the screen.
-                # Reset nextUseableLine to top of screen
-                nextUsableLine = 2
-                # Create a table of jitter stats
-                width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("jitter").items()),
-                                                   "Jitter Stats")
-                printTable(nextUsableColumn, nextUsableLine, table)
-                nextUsableLine += (height + padding)
-                # if (width + padding + margin) > nextUseableColumn:
-                #     nextUseableColumn = width + padding + margin
-
-                # Create a table of Packet stats beside the jitter table
-                width, height, table = createTable(humanise(currentRtpRxStream.getRtpStreamStatsByFilter("packet").items()),
-                                                   "Packet Stats")
-                # # Print the table to the screen line by line
-                printTable(nextUsableColumn, nextUsableLine, table)
-                nextUsableLine += (height + padding)
-
-                # # Move cursor to start of next available line
-                print ("\033[" + str(nextUseableLineWholeWidth) + ";" + str(0) + "H" + "\r")
-            except Exception as e:
-                Message.addMessage("__displayThread: stats tables" + str(e))
-
-            try:
-                # Get the last x events
-                noOfHistoricEventsToView = 10
-                events = currentRtpRxStream.getRTPStreamEventList(noOfHistoricEventsToView)
-                # Now create table from eventList
-                eventTableRows = []
-                for event in events:
-                    # Get dictionary from Event method containing timestamp and summary
-                    eventData = event.getSummary()
-                    # Create the new row
-                    tableRow = [eventData["timeCreated"].strftime("%H:%M:%S"), eventData["summary"]]
-                    # Append the new row to the list of rows
-                    eventTableRows.append(tableRow)
-                    # Now stored, delete the row, ready for next time around the loop
-                    del tableRow
-
-                title = "Event list (last " + str(noOfHistoricEventsToView) + "of" + \
-                        str(stats["stream_all_events_counter"]) + " events)"
-
-                width, height, table = createTable(eventTableRows, title)
-                printTable(margin, nextUseableLineWholeWidth, table)
-                nextUseableLineWholeWidth += (height + padding)
-                nextUsableColumn = width + padding + margin
-            except Exception as e:
-                Message.addMessage("__displayThread: Events tables " + str(e))
-
-
-        # Print a messages table on the next useable line
-        # Get last 10 messages
-        messages = Message.getMessages(10)
-        if len(messages) > 0:
-            width, height, table = createTable(messages, "Messages")
-            printTable(margin, nextUseableLineWholeWidth, table)
-
-        # # # Get all available keys
-        # stats =rtpStream.getRtpStreamStatsByFilter("stream")
-        # for k in stats:
-        #     print k,", ",
-        # print "\r"
-        # stats = rtpStream.getRtpStreamStats()
-        # print stats["stream_time_elapsed_total"].seconds, "\r"
-        # print stats["stream_all_events_counter"], "\r"
-
-        # Finally, print some tx info
-        # Check operation mode and also check to see if a valid rtpTxStream currently exists in the array
-        if (operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK') and len(rtpTxStreams) > 0:
-            # Get stats from latest rtpTxStream
-            try:
-                stats = rtpTxStreams[-1].getStats()
-                print(" [Sending to " + stats['Dest IP'] + ":"+str(stats['Dest Port'])+", " + \
-                    bToMb(stats['Tx Rate']) + "bps, " + \
-                    "Packet size: " + str(stats['Packet size']) + " bytes, " + \
-                    "Src ID: "+str(stats['Sync Source ID'])+"],\r")
-                print(" [Total Data sent: " + bToMb(stats['Bytes transmitted']) + "B" + \
-                    " Actual Tx rate: "+ bToMb(stats['Tx Rate (actual)']) + "bps, " + \
-                    "Elapsed Time: " + str(stats['Elapsed Time']) + "]\r")
-
-            except Exception as e:
-                Message.addMessage("RtpGenerator: "+ str(stats['Sync Source ID'])+", " + str(e))
-        print (operationMode + " MODE-----------------------------------------------------------------------------------------------------------------------\r")
-
-        if (operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK') and len(rtpTxStreams) > 0:
-            print (" [SPACE] Drop packet, [z] Toggle transmit on/off, [j] Simulate jitter on/off, [q]/[w] Decrease/Increase Tx rate\r")
-            print (" [e] Increment sync source id, [a]/[s] Decrease/Increase tx packet size\r")
-        # If receive mode, list the available streams
-        if operationMode == 'RECEIVE' or operationMode == 'LOOPBACK':
-            print("[n] to cycle through available receive streams\r")
-            streamListString = ""
-            for x in availableRtpRxStreamList:
-                # if the list item sync source id matches the currently selected stream sync source, highlight it
-                if x[0] == availableRtpRxStreamList[selectedStream][0]:
-                    streamListString += Fore.WHITE+Back.BLACK+str(x[0]) + Style.RESET_ALL + ", "
-                else:
-                    streamListString += str(x[0]) + ", "
-
-            print ("Available streams: " + streamListString + "\r")
-        time.sleep(1)
 
 # Define a thread that will trap keys pressed
 def __catchKeyboardPresses(keyPressed):
-    Message.addMessage("Starting __catchKeyboardPresses thread")
+    Message.addMessage("INFO: Starting __catchKeyboardPresses thread")
     # OSX and Windows seem to return different codes for the cursor keys, so check for both
     while True:
         ch = Term.getch()
@@ -3475,7 +3195,7 @@ class RtpGenerator(object):
             # Seq no is only a 16 bit value, so reset at max value (65535)
             if rtpSequenceNo > 65535:
                 rtpSequenceNo = 0
-                Message.addMessage("rtpGenerator. Seq no wrapping to zero")
+                Message.addMessage("INFO: rtpGenerator. " + str(self.syncSourceIdentifier) + " Seq no wrapping to zero")
             # If flag set, generate random delay centred around self.txPeriod (0.01 = 10mS period)
             if self.jitterGenerationFlag == True:
                 jitter = random.uniform(-1 * maxDeviation, maxDeviation)
@@ -3505,7 +3225,7 @@ class RtpGenerator(object):
                     # Modify txPeriod to compensate for error
                     # Prevent overshoots of the desired rate, only reduce self.txPeriod by 'half' the error amount in one go
                     self.txPeriod -= self.txPeriod * (errorFactor / 2.0)
-                    # Message.addMessage("Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
+                    # Message.addMessage("DBUG: Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
                     #                    str(self.txRate) + ", Actual tx rate:" + str(self.txBps_1s))
                 # Test for overshoots
                 if self.txBps_1s > (1.05 * self.txRate):
@@ -3516,11 +3236,11 @@ class RtpGenerator(object):
                     errorFactor = (txRateError * 1.0 / self.txRate)
                     # Reduce by 'half' the errorFactor (per adjustment) to prevent hunting
                     self.txPeriod += self.txPeriod * (errorFactor / 2.0)
-                    # Message.addMessage("Data rate too high. Reducing.)")
+                    # Message.addMessage("DBUG: Data rate too high. Reducing.)")
 
                 # Take copy of current actual tx rate
                 self.txActualTxRate_bps = self.txBps_1s
-                # Message.addMessage("txActualTxRate_bps: "+str(bToMb((self.txActualTxRate_bps))))
+                # Message.addMessage("DBUG: txActualTxRate_bps: "+str(bToMb((self.txActualTxRate_bps))))
                 # Clear counter
                 self.txBps_1s = 0
 
@@ -3602,7 +3322,7 @@ class ResultsReceiver(object):
                 try:
                     # Wait for data (blocking function call)
                     data, addr = self.udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
-                    # Message.addMessage("ResultsReceiver.__receiverThread()" + ", " + str(data))
+                    # Message.addMessage("DBUG: ResultsReceiver.__receiverThread()" + ", " + str(data))
                     # attempt to unpickle the received data to yield a stats dictionary
 
                     # Create empty dictionary to hold incoming stats updates
@@ -3690,7 +3410,7 @@ class ResultsReceiver(object):
                     # Check to see if the new eventList contains any data and also that there exists a stream object to add the data to
                     if len(latestEventsList) > 0 and len(stats) > 0:
                         try:
-                            # Message.addMessage("**latestEventsList: " + str(latestEventsList[-1].eventNo))
+                            # Message.addMessage("DBUG: **latestEventsList: " + str(latestEventsList[-1].eventNo))
                             # Get handle on an (existing) rtpStreamResults object
                             rtpStreamResults = self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
                             # Work out whether the eventList contains any new events that we haven't already seen
@@ -3706,7 +3426,7 @@ class ResultsReceiver(object):
                                     # rtpStreamResults.updateEventsList(latestEventsList)
                                     # # Extract the event no from the last known event
                                     lastKnownEventNo = existingEventsList[-1].eventNo
-                                    # Message.addMessage("firstEventNoInNewList: " + str(firstEventNoInNewList) + \
+                                    # Message.addMessage("DBUG: firstEventNoInNewList: " + str(firstEventNoInNewList) + \
                                     #                    ", lastEventNoInNewList: " + str(lastEventNoInNewList) + \
                                     #                    ", lastKnownEventNo: " + str(lastKnownEventNo))
 
@@ -3727,7 +3447,7 @@ class ResultsReceiver(object):
                                 else:
                                     # existingEventsList is empty so append the entirety of latestEventsList
                                     rtpStreamResults.updateEventsList(latestEventsList)
-                                # Message.addMessage("**" + str(rtpStreamResults.getRTPStreamEventList(1)))
+                                # Message.addMessage("DBUG:**" + str(rtpStreamResults.getRTPStreamEventList(1)))
                             except Exception as e:
                                 Message.addMessage(
                                     "ERR:_resultsReceiverThread(). rtpStreamResults.getRTPStreamEventList(1) " + str(e))
@@ -3739,9 +3459,9 @@ class ResultsReceiver(object):
                     #         stream= self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
                     #         x=stream.getRTPStreamEventList(1)
                     #         if len(x) > 0:
-                    #             Message.addMessage("Last known event: " + str(x[-1].type))
+                    #             Message.addMessage("DBUG: Last known event: " + str(x[-1].type))
                     #     except Exception as e:
-                    #         Message.addMessage("wtf " + str(e))
+                    #         Message.addMessage("DBUG: wtf " + str(e))
 
                 # Catch all other exceptions
                 except Exception as e:
@@ -3896,7 +3616,7 @@ class ResultsTransmitter(object):
                         except:
                             # For Python 2
                             txMessage = pickle.dumps(fragment)
-                        # Message.addMessage("tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
+                        # Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
                         self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
 
 
@@ -3908,7 +3628,7 @@ class ResultsTransmitter(object):
 def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
     # Autonomous thread to iterate over rtpStreamsDict and poll RtpStream eventLists for new events
     # and write them  to disk
-    Message.addMessage("diskLoggerThread starting")
+    Message.addMessage("INFO: diskLoggerThread starting")
     # Prefix the filenames created when in RECEIVE mode
     if operationMode == 'RECEIVE':
         prefix = "receiver_report_"
@@ -3934,7 +3654,7 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
                         "\r\n-------------------------------------------------------------------------\n")
         file_json.close()
     except Exception as e:
-        Message.addMessage("__diskLoggerThread " + str(e))
+        Message.addMessage("DBUG:__diskLoggerThread " + str(e))
 
     while True:
         # Get dictionary of available rtpRxStreams as a list
@@ -3974,7 +3694,7 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
                             # Slice the latest portion of the allEvents list into a sub list
                             latestEvents = allEvents[(newEvents * -1):]
                 except Exception as e:
-                    Message.addMessage("__diskLoggerThread - determining new events" + str(e))
+                    Message.addMessage("DBUG: __diskLoggerThread - determining new events" + str(e))
 
                 # Confirm to see that there are some events in the list
                 if len(latestEvents) > 0:
@@ -3999,7 +3719,7 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
                         # Empty the latestEvents list
                         del latestEvents[:]
                     except Exception as e:
-                        Message.addMessage("__diskLoggerThread - appending to file" + str(e))
+                        Message.addMessage("DBUG: __diskLoggerThread - appending to file" + str(e))
 
         # Finally, iterate over lastWrittenEventNoDict{} to confirm that all the stream objects listed
         # inside it still exist in rtpStreamsDict{} (in other words, synchronise the deletions within
@@ -4398,8 +4118,8 @@ def main(argv):
                                  socket.SOCK_DGRAM)  # UDP
             sock.bind((UDP_RX_IP, UDP_RX_PORT))
         except Exception as e:
-            Message.addMessage("\x1B[31m__main(): Cannot create socket listen on "+UDP_RX_IP+":"+str(UDP_RX_PORT)+", "+str(e)+\
-                ". Try another port. Exiting\x1B[0m")
+            Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on "+UDP_RX_IP+":"+str(UDP_RX_PORT)+", "+str(e)+\
+                ". Try another port. Exiting"+Term.FG(Term.RESET))
             time.sleep(2)
             exit()
 
@@ -4415,7 +4135,7 @@ def main(argv):
                 # Wait for data (blocking function call)
                 data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
             except Exception as e:
-                Message.addMessage("\x1B[31m__main()sock.recvfrom(): Cannot read socket\x1B[0m" + UDP_RX_IP + ":" + \
+                Message.addMessage(Term.FG(Term.RED) + "__main()sock.recvfrom(): Cannot read socket\x1B[0m" + UDP_RX_IP + ":" + \
                     str(UDP_RX_PORT) + ", " + str(e))
                 time.sleep(2)
                 exit()
@@ -4457,7 +4177,7 @@ def main(argv):
 
                     if rtpSyncSourceIdentifier in rtpRxStreamTempDict:
                         # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
-                        Message.addMessage(Fore.GREEN + str(rtpSyncSourceIdentifier) +
+                        Message.addMessage(Fore.GREEN + "INFO: " + str(rtpSyncSourceIdentifier) +
                                            " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
                         # Create and add the new stream to the rtpRxStreamsDict
                         newRtpStream = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP,\
@@ -4471,7 +4191,7 @@ def main(argv):
                     else:
                         # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
                         # create a entry in the temporary list (with a timestamp)
-                        Message.addMessage(Fore.RED+"Stream doesn't exist yet, adding to temp list: " + str(rtpSyncSourceIdentifier))
+                        Message.addMessage(Fore.RED+"INFO: Stream doesn't exist yet, adding to temp list: " + str(rtpSyncSourceIdentifier))
                         rtpRxStreamTempDict[rtpSyncSourceIdentifier] = timer()
 
             except Exception as e:
