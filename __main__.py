@@ -76,6 +76,9 @@ class Message(object):
 
         # Calculate how many of the filters to mask, depending upon cls.verbosityLevel
         mask = len(listOfFilters) - cls.verbosityLevel
+        if mask < 0:
+            mask =0
+
         # Now truncate (or mask) filterLevel[] according to the verbosity level
         filtersInUse = listOfFilters[:mask]
 
