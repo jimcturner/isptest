@@ -516,8 +516,8 @@ class Event():
     @abstractmethod
     def getSummary(self):
         optionalFields =""
-        summary = "[" + str(self.eventNo) + "]," + \
-                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
+        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
+                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
@@ -559,8 +559,8 @@ class StreamStarted(Event):
     def getSummary(self):
         # Returns a dictionary containing a timestamp and a concise description of the event as a string
         optionalFields = ", first rtp sequence no:"+str(self.firstPacketReceived.rtpSequenceNo)
-        summary = "[" + str(self.eventNo) + "]," + \
-                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
+        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
+                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
@@ -598,8 +598,8 @@ class StreamLost(Event):
 
     def getSummary(self):
         optionalFields = ", Most recent rtp sequence no: "+str(self.lastPacketReceived.rtpSequenceNo)
-        summary = "[" + str(self.eventNo) + "]," + \
-                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
+        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
+                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
@@ -636,8 +636,8 @@ class ExcessiveJitter(Event):
         self.lastPacketReceived = lastPacketReceived
     def getSummary(self):
         optionalFields = " "+str(int(self.stats["jitter_mean_1S_uS"])) + "/" + str(int(self.stats["jitter_long_term_uS"])) + "uS"
-        summary = "[" + str(self.eventNo) + "]," + \
-                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
+        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
+                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
@@ -676,8 +676,8 @@ class ProcessorOverload(Event):
 
     def getSummary(self):
         optionalFields =  " "+str(int(self.stats["stream_processor_utilisation_percent"])) + "%"
-        summary = "[" + str(self.eventNo) + "]," + \
-                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
+        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
+                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
@@ -730,10 +730,10 @@ class Glitch(Event):
         self.actualReceivedSequenceNo = self.endOfGap.rtpSequenceNo
 
     def getSummary(self):
-        optionalFields = ". Dur:, " + str(self.glitchLength) + ", " + str(self.packetsLost) + ", packet(s) lost. "+\
-            "Expected seq no "+str(self.expectedSequenceNo)+" but received "+ str(self.actualReceivedSequenceNo)
-        summary = "[" + str(self.eventNo) + "]," + \
-                  "[" + str(self.stats["stream_syncSource"]) + "], " + self.type + optionalFields
+        optionalFields = " " + dtstrft(self.glitchLength) + ", " + str(self.packetsLost) + " lost. "+\
+                "Exptd: " +str(self.expectedSequenceNo)+", Got: "+ str(self.actualReceivedSequenceNo)
+        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
+                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
@@ -1185,7 +1185,7 @@ class RtpStream(object):
                 # Post a message
                 Message.addMessage(glitch.getSummary()['summary'])
             else:
-                Message.addMessage("Glitch (ignored): " + glitch.getSummary()['summary'])
+                Message.addMessage(glitch.getSummary()['summary'] + " (ignored)")
             # update glitch stats
             self.__updateGlitchStats(glitch)
 
@@ -1221,7 +1221,7 @@ class RtpStream(object):
                     # Post a message
                     Message.addMessage(glitch.getSummary()['summary'])
                 else:
-                    Message.addMessage("Insignificant glitch (ignored): " + glitch.getSummary()['summary'])
+                    Message.addMessage(glitch.getSummary()['summary'] + " (ignored)")
 
                 # update glitch stats
                 self.__updateGlitchStats(glitch)
@@ -2046,7 +2046,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                        ["Tx Rate\n bps", 'Tx Rate'],
                        ["Length\n(bytes)", 'Packet size'],
                        ["Bytes\n tx'd", 'Bytes transmitted'],
-                       [" Time\nremain", 'Time to live'],
+                       [" Time\nremain", 'Time to live']
                        ],availableRtpTxStreamList])
 
     # If actually the receiving end, use availableRtpRxStreamList[] as a source for the stream tables
@@ -2068,8 +2068,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    [" %\nloss", "glitch_packets_lost_total_percent"],
                    ["Last\nglitch","glitch_most_recent_timestamp"],
                    ["glitch\nperiod","glitch_mean_time_between_glitches"],
-                   ["Count","glitch_counter_total_glitches"],
-                   ["CPU\n %","stream_processor_utilisation_percent"]
+                   ["Count","glitch_counter_total_glitches"]
+                   #["CPU\n %","stream_processor_utilisation_percent"]
                    ],streamResultsDataSet])
 
     views.append(["Stream",
@@ -2092,6 +2092,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Length\n(bytes)","packet_payload_size_mean_1S_bytes"],
                    ["Recv\nperiod","packet_mean_receive_period_uS"],
                    ["Bytes\nRcvd","packet_data_received_total_bytes"],
+                   ["CPU\n %", "stream_processor_utilisation_percent"]
                    #["",""],
                    ],streamResultsDataSet])
 
@@ -2105,7 +2106,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Max\nduration", "glitch_max_glitch_duration"],
                    ["Total\nGlitch", "glitch_counter_total_glitches"],
                    ["Ignored", "glitch_glitches_ignored_counter"],
-                   ["Threshold", "glitch_Event_Trigger_Threshold_packets"],
+                   ["Threshold", "glitch_Event_Trigger_Threshold_packets"]
                    ],streamResultsDataSet])
 
     views.append(["Historic",
@@ -2115,7 +2116,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["1Hr\n", "historic_glitch_counter_last_1Hr"],
                    ["10Min\n", "historic_glitch_counter_last_10Min"],
                    ["1Min\n", "historic_glitch_counter_last_1Min"],
-                   ["10Sec\n", "historic_glitch_counter_last_10Sec"],
+                   ["10Sec\n", "historic_glitch_counter_last_10Sec"]
                    #["", ""],
                    ],streamResultsDataSet])
 
@@ -2126,7 +2127,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                    ["Min", "jitter_min_uS"],
                    ["Max", "jitter_max_uS"],
                    ["Range", "jitter_range_uS"],
-                   ["1S \nmean", "jitter_mean_1S_uS"],
+                   ["1S \nmean", "jitter_mean_1S_uS"]
                    ],streamResultsDataSet])
 
     # views.append(["Misc",
