@@ -70,25 +70,30 @@ class Message(object):
     def getFilteredMessagesList(cls):
         # prefixes are ERR:, INFO: etc. Messages containing these prefixes may/may not be displayed
         # according to cls.verbosityLevel.
+        # Currently for verbosityLevel = 0, all messages containing the strings in listOfFilters[] will be hidden
+        # For verbosityLevel = 1, ERR: messages will be displayed
+        # For verbosityLevel = 2, ERR: and INFO: messages will be displayed
+        # For verbosityLevel = 3, ERR:, INFO: and DBUG: messages will be diplayed
+        # etc...
 
         # Verbosity definitions (in ascending order of importance)
-        listOfFilters = ["LEV3:", "LEV2:", "INFO:", "ERR"]
+        listOfFilters = ["LEV3:", "DBUG:", "INFO:", "ERR:"]
 
         # Calculate how many of the filters to mask, depending upon cls.verbosityLevel
         mask = len(listOfFilters) - cls.verbosityLevel
         if mask < 0:
             mask =0
 
-        # Now truncate (or mask) filterLevel[] according to the verbosity level
+        # Now truncate (or mask) listOfFilters[] according to the verbosity level
         filtersInUse = listOfFilters[:mask]
-
-        Message.addMessage("Message to be filtered: " + str(filtersInUse).lower())
 
         filteredList = []
         # Iterate over cls.messages[] filtering messages according to the contents of filtersInUse[]
         for message in cls.messages:
             # If any of the contents of filtersInUse are found in message[1], omit them from filteredList[]
             if any(x in message[1] for x in filtersInUse):
+                # Add messages that would be filtered back into the 'filtered list' with a ** suffix
+                # filteredList.append([datetime.datetime.now().strftime("%H:%M:%S"), "*OMMITED*"+message[1]])
                 pass
             else:
                 # Otherwise add that message to the filtered list
@@ -99,25 +104,25 @@ class Message(object):
     # Class method to return the messages list
     @classmethod
     def getMessages(cls, *args):
+        filteredMessages = cls.getFilteredMessagesList()
         if len(args) == 2:
             # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
             try:
-                return list (cls.messages[args[0]:args[1] + 1])
+                return list (filteredMessages[args[0]:args[1] + 1])
             except Exception as e:
-                Message.addMessage("Messages:getMessage(" + str(args[0]) + ":" +
+                Message.addMessage("DBUG: Messages:getMessage(" + str(args[0]) + ":" +
                                    str(args[1]) + ") requested start and end indexes out of range: " + str(e))
         elif len(args) == 1:
             # If one arg supplied, return the last n messages.
-            filteredMessages = cls.getFilteredMessagesList()
             try:
-                # return list (cls.messages[(args[0] * -1):])
                 return list(filteredMessages[(args[0] * -1):])
             except Exception as e:
                 # return list (cls.messages)
+                Message.addMessage("DBUG: Messages.getMessages(" + str(args) + ") " + str(e))
                 return filteredMessages
         else:
             # if no args supplied, return complete list
-            return list (cls.messages)
+            return list (filteredMessages)
 
 
 # Define a utility class to help with screen drawing
@@ -841,7 +846,7 @@ class RtpStream(object):
         self.__stats["stream_srcPort"] = srcPort
         self.__stats["stream_rxAddress"] = rxAddress
         self.__stats["stream_rxPort"] = rxPort
-        Message.addMessage("Creating RtpStream with syncSource: " + str(self.__stats["stream_syncSource"]))
+        Message.addMessage("INFO: RtpStream:: Creating RtpStream with syncSource: " + str(self.__stats["stream_syncSource"]))
 
         # This is a reference to the UDP listening socket created in main() (to receive all incoming streams)
         # We need it, because we want to be able to reply to the sending end using the same src/dest UDP ports
@@ -1066,7 +1071,7 @@ class RtpStream(object):
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
                     Message.addMessage("["+str(self.__stats["stream_syncSource"])+"]. Excessive jitter. "+\
-                        str(int(self.__stats["jitter_mean_1S_uS"]))+"/"+str(int(self.__stats["jitter_long_term_uS"]))+"uS")
+                        str(uTom(self.__stats["jitter_mean_1S_uS"]))+"/"+str(uTom(self.__stats["jitter_long_term_uS"]))+"S")
 
                 # Update the event counter for Excess Jitter
                 self.__stats["jitter_excess_jitter_events_total"] += 1
@@ -1791,6 +1796,19 @@ def bToMb(value):
     else:
         return str(value)
 
+def uTom(value):
+    # Utility function to convert a value in micros to millies (eg uS to mS)
+    # It will append a 'u' or 'm' suffix and return a string
+    # If > 1000u, express as a m
+    if int(value) > 1000 or int(value) < -1000:
+        value = str(int(value / 1000)) + "m"
+    else:
+        # Append u to the value
+        value = str(int(value)) + "u"
+    return value
+
+
+
 def get_ip():
     # Returns the IP address of the network interface currently used as the default route to the internet
     # Lifted from here https://stackoverflow.com/questions/166506/finding-local-ip-addresses-using-pythons-stdlib
@@ -1804,6 +1822,15 @@ def get_ip():
     finally:
         s.close()
     return IP
+
+def listCurrentThreads():
+    # Returns a string listing the names of the currently running threads
+    activeThreads = threading.enumerate()
+    s = ""
+    for x in activeThreads:
+        s += str(x.getName()) + ", "
+    return s
+
 
 def oldHumanise(inputDictionary):
     # This function will examine the key/value pairs of the stats dictionary and
@@ -2694,13 +2721,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                         Message.addMessage(s)
                         s =""
 
-                # Display current threads
-                # Get list of current threads
-                activeThreads = threading.enumerate()
-                s = ""
-                for x in activeThreads:
-                    s += str(x.getName()) + ", "
-                Message.addMessage("Current threads: " + s)
+                # Message.addMessage("DBUG: Current threads: " + str(listCurrentThreads()))
 
             ######### Print Navigation bar (shows the available views) - shouldn't change much, so only a periodic redraw
 
@@ -2909,11 +2930,12 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
             # Get last x messages. Make a deep copy as we're going to add blankspace padding
             messages = deepcopy(Message.getMessages(maxNoOfMessagesThatWillFitScreen))
-            if lastMessageAdded != messages[-1][1]:
-                # New messages have been added, so set the redraw flag
-                redrawMessageTable=True
-            # Take a copy of the most recent message for next time around the loop
-            lastMessageAdded = messages[-1][1]
+            if len(messages) > 0:
+                if lastMessageAdded != messages[-1][1]:
+                    # New messages have been added, so set the redraw flag
+                    redrawMessageTable=True
+                # Take a copy of the most recent message for next time around the loop
+                lastMessageAdded = messages[-1][1]
 
             if redrawMessageTable or redrawScreen:
                 redrawMessageTable = False  # Clear flag
@@ -2922,9 +2944,11 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 # If they're too short, make them longer (to fill the space)
                 maxMessageDisplayLength=currentTermWidth - 12
                 for message in messages:
+                    # If message to long to fit the screen, truncate it
                     if len(message[1])>maxMessageDisplayLength:
                         message[1] = message[1][:maxMessageDisplayLength-2]
                     else:
+                        # Otherwise pad the message out with spaces
                         paddingLength=(maxMessageDisplayLength-2) -len(message[1])
                         if paddingLength >0:
                             paddingString = " " * paddingLength
@@ -2933,6 +2957,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
                 if len(messages) > 0:
                     width, height, tableData = createTable(messages, "Messages")
+                    # Overwrite previous messages table
+                    for y in range(yPos,yPos + (maxNoOfMessagesThatWillFitScreen + 3)):
+                        Term.setBackgroundColourSingleLine(1,y,Term.BLUE)
                     Term.printTable(tableData,2,yPos,width,Term.BLACK,Term.WHITE)
             del messages [:]
         redrawScreen =False
