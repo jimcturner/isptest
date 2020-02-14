@@ -2264,7 +2264,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             redrawScreen = True
 
 
-        if keyPressed[0] == 'a':
+        if keyPressed[0] == 'addTXStreamWithDefaults':
             keyPressed[0] = ''  # Clear key buffer
             # Attempt to add a new tx stream (if we're in loopback or transmit mode)
             # If a tx stream already exists, the new stream will be created with an incremented
@@ -2299,6 +2299,78 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     redrawScreen = True
                 else:
                     Message.addMessage("No Tx stream to copy from. New stream not added")
+
+        if keyPressed[0] == 'addTXStreamWithArgs':
+            # Attempt to create a new stream based on the user entered parameters
+            keyPressed[0] = ''  # Clear key buffer
+            try:
+                # Capture dict containing the new parameters from keyPressed[] (second element)
+                txParameters=deepcopy(keyPressed[1])
+                # txParameters = {}
+                # txParameters["destIP"] = "10.56.60.143"
+                # txParameters["destPort"] = 5000
+                # txParameters["srcPort"] =2000
+                # txParameters["syncSourceID"] = 1234567890
+                # txParameters["payloadLength"] = 1000
+                # txParameters["txRate"] = "2m"
+                # txParameters["timeToLive"] = 120
+                # txParameters["friendlyName"] = "dave"
+
+
+                del keyPressed[1]  # Remove key buffer array now eve stored it
+                Message.addMessage("addTXStreamWithArgs" + str(txParameters))
+
+                # Attempt to create a new stream using the user-entered stream parameters
+
+                try:
+                    # attempt to extract tx rate using regex to split into numerical and string parts
+                    txRate = 0
+                    splitArg = re.split(r'(\d+)', txParameters["txRate"])
+                    # Extract numerical part
+                    x = int(splitArg[1])
+                    # Extract string part
+                    multiplier = splitArg[2]
+
+                    if multiplier == 'k' or multiplier == 'K':
+                        txRate = x * 1024
+                    elif multiplier == 'm' or multiplier == 'M':
+                        txRate = x * 1024 * 1024
+                    else:
+                        Message.addMessage("Invalid bandwidth specified. Unknown multiplier: " + str(multiplier))
+                        break
+
+                    Message.addMessage(str(txParameters["destIP"]) + ", " + str(txParameters["destPort"]) + ", " + \
+                                       str(txRate) + ", " + str(txParameters["payloadLength"]) + ", " + \
+                                       str(txParameters["syncSourceID"]) + ", " + \
+                                       str(txParameters["timeToLive"]) + ", " + str(txParameters["friendlyName"]) + \
+                                       ", " + str(txParameters["srcPort"]))
+
+
+                    # Validate supplied IP address
+
+                    try:
+                        socket.inet_aton(txParameters["destIP"])
+                    except Exception as e:
+                        Message.addMessage ("Invalid Dest IP address supplied: " + str(txParameters["destIP"]))
+
+                    # add new Rtp generator
+                    rtpGenerator = RtpGenerator(txParameters["destIP"], txParameters["destPort"], txRate,
+                                                txParameters["payloadLength"], txParameters["syncSourceID"],
+                                                txParameters["timeToLive"], \
+                                                rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
+                                                txParameters["friendlyName"], txParameters["srcPort"])
+
+                    # Add the new stream to the rtpStreams dictionary
+                    addRtpStreamToDict(txParameters["syncSourceID"], rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
+
+                    # Force redraw
+                    redrawScreen = True
+
+                except Exception as e:
+                    Message.addMessage("Can't create new stream as specified")
+
+            except:
+                pass
 
 
         if keyPressed[0] == 'm':
@@ -2636,6 +2708,12 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 except Exception as e:
                     Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
 
+        if keyPressed[0] == 'redrawScreen':
+            keyPressed[0] = ''  # Clear key buffer
+            # Force redraw
+            redrawScreen = True
+
+
         ############################# Screen drawing starts here
         if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
             Term.clearTerminalScrollbackBuffer()
@@ -2930,7 +3008,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
 
 
 # Define a thread that will trap keys pressed
-def __catchKeyboardPresses(keyPressed):
+def __catchKeyboardPresses(operationMode, keyPressed):
     Message.addMessage("INFO: Starting __catchKeyboardPresses thread")
     # OSX and Windows seem to return different codes for the cursor keys, so check for both
     while True:
@@ -2965,7 +3043,7 @@ def __catchKeyboardPresses(keyPressed):
             keyPressed[0] = 'Enter'
 
 
-        # Special case if 'i' pressed
+        # Special case if 's' pressed
         elif ch == 's':
             ch == ''    # Clear keybuffer
             # provide input prompt -used to edit a stream name
@@ -2975,7 +3053,7 @@ def __catchKeyboardPresses(keyPressed):
 
             # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
             keyPressed[0]='inhibit_redraw'
-            # Generate and print ascii string to move cursor to start of penultimate line, blue on white text
+            # Generate and print ascii string to move cursor to start of penultimate line
             print(str(Term.XY(1,(termH - 2))))
             # Request user input
             # Cludge to make input code compatible for Python2 and Python3
@@ -2991,6 +3069,89 @@ def __catchKeyboardPresses(keyPressed):
                 keyPressed.append(str(friendlyName))
             except:
                 pass
+
+        # Special case if 'a' pressed (add additional tx stream)
+        elif ch == 'a':
+            ch == ''    # Clear keybuffer
+            # Check we're in transmit mode
+            if operationMode == 'TRANSMIT':
+                # Get current terminal size
+                termW, termH = Term.getTerminalSize()
+                # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
+                keyPressed[0] = 'inhibit_redraw'
+
+                # Re-render bottom status bar (to overwrite key commands text)
+                Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)
+                # Generate and print ascii string to move cursor to start of penultimate line
+                print(str(Term.XY(1, (termH - 2))))
+                # Generate use prompts:-
+                response = input("[Enter] to add stream with defaults (1Mbps) or [s] to specify tx parameters:")
+                if response == '':
+                    keyPressed[0] = 'addTXStreamWithDefaults'
+                elif response == 's':
+                    # Dict to store user entered tx parameters
+                    txParameters ={}
+                    # Re-render bottom status bar (to overwrite key commands text)
+                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)
+                    # Generate and print ascii string to move cursor to start of penultimate line
+                    print(str(Term.XY(1, (termH - 2))))
+                    # Generate user prompts:-
+                    # Dest IP addr
+                    response = input("Enter destination ip address: ")
+                    # Add settings to dict
+                    txParameters["destIP"] = response
+
+                    # Dest UDP port
+                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                    print(str(Term.XY(1, (termH - 2))))     # Move cursor
+                    response = input("Enter destination port: ")    # Generate prompt
+                    txParameters["destPort"] = response # Store in dictionary
+
+                    # Source UDP port
+                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                    response = input("Enter optional UDP source port: ")  # Generate prompt
+                    if response != "":
+                        txParameters["srcPort"] = response  # Store in dictionary (if supplied, otherwise don't)
+
+                    # Sync source ID
+                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                    response = input("Enter sync source id: ")  # Generate prompt
+                    txParameters["syncSourceID"] = response  # Store in dictionary (if supplied, otherwise don't)
+
+                    # Payload length
+                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                    response = input("Enter payload length (bytes): ")  # Generate prompt
+                    txParameters["payloadLength"] = response  # Store in dictionary (if supplied, otherwise don't)
+
+                    # Tx rate (in bps)
+                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                    response = input("Enter tx Rate (with suffix [k]bps or [m]bps: ")  # Generate prompt
+                    txParameters["txRate"] = response  # Store in dictionary (if supplied, otherwise don't)
+
+                    # Lifetime (in secs)
+                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                    response = input("Enter time to live (in seconds): ")  # Generate prompt
+                    txParameters["timeToLive"] = response  # Store in dictionary (if supplied, otherwise don't)
+
+                    # Friendly name
+                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                    response = input("Enter friendly name (10 chars max): ")  # Generate prompt
+                    txParameters["friendlyName"] = response  # Store in dictionary (if supplied, otherwise don't)
+
+                    # Now signal to _displayThread that a custom tx stream has been specified
+                    # Pass the dict containing the parameters as the second arg of keyPressed[]
+                    keyPressed[0] = 'addTXStreamWithArgs'
+                    keyPressed.append(txParameters)
+
+                else:
+                    # Force a screen redraw
+                    keyPressed[0] = "redrawScreen"
         else:
             keyPressed[0] = ch
         time.sleep(0.1)
@@ -3004,15 +3165,15 @@ class RtpGenerator(object):
 
         # Assign instance variables
         self.UDP_TX_IP = UDP_TX_IP
-        self.UDP_TX_PORT = UDP_TX_PORT
+        self.UDP_TX_PORT = int(UDP_TX_PORT)
         self.UDP_TX_SRC_PORT = 0
-        self.txRate = txRate
+        self.txRate = int(txRate)
         self.txPeriod = 0  # Calculated from self.txRate
-        self.payloadLength = payloadLength
+        self.payloadLength = int(payloadLength)
         self.txCounter_bytes = 0
         self.txActualTxRate_bps = 0
         self.txBps_1s = 0               # Used to 'sample' the actual tx rate
-        self.syncSourceIdentifier = syncSourceID
+        self.syncSourceIdentifier = int(syncSourceID)
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
         self.elapsedTime = datetime.timedelta()
         self.maxNameLength = 10
@@ -3024,7 +3185,7 @@ class RtpGenerator(object):
             # if a friendly name is supplied, use it
             self.setFriendlyName(friendlyName)
 
-        self.timeToLive = timeToLive
+        self.timeToLive = int(timeToLive)
         self.enablePacketGeneration = True
         self.packetsToSkip = 0 # Set by simulatePacketLoss()
         self.jitterGenerationFlag = False
@@ -4141,7 +4302,7 @@ def main(argv):
     rtpTxStreamResultsDictMutex = threading.Lock()
 
     # Start keyboard monitoring thread
-    catchKeyboardPresses = threading.Thread(target=__catchKeyboardPresses, args=(keyPressed,))
+    catchKeyboardPresses = threading.Thread(target=__catchKeyboardPresses, args=(MODE, keyPressed,))
     catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
     catchKeyboardPresses.setName("__catchKeyboardPresses")
     catchKeyboardPresses.start()
