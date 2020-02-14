@@ -2141,7 +2141,7 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     #                ],DATASET_TO_DISPLAY,ROW_SELECTOR])
 
     # Screen label showing the availablle key commands (depending upon mode)
-    keyCommandsString = "[<]/[>] cycle panes, [^]/[v] select stream, [d]elete, [s]et name"
+    keyCommandsString = "[<]/[>] cycle panes, [^]/[v] select stream, [d]elete, [s]et name, [e]rrors"
 
     extraKeyCommandsString = "TX  modifier: [o/p] seq ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
     txStreamModifierCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
@@ -2168,6 +2168,11 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     streamTableRefreshPeriod = 2
     # start elapsed timer for streamTable refresh
     displayThread_streamTableRefreshTimer = timer()
+
+    # Get Initial snapshot of current verbosity level
+    intialVerbosityLevel = Message.verbosityLevel
+    # Flag to turn on/off error messages (verbosity level 1)
+    showErrorsFlag = False
 
     while True:
 
@@ -2462,6 +2467,21 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     # Force redraw
                     redrawScreen = True
 
+        if keyPressed[0] == 'e':
+            # Toggle error messages on/off
+            keyPressed[0] = ''  # Clear key buffer
+            if showErrorsFlag == False:
+                # Set flag to true
+                showErrorsFlag = True
+                # Force a change of Message verbosity level to show errors
+                Message.setVerbosity(1)
+            else:
+                # Set flag to false
+                showErrorsFlag = False
+                # Force a change of Message verbosity back to intial setting
+                Message.setVerbosity(intialVerbosityLevel)
+
+
         if keyPressed[0] == 'd':
             # Delete selected stream (selected table row)
             keyPressed[0] = ''  # Clear key buffer
@@ -2650,19 +2670,19 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                 Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
 
                 # Display last five events (in descending order)
-                s=""
-                if len(availableRtpTxResultsList) > 0:
-                    # Iterate over availableRtpTxResultsList
-                    for stream in availableRtpTxResultsList:
-                        # We want to display: [streamID], eventNo:Type, eventNo:Type....
-                        eventList = stream[1].getRTPStreamEventList(5) # get last 5 events
-                        s += "[" + str(stream[0]) + "] "    # Prefix with stream id
-                        # for event in eventList:
-                        for x in range(len(eventList)-1,-1,-1):
-                            # s+= str(event.eventNo) + ":" + str(event.type) + ", "
-                            s += str(eventList[x].eventNo) + ":" + str(eventList[x].type) + ", "
-                        Message.addMessage("INFO: Last five events: " + s)
-                        s =""
+                # s=""
+                # if len(availableRtpTxResultsList) > 0:
+                #     # Iterate over availableRtpTxResultsList
+                #     for stream in availableRtpTxResultsList:
+                #         # We want to display: [streamID], eventNo:Type, eventNo:Type....
+                #         eventList = stream[1].getRTPStreamEventList(5) # get last 5 events
+                #         s += "[" + str(stream[0]) + "] "    # Prefix with stream id
+                #         # for event in eventList:
+                #         for x in range(len(eventList)-1,-1,-1):
+                #             # s+= str(event.eventNo) + ":" + str(event.type) + ", "
+                #             s += str(eventList[x].eventNo) + ":" + str(eventList[x].type) + ", "
+                #         Message.addMessage("INFO: Last five events: " + s)
+                #         s =""
 
                 # Message.addMessage("DBUG: Current threads: " + str(listCurrentThreads()))
 
