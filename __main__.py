@@ -46,8 +46,15 @@ class Message(object):
     # No. of messages to keep before they're discarded
     historicMessagesToKeep = 50
 
-    # Class method to add a new message to the list
+    # Determines which messages will be revealed by getMessages
+    # 0 = no warning messages, > 0 = warning messages displayed
+    verbosityLevel = 0
 
+    @classmethod
+    def setVerbosity(cls, verbosity):
+        cls.verbosityLevel = verbosity
+
+    # Class method to add a new message to the list
     @classmethod
     def addMessage(cls, message):
         # Add the supplied message to the messages list as a tuple containing a timestamp
@@ -56,6 +63,35 @@ class Message(object):
         if len(cls.messages) > cls.historicMessagesToKeep:
             # Remove first (oldest) message
             del cls.messages[:1]
+
+
+    # class method to filter cls.messages[] based on the message prefix and cls.verbosityLevel and return a sublist
+    @classmethod
+    def getFilteredMessagesList(cls):
+        # prefixes are ERR:, INFO: etc. Messages containing these prefixes may/may not be displayed
+        # according to cls.verbosityLevel.
+
+        # Verbosity definitions (in ascending order of importance)
+        listOfFilters = ["LEV3:", "LEV2:", "INFO:", "ERR"]
+
+        # Calculate how many of the filters to mask, depending upon cls.verbosityLevel
+        mask = len(listOfFilters) - cls.verbosityLevel
+        # Now truncate (or mask) filterLevel[] according to the verbosity level
+        filtersInUse = listOfFilters[:mask]
+
+        Message.addMessage("Message to be filtered: " + str(filtersInUse).lower())
+
+        filteredList = []
+        # Iterate over cls.messages[] filtering messages according to the contents of filtersInUse[]
+        for message in cls.messages:
+            # If any of the contents of filtersInUse are found in message[1], omit them from filteredList[]
+            if any(x in message[1] for x in filtersInUse):
+                pass
+            else:
+                # Otherwise add that message to the filtered list
+                filteredList.append(message)
+
+        return filteredList
 
     # Class method to return the messages list
     @classmethod
@@ -69,13 +105,17 @@ class Message(object):
                                    str(args[1]) + ") requested start and end indexes out of range: " + str(e))
         elif len(args) == 1:
             # If one arg supplied, return the last n messages.
+            filteredMessages = cls.getFilteredMessagesList()
             try:
-                return list (cls.messages[(args[0] * -1):])
+                # return list (cls.messages[(args[0] * -1):])
+                return list(filteredMessages[(args[0] * -1):])
             except Exception as e:
-                return list (cls.messages)
+                # return list (cls.messages)
+                return filteredMessages
         else:
             # if no args supplied, return complete list
             return list (cls.messages)
+
 
 # Define a utility class to help with screen drawing
 class Term(object):
@@ -4030,6 +4070,11 @@ def main(argv):
     # Default friendly name of Tx stream (if not overridden, sync source ID is used instead)
     RTP_TX_STREAM_FRIENDLY_NAME = ""
 
+    # Default message verbosity
+    defaultVerbosityLevel = 0
+    # Set default value
+    Message.setVerbosity(defaultVerbosityLevel)
+
     # print ('Argument List: '+ str(argv))
     try:
         # options are:
@@ -4043,6 +4088,7 @@ def main(argv):
         # -s udp transmit source port (for transmit or loopback mode)
         # -i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4
         # -u sync source ID (for transmit or loopback mode)
+        # -v:[int] verbosity
 
 
 
@@ -4053,7 +4099,7 @@ def main(argv):
             print ("No options supplied. Use -h for help")
             exit()
 
-        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:")
+        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:v:")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
@@ -4070,6 +4116,7 @@ def main(argv):
                 print ("-b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps\r")
                 print ("-d rtp payload size (bytes). Default = 1300 bytes\r")
                 print ("-i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4\r")
+                print ("-v:[int] message verbosity level\r")
                 exit()
 
             elif opt == '-x':
@@ -4216,7 +4263,7 @@ def main(argv):
                 print ("sync source id: " + str(UDP_TX_SRC_PORT))
 
             elif opt in ("-l"):
-                # Specify duraion (or 'time to live' for tx stream)
+                # Specify duration (or 'time to live' for tx stream)
                 # Test to see if supplied value is an int
 
                 try:
@@ -4228,6 +4275,16 @@ def main(argv):
 
                 print ("Tx time to live duration : " + str(txStreamTimeToLive_sec))
 
+            elif opt in ("-v"):
+                # Specify message verbosity (to hide warning messages)
+                try:
+                    # Test for an int
+                    arg = int(arg) + 1 -1
+                    # assign the value
+                    Message.setVerbosity(arg)
+                except:
+                    print ("Invalid -v message verbosity value supplied. " + str(arg))
+                    exit()
 
     except getopt.GetoptError:
         print ('invalid options supplied'+ str(argv))
