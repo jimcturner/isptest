@@ -3847,10 +3847,10 @@ class ResultsTransmitter(object):
                         # Pickle and send each fragment one at a time
                         try:
                             # For Python 3
-                            txMessage = pickle.dumps(fragment, encoding='bytes')
+                            txMessage = pickle.dumps(fragment, protocol=0, encoding='bytes')
                         except:
                             # For Python 2
-                            txMessage = pickle.dumps(fragment)
+                            txMessage = pickle.dumps(fragment, protocol=0)
                         # Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
                         self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
 
