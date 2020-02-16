@@ -27,8 +27,9 @@ import pickle
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
 
-# import dill
-# dill._dill._reverse_typemap['ObjectType'] = object
+import dill
+# Fix to allow Python3 to decode Python2 Pickles
+dill._dill._reverse_typemap['ObjectType'] = object
 
 # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
 # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
