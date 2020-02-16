@@ -1632,6 +1632,19 @@ def myPickler(input):
         pickledMessage = pickle.dumps(input, protocol=2)
     return pickledMessage
 
+# Define a utility function to replace the Pickle.loads() method with something that is
+# Cross compatible between Python2 and Python3
+def myUnpickler(input):
+    # Try Python3 version first (has the 'fix_imports' keyword
+    try:
+        unPickledMessage = pickle.loads(input, fix_imports=True)
+
+    except:
+        # Try the Python2 version
+        unPickledMessage = pickle.loads(input)
+    return unPickledMessage
+
+
 # Define a class to encompass the results sent back from the receiving to the transmitting side (via the
 # ResultsTransmitter and ResultsReceiver objects)
 # It does't perform any calculations itself (unlike RtpStream) but it does have similar getter methods for results,
@@ -3617,7 +3630,8 @@ class ResultsReceiver(object):
                             # last 5 events
                             try:
                                 # Attempt to reconsctruct the original message sent by ResultsTransmitter
-                                unPickledMessage = pickle.loads(rxMssage)
+                                # unPickledMessage = pickle.loads(rxMssage, fix_imports=True)
+                                unPickledMessage = myUnpickler(rxMssage)
 
                                 # Attempt to extract the stats dictionary and eventsList list
                                 try:
