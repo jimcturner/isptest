@@ -3633,7 +3633,7 @@ class ResultsReceiver(object):
                                 # Attempt to reconsctruct the original message sent by ResultsTransmitter
                                 # unPickledMessage = pickle.loads(rxMssage, fix_imports=True)
                                 unPickledMessage = pickle.loads(rxMssage)
-                                Message.addMessage(str(unPickledMessage))
+                                # Message.addMessage("DBG:" + str(unPickledMessage))
 
                                 # Attempt to extract the stats dictionary and eventsList list
                                 try:
