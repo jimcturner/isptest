@@ -1611,6 +1611,24 @@ class RtpStream(object):
         # Now we've added the newData object to the list rtpStreamData[] we cab delete the newData object
         del newData
 
+# Define a utility function to take the place of Pickle.dumps()
+# This is in order to create a single function that is Python2 and Python3 compatible
+# (because P2 and P3 pickles aren't by default, compatible)
+def myPickler(input):
+    # Python2 and Python3 aren't automatically interchangeable unless you specify the
+    # encoding='bytes' option. Unfortunately this option isn't present in Python2
+    # Therfore we have to try both attempts
+
+    pickledMessage = b""
+    try:
+        # Try Python3 version of pickle first
+        # By default
+        pickledMessage = str(pickle.dumps(input, protocol=2, encoding='bytes'))
+    except:
+        # If that fails, try Python 2's version
+        pickledMessage = str(pickle.dumps(input, protocol=2))
+    return pickledMessage
+
 # Define a class to encompass the results sent back from the receiving to the transmitting side (via the
 # ResultsTransmitter and ResultsReceiver objects)
 # It does't perform any calculations itself (unlike RtpStream) but it does have similar getter methods for results,
@@ -3814,27 +3832,9 @@ class ResultsTransmitter(object):
                     eventsList = self.parentRtpRxStream.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
 
                     # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
-                    # Python2 and Python3 aren't automatically interchangeable unless you specify the
-                    # encoding='bytes' option. Unfortunately this option isn't present in Python2
-                    # Therfore we have to try both attempts
+
                     msg = {"stats": stats, "eventList": eventsList}
-                    try:
-                        # Try Python3 version of pickle first
-                        pickledMessage = str(pickle.dumps(msg, protocol=0, encoding='bytes'))
-                    except:
-                        # If that fails, try Python 2's version
-                        pickledMessage = str(pickle.dumps(msg, protocol=0))
-
-                    # pickledMessage = pickle.dumps(msg,protocol=0,'latin-1')
-
-
-                    # if len(eventsList) > 0:
-                    #     # Get event no of most recent event in the list
-                    #     mostRecentEventNo = eventsList[-1].eventNo
-                    #     noOfNewEventsToSend = mostRecentEventNo - mostRecentlySentEventNo
-                    #     if noOfNewEventsToSend >0:
-                    #         # Obtain a sublist of just the unsent events
-                    #         newEventsToSend = self.parentRtpRxStream.getRTPStreamEventList(noOfNewEventsToSend)
+                    pickledMessage = myPickler(msg)
 
                     # Set max safe UDP tx size to 576 (based on this:-
                     # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
@@ -3845,12 +3845,7 @@ class ResultsTransmitter(object):
                     # iterate over fragments
                     for fragment in fragmentedMessage:
                         # Pickle and send each fragment one at a time
-                        try:
-                            # For Python 3
-                            txMessage = pickle.dumps(fragment, protocol=0, encoding='bytes')
-                        except:
-                            # For Python 2
-                            txMessage = pickle.dumps(fragment, protocol=0)
+                        txMessage = myPickler(fragment)
                         # Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
                         self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
 
