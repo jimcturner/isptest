@@ -1625,7 +1625,8 @@ def myPickler(input):
         # Try Python3 version of pickle first
         # By default Python3 uses 'protocol 3' and unicode strings
         # Force it to use the older (Python2 compatible) protocal 2, and byte (ascii) strings
-        pickledMessage = pickle.dumps(input, protocol=2, encoding='bytes')
+        # pickledMessage = pickle.dumps(input, protocol=2, encoding='bytes')
+        pickledMessage = pickle.dumps(input, protocol=2, encoding='latin1')
     except:
         Message.addMessage("P2")
         # If that fails, try Python 2's version
@@ -3597,7 +3598,7 @@ class ResultsReceiver(object):
                     # Create empty list to store incoming events list updates
                     latestEventsList =[]
 
-                    # First round of unpickling - extract the fragment
+                    # First round of unpickling - extract the fragment (a tuple)
                     try:
                         # fragment = pickle.loads(data)
                         fragment = myUnpickler(data)
