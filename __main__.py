@@ -1645,7 +1645,6 @@ def myUnpickler(input):
         # Try the Python2 version
         Message.addMessage("U2 " + str(e))
         unPickledMessage = pickle.loads(input)
-    Message.addMessage(str(unPickledMessage))
     return unPickledMessage
 
 
@@ -3636,6 +3635,7 @@ class ResultsReceiver(object):
                                 # Attempt to reconsctruct the original message sent by ResultsTransmitter
                                 # unPickledMessage = pickle.loads(rxMssage, fix_imports=True)
                                 unPickledMessage = myUnpickler(rxMssage)
+                                Message.addMessage(str(unPickledMessage))
 
                                 # Attempt to extract the stats dictionary and eventsList list
                                 try:
