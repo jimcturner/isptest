@@ -1639,7 +1639,8 @@ def myPickler(input):
 def myUnpickler(input):
     # Try Python3 version first (has the 'fix_imports' keyword
     try:
-        unPickledMessage = pickle.loads(input, fix_imports=True, encoding="bytes")
+        # unPickledMessage = pickle.loads(input, fix_imports=True, encoding="bytes")
+        unPickledMessage = pickle.loads(input, encoding="bytes")
         Message.addMessage("U1")
     except Exception as e:
         # Try the Python2 version
