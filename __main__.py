@@ -1638,9 +1638,10 @@ def myUnpickler(input):
     # Try Python3 version first (has the 'fix_imports' keyword
     try:
         unPickledMessage = pickle.loads(input, fix_imports=True)
-
+        Message.addMessage("U1")
     except:
         # Try the Python2 version
+        Message.addMessage("U2")
         unPickledMessage = pickle.loads(input)
     return unPickledMessage
 
