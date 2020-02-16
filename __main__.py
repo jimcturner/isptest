@@ -27,9 +27,6 @@ import pickle
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
 
-import dill
-# Fix to allow Python3 to decode Python2 Pickles
-# dill._dill._reverse_typemap['ObjectType'] = object
 
 # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
 # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
@@ -1634,19 +1631,19 @@ def myPickler(input):
         pickledMessage = pickle.dumps(input, protocol=2)
     return pickledMessage
 
-# Define a utility function to replace the Pickle.loads() method with something that is
-# Cross compatible between Python2 and Python3
-def myUnpickler(input):
-    # Try Python3 version first (has the 'fix_imports' keyword
-    try:
-        # unPickledMessage = pickle.loads(input, fix_imports=True, encoding="bytes")
-        unPickledMessage = pickle.loads(input)
-        Message.addMessage("U1")
-    except Exception as e:
-        # Try the Python2 version
-        Message.addMessage("U2 " + str(e))
-        unPickledMessage = pickle.loads(input)
-    return unPickledMessage
+# # Define a utility function to replace the Pickle.loads() method with something that is
+# # Cross compatible between Python2 and Python3
+# def myUnpickler(input):
+#     # Try Python3 version first (has the 'fix_imports' keyword
+#     try:
+#         # unPickledMessage = pickle.loads(input, fix_imports=True, encoding="bytes")
+#         unPickledMessage = pickle.loads(input)
+#         Message.addMessage("U1")
+#     except Exception as e:
+#         # Try the Python2 version
+#         Message.addMessage("U2 " + str(e))
+#         unPickledMessage = pickle.loads(input)
+#     return unPickledMessage
 
 
 # Define a class to encompass the results sent back from the receiving to the transmitting side (via the
@@ -3602,7 +3599,7 @@ class ResultsReceiver(object):
 
                     # First round of unpickling - extract the fragment (a tuple)
                     try:
-                        fragment = myUnpickler(data)
+                        fragment = pickle.loads(data)
                         # detect first fragment
                         if fragment[0] == 0:
                             # Clear away any existing contents of rxMessage
@@ -3635,7 +3632,7 @@ class ResultsReceiver(object):
                             try:
                                 # Attempt to reconsctruct the original message sent by ResultsTransmitter
                                 # unPickledMessage = pickle.loads(rxMssage, fix_imports=True)
-                                unPickledMessage = myUnpickler(rxMssage)
+                                unPickledMessage = pickle.loads(rxMssage)
                                 Message.addMessage(str(unPickledMessage))
 
                                 # Attempt to extract the stats dictionary and eventsList list
