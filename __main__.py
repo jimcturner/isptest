@@ -27,8 +27,8 @@ import pickle
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
 
-import dill
-dill._dill._reverse_typemap['ObjectType'] = object
+# import dill
+# dill._dill._reverse_typemap['ObjectType'] = object
 
 # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
 # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
@@ -1622,7 +1622,8 @@ def myPickler(input):
     pickledMessage = b""
     try:
         # Try Python3 version of pickle first
-        # By default
+        # By default Python3 uses 'protocol 3' and unicode strings
+        # Force it to use the older (Python2 compatible) protocal 2, and byte (ascii) strings
         pickledMessage = str(pickle.dumps(input, protocol=2, encoding='bytes'))
     except:
         # If that fails, try Python 2's version
