@@ -3599,7 +3599,8 @@ class ResultsReceiver(object):
 
                     # First round of unpickling - extract the fragment
                     try:
-                        fragment = pickle.loads(data)
+                        # fragment = pickle.loads(data)
+                        fragment = myUnpickler(data)
                         # detect first fragment
                         if fragment[0] == 0:
                             # Clear away any existing contents of rxMessage
