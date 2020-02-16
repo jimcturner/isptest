@@ -1624,11 +1624,11 @@ def myPickler(input):
         # Try Python3 version of pickle first
         # By default Python3 uses 'protocol 3' and unicode strings
         # Force it to use the older (Python2 compatible) protocal 2, and byte (ascii) strings
-        pickledMessage = str(pickle.dumps(input, protocol=2, encoding='bytes'))
+        pickledMessage = pickle.dumps(input, protocol=2, encoding='bytes')
     except:
         Message.addMessage("P2")
         # If that fails, try Python 2's version
-        pickledMessage = str(pickle.dumps(input, protocol=2))
+        pickledMessage = pickle.dumps(input, protocol=2)
     return pickledMessage
 
 # Define a class to encompass the results sent back from the receiving to the transmitting side (via the
