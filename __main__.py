@@ -1626,7 +1626,7 @@ def myPickler(input):
         # By default Python3 uses 'protocol 3' and unicode strings
         # Force it to use the older (Python2 compatible) protocal 2, and byte (ascii) strings
         # pickledMessage = pickle.dumps(input, protocol=2, encoding='bytes')
-        pickledMessage = pickle.dumps(input, protocol=2, encoding='latin1')
+        pickledMessage = pickle.dumps(input, protocol=2, encoding='bytes')
     except:
         Message.addMessage("P2")
         # If that fails, try Python 2's version
@@ -1638,7 +1638,7 @@ def myPickler(input):
 def myUnpickler(input):
     # Try Python3 version first (has the 'fix_imports' keyword
     try:
-        unPickledMessage = pickle.loads(input, fix_imports=True, encoding="latin1")
+        unPickledMessage = pickle.loads(input, fix_imports=True, encoding="bytes")
         Message.addMessage("U1")
     except:
         # Try the Python2 version
