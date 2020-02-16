@@ -3817,12 +3817,15 @@ class ResultsTransmitter(object):
                     # Python2 and Python3 aren't automatically interchangeable unless you specify the
                     # encoding='bytes' option. Unfortunately this option isn't present in Python2
                     # Therfore we have to try both attempts
+                    msg = {"stats": stats, "eventList": eventsList}
                     try:
                         # Try Python3 version of pickle first
-                        pickledMessage = pickle.dumps({"stats": stats, "eventList": eventsList}, encoding='bytes')
+                        pickledMessage = str(pickle.dumps(msg, protocol=0, encoding='bytes'))
                     except:
                         # If that fails, try Python 2's version
-                        pickledMessage = pickle.dumps({"stats": stats, "eventList": eventsList})
+                        pickledMessage = str(pickle.dumps(msg, protocol=0))
+
+                    # pickledMessage = pickle.dumps(msg,protocol=0,'latin-1')
 
 
                     # if len(eventsList) > 0:
