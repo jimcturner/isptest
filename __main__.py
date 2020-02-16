@@ -1626,6 +1626,7 @@ def myPickler(input):
         # Force it to use the older (Python2 compatible) protocal 2, and byte (ascii) strings
         pickledMessage = str(pickle.dumps(input, protocol=2, encoding='bytes'))
     except:
+        Message.addMessage("P2")
         # If that fails, try Python 2's version
         pickledMessage = str(pickle.dumps(input, protocol=2))
     return pickledMessage
