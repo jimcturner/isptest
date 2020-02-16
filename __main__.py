@@ -1609,27 +1609,27 @@ class RtpStream(object):
         # Now we've added the newData object to the list rtpStreamData[] we cab delete the newData object
         del newData
 
-# Define a utility function to take the place of Pickle.dumps()
-# This is in order to create a single function that is Python2 and Python3 compatible
-# (because P2 and P3 pickles aren't by default, compatible)
-def myPickler(input):
-    # Python2 and Python3 aren't automatically interchangeable unless you specify the
-    # encoding='bytes' option. Unfortunately this option isn't present in Python2
-    # Therfore we have to try both attempts
-
-    pickledMessage = b""
-    try:
-        # Try Python3 version of pickle first
-        # By default Python3 uses 'protocol 3' and unicode strings
-        # Force it to use the older (Python2 compatible) protocal 2, and byte (ascii) strings
-        # pickledMessage = pickle.dumps(input, protocol=2, encoding='bytes')
-        Message.addMessage("D1")
-        pickledMessage = pickle.dumps(input, protocol=2)
-    except Exception as e:
-        Message.addMessage("D2 " + str(e))
-        # If that fails, try Python 2's version
-        pickledMessage = pickle.dumps(input, protocol=2)
-    return pickledMessage
+# # Define a utility function to take the place of Pickle.dumps()
+# # This is in order to create a single function that is Python2 and Python3 compatible
+# # (because P2 and P3 pickles aren't by default, compatible)
+# def myPickler(input):
+#     # Python2 and Python3 aren't automatically interchangeable unless you specify the
+#     # encoding='bytes' option. Unfortunately this option isn't present in Python2
+#     # Therfore we have to try both attempts
+#
+#     pickledMessage = b""
+#     try:
+#         # Try Python3 version of pickle first
+#         # By default Python3 uses 'protocol 3' and unicode strings
+#         # Force it to use the older (Python2 compatible) protocal 2, and byte (ascii) strings
+#         # pickledMessage = pickle.dumps(input, protocol=2, encoding='bytes')
+#         Message.addMessage("D1")
+#         pickledMessage = pickle.dumps(input, protocol=2)
+#     except Exception as e:
+#         Message.addMessage("D2 " + str(e))
+#         # If that fails, try Python 2's version
+#         pickledMessage = pickle.dumps(input, protocol=2)
+#     return pickledMessage
 
 # # Define a utility function to replace the Pickle.loads() method with something that is
 # # Cross compatible between Python2 and Python3
@@ -3853,7 +3853,7 @@ class ResultsTransmitter(object):
                     # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
 
                     msg = {"stats": stats, "eventList": eventsList}
-                    pickledMessage = myPickler(msg)
+                    pickledMessage = pickle.dumps(msg,protocol=2)
 
                     # Set max safe UDP tx size to 576 (based on this:-
                     # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
@@ -3864,7 +3864,7 @@ class ResultsTransmitter(object):
                     # iterate over fragments
                     for fragment in fragmentedMessage:
                         # Pickle and send each fragment one at a time
-                        txMessage = myPickler(fragment)
+                        txMessage = pickle.dumps(fragment,protocol=2)
                         # Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
                         self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
 
