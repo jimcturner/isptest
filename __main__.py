@@ -1645,6 +1645,7 @@ def myUnpickler(input):
         # Try the Python2 version
         Message.addMessage("U2 " + str(e))
         unPickledMessage = pickle.loads(input)
+    Message.addMessage(str(unPickledMessage))
     return unPickledMessage
 
 
