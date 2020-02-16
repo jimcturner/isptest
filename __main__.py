@@ -1628,8 +1628,8 @@ def myPickler(input):
         # pickledMessage = pickle.dumps(input, protocol=2, encoding='bytes')
         Message.addMessage("D1")
         pickledMessage = pickle.dumps(input, protocol=2, encoding='bytes')
-    except:
-        Message.addMessage("D2")
+    except Exception as e:
+        Message.addMessage("D2 " + str(e))
         # If that fails, try Python 2's version
         pickledMessage = pickle.dumps(input, protocol=2)
     return pickledMessage
@@ -1641,9 +1641,9 @@ def myUnpickler(input):
     try:
         unPickledMessage = pickle.loads(input, fix_imports=True, encoding="bytes")
         Message.addMessage("U1")
-    except:
+    except Exception as e:
         # Try the Python2 version
-        Message.addMessage("U2")
+        Message.addMessage("U2 " + str(e))
         unPickledMessage = pickle.loads(input)
     return unPickledMessage
 
