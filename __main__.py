@@ -2233,6 +2233,14 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
         __updateAvailableStreamsList(availableRtpRxStreamList,rtpRxStreamsDict, rtpRxStreamsDictMutex)
         __updateAvailableStreamsList(availableRtpTxStreamList,rtpTxStreamsDict, rtpTxStreamsDictMutex)
         __updateAvailableStreamsList(availableRtpTxResultsList,rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex)
+
+        # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
+        if len(availableRtpTxStreamList) > 0:
+            latestTxStream = availableRtpTxStreamList[-1][1]
+            # Take a deep copy so that we're not dependent upon this stream existing
+            latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
+
+
         if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
             keyPressed[0]=''    # Clear key buffer
             selectedView += 1
@@ -2314,10 +2322,9 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             # UDP source port and a random sync source id
             if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
 
-                # Grab the stats of the latest added tx stream
-                if len(availableRtpTxStreamList) > 0:
-                    latestTxStream = availableRtpTxStreamList[-1][1]
-                    latestTxStreamStats=latestTxStream.getRtpStreamStats()
+                # Grab the stats of the most recent added tx stream, and make a copy derived from it's settings
+                # Check that there are actually some stream settings to copy
+                if len(latestTxStreamStats) > 0 :
 
                     # Use stats of existing tx stream to derive setup parameters for new stream
                     syncSourceID = latestTxStreamStats['Sync Source ID'] + 1
