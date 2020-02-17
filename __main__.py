@@ -3033,8 +3033,10 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                         paddingLength=(maxMessageDisplayLength-2) -len(message[1])
                         if paddingLength >0:
                             paddingString = " " * paddingLength
-                            message[1] += paddingString
-
+                            try:
+                                message[1] += paddingString
+                            except Exception as e:
+                                Message.addMessage("__displayThread: Invalid message")
 
                 if len(messages) > 0:
                     width, height, tableData = createTable(messages, "Messages")
