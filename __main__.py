@@ -1692,6 +1692,9 @@ class RtpStreamResults(object):
         self.__accessRtpStreamEventListMutex.release()
         # update the lastUpdated timestamp
         self.lastUpdatedTimestamp = datetime.datetime.now()
+        # Now create a message for each event added (showing the summary for each event)
+        for event in eventsList:
+            Message.addMessage(event.getSummary())
 
 
     # def setFriendlyName(self, friendlyName):
