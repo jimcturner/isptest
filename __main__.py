@@ -1609,42 +1609,6 @@ class RtpStream(object):
         # Now we've added the newData object to the list rtpStreamData[] we cab delete the newData object
         del newData
 
-# # Define a utility function to take the place of Pickle.dumps()
-# # This is in order to create a single function that is Python2 and Python3 compatible
-# # (because P2 and P3 pickles aren't by default, compatible)
-# def myPickler(input):
-#     # Python2 and Python3 aren't automatically interchangeable unless you specify the
-#     # encoding='bytes' option. Unfortunately this option isn't present in Python2
-#     # Therfore we have to try both attempts
-#
-#     pickledMessage = b""
-#     try:
-#         # Try Python3 version of pickle first
-#         # By default Python3 uses 'protocol 3' and unicode strings
-#         # Force it to use the older (Python2 compatible) protocal 2, and byte (ascii) strings
-#         # pickledMessage = pickle.dumps(input, protocol=2, encoding='bytes')
-#         Message.addMessage("D1")
-#         pickledMessage = pickle.dumps(input, protocol=2)
-#     except Exception as e:
-#         Message.addMessage("D2 " + str(e))
-#         # If that fails, try Python 2's version
-#         pickledMessage = pickle.dumps(input, protocol=2)
-#     return pickledMessage
-
-# # Define a utility function to replace the Pickle.loads() method with something that is
-# # Cross compatible between Python2 and Python3
-# def myUnpickler(input):
-#     # Try Python3 version first (has the 'fix_imports' keyword
-#     try:
-#         # unPickledMessage = pickle.loads(input, fix_imports=True, encoding="bytes")
-#         unPickledMessage = pickle.loads(input)
-#         Message.addMessage("U1")
-#     except Exception as e:
-#         # Try the Python2 version
-#         Message.addMessage("U2 " + str(e))
-#         unPickledMessage = pickle.loads(input)
-#     return unPickledMessage
-
 
 # Define a class to encompass the results sent back from the receiving to the transmitting side (via the
 # ResultsTransmitter and ResultsReceiver objects)
