@@ -1694,7 +1694,7 @@ class RtpStreamResults(object):
         self.lastUpdatedTimestamp = datetime.datetime.now()
         # Now create a message for each event added (showing the summary for each event)
         for event in eventsList:
-            Message.addMessage(event.getSummary())
+            Message.addMessage(event.getSummary()[1])
 
 
     # def setFriendlyName(self, friendlyName):
