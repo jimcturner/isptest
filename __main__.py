@@ -3652,7 +3652,7 @@ class ResultsReceiver(object):
                             Message.addMessage("ERR: __resultsReceiverThread. More fragments received than expected")
 
                     except Exception as e:
-                            Message.addMessage("ERR: __resultsReceiverThread(single fragment): " + str(e))
+                            Message.addMessage("ERR: __resultsReceiverThread(single fragment): Is Receiving running Python2 If so, switch to Python 2 at this end - Incompatible pickles?" + str(e))
 
                     # Check if we have some new stats data
                     if len(stats) > 0:
