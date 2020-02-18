@@ -4413,6 +4413,7 @@ def main(argv):
         except Exception as e:
             Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on "+UDP_RX_IP+":"+str(UDP_RX_PORT)+", "+str(e)+\
                 ". Try another port. Exiting"+Term.FG(Term.RESET))
+            Message.addMessage(str(e))
             time.sleep(2)
             exit()
 
