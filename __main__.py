@@ -2297,8 +2297,8 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
                     destAddr = latestTxStreamStats['Dest IP']
                     packetLength = latestTxStreamStats['Packet size']
 
-                    # As a default, set time to live to be infinite
-                    timeToLive = -1
+                    # As a default, set time to live to be 1hr
+                    timeToLive = 3600
                     # As a default, set tx rate to be 1 Mbps
                     txRate = 1048576
 
