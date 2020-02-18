@@ -973,7 +973,7 @@ class RtpStream(object):
         self.calculateThread.start()
 
         # create a stream results transmitter object for this rx stream
-        self.resultsTransmitter = ResultsTransmitter(self)
+        # self.resultsTransmitter = ResultsTransmitter(self)
 
     def killStream(self):
         # This kills the ResultsTransmitter object created by this stream  - because
