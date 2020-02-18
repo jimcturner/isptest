@@ -2146,7 +2146,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
     #                ],DATASET_TO_DISPLAY,ROW_SELECTOR])
 
     # Screen label showing the availablle key commands (depending upon mode)
-    keyCommandsString = "[<]/[>] cycle panes, [^]/[v] select stream, [d]elete, [s]et name, [e]rrors"
+    keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abou[t]"
 
 
     txStreamModifierCommandsString = "TX  modifier: [o/p] seq ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
@@ -2205,6 +2205,10 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
             latestTxStream = availableRtpTxStreamList[-1][1]
             # Take a deep copy so that we're not dependent upon this stream existing
             latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
+
+        # Force a screen redraw
+        if keyPressed[0] == 'redraw_screen':
+            redrawScreen = True
 
 
         if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
@@ -3177,6 +3181,36 @@ def __catchKeyboardPresses(operationMode, keyPressed):
                 # else:
                 #     # Force a screen redraw
                 #     keyPressed[0] = "redrawScreen"
+
+        # Special case if 't' pressed ('about' dialog - need to inhibit screen)
+        elif ch == 't':
+            ch == ''  # Clear keybuffer
+            # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
+            keyPressed[0] = 'inhibit_redraw'
+            # Create a dialogue box (using a table with a single cell and no headings)
+            tableContents ="BBC IBEOO Team ISP Analyser V1.0".center(40," ")+\
+                "\n" + "(c) James Turner 2020".center(40," ")+\
+                "\n\n\n\n" +\
+                "Press the [any] key to continue".center(40," ")
+
+            # Create a single-celled table
+            aboutDialogue = SingleTable([[tableContents]])
+            aboutDialogue.title = "About"
+            width = aboutDialogue.table_width
+            height = tableContents.count('\n') + 2
+
+            # Get Terminal size so we can centre the table
+            termW, termH = Term.getTerminalSize()
+            xPos = int((termW - width)/2)
+            yPos = int((termH-height)/2)
+
+            Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
+            # Wait for a key press
+            Term.getch()
+            # re-enable screen redrawing (by clearing 'inhibit_redraw' from keyPressed[0]
+            keyPressed[0] = 'redraw_screen'
+
+
         else:
             keyPressed[0] = ch
         time.sleep(0.1)
