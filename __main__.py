@@ -3075,7 +3075,7 @@ def __catchKeyboardPresses(operationMode, keyPressed):
 
 
         # Special case if 's' pressed
-        elif ch == 's':
+        elif ch == b's':
             ch == ''    # Clear keybuffer
             # provide input prompt -used to edit a stream name
 
@@ -3102,7 +3102,7 @@ def __catchKeyboardPresses(operationMode, keyPressed):
                 pass
 
         # Special case if 'a' pressed (add additional tx stream)
-        elif ch == 'a':
+        elif ch == b'a':
             ch == ''    # Clear keybuffer
             # Check we're in transmit mode
             if operationMode == 'TRANSMIT':
@@ -3187,7 +3187,7 @@ def __catchKeyboardPresses(operationMode, keyPressed):
                 #     keyPressed[0] = "redrawScreen"
 
         # Special case if 't' pressed ('about' dialog - need to inhibit screen)
-        elif ch == 't':
+        elif ch == b't':
             ch == ''  # Clear keybuffer
             # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
             keyPressed[0] = 'inhibit_redraw'
