@@ -4452,14 +4452,16 @@ def main(argv):
             # Get timestamp at the point the packet was received
             timeNow = datetime.datetime.now()
 
-            srcAddress = addr[0]
-            srcPort = addr[1]
+
 
             # if (keyPressed[0]!=''):
             # 	print "keyPressed",keyPressed[0]
             # 	keyPressed[0]=''
 
             try:
+                srcAddress = addr[0]
+                srcPort = addr[1]
+
                 # Split rtp header into an array of values
                 # RTP header is 12 bytes long. Unpack it as an array.
                 # !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
