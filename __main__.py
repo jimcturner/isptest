@@ -4433,6 +4433,7 @@ def main(argv):
                 try:
                     sock = socket.socket(socket.AF_INET,  # Internet
                                          socket.SOCK_DGRAM)  # UDP
+                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                     sock.bind((UDP_RX_IP, UDP_RX_PORT))
                 except Exception as e:
                     Message.addMessage(
