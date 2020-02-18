@@ -4500,7 +4500,7 @@ def main(argv):
                     print (message)
                     Message.addMessage(message)
 
-                # Now delete the contents of data[] and addr[] (for next time around the while loop)
+                # Now delete the contents of data[]  (for next time around the while loop)
                 del data [:]
             else:
                 message = Fore.RED+"Invalid data or no data received: " + str(addr) + ", " + str(data)
