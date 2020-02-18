@@ -2253,7 +2253,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
 
         if (keyPressed[0] == 'Enter'):
             keyPressed[0] = ''  # Clear key buffer
-            Message.addMessage("Enter")
+            Message.addMessage("INFO: Enter")
 
         if (keyPressed[0] == 'newFriendlyNameEntered'):
             keyPressed[0] = ''  # Clear key buffer
@@ -2390,7 +2390,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                 pass
 
 
-        if keyPressed[0] == 'm':
+        if keyPressed[0] == b'm':
             # Increase tx rate of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2412,7 +2412,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == 'n':
+        if keyPressed[0] == b'n':
             # Decrease tx rate of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2434,10 +2434,10 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == 'h' or keyPressed[0] == 'j':
+        if keyPressed[0] == b'h' or keyPressed[0] == b'j':
             # Decrease/Increase time to live of selected stream
             modifier = 0
-            if keyPressed[0] == 'h':
+            if keyPressed[0] == b'h':
                 # Decrease time to live
                 modifier = -1
             else:
@@ -2478,12 +2478,12 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                             datetime.timedelta(seconds=newTTL)))
 
 
-        if keyPressed[0] == 'h':
+        if keyPressed[0] == b'h':
             # Decrease time to live of selected stream
             keyPressed[0] = ''  # Clear key buffer
 
 
-        if keyPressed[0] == 'l':
+        if keyPressed[0] == b'l':
             # Increase payload size of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2502,7 +2502,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == 'k':
+        if keyPressed[0] == b'k':
             # Decrease payload size of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2520,7 +2520,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == 'p':
+        if keyPressed[0] == b'p':
             # Increase sync source ID of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2538,7 +2538,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == 'o':
+        if keyPressed[0] == b'o':
             # Decrease sync source ID of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2556,7 +2556,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == 'e':
+        if keyPressed[0] == b'e':
             # Toggle error messages on/off
             keyPressed[0] = ''  # Clear key buffer
             if showErrorsFlag == False:
@@ -2571,7 +2571,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                 Message.setVerbosity(intialVerbosityLevel)
 
 
-        if keyPressed[0] == 'd':
+        if keyPressed[0] == b'd':
             # Delete selected stream (selected table row)
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that the dataset associated with this view actually has some data in it
@@ -2630,7 +2630,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
 
         # Add extra key checkling when in 'special features' mode
         if specialFeaturesModeFlag == True:
-            if keyPressed[0] == 'z':
+            if keyPressed[0] == b'z':
                 # Toggle packet generation on/off for the selected stream
                 keyPressed[0] = ''  # Clear key buffer
                 # Confirm that the current view has any streams within its data set
@@ -2654,7 +2654,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     except Exception as e:
                         Message.addMessage("ERR: __displayThread [z] enable/disable stream. " + str(e))
 
-            if keyPressed[0] == 'x':
+            if keyPressed[0] == b'x':
                 # Toggle packet jitter simulation on/off for the selected stream
                 keyPressed[0] = ''  # Clear key buffer
                 # Confirm that the current view has any streams within its data set
@@ -2677,7 +2677,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     except Exception as e:
                         Message.addMessage("ERR: __displayThread [x] enabled/disable jitter simulation. " + str(e))
 
-            if keyPressed[0] == 'c':
+            if keyPressed[0] == b'c':
                 # Insert minor packet loss for the selected stream (< glitch threshold)
                 keyPressed[0] = ''  # Clear key buffer
                 # Confirm that the current view has any streams within its data set
@@ -2703,7 +2703,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     except Exception as e:
                         Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
 
-            if keyPressed[0] == 'v':
+            if keyPressed[0] == b'v':
                 # Insert significant packet loss for the selected stream (>= glitch threshold)
                 keyPressed[0] = ''  # Clear key buffer
                 # Confirm that the current view has any streams within its data set
