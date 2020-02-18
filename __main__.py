@@ -4506,10 +4506,15 @@ def main(argv):
                         rtpRxStreamTempDict[rtpSyncSourceIdentifier] = timer()
 
             except Exception as e:
-                message = Fore.RED+"Cannot decode RTP headers. Is this an RTP packet? "+str(e)+ " Length:" + str(len(data))+\
-                       " bytes received\r"
-                print (message)
-                Message.addMessage(message)
+                try:
+                    message = Fore.RED+"Cannot decode RTP headers. Is this an RTP packet? "+str(e)+ " Length:" + str(len(data))+\
+                           " bytes received\r"
+                    print (message)
+                    Message.addMessage(message)
+                except Exception as e:
+                    message = Fore.RED+"Invalid data or no data received" + str(e)
+                    print (message)
+                    Message.addMessage(message)
 
             # Iterate over tpRxStreamTempDict to purge it of old, non-existant streams that never made it into rtpRxStreamTempDict
             # If an RTP packet with the matching sync source id doesn;t appear within nonExistentStreamTimout_seconds seconds,
