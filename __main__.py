@@ -2007,7 +2007,7 @@ def humanise(key,value):
         return value
 
 
-def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
+def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
                     rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT):
 
@@ -2148,8 +2148,10 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
     # Screen label showing the availablle key commands (depending upon mode)
     keyCommandsString = "[<]/[>] cycle panes, [^]/[v] select stream, [d]elete, [s]et name, [e]rrors"
 
-    extraKeyCommandsString = "TX  modifier: [o/p] seq ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
-    txStreamModifierCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
+
+    txStreamModifierCommandsString = "TX  modifier: [o/p] seq ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
+    # Extra command strip for 'special features' mode
+    extraKeyCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
 
     streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
     streamTableLastRow = 0 # Tracks the current end row of the stream table data
@@ -2622,102 +2624,106 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             # # Send exit signal to main thread (via keyPressed[0])
             # keyPressed[0] = 'exit'
 
-        if keyPressed[0] == 'z':
-            # Toggle packet generation on/off for the selected stream
-            keyPressed[0] = ''  # Clear key buffer
-            # Confirm that the current view has any streams within its data set
-            if len(views[selectedView][2]) > 0:
-                try:
-                    # Get handle on selected stream
-                    stream = views[selectedView][2][selectedTableRow][1]
-                    idOfStream = views[selectedView][2][selectedTableRow][0]
+        # Add extra key checkling when in 'special features' mode
+        if specialFeaturesModeFlag == True:
+            if keyPressed[0] == 'z':
+                # Toggle packet generation on/off for the selected stream
+                keyPressed[0] = ''  # Clear key buffer
+                # Confirm that the current view has any streams within its data set
+                if len(views[selectedView][2]) > 0:
+                    try:
+                        # Get handle on selected stream
+                        stream = views[selectedView][2][selectedTableRow][1]
+                        idOfStream = views[selectedView][2][selectedTableRow][0]
 
-                    # Confirm that the stream is an RtpGenerator
-                    if type(stream) == RtpGenerator:
-                        # Get current transit status and toggle accordingly
-                        if stream.getEnableStreamStatus():
-                            # If currently enabled, disable it
-                            stream.disableStream()
-                            Message.addMessage("[z] Stream "+str(idOfStream)+" disabled")
-                        else:
-                            # otherwise, enable it
-                            stream.enableStream()
-                            Message.addMessage("[z] Stream " + str(idOfStream) + " enabled")
-                except Exception as e:
-                    Message.addMessage("ERR: __displayThread [z] enable/disable stream. " + str(e))
+                        # Confirm that the stream is an RtpGenerator
+                        if type(stream) == RtpGenerator:
+                            # Get current transit status and toggle accordingly
+                            if stream.getEnableStreamStatus():
+                                # If currently enabled, disable it
+                                stream.disableStream()
+                                Message.addMessage("[z] Stream "+str(idOfStream)+" disabled")
+                            else:
+                                # otherwise, enable it
+                                stream.enableStream()
+                                Message.addMessage("[z] Stream " + str(idOfStream) + " enabled")
+                    except Exception as e:
+                        Message.addMessage("ERR: __displayThread [z] enable/disable stream. " + str(e))
 
-        if keyPressed[0] == 'x':
-            # Toggle packet jitter simulation on/off for the selected stream
-            keyPressed[0] = ''  # Clear key buffer
-            # Confirm that the current view has any streams within its data set
-            if len(views[selectedView][2]) > 0:
-                try:
-                    # Get handle on selected stream
-                    stream = views[selectedView][2][selectedTableRow][1]
-                    idOfStream = views[selectedView][2][selectedTableRow][0]
+            if keyPressed[0] == 'x':
+                # Toggle packet jitter simulation on/off for the selected stream
+                keyPressed[0] = ''  # Clear key buffer
+                # Confirm that the current view has any streams within its data set
+                if len(views[selectedView][2]) > 0:
+                    try:
+                        # Get handle on selected stream
+                        stream = views[selectedView][2][selectedTableRow][1]
+                        idOfStream = views[selectedView][2][selectedTableRow][0]
 
-                    # Confirm that the stream is an RtpGenerator
-                    if type(stream) == RtpGenerator:
-                        if stream.getJitterStatus():
-                            # if jitter simulation currently enabled, disable it
-                            stream.disableJitter()
-                            Message.addMessage("[x] Stream " + str(idOfStream) + " jitter simulation disabled")
-                        else:
-                            stream.enableJitter()
-                            Message.addMessage("[x] Stream " + str(idOfStream) + " jitter simulation enabled")
+                        # Confirm that the stream is an RtpGenerator
+                        if type(stream) == RtpGenerator:
+                            if stream.getJitterStatus():
+                                # if jitter simulation currently enabled, disable it
+                                stream.disableJitter()
+                                Message.addMessage("[x] Stream " + str(idOfStream) + " jitter simulation disabled")
+                            else:
+                                stream.enableJitter()
+                                Message.addMessage("[x] Stream " + str(idOfStream) + " jitter simulation enabled")
 
-                except Exception as e:
-                    Message.addMessage("ERR: __displayThread [x] enabled/disable jitter simulation. " + str(e))
+                    except Exception as e:
+                        Message.addMessage("ERR: __displayThread [x] enabled/disable jitter simulation. " + str(e))
 
-        if keyPressed[0] == 'c':
-            # Insert minor packet loss for the selected stream (< glitch threshold)
-            keyPressed[0] = ''  # Clear key buffer
-            # Confirm that the current view has any streams within its data set
-            if len(views[selectedView][2]) > 0:
-                try:
-                    # Get handle on selected stream
-                    stream = views[selectedView][2][selectedTableRow][1]
-                    # idOfStream = views[selectedView][2][selectedTableRow][0]
+            if keyPressed[0] == 'c':
+                # Insert minor packet loss for the selected stream (< glitch threshold)
+                keyPressed[0] = ''  # Clear key buffer
+                # Confirm that the current view has any streams within its data set
+                if len(views[selectedView][2]) > 0:
+                    try:
+                        # Get handle on selected stream
+                        stream = views[selectedView][2][selectedTableRow][1]
+                        idOfStream = views[selectedView][2][selectedTableRow][0]
 
-                    # Confirm that the stream is an RtpGenerator
-                    if type(stream) == RtpGenerator:
-                        # Get current glitch threshold from first available rx stream
-                        if len(availableRtpRxStreamList)>0:
-                            rtpRxStream=availableRtpRxStreamList[0][1]
-                            glitchLength_packets=rtpRxStream.getRtpStreamStats()["glitch_Event_Trigger_Threshold_packets"]
-                        else:
-                            # If not available set a default value of 1 packet
-                            glitchLength_packets = 1
-                        # Simulate packet loss
-                        stream.simulatePacketLoss(glitchLength_packets)
+                        # Confirm that the stream is an RtpGenerator
+                        if type(stream) == RtpGenerator:
+                            # Get current glitch threshold from first available rx stream
+                            if len(availableRtpRxStreamList)>0:
+                                rtpRxStream=availableRtpRxStreamList[0][1]
+                                glitchLength_packets=rtpRxStream.getRtpStreamStats()["glitch_Event_Trigger_Threshold_packets"]
+                            else:
+                                # If not available set a default value of 1 packet
+                                glitchLength_packets = 1
+                            # Simulate packet loss
+                            stream.simulatePacketLoss(glitchLength_packets)
+                            Message.addMessage("[c] Stream " + str(idOfStream) + " simulate minor packet loss")
 
-                except Exception as e:
-                    Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
+                    except Exception as e:
+                        Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
 
-        if keyPressed[0] == 'v':
-            # Insert significant packet loss for the selected stream (>= glitch threshold)
-            keyPressed[0] = ''  # Clear key buffer
-            # Confirm that the current view has any streams within its data set
-            if len(views[selectedView][2]) > 0:
-                try:
-                    # Get handle on selected stream
-                    stream = views[selectedView][2][selectedTableRow][1]
-                    # idOfStream = views[selectedView][2][selectedTableRow][0]
+            if keyPressed[0] == 'v':
+                # Insert significant packet loss for the selected stream (>= glitch threshold)
+                keyPressed[0] = ''  # Clear key buffer
+                # Confirm that the current view has any streams within its data set
+                if len(views[selectedView][2]) > 0:
+                    try:
+                        # Get handle on selected stream
+                        stream = views[selectedView][2][selectedTableRow][1]
+                        idOfStream = views[selectedView][2][selectedTableRow][0]
 
-                    # Confirm that the stream is an RtpGenerator
-                    if type(stream) == RtpGenerator:
-                        # Get current glitch threshold from first available rx stream
-                        if len(availableRtpRxStreamList)>0:
-                            rtpRxStream=availableRtpRxStreamList[0][1]
-                            glitchLength_packets=rtpRxStream.getRtpStreamStats()["glitch_Event_Trigger_Threshold_packets"] + 1
-                        else:
-                            # If not available set a default value of 20 packets
-                            glitchLength_packets = 20
-                        # Simulate packet loss
-                        stream.simulatePacketLoss(glitchLength_packets)
+                        # Confirm that the stream is an RtpGenerator
+                        if type(stream) == RtpGenerator:
+                            # Get current glitch threshold from first available rx stream
+                            if len(availableRtpRxStreamList)>0:
+                                rtpRxStream=availableRtpRxStreamList[0][1]
+                                glitchLength_packets=rtpRxStream.getRtpStreamStats()["glitch_Event_Trigger_Threshold_packets"] + 1
+                            else:
+                                # If not available set a default value of 20 packets
+                                glitchLength_packets = 20
+                            # Simulate packet loss
+                            stream.simulatePacketLoss(glitchLength_packets)
+                            Message.addMessage("[v] Stream " + str(idOfStream) + " simulate major packet loss")
 
-                except Exception as e:
-                    Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
+                    except Exception as e:
+                        Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
 
         if keyPressed[0] == 'redrawScreen':
             keyPressed[0] = ''  # Clear key buffer
@@ -2745,9 +2751,13 @@ def __displayThread(operationMode, keyPressed, rtpTxStreamsDict, rtpTxStreamsDic
             # For tx mode, add an extra row of commands
             if operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK':
                 Term.setBackgroundColourSingleLine(1, (currentTermHeight - 2), Term.WHITE)
-                Term.printAt(extraKeyCommandsString, 1, (currentTermHeight - 2), Term.BLACK, Term.WHITE)
-                Term.setBackgroundColourSingleLine(1, (currentTermHeight - 3), Term.WHITE)
-                Term.printAt(txStreamModifierCommandsString, 1, (currentTermHeight - 3), Term.BLACK, Term.WHITE)
+                Term.printAt(txStreamModifierCommandsString, 1, (currentTermHeight - 2), Term.BLACK, Term.WHITE)
+
+                # For special features mode, add yet another row of commands
+                if specialFeaturesModeFlag == True:
+                    Term.setBackgroundColourSingleLine(1, (currentTermHeight - 3), Term.WHITE)
+                    Term.printAt(extraKeyCommandsString, 1, (currentTermHeight - 3), Term.BLACK, Term.WHITE)
+
 
         # Redraw changing screen elements - but not if redrawing has been inhibited
         if not (keyPressed[0] == 'inhibit_redraw'):
@@ -4023,7 +4033,12 @@ def main(argv):
     # Invoke colorama init() method to allow ansi escape sequences to work on Windows
     init(autoreset=True)
 
+   # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
+
+
+    # Additonal Operation Mode flag for 'special features'
+    specialFeaturesModeFlag = False
     # Specify a default txRate of 1Mbps if no rate specified
     txRate = 1 * 1024 * 1024
 
@@ -4066,6 +4081,7 @@ def main(argv):
         # -i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4
         # -u sync source ID (for transmit or loopback mode)
         # -v:[int] verbosity
+        # -z Enable special features (like simulate packel loss, jitter etc)
 
 
 
@@ -4076,7 +4092,7 @@ def main(argv):
             print ("No options supplied. Use -h for help")
             exit()
 
-        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:v:")
+        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:v:z")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
@@ -4094,6 +4110,7 @@ def main(argv):
                 print ("-d rtp payload size (bytes). Default = 1300 bytes\r")
                 print ("-i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4\r")
                 print ("-v:[int] message verbosity level\r")
+                print ("-z Enable special features (like simulate packel loss, jitter etc)\r")
                 exit()
 
             elif opt == '-x':
@@ -4263,6 +4280,10 @@ def main(argv):
                     print ("Invalid -v message verbosity value supplied. " + str(arg))
                     exit()
 
+            elif opt in ("-z"):
+                # Enable 'special features' mode
+                specialFeaturesModeFlag = True
+
     except getopt.GetoptError:
         print ('invalid options supplied'+ str(argv))
         exit()
@@ -4306,7 +4327,7 @@ def main(argv):
 
     # Create a display thread
     displayThread = threading.Thread(target=__displayThread,
-                                     args=(MODE, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
+                                     args=(MODE, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
                                            rtpRxStreamsDict, rtpRxStreamsDictMutex,
                                            rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT,))
     displayThread.daemon = True  # Thread will auto shutdown when the prog ends
