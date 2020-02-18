@@ -3188,10 +3188,13 @@ def __catchKeyboardPresses(operationMode, keyPressed):
             # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
             keyPressed[0] = 'inhibit_redraw'
             # Create a dialogue box (using a table with a single cell and no headings)
-            maxWidth = 50
+            maxWidth = 55
             tableContents ="BBC IBEOO Team ISP Analyser V1.0 (beta)".center(maxWidth," ")+\
-                "\n" + "(c) James Turner 2020".center(maxWidth," ")+\
-                "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth," ")+\
+                "\n\n" + "(c) James Turner 2020".center(maxWidth," ")+ \
+                "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
+                "\n" + " measurement tool supporting multiple tx/tx streams".center(maxWidth, " ") + \
+                "\n" + "  and event logging".center(maxWidth, " ") + \
+                           "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth," ")+\
                 "\n\n\n\n" +\
                 "Press the [any] key to continue".center(maxWidth," ")
 
