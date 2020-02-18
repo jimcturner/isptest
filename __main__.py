@@ -4424,15 +4424,86 @@ def main(argv):
         diskLoggerThread.setName("__diskLoggerThread")
         diskLoggerThread.start()
 
-        data = []       # Will hold the data received
-        addr = []       # Will hold the src address and src port of the received data
-
+        data = b""       # Will hold the data received
         while True:
             # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
             try:
                 # Wait for data (blocking function call)
-
                 data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
+                # Confirm that we have some data (RTP header is 12 bytes long)
+                if len(data) > 11:
+                    # Get timestamp at the point the packet was received
+                    timeNow = datetime.datetime.now()
+                    try:
+                        srcAddress = addr[0]
+                        srcPort = addr[1]
+
+                        # Split rtp header into an array of values
+                        # RTP header is 12 bytes long. Unpack it as an array.
+                        # !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
+                        RTP_HEADER_SIZE = 12
+                        rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
+
+                        # Calculate the data payload size
+                        payloadSize = len(data) - RTP_HEADER_SIZE
+
+                        # Take copies of the data values that we need
+                        # 	sequence no=rtpHeader[2]
+                        #	timestamp=rtpHeader[3]
+                        # 	sync-source identifier =rtpHeader[4]
+
+                        rtpSequenceNo = rtpHeader[2]
+                        rtpSyncSourceIdentifier = rtpHeader[4]
+
+                        # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
+                        try:
+                            # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
+                            rtpRxStreamsDict[rtpSyncSourceIdentifier].addData(rtpSequenceNo, payloadSize, timeNow,
+                                                                              rtpSyncSourceIdentifier)
+
+                        except:
+
+                            # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
+
+                            if rtpSyncSourceIdentifier in rtpRxStreamTempDict:
+                                # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
+                                Message.addMessage(Fore.GREEN + "INFO: " + str(rtpSyncSourceIdentifier) +
+                                                   " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
+                                # Create and add the new stream to the rtpRxStreamsDict
+                                newRtpStream = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, \
+                                                         UDP_RX_PORT, glitchEventTriggerThreshold, sock,
+                                                         rtpRxStreamsDict, rtpRxStreamsDictMutex)
+
+                                addRtpStreamToDict(rtpSyncSourceIdentifier, newRtpStream, rtpRxStreamsDict,
+                                                   rtpRxStreamsDictMutex)
+
+                                # Now delete the entry from the temporary dict
+                                rtpRxStreamTempDict.pop(rtpSyncSourceIdentifier, None)
+
+                            else:
+                                # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
+                                # create a entry in the temporary list (with a timestamp)
+                                Message.addMessage(
+                                    Fore.RED + "INFO: Stream doesn't exist yet, adding to temp list: " + str(
+                                        rtpSyncSourceIdentifier))
+                                rtpRxStreamTempDict[rtpSyncSourceIdentifier] = timer()
+
+                    except Exception as e:
+
+                        message = Fore.RED + "Cannot decode RTP headers. Is this an RTP packet? " + str(
+                            e) + " Length:" + str(len(data)) + \
+                                  " bytes received\r"
+                        print (message)
+                        Message.addMessage(message)
+
+                    # Now delete contents of data[]
+                    data = b""
+
+                else:
+                    message = Fore.RED + "Invalid/no data received: " + str(addr) + ", " + str(data)
+                    print (message)
+                    Message.addMessage(message)
+
             except Exception as e:
                 Message.addMessage(Term.FG(Term.RED) + "__main()sock.recvfrom(): Cannot read socket " + UDP_RX_IP + ":" + \
                     str(UDP_RX_PORT) + ", " + str(e))
@@ -4441,71 +4512,7 @@ def main(argv):
                 time.sleep(2)
                 # exit()
 
-            # Get timestamp at the point the packet was received
-            timeNow = datetime.datetime.now()
 
-            # Confirm that we have some data
-            if len(addr) > 0 and len(data) >0:
-                try:
-                    srcAddress = addr[0]
-                    srcPort = addr[1]
-
-                    # Split rtp header into an array of values
-                    # RTP header is 12 bytes long. Unpack it as an array.
-                    # !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
-                    RTP_HEADER_SIZE = 12
-                    rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
-
-                    # Calculate the data payload size
-                    payloadSize = len(data) - RTP_HEADER_SIZE
-
-                    # 	sequence no=rtpHeader[2]
-                    #	timestamp=rtpHeader[3]
-                    # 	sync-source identifier =rtpHeader[4]
-                    rtpSequenceNo = rtpHeader[2]
-                    rtpSyncSourceIdentifier = rtpHeader[4]
-
-                    # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
-                    try:
-                        # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
-                        rtpRxStreamsDict[rtpSyncSourceIdentifier].addData(rtpSequenceNo, payloadSize, timeNow, rtpSyncSourceIdentifier)
-
-                    except:
-
-                        # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
-
-                        if rtpSyncSourceIdentifier in rtpRxStreamTempDict:
-                            # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
-                            Message.addMessage(Fore.GREEN + "INFO: " + str(rtpSyncSourceIdentifier) +
-                                               " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
-                            # Create and add the new stream to the rtpRxStreamsDict
-                            newRtpStream = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP,\
-                                          UDP_RX_PORT, glitchEventTriggerThreshold, sock, rtpRxStreamsDict, rtpRxStreamsDictMutex)
-
-                            addRtpStreamToDict(rtpSyncSourceIdentifier, newRtpStream, rtpRxStreamsDict, rtpRxStreamsDictMutex)
-
-                            # Now delete the entry from the temporary dict
-                            rtpRxStreamTempDict.pop(rtpSyncSourceIdentifier,None)
-
-                        else:
-                            # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
-                            # create a entry in the temporary list (with a timestamp)
-                            Message.addMessage(Fore.RED+"INFO: Stream doesn't exist yet, adding to temp list: " + str(rtpSyncSourceIdentifier))
-                            rtpRxStreamTempDict[rtpSyncSourceIdentifier] = timer()
-
-                except Exception as e:
-
-                    message = Fore.RED+"Cannot decode RTP headers. Is this an RTP packet? "+str(e)+ " Length:" + str(len(data))+\
-                           " bytes received\r"
-                    print (message)
-                    Message.addMessage(message)
-
-                # Now delete the contents of data[]  (for next time around the while loop)
-                del data [:]
-            else:
-                message = Fore.RED+"Invalid data or no data received: " + str(addr) + ", " + str(data)
-                print (message)
-                Message.addMessage(message)
 
             # Iterate over tpRxStreamTempDict to purge it of old, non-existant streams that never made it into rtpRxStreamTempDict
             # If an RTP packet with the matching sync source id doesn;t appear within nonExistentStreamTimout_seconds seconds,
