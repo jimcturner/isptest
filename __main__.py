@@ -3040,6 +3040,8 @@ def __catchKeyboardPresses(operationMode, keyPressed):
     # OSX and Windows seem to return different codes for the cursor keys, so check for both
     while True:
         ch = Term.getch()
+        if ch != "":
+            Message.addMessage("keyPressed[0] " +str(ch))
         if ord(ch)==67 or ord(ch)==77:
             # Right cursor key
             keyPressed[0] = 'CursorRight'
