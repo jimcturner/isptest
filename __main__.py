@@ -4432,6 +4432,7 @@ def main(argv):
             except Exception as e:
                 Message.addMessage(Term.FG(Term.RED) + "__main()sock.recvfrom(): Cannot read socket " + UDP_RX_IP + ":" + \
                     str(UDP_RX_PORT) + ", " + str(e))
+                Message.addMessage(str(e))
                 # Message.addMessage("Attempting to recreate receive socket binding on " + UDP_RX_IP + ":" + str(UDP_RX_PORT))
                 # try:
                 #     # sock = socket.socket(socket.AF_INET,  # Internet
