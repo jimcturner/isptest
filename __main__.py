@@ -1458,18 +1458,20 @@ class RtpStream(object):
                 # Check to see if this is a truly dead receive stream. If so, kill the associated this calculateThread and
                 # also the corresponding ResultsTransmitter.__resultsTransmitterThread. Finally, remove this RtpStream object
                 # from the dictionary
-                if (datetime.datetime.now() - self.__stats["packet_last_seen_received_timestamp"]) > \
-                        datetime.timedelta(seconds = self.streamIsDeadThreshold_s):
+                try:
+                    if (datetime.datetime.now() - self.__stats["packet_last_seen_received_timestamp"]) > \
+                            datetime.timedelta(seconds = self.streamIsDeadThreshold_s):
 
-                    Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) +\
-                                       "(" + str(self.__stats["stream_friendly_name"]).rstrip() +\
-                                       ") believed dead, removing from list")
-                    # Kill itself
-                    self.killStream()
+                        Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) +\
+                                           "(" + str(self.__stats["stream_friendly_name"]).rstrip() +\
+                                           ") believed dead, removing from list")
+                        # Kill itself
+                        self.killStream()
 
-                    # Finally remove itself from the rtpRxStreamsDict
-                    removeRtpStreamFromDict(self.__stats["stream_syncSource"], self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
-
+                        # Finally remove itself from the rtpRxStreamsDict
+                        removeRtpStreamFromDict(self.__stats["stream_syncSource"], self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
+                except Exception as e:
+                    Message.addMessage("RtpStream.__calc..Thread. self.killStream: " + str(e))
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
             # Take the calculation time in microseconds and combine with the period between
