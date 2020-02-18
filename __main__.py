@@ -3042,6 +3042,8 @@ def __catchKeyboardPresses(operationMode, keyPressed):
         ch = Term.getch()
         if ch != "":
             Message.addMessage("keyPressed[0] " +str(ch))
+        if ch == b'a':
+            Message.addMessage("a pressed")
         if ord(ch)==67 or ord(ch)==77:
             # Right cursor key
             keyPressed[0] = 'CursorRight'
