@@ -2149,7 +2149,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
     keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abou[t]"
 
 
-    txStreamModifierCommandsString = "TX  modifier: [o/p] seq ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
+    txStreamModifierCommandsString = "TX  modifier: [o/p] src ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
     # Extra command strip for 'special features' mode
     extraKeyCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
 
@@ -4426,10 +4426,10 @@ def main(argv):
                 # Wait for data (blocking function call)
                 data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
             except Exception as e:
-                Message.addMessage(Term.FG(Term.RED) + "__main()sock.recvfrom(): Cannot read socket\x1B[0m" + UDP_RX_IP + ":" + \
+                Message.addMessage(Term.FG(Term.RED) + "__main()sock.recvfrom(): Cannot read socket " + UDP_RX_IP + ":" + \
                     str(UDP_RX_PORT) + ", " + str(e))
                 time.sleep(2)
-                exit()
+                # exit()
 
             # Get timestamp at the point the packet was received
             timeNow = datetime.datetime.now()
