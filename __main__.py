@@ -3088,83 +3088,85 @@ def __catchKeyboardPresses(operationMode, keyPressed):
             ch == ''    # Clear keybuffer
             # Check we're in transmit mode
             if operationMode == 'TRANSMIT':
+                keyPressed[0] = 'addTXStreamWithDefaults'
+                # Commented out 'add custom stream code for this version)
                 # Get current terminal size
-                termW, termH = Term.getTerminalSize()
-                # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
-                keyPressed[0] = 'inhibit_redraw'
-
-                # Re-render bottom status bar (to overwrite key commands text)
-                Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)
-                # Generate and print ascii string to move cursor to start of penultimate line
-                print(str(Term.XY(1, (termH - 2))))
-                # Generate use prompts:-
-                response = input("[Enter] to add stream with defaults (1Mbps) or [s] to specify tx parameters:")
-                if response == '':
-                    keyPressed[0] = 'addTXStreamWithDefaults'
-                elif response == 's':
-                    # Dict to store user entered tx parameters
-                    txParameters ={}
-                    # Re-render bottom status bar (to overwrite key commands text)
-                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)
-                    # Generate and print ascii string to move cursor to start of penultimate line
-                    print(str(Term.XY(1, (termH - 2))))
-                    # Generate user prompts:-
-                    # Dest IP addr
-                    response = input("Enter destination ip address: ")
-                    # Add settings to dict
-                    txParameters["destIP"] = response
-
-                    # Dest UDP port
-                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                    print(str(Term.XY(1, (termH - 2))))     # Move cursor
-                    response = input("Enter destination port: ")    # Generate prompt
-                    txParameters["destPort"] = response # Store in dictionary
-
-                    # Source UDP port
-                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                    response = input("Enter optional UDP source port: ")  # Generate prompt
-                    if response != "":
-                        txParameters["srcPort"] = response  # Store in dictionary (if supplied, otherwise don't)
-
-                    # Sync source ID
-                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                    response = input("Enter sync source id: ")  # Generate prompt
-                    txParameters["syncSourceID"] = response  # Store in dictionary (if supplied, otherwise don't)
-
-                    # Payload length
-                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                    response = input("Enter payload length (bytes): ")  # Generate prompt
-                    txParameters["payloadLength"] = response  # Store in dictionary (if supplied, otherwise don't)
-
-                    # Tx rate (in bps)
-                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                    response = input("Enter tx Rate (with suffix [k]bps or [m]bps: ")  # Generate prompt
-                    txParameters["txRate"] = response  # Store in dictionary (if supplied, otherwise don't)
-
-                    # Lifetime (in secs)
-                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                    response = input("Enter time to live (in seconds): ")  # Generate prompt
-                    txParameters["timeToLive"] = response  # Store in dictionary (if supplied, otherwise don't)
-
-                    # Friendly name
-                    Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                    print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                    response = input("Enter friendly name (10 chars max): ")  # Generate prompt
-                    txParameters["friendlyName"] = response  # Store in dictionary (if supplied, otherwise don't)
-
-                    # Now signal to _displayThread that a custom tx stream has been specified
-                    # Pass the dict containing the parameters as the second arg of keyPressed[]
-                    keyPressed[0] = 'addTXStreamWithArgs'
-                    keyPressed.append(txParameters)
-
-                else:
-                    # Force a screen redraw
-                    keyPressed[0] = "redrawScreen"
+                # termW, termH = Term.getTerminalSize()
+                # # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
+                # keyPressed[0] = 'inhibit_redraw'
+                #
+                # # Re-render bottom status bar (to overwrite key commands text)
+                # Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)
+                # # Generate and print ascii string to move cursor to start of penultimate line
+                # print(str(Term.XY(1, (termH - 2))))
+                # # Generate use prompts:-
+                # response = input("[Enter] to add stream with defaults (1Mbps) or [s] to specify tx parameters:")
+                # if response == '':
+                #     keyPressed[0] = 'addTXStreamWithDefaults'
+                # elif response == 's':
+                #     # Dict to store user entered tx parameters
+                #     txParameters ={}
+                #     # Re-render bottom status bar (to overwrite key commands text)
+                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)
+                #     # Generate and print ascii string to move cursor to start of penultimate line
+                #     print(str(Term.XY(1, (termH - 2))))
+                #     # Generate user prompts:-
+                #     # Dest IP addr
+                #     response = input("Enter destination ip address: ")
+                #     # Add settings to dict
+                #     txParameters["destIP"] = response
+                #
+                #     # Dest UDP port
+                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                #     print(str(Term.XY(1, (termH - 2))))     # Move cursor
+                #     response = input("Enter destination port: ")    # Generate prompt
+                #     txParameters["destPort"] = response # Store in dictionary
+                #
+                #     # Source UDP port
+                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                #     response = input("Enter optional UDP source port: ")  # Generate prompt
+                #     if response != "":
+                #         txParameters["srcPort"] = response  # Store in dictionary (if supplied, otherwise don't)
+                #
+                #     # Sync source ID
+                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                #     response = input("Enter sync source id: ")  # Generate prompt
+                #     txParameters["syncSourceID"] = response  # Store in dictionary (if supplied, otherwise don't)
+                #
+                #     # Payload length
+                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                #     response = input("Enter payload length (bytes): ")  # Generate prompt
+                #     txParameters["payloadLength"] = response  # Store in dictionary (if supplied, otherwise don't)
+                #
+                #     # Tx rate (in bps)
+                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                #     response = input("Enter tx Rate (with suffix [k]bps or [m]bps: ")  # Generate prompt
+                #     txParameters["txRate"] = response  # Store in dictionary (if supplied, otherwise don't)
+                #
+                #     # Lifetime (in secs)
+                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                #     response = input("Enter time to live (in seconds): ")  # Generate prompt
+                #     txParameters["timeToLive"] = response  # Store in dictionary (if supplied, otherwise don't)
+                #
+                #     # Friendly name
+                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+                #     response = input("Enter friendly name (10 chars max): ")  # Generate prompt
+                #     txParameters["friendlyName"] = response  # Store in dictionary (if supplied, otherwise don't)
+                #
+                #     # Now signal to _displayThread that a custom tx stream has been specified
+                #     # Pass the dict containing the parameters as the second arg of keyPressed[]
+                #     keyPressed[0] = 'addTXStreamWithArgs'
+                #     keyPressed.append(txParameters)
+                #
+                # else:
+                #     # Force a screen redraw
+                #     keyPressed[0] = "redrawScreen"
         else:
             keyPressed[0] = ch
         time.sleep(0.1)
