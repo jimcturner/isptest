@@ -4424,12 +4424,14 @@ def main(argv):
         diskLoggerThread.setName("__diskLoggerThread")
         diskLoggerThread.start()
 
+        data = []       # Will hold the data received
+        addr = []       # Will hold the src address and src port of the received data
+
         while True:
             # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
             try:
                 # Wait for data (blocking function call)
-                # data =0
-                # addr = 0
+
                 data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
             except Exception as e:
                 Message.addMessage(Term.FG(Term.RED) + "__main()sock.recvfrom(): Cannot read socket " + UDP_RX_IP + ":" + \
