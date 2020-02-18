@@ -4407,7 +4407,8 @@ def main(argv):
         try:
             sock = socket.socket(socket.AF_INET,  # Internet
                                  socket.SOCK_DGRAM)  # UDP
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
             sock.bind((UDP_RX_IP, UDP_RX_PORT))
         except Exception as e:
             Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on "+UDP_RX_IP+":"+str(UDP_RX_PORT)+", "+str(e)+\
