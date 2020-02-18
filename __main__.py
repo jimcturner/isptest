@@ -4070,8 +4070,8 @@ def main(argv):
     # print(reassembled)
     #
     # exit()
-    print ("ip addr: " + str(get_ip()))
-    exit()
+    # print ("ip addr: " + str(get_ip()))
+    # exit()
 
     # Invoke colorama init() method to allow ansi escape sequences to work on Windows
     init(autoreset=True)
