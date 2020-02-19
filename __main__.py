@@ -3883,7 +3883,7 @@ class ResultsTransmitter(object):
         # mostRecentlySentEventNo = 0 # Tracks the eventNo of the most recently sent event
         while self.transmitterActiveFlag:
             self.udpSocket = self.parentRtpRxStream.getSocket()
-            if self.udpSocket != 0:
+            if type(self.udpSocket) == socket:
                 # Get the destination addr and src port from the supplied rtpStream object
                 self.syncSource, self.destAddr, self.destPort, self.friendlyName = \
                     self.parentRtpRxStream.getRTPStreamID()
