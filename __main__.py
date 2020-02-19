@@ -3892,8 +3892,11 @@ class ResultsTransmitter(object):
     def __resultsTransmitterThread(self):
         Message.addMessage("INFO: __resultsTransmitterThread started: "+str(self.udpSocket))
         # mostRecentlySentEventNo = 0 # Tracks the eventNo of the most recently sent event
+        oldSocket = self.parentRtpRxStream.getSocket()
         while self.transmitterActiveFlag:
             self.udpSocket = self.parentRtpRxStream.getSocket()
+            if oldSocket is not self.udpSocket:
+                Message.addMessage("socket has changed")
             # Check that the the socket is a valid socket.socket object
             if type(self.udpSocket) == socket.socket:
                 # Get the destination addr and src port from the supplied rtpStream object
