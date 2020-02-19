@@ -4585,7 +4585,7 @@ def main(argv):
 
             Message.addMessage(Term.WhiRed + "WARNING. Recreating UDP receive socket. Reported Glitches might not be genuine")
             refreshRtpStreamSocketsFlag = True
-
+            time.sleep(1)
     # Infinite loop to sit in (if in TRANSMIT mode)
     while True:
         time.sleep(1)
