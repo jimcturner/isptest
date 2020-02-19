@@ -3128,7 +3128,7 @@ def __catchKeyboardPresses(operationMode, keyPressed):
                 pass
 
         # Special case if 'a' pressed (add additional tx stream)
-        elif ord(ch) == 97
+        elif ord(ch) == 97:
             ch == ''    # Clear keybuffer
             # Check we're in transmit mode
             if operationMode == 'TRANSMIT':
