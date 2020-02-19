@@ -3213,7 +3213,7 @@ def __catchKeyboardPresses(operationMode, keyPressed):
                 #     keyPressed[0] = "redrawScreen"
 
         # Special case if 't' pressed ('about' dialog - need to inhibit screen)
-        elif ch == ord('t'):
+        elif ord(ch) == 116:
             ch == ''  # Clear keybuffer
             # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
             keyPressed[0] = 'inhibit_redraw'
