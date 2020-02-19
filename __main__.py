@@ -2418,6 +2418,8 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
         ch = ' '
         if len(keyPressed[0]) > 0:
             ch = list(keyPressed[0])[0]
+            # Convert from unicode to byte char
+            ch =b"".join(ch)
 
         if ord(ch) == ord('m'):
 
