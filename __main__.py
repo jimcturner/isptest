@@ -3946,7 +3946,7 @@ class ResultsTransmitter(object):
                         # For Python2 which doesn't
                         Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(self.udpSocket))
                     finally:
-
+                        Message.addMessage("ERR: __resultsTransmitterThread. Killing object for stream: " + str(self.syncSource))
                         self.kill()
 
             else:
