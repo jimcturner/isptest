@@ -2411,12 +2411,11 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
 
                 except Exception as e:
                     Message.addMessage("Can't create new stream as specified")
-
             except:
                 pass
 
 
-        if ord(keyPressed[0]) == ord('m'):
+        if ord(keyPressed[0][0]) == ord('m'):
             # Increase tx rate of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
