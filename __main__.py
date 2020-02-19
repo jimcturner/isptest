@@ -4424,13 +4424,15 @@ def main(argv):
         diskLoggerThread.setName("__diskLoggerThread")
         diskLoggerThread.start()
 
-        data = b""       # Will hold the data received
+        data = b""       # Will hold the data received - specify a bytes string
         while True:
             # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
             try:
                 # Wait for data (blocking function call)
                 data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
                 # Confirm that we have some data (RTP header is 12 bytes long)
+                if len(data) == 0:
+                    Message.addMessage("socket is broken")
                 if len(data) > 11:
                     # Get timestamp at the point the packet was received
                     timeNow = datetime.datetime.now()
@@ -4489,20 +4491,20 @@ def main(argv):
                                 rtpRxStreamTempDict[rtpSyncSourceIdentifier] = timer()
 
                     except Exception as e:
-
+                        # Problem decoding RTP headers
                         message = Fore.RED + "Cannot decode RTP headers. Is this an RTP packet? " + str(
                             e) + " Length:" + str(len(data)) + \
                                   " bytes received\r"
                         print (message)
                         Message.addMessage(message)
 
-                    # Now delete contents of data[]
-                    data = b""
-
                 else:
                     message = Fore.RED + "Invalid/no data received: " + str(addr) + ", " + str(data)
                     print (message)
                     Message.addMessage(message)
+
+                # Now delete contents of data[]
+                data = b""
 
             except Exception as e:
                 Message.addMessage(Term.FG(Term.RED) + "__main()sock.recvfrom(): Cannot read socket " + UDP_RX_IP + ":" + \
