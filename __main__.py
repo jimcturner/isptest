@@ -2812,10 +2812,10 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                 #         s =""
 
                 # Message.addMessage("DBUG: Current threads: " + str(listCurrentThreads()))
-                s = ""
-                for stream in availableRtpRxStreamList:
-                    s+= str(id(stream[1].getSocket())) + ", "
-                Message.addMessage(s)
+                # s = ""
+                # for stream in availableRtpRxStreamList:
+                #     s+= str(id(stream[1].getSocket())) + ", "
+                # Message.addMessage(s)
             ######### Print Navigation bar (shows the available views) - shouldn't change much, so only a periodic redraw
 
                 navigationBar = ""  # Clear navigation bar for next time
@@ -3067,8 +3067,8 @@ def __catchKeyboardPresses(operationMode, keyPressed):
     # OSX and Windows seem to return different codes for the cursor keys, so check for both
     while True:
         ch = Term.getch()
-        # if ch != "":
-        #     Message.addMessage("keyPressed[0] " +str(ch))
+        if ch != "":
+            Message.addMessage("keyPressed[0] " +str(ch))
         # if ch == b'a':
         #     Message.addMessage("a pressed")
         if ord(ch)==67 or ord(ch)==77:
