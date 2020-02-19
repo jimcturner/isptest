@@ -2805,6 +2805,8 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                 #         s =""
 
                 # Message.addMessage("DBUG: Current threads: " + str(listCurrentThreads()))
+                for stream in availableRtpRxStreamList:
+                    Message.addMessage(str(stream[1].getSocket()))
 
             ######### Print Navigation bar (shows the available views) - shouldn't change much, so only a periodic redraw
 
