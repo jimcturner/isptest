@@ -3922,7 +3922,7 @@ class ResultsTransmitter(object):
 
 
                 except Exception as e:
-                    Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(e))
+                    Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(id(self.udpSocket)))
             else:
                 Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
             time.sleep(0.5)
