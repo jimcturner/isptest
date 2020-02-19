@@ -1006,11 +1006,11 @@ class RtpStream(object):
 
     def setSocket(self, newSocket):
         # Thread-safe method that sets the UDP receive/transmit socket associated with the stream
-        Message.addMessage("RtpStream.setSocket -old() " + str(id(self.socket)))
+        # Message.addMessage("RtpStream.setSocket -old() " + str(id(self.socket)))
         self.__udpSocketMutex.acquire()
         self.socket = newSocket
         self.__udpSocketMutex.release()
-        Message.addMessage("RtpStream.setSocket -New() " + str(id(self.socket)))
+        # Message.addMessage("RtpStream.setSocket -New() " + str(id(self.socket)))
 
     def __calculateJitter(self, prevRtpPacket):
         # Iterate over self.rtpStream to get total count of data received in this batch of data, no. of packets and also calculate
@@ -3895,17 +3895,17 @@ class ResultsTransmitter(object):
         Message.addMessage("INFO: __resultsTransmitterThread started: "+str(self.udpSocket))
 
         oldSocket = self.parentRtpRxStream.getSocket()
-        Message.addMessage("__resultsTransmitterThread. Initial socket" + str(id(oldSocket)))
+        # Message.addMessage("__resultsTransmitterThread. Initial socket" + str(id(oldSocket)))
 
         while self.transmitterActiveFlag:
             self.udpSocket = self.parentRtpRxStream.getSocket()
-            if oldSocket is not self.udpSocket:
-                Message.addMessage("__resultsTransmitterThread. Socket changed to " + str(id(self.udpSocket)))
-                oldSocket = self.udpSocket
+            # if oldSocket is not self.udpSocket:
+            #     Message.addMessage("__resultsTransmitterThread. Socket changed to " + str(id(self.udpSocket)))
+            #     oldSocket = self.udpSocket
 
             # Check that the the socket is a valid socket.socket object
             if type(self.udpSocket) == socket.socket:
-                Message.addMessage("__resultsTransmitterThread. Current TX socket " + str(id(self.udpSocket)))
+                # Message.addMessage("__resultsTransmitterThread. Current TX socket " + str(id(self.udpSocket)))
                 # Get the destination addr and src port from the supplied rtpStream object
                 self.syncSource, self.destAddr, self.destPort, self.friendlyName = \
                     self.parentRtpRxStream.getRTPStreamID()
