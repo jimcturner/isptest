@@ -4579,7 +4579,8 @@ def main(argv):
 
                 except Exception as e:
                     Message.addMessage(Term.WhiRed + "__main()sock.recvfrom(): Cannot read socket " + UDP_RX_IP + ":" + \
-                        str(UDP_RX_PORT) + ", " + str(e))
+                        str(UDP_RX_PORT) + ", " + str(id(sock)))
+
                     Message.addMessage(str(e))
                     try:
                         # Close existing socket
