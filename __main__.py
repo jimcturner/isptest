@@ -252,6 +252,10 @@ class Term(object):
     WhiBlu = "\033[37m"+"\033[44m"
     # White on black
     WhBla = "\033[37m"+"\033[40m"
+    # white on red
+    WhiRed = "\033[37m"+"\033[41m"
+    # Red on White
+    RedWhi = "\033[31m"+"\033[47m"
 
     DIM = "\033[2m"
 
@@ -859,6 +863,7 @@ class RtpStream(object):
         self.__accessRtpDataMutex = threading.Lock()
         self.__accessRtpStreamStatsMutex = threading.Lock()
         self.__accessRtpStreamEventListMutex = threading.Lock()
+        self.__udpSocketMutex = threading.Lock()
 
         # Add a name field (which can be set with a friendly name (via a setter method) to identify the stream)
         self.maxNameLength = 10
@@ -985,8 +990,17 @@ class RtpStream(object):
         self.calculateThreadActiveFlag = False
 
     def getSocket(self):
-        # Returns the receive UDP socket associated with this stream
-        return self.socket
+        # Thread-safe method that returns the receive UDP socket associated with this stream
+        self.__udpSocketMutex.acquire()
+        sock = self.socket
+        self.__udpSocketMutex.release()
+        return sock
+
+    def setSocket(self, newSocket):
+        # Thread-safe method that sets the UDP receive/transmit socket associated with the stream
+        self.__udpSocketMutex.acquire()
+        self.socket = newSocket
+        self.__udpSocketMutex.release()
 
     def __calculateJitter(self, prevRtpPacket):
         # Iterate over self.rtpStream to get total count of data received in this batch of data, no. of packets and also calculate
@@ -4406,6 +4420,12 @@ def main(argv):
 
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
+        # Flag to signal whether RtpStream (Receive stream) socket vars have to be refreshed.
+        # This will happen if the receive socket has to be recreated (due to an OS (Windows) error
+        # and there are currently active receive streams
+        # (Nb. Windows has a habit of terminating a socket if it receives a bad packet. Since all the receive streams
+        # (and their corresponding ResultsTransmitters) are sharing a reference to this single socket, this is a problem.
+        refreshRtpStreamSocketsFlag = False
 
         while True:
             # Create receive UDP socket
@@ -4414,6 +4434,15 @@ def main(argv):
                                      socket.SOCK_DGRAM)  # UDP
                 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.bind((UDP_RX_IP, UDP_RX_PORT))
+
+                # If this a 'regeneration' of the existing socket, we need to inform all the existing RtpStream objects of the change
+                if refreshRtpStreamSocketsFlag == True:
+                    # Clear the flag
+                    refreshRtpStreamSocketsFlag = False
+                    # Update all streams in rtpRxStreamsDict
+                    for stream in rtpRxStreamsDict:
+                        stream.setSocket(sock)
+
             except Exception as e:
                 Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on "+UDP_RX_IP+":"+str(UDP_RX_PORT)+", "+str(e)+\
                     ". Try another port. Exiting"+Term.FG(Term.RESET))
@@ -4428,6 +4457,7 @@ def main(argv):
             diskLoggerThread.start()
 
             data = b""       # Will hold the data received - specify a bytes string
+
             while True:
                 # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
                 try:
@@ -4546,7 +4576,8 @@ def main(argv):
                         # Delete the stream (key) from the dictionary as not wanted
                         rtpRxStreamTempDict.pop(stream, None)
 
-            Message.addMessage("***Breaking out of inner while loop***")
+            Message.addMessage(Term.WhiRed + "WARNING. Recreating UDP receive socket. Reported Glitches might not be genuine")
+            refreshRtpStreamSocketsFlag = True
 
     # Infinite loop to sit in (if in TRANSMIT mode)
     while True:
