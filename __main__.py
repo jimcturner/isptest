@@ -4441,7 +4441,7 @@ def main(argv):
                     refreshRtpStreamSocketsFlag = False
                     # Update all streams in rtpRxStreamsDict
                     for stream in rtpRxStreamsDict:
-                        stream.setSocket(sock)
+                        rtpRxStreamsDict[stream].setSocket(sock)
 
             except Exception as e:
                 Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on "+UDP_RX_IP+":"+str(UDP_RX_PORT)+", "+str(e)+\
