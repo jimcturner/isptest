@@ -989,6 +989,14 @@ class RtpStream(object):
         # Also kill the __calculateThread associated with this receive stream
         self.calculateThreadActiveFlag = False
 
+        # Finally forcibly remove this RtpStream (itself) from rtpRxStreamsDict
+        self.rtpRxStreamsDictMutex.acquire()
+        try:
+            del self.rtpRxStreamsDict[self.__stats["stream_syncSource"]]
+        except Exception as e:
+            Message.addMessage("ERR: RtpStream.killStream() (remove from rtpRxStreamsDict{})" + str(self.__stats["stream_syncSource"]))
+        self.rtpRxStreamsDictMutex.release()
+
     def getSocket(self):
         # Thread-safe method that returns the receive UDP socket associated with this stream
         self.__udpSocketMutex.acquire()
@@ -3924,6 +3932,8 @@ class ResultsTransmitter(object):
                 except Exception as e:
                     Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(id(self.udpSocket)))
                     time.sleep(2)
+                    # Assume this socket is invalid so kill this receive stream stone dead
+                    self.parentRtpRxStream.killStream()
             else:
                 Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
             time.sleep(2)
@@ -4583,6 +4593,7 @@ def main(argv):
                         # Delete the stream (key) from the dictionary as not wanted
                         rtpRxStreamTempDict.pop(stream, None)
 
+            # If program execution gets here, the udp socket must have been corrupted
             Message.addMessage(Term.WhiRed + "WARNING. Recreating UDP receive socket. Reported Glitches might not be genuine")
             refreshRtpStreamSocketsFlag = True
             time.sleep(1)
