@@ -989,13 +989,13 @@ class RtpStream(object):
         # Also kill the __calculateThread associated with this receive stream
         self.calculateThreadActiveFlag = False
 
-        # Finally forcibly remove this RtpStream (itself) from rtpRxStreamsDict
-        self.rtpRxStreamsDictMutex.acquire()
-        try:
-            del self.rtpRxStreamsDict[self.__stats["stream_syncSource"]]
-        except Exception as e:
-            Message.addMessage("ERR: RtpStream.killStream() (remove from rtpRxStreamsDict{})" + str(self.__stats["stream_syncSource"]))
-        self.rtpRxStreamsDictMutex.release()
+        # # Finally forcibly remove this RtpStream (itself) from rtpRxStreamsDict
+        # self.rtpRxStreamsDictMutex.acquire()
+        # try:
+        #     del self.rtpRxStreamsDict[self.__stats["stream_syncSource"]]
+        # except Exception as e:
+        #     Message.addMessage("ERR: RtpStream.killStream() (remove from rtpRxStreamsDict{})" + str(self.__stats["stream_syncSource"]))
+        # self.rtpRxStreamsDictMutex.release()
 
     def getSocket(self):
         # Thread-safe method that returns the receive UDP socket associated with this stream
@@ -1008,7 +1008,6 @@ class RtpStream(object):
         # Thread-safe method that sets the UDP receive/transmit socket associated with the stream
         self.__udpSocketMutex.acquire()
         self.socket = newSocket
-        Message.addMessage("RtpStream.setSocket() " + str(newSocket))
         self.__udpSocketMutex.release()
 
     def __calculateJitter(self, prevRtpPacket):
@@ -3932,8 +3931,7 @@ class ResultsTransmitter(object):
                 except Exception as e:
                     Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(id(self.udpSocket)))
                     time.sleep(2)
-                    # Assume this socket is invalid so kill this receive stream stone dead
-                    self.parentRtpRxStream.killStream()
+
             else:
                 Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
             time.sleep(2)
