@@ -3938,7 +3938,7 @@ class ResultsTransmitter(object):
                     finally:
                         # Try closing the socket
                         self.udpSocket.close()
-                        time.sleep(2)
+                        time.sleep(5)
 
             else:
                 Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
