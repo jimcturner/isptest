@@ -1006,11 +1006,11 @@ class RtpStream(object):
 
     def setSocket(self, newSocket):
         # Thread-safe method that sets the UDP receive/transmit socket associated with the stream
-        Message.addMessage("RtpStream.setSocket -old() " + str(id(self.udpSocket)))
+        Message.addMessage("RtpStream.setSocket -old() " + str(id(self.socket)))
         self.__udpSocketMutex.acquire()
         self.socket = newSocket
         self.__udpSocketMutex.release()
-        Message.addMessage("RtpStream.setSocket -New() " + str(id(self.udpSocket)))
+        Message.addMessage("RtpStream.setSocket -New() " + str(id(self.socket)))
 
     def __calculateJitter(self, prevRtpPacket):
         # Iterate over self.rtpStream to get total count of data received in this batch of data, no. of packets and also calculate
