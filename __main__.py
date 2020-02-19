@@ -4440,8 +4440,14 @@ def main(argv):
                     # Clear the flag
                     refreshRtpStreamSocketsFlag = False
                     # Update all streams in rtpRxStreamsDict
+                    s = ""
                     for stream in rtpRxStreamsDict:
-                        rtpRxStreamsDict[stream].setSocket(sock)
+                        # Compare the new sock with the existing socket objects (for each stream). If they're wrong, update them
+                        oldSock = rtpRxStreamsDict[stream].getSocket()
+                        if sock is not oldSock:
+                            rtpRxStreamsDict[stream].setSocket(sock)
+                            Message.addMessage(str(oldSock) + ":" + str(sock))
+
 
             except Exception as e:
                 Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on "+UDP_RX_IP+":"+str(UDP_RX_PORT)+", "+str(e)+\
