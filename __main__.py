@@ -1000,6 +1000,7 @@ class RtpStream(object):
         # Thread-safe method that sets the UDP receive/transmit socket associated with the stream
         self.__udpSocketMutex.acquire()
         self.socket = newSocket
+        Message.addMessage("RtpStream.setSocket() " + str(newSocket))
         self.__udpSocketMutex.release()
 
     def __calculateJitter(self, prevRtpPacket):
@@ -3883,6 +3884,7 @@ class ResultsTransmitter(object):
         # mostRecentlySentEventNo = 0 # Tracks the eventNo of the most recently sent event
         while self.transmitterActiveFlag:
             self.udpSocket = self.parentRtpRxStream.getSocket()
+            # Check that the the socket is a valid socket.socket object
             if type(self.udpSocket) == socket.socket:
                 # Get the destination addr and src port from the supplied rtpStream object
                 self.syncSource, self.destAddr, self.destPort, self.friendlyName = \
@@ -4432,7 +4434,7 @@ def main(argv):
             try:
                 sock = socket.socket(socket.AF_INET,  # Internet
                                      socket.SOCK_DGRAM)  # UDP
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 sock.bind((UDP_RX_IP, UDP_RX_PORT))
 
                 # If this a 'regeneration' of the existing socket, we need to inform all the existing RtpStream objects of the change
