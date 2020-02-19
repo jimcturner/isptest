@@ -3904,6 +3904,8 @@ class ResultsTransmitter(object):
 
                 except Exception as e:
                     Message.addMessage("ERR:__resultsTransmitterThread sendto() "+ str(datetime.datetime.now()) + ", " + str(e))
+            else:
+                Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
             time.sleep(0.5)
 
 
