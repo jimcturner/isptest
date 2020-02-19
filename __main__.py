@@ -4499,7 +4499,6 @@ def main(argv):
                                   " bytes received\r"
                         print (message)
                         Message.addMessage(message)
-                        sock.close()
                 else:
                     message = Fore.RED + "Invalid/no data received: " + str(addr) + ", " + str(data)
                     print (message)
@@ -4512,7 +4511,10 @@ def main(argv):
                 Message.addMessage(Term.FG(Term.RED) + "__main()sock.recvfrom(): Cannot read socket " + UDP_RX_IP + ":" + \
                     str(UDP_RX_PORT) + ", " + str(e))
                 Message.addMessage(str(e))
-
+                try:
+                    sock.close()
+                except Exception as e:
+                    Message.addMessage("main() sock.close() " + str(e))
 
                 time.sleep(2)
                 # exit()
