@@ -3933,7 +3933,7 @@ class ResultsTransmitter(object):
                         # For Python3 (which has the id() function)
                         Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(id(self.udpSocket)))
                     except:
-                        # For Python2 whoch doesn't
+                        # For Python2 which doesn't
                         Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(self.udpSocket))
                     finally:
                         time.sleep(2)
@@ -4459,6 +4459,12 @@ def main(argv):
                 if refreshRtpStreamSocketsFlag == True:
                     # Clear the flag
                     refreshRtpStreamSocketsFlag = False
+                    try:
+                        # For Python3 (which has the id() function)
+                        Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(id(socket)))
+                    except:
+                        # For Python2 which doesn't
+                        Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(socket))
                     # Update all streams in rtpRxStreamsDict
                     for stream in rtpRxStreamsDict:
                         rtpRxStreamsDict[stream].setSocket(sock)
