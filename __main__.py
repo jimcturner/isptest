@@ -3946,9 +3946,8 @@ class ResultsTransmitter(object):
                         # For Python2 which doesn't
                         Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(self.udpSocket))
                     finally:
-                        # Try closing the socket
-                        self.udpSocket.close()
-                        time.sleep(5)
+
+                        self.kill()
 
             else:
                 Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
