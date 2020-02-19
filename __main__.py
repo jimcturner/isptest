@@ -2416,7 +2416,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                 pass
 
 
-        if keyPressed[0] == b'm':
+        if keyPressed[0] == b'm' or keyPressed[0] == 'm':
             # Increase tx rate of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2438,7 +2438,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == b'n':
+        if keyPressed[0] == b'n' or keyPressed[0] == 'n':
             # Decrease tx rate of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2460,10 +2460,10 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == b'h' or keyPressed[0] == b'j':
+        if keyPressed[0] == b'h' or keyPressed[0] == 'h' or keyPressed[0] == b'j' or keyPressed[0] == 'j':
             # Decrease/Increase time to live of selected stream
             modifier = 0
-            if keyPressed[0] == b'h':
+            if keyPressed[0] == b'h' or keyPressed[0] == 'h':
                 # Decrease time to live
                 modifier = -1
             else:
@@ -2504,12 +2504,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                             datetime.timedelta(seconds=newTTL)))
 
 
-        if keyPressed[0] == b'h':
-            # Decrease time to live of selected stream
-            keyPressed[0] = ''  # Clear key buffer
-
-
-        if keyPressed[0] == b'l':
+        if keyPressed[0] == b'l' or keyPressed[0] == 'l':
             # Increase payload size of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2528,7 +2523,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == b'k':
+        if keyPressed[0] == b'k' or keyPressed[0] == 'k':
             # Decrease payload size of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2546,7 +2541,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == b'p':
+        if keyPressed[0] == b'p' or keyPressed[0] == 'p':
             # Increase sync source ID of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2564,7 +2559,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == b'o':
+        if keyPressed[0] == b'o' or keyPressed[0] == 'o':
             # Decrease sync source ID of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -2582,7 +2577,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if keyPressed[0] == b'e':
+        if keyPressed[0] == b'e' or keyPressed[0] == 'e':
             # Toggle error messages on/off
             keyPressed[0] = ''  # Clear key buffer
             if showErrorsFlag == False:
@@ -2590,14 +2585,15 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                 showErrorsFlag = True
                 # Force a change of Message verbosity level to show errors
                 Message.setVerbosity(1)
+                Message("[e] Error messages on")
             else:
                 # Set flag to false
                 showErrorsFlag = False
                 # Force a change of Message verbosity back to intial setting
                 Message.setVerbosity(intialVerbosityLevel)
+                Message("[e] Reverting to initial verbosity level")
 
-
-        if keyPressed[0] == b'd':
+        if keyPressed[0] == b'd' or keyPressed[0] == 'd':
             # Delete selected stream (selected table row)
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that the dataset associated with this view actually has some data in it
@@ -2656,7 +2652,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
 
         # Add extra key checkling when in 'special features' mode
         if specialFeaturesModeFlag == True:
-            if keyPressed[0] == b'z':
+            if keyPressed[0] == b'z' or keyPressed[0] == 'z':
                 # Toggle packet generation on/off for the selected stream
                 keyPressed[0] = ''  # Clear key buffer
                 # Confirm that the current view has any streams within its data set
@@ -2680,7 +2676,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     except Exception as e:
                         Message.addMessage("ERR: __displayThread [z] enable/disable stream. " + str(e))
 
-            if keyPressed[0] == b'x':
+            if keyPressed[0] == b'x' or keyPressed[0] == 'x':
                 # Toggle packet jitter simulation on/off for the selected stream
                 keyPressed[0] = ''  # Clear key buffer
                 # Confirm that the current view has any streams within its data set
@@ -2703,7 +2699,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     except Exception as e:
                         Message.addMessage("ERR: __displayThread [x] enabled/disable jitter simulation. " + str(e))
 
-            if keyPressed[0] == b'c':
+            if keyPressed[0] == b'c' or keyPressed[0] == 'c':
                 # Insert minor packet loss for the selected stream (< glitch threshold)
                 keyPressed[0] = ''  # Clear key buffer
                 # Confirm that the current view has any streams within its data set
@@ -2729,7 +2725,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     except Exception as e:
                         Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
 
-            if keyPressed[0] == b'v':
+            if keyPressed[0] == b'v' or keyPressed[0] == 'v':
                 # Insert significant packet loss for the selected stream (>= glitch threshold)
                 keyPressed[0] = ''  # Clear key buffer
                 # Confirm that the current view has any streams within its data set
@@ -4569,7 +4565,7 @@ def main(argv):
                             print (message)
                             Message.addMessage(message)
                     else:
-                        message = Fore.RED + "Invalid/no data received: " + str(addr) + ", " + str(data)
+                        message = Fore.RED + "ERR: Invalid/no data received: " + str(addr) + ", " + str(data)
                         print (message)
                         Message.addMessage(message)
 
@@ -4577,7 +4573,7 @@ def main(argv):
                     data = b""
 
                 except Exception as e:
-                    Message.addMessage(Term.WhiRed + "__main()sock.recvfrom():" + UDP_RX_IP + ":" + \
+                    Message.addMessage(Term.WhiRed + "ERR: __main()sock.recvfrom():" + UDP_RX_IP + ":" + \
                         str(UDP_RX_PORT) + ", " + str(id(sock)))
 
                     Message.addMessage(str(e))
@@ -4585,7 +4581,7 @@ def main(argv):
                         # Close existing socket
                         sock.close()
                     except Exception as e:
-                        Message.addMessage("main() sock.close() " + str(e))
+                        Message.addMessage("ERR: main() sock.close() " + str(e))
 
                     # Now try to recreate the socket
                     # break out of this inner while loop to the outer while loop (where the socket is created)
