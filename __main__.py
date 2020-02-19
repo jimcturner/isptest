@@ -4446,12 +4446,8 @@ def main(argv):
                     refreshRtpStreamSocketsFlag = False
                     # Update all streams in rtpRxStreamsDict
                     # s = ""
-                    # for stream in rtpRxStreamsDict:
-                    #     # Compare the new sock with the existing socket objects (for each stream). If they're wrong, update them
-                    #     oldSock = rtpRxStreamsDict[stream].getSocket()
-                    #     if sock is not oldSock:
-                    #         rtpRxStreamsDict[stream].setSocket(sock)
-                    #         Message.addMessage(str(oldSock) + ":" + str(sock))
+                    for stream in rtpRxStreamsDict:
+                        rtpRxStreamsDict[stream].setSocket(sock)
 
 
             except Exception as e:
