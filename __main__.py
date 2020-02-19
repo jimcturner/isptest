@@ -4445,9 +4445,8 @@ def main(argv):
                     # Clear the flag
                     refreshRtpStreamSocketsFlag = False
                     # Update all streams in rtpRxStreamsDict
-                    # s = ""
-                    # for stream in rtpRxStreamsDict:
-                    #     rtpRxStreamsDict[stream].setSocket(sock)
+                    for stream in rtpRxStreamsDict:
+                        rtpRxStreamsDict[stream].setSocket(sock)
 
 
             except Exception as e:
