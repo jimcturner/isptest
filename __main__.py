@@ -4578,7 +4578,7 @@ def main(argv):
                     data = b""
 
                 except Exception as e:
-                    Message.addMessage(Term.WhiRed + "__main()sock.recvfrom(): Cannot read socket " + UDP_RX_IP + ":" + \
+                    Message.addMessage(Term.WhiRed + "__main()sock.recvfrom():" + UDP_RX_IP + ":" + \
                         str(UDP_RX_PORT) + ", " + str(id(sock)))
 
                     Message.addMessage(str(e))
