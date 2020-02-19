@@ -3929,12 +3929,18 @@ class ResultsTransmitter(object):
 
 
                 except Exception as e:
-                    Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(id(self.udpSocket)))
-                    time.sleep(2)
+                    try:
+                        # For Python3 (which has the id() function)
+                        Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(id(self.udpSocket)))
+                    except:
+                        # For Python2 whoch doesn't
+                        Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(self.udpSocket))
+                    finally:
+                        time.sleep(2)
 
             else:
                 Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
-            time.sleep(2)
+            time.sleep(0.5)
 
 
 def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
@@ -4554,7 +4560,7 @@ def main(argv):
                     data = b""
 
                 except Exception as e:
-                    Message.addMessage(Term.FG(Term.RED) + "__main()sock.recvfrom(): Cannot read socket " + UDP_RX_IP + ":" + \
+                    Message.addMessage(Term.WhiRed + "__main()sock.recvfrom(): Cannot read socket " + UDP_RX_IP + ":" + \
                         str(UDP_RX_PORT) + ", " + str(e))
                     Message.addMessage(str(e))
                     try:
@@ -4592,7 +4598,7 @@ def main(argv):
                         rtpRxStreamTempDict.pop(stream, None)
 
             # If program execution gets here, the udp socket must have been corrupted
-            Message.addMessage(Term.WhiRed + "WARNING. Recreating UDP receive socket. Reported Glitches might not be genuine")
+            Message.addMessage(Term.WhiRed + "WARNING. Recreating UDP receive socket. Glitches might not be genuine")
             refreshRtpStreamSocketsFlag = True
             time.sleep(1)
     # Infinite loop to sit in (if in TRANSMIT mode)
