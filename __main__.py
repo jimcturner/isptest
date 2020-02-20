@@ -1424,7 +1424,7 @@ class RtpStream(object):
                 # Calculate self.__stats["packet_payload_size_mean_1S_bytes"]
                 if self.__stats["packet_counter_1S"] > 0:
                     self.__stats["packet_payload_size_mean_1S_bytes"] = \
-                        self.__stats["packet_data_received_1S_bytes"] / self.__stats["packet_counter_1S"]
+                        int(self.__stats["packet_data_received_1S_bytes"] / self.__stats["packet_counter_1S"])
                 # Clear running totals
                 runningTotalPacketsPerSecond = 0
                 runningTotalDataReceivedPerSecond = 0
@@ -1992,6 +1992,7 @@ def humanise(key,value):
     if type(value) == datetime.timedelta:
         # Pass to (my) dtstrft() function to create a much shorter string
         return dtstrft(value)
+
 
     if key=="packet_data_received_total_bytes" or key=="Bytes transmitted":
         value = bToMb(value)+"B"
