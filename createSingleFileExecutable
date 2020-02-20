@@ -19,7 +19,7 @@ python3 -m zipapp -p "/usr/bin/env python" $targetSubFolder
 #echo "Delete $targetSubFolder subfolder (as no longer required) y/n?"
 #read answer
 #if [ "$answer" != "${answer#[Yy]}" ] ;then
-    rm -rf $targetSubFolder
+#    rm -rf $targetSubFolder
 #else
 #    exit
 #fi
