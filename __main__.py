@@ -2420,7 +2420,6 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
             ch = list(keyPressed[0])[0]
 
         if keyPressed[0] == ord('m'):
-
             # Increase tx rate of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
