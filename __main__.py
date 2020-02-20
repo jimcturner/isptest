@@ -1495,7 +1495,7 @@ class RtpStream(object):
                         # Finally remove itself from the rtpRxStreamsDict
                         removeRtpStreamFromDict(self.__stats["stream_syncSource"], self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
                 except Exception as e:
-                    Message.addMessage("RtpStream.__calc..Thread. self.killStream: " + str(e))
+                    Message.addMessage("ERR: RtpStream.__calc..Thread. auto self.killStream: " + str(e))
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
             # Take the calculation time in microseconds and combine with the period between
@@ -2338,11 +2338,11 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                                                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, "", sourcePort)
                     # Add the new stream to the rtpStreams dictionary
                     addRtpStreamToDict(syncSourceID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
-
+                    Message.addMessage("[a] Added new " +  str(bToMb(txRate)) +"bps stream with id " + str(syncSourceID))
                     # Force redraw
                     redrawScreen = True
                 else:
-                    Message.addMessage("No Tx stream to copy from. New stream not added")
+                    Message.addMessage("ERR: No previous Tx stream stats to copy from. New stream not added")
 
         if keyPressed[0] == 'addTXStreamWithArgs':
             # Attempt to create a new stream based on the user entered parameters
@@ -2423,6 +2423,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
             if len(availableRtpTxStreamList)>0:
                 # Get handle on selected stream
                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                streamID = views[selectedView][2][selectedTableRow][0]
                 # Now check that this is a generator object
                 if type(streamToBeModified) == RtpGenerator:
                     # Get tx rate from currently selected stream
@@ -2430,10 +2431,16 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     currentTxRate=int(stats['Tx Rate'])
                     # If less than 1Mbps increment by 256kbps
                     if currentTxRate < 1048576:
-                        streamToBeModified.setTxRate(currentTxRate+262144)
+                        newTxRate = currentTxRate+262144
+                        streamToBeModified.setTxRate(newTxRate)
                     # Otherwise increment by 500kbps
                     else:
-                        streamToBeModified.setTxRate(currentTxRate + 524288)
+                        newTxRate = currentTxRate + 524288
+                        streamToBeModified.setTxRate(newTxRate)
+                    # Verify new rate set
+                    stats = streamToBeModified.getRtpStreamStats()
+                    currentTxRate = int(stats['Tx Rate'])
+                    Message.addMessage("[m] Stream " + str(streamID) + " tx rate increased to " + str(bToMb(currentTxRate)))
 
                     # Force redraw
                     redrawScreen = True
@@ -2445,6 +2452,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
             if len(availableRtpTxStreamList) > 0:
                 # Get handle on selected stream
                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                streamID = views[selectedView][2][selectedTableRow][0]
                 # Now check that this is a generator object
                 if type(streamToBeModified) == RtpGenerator:
                     # Get tx rate from currently selected stream
@@ -2453,10 +2461,17 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
 
                     # If less than 1Mbps decrement by 256kbps
                     if currentTxRate < 1048576:
-                        streamToBeModified.setTxRate(currentTxRate - 262144)
+                        newTxRate = currentTxRate - 262144
+                        streamToBeModified.setTxRate(newTxRate)
                     # Otherwise decrement by 512kbps
                     else:
-                        streamToBeModified.setTxRate(currentTxRate - 524288)
+                        newTxRate = currentTxRate - 524288
+                        streamToBeModified.setTxRate(newTxRate)
+
+                    # Verify new rate set
+                    stats = streamToBeModified.getRtpStreamStats()
+                    currentTxRate = int(stats['Tx Rate'])
+                    Message.addMessage("[n] Stream " + str(streamID) + " tx rate decreased to " + str(bToMb(currentTxRate)))
                     # Force redraw
                     redrawScreen = True
 
@@ -2511,6 +2526,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
             if len(availableRtpTxStreamList) > 0:
                 # Get handle on selected stream
                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                streamID = views[selectedView][2][selectedTableRow][0]
                 # Now check that this is a generator object
                 if type(streamToBeModified) == RtpGenerator:
                     # Get the stats dictionary from the RtpGenerator object
@@ -2519,6 +2535,12 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     currentTxPayloadSize = int(stats['Packet size'])
                     # Increment current size by 10 bytes
                     streamToBeModified.setPayloadLength(currentTxPayloadSize+10)
+
+                    # Verify new payload size
+                    stats = streamToBeModified.getRtpStreamStats()
+                    currentTxPayloadSize = int(stats['Packet size'])
+                    Message.addMessage(
+                        "[l] Stream " + str(streamID) + " packet size increased to " + str(currentTxPayloadSize) + " bytes")
 
                     # Force redraw
                     redrawScreen = True
@@ -2530,6 +2552,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
             if len(availableRtpTxStreamList) > 0:
                 # Get handle on selected stream
                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                streamID = views[selectedView][2][selectedTableRow][0]
                 # Now check that this is a generator object
                 if type(streamToBeModified) == RtpGenerator:
                     # Get the stats dictionary from the RtpGenerator object
@@ -2538,6 +2561,13 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     currentTxPayloadSize = int(stats['Packet size'])
                     # Increment current size by 10 bytes
                     streamToBeModified.setPayloadLength(currentTxPayloadSize - 10)
+
+                    # Verify new payload size
+                    stats = streamToBeModified.getRtpStreamStats()
+                    currentTxPayloadSize = int(stats['Packet size'])
+                    Message.addMessage(
+                        "[k] Stream " + str(streamID) + " packet size decreased to " + str(
+                            currentTxPayloadSize) + " bytes")
                     # Force redraw
                     redrawScreen = True
 
@@ -2548,6 +2578,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
             if len(availableRtpTxStreamList) > 0:
                 # Get handle on selected stream
                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                streamID = views[selectedView][2][selectedTableRow][0]
                 # Now check that this is a generator object
                 if type(streamToBeModified) == RtpGenerator:
                     # Get the stats dictionary from the RtpGenerator object
@@ -2556,6 +2587,12 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     currentSyncSourceID = int(stats['Sync Source ID'])
                     # Increment sync source by 1
                     streamToBeModified.setSyncSourceIdentifier(currentSyncSourceID+1)
+
+                    # Verify new sync source id
+                    stats = streamToBeModified.getRtpStreamStats()
+                    currentSyncSourceID = int(stats['Sync Source ID'])
+                    Message.addMessage(
+                        "[p] Stream " + str(streamID) + " sync source id changed to " + str(currentSyncSourceID))
                     # Force redraw
                     redrawScreen = True
 
@@ -2566,6 +2603,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
             if len(availableRtpTxStreamList) > 0:
                 # Get handle on selected stream
                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+                streamID = views[selectedView][2][selectedTableRow][0]
                 # Now check that this is a generator object
                 if type(streamToBeModified) == RtpGenerator:
                     # Get the stats dictionary from the RtpGenerator object
@@ -2574,6 +2612,11 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     currentSyncSourceID = int(stats['Sync Source ID'])
                     # Decrement sync source by 1
                     streamToBeModified.setSyncSourceIdentifier(currentSyncSourceID-1)
+                    # Verify new sync source id
+                    stats = streamToBeModified.getRtpStreamStats()
+                    currentSyncSourceID = int(stats['Sync Source ID'])
+                    Message.addMessage(
+                        "[o] Stream " + str(streamID) + " sync source id changed to " + str(currentSyncSourceID))
                     # Force redraw
                     redrawScreen = True
 
@@ -2607,7 +2650,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
                     if type(streamToBeDeleted) == RtpGenerator:
                         # It is a generator object
-                        Message.addMessage("INFO: Deleting Tx Stream: " + str(idOfStreamToBeDeleted))
+                        Message.addMessage("[d] Deleting Tx Stream: " + str(idOfStreamToBeDeleted))
                         # Remove the stream from the rtpTxStreamsDict dictionary
                         removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamsDict, rtpTxStreamsDictMutex)
                         # Instruct the RtpGenerator object to die
@@ -2620,7 +2663,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
 
                     elif type(streamToBeDeleted) == RtpStream:
                         # It is an RtpStream (receiver) object
-                        Message.addMessage("INFO: Deleting Rx Stream: " + str(idOfStreamToBeDeleted))
+                        Message.addMessage("[d] Deleting Rx Stream: " + str(idOfStreamToBeDeleted))
                         # Safely shutdown the RtpStream object itself
                         # del rtpRxStreamsDict[idOfStreamToBeDeleted]
                         streamToBeDeleted.killStream()
@@ -3066,9 +3109,8 @@ def __catchKeyboardPresses(operationMode, keyPressed):
     while True:
         ch = Term.getch()
         if ch != "":
-            Message.addMessage("keyPressed[0] " +str(ch) + ", " + str(ord(ch)))
-        if ord(ch) == 97:
-            Message.addMessage("a pressed (97)")
+            Message.addMessage("DBUG: keyPressed[0] " +str(ch) + ", " + str(ord(ch)))
+
 
         if ord(ch)==67 or ord(ch)==77:
             # Right cursor key
