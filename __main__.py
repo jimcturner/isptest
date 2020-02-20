@@ -2414,10 +2414,6 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
             except:
                 pass
 
-        # Get single char from keyPressed[]
-        ch = ' '
-        if len(keyPressed[0]) > 0:
-            ch = list(keyPressed[0])[0]
 
         if keyPressed[0] == ord('m'):
             # Increase tx rate of selected stream
