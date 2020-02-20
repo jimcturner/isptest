@@ -2414,6 +2414,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
             except:
                 pass
 
+        ch = keyPressed[0]
 
         if keyPressed[0] == ord('m'):
             # Increase tx rate of selected stream
