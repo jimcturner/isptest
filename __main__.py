@@ -2207,6 +2207,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
     # Flag to turn on/off error messages (verbosity level 1)
     showErrorsFlag = False
 
+    Message.addMessage("Waiting for incoming RTP streams on " + str(UDP_RX_IP) + ":" + str(UDP_RX_PORT))
     while True:
 
         # Check to see if terminal has been resized
