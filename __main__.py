@@ -2463,7 +2463,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
         if keyPressed[0] == ord('h') or keyPressed[0] == ord('j'):
             # Decrease/Increase time to live of selected stream
             modifier = 0
-            if ord(keyPressed[0]) == ord('h'):
+            if keyPressed[0] == ord('h'):
                 # Decrease time to live
                 modifier = -1
             else:
