@@ -2419,7 +2419,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
         if len(keyPressed[0]) > 0:
             ch = list(keyPressed[0])[0]
 
-        if ord(ch) == ord('m'):
+        if keyPressed[0] == ord('m'):
 
             # Increase tx rate of selected stream
             keyPressed[0] = ''  # Clear key buffer
@@ -2442,7 +2442,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     # Force redraw
                     redrawScreen = True
 
-        if ord(ch) == ord('n'):
+        if keyPressed[0] == ord('n'):
             # Decrease tx rate of selected stream
             keyPressed[0] = ''  # Clear key buffer
             # Confirm that a tx stream exists
@@ -3251,7 +3251,8 @@ def __catchKeyboardPresses(operationMode, keyPressed):
 
 
         else:
-            keyPressed[0] = ch
+            # Return the integer ascii value of the key pressed to keyPressed[]
+            keyPressed[0] = ord(ch)
         time.sleep(0.1)
 
 # Define an RTP Generator that can run autonomously as a thread
