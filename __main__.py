@@ -2652,7 +2652,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
 
         # Add extra key checkling when in 'special features' mode
         if specialFeaturesModeFlag == True:
-            if keyPressed[0] == b'z' or keyPressed[0] == 'z':
+            if keyPressed[0] == ord('z'):
                 # Toggle packet generation on/off for the selected stream
                 keyPressed[0] = ''  # Clear key buffer
                 # Confirm that the current view has any streams within its data set
