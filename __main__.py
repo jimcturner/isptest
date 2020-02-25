@@ -26,7 +26,7 @@ import pickle
 # Non standard libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
-
+import RtpStreams
 
 # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
 # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
@@ -835,15 +835,15 @@ class MovingTotalEventCounter(object):
 
 
 # Define a class to represent a flow of received rtp packets (and associated stats)
-class RtpStream(object):
+class RtpReceiveStream(object):
     # Constructor method.
-    # The RtpStream object should be created with a unique id no
+    # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold, rxSocket, rtpRxStreamsDict, rtpRxStreamsDictMutex):
 
         self.rtpRxStreamsDict = rtpRxStreamsDict
         self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
-        # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
+        # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
         self.__stats = {}
         # Assign to instance variable
         self.__stats["stream_syncSource"] = syncSource
@@ -851,7 +851,7 @@ class RtpStream(object):
         self.__stats["stream_srcPort"] = srcPort
         self.__stats["stream_rxAddress"] = rxAddress
         self.__stats["stream_rxPort"] = rxPort
-        Message.addMessage("INFO: RtpStream:: Creating RtpStream with syncSource: " + str(self.__stats["stream_syncSource"]))
+        Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
 
         # This is a reference to the UDP listening socket created in main() (to receive all incoming streams)
         # We need it, because we want to be able to reply to the sending end using the same src/dest UDP ports
@@ -875,7 +875,7 @@ class RtpStream(object):
         # Create empty list to hold rtp stream data as it is received by the socket
         self.rtpStreamData = []
 
-        # Create private empty list to hold Events for this RtpStream object. Accessible via a getter method
+        # Create private empty list to hold Events for this RtpReceiveStream object. Accessible via a getter method
         self.__eventList = []
 
         # Counter to be used by __calculateJitter()
@@ -906,7 +906,7 @@ class RtpStream(object):
         self.__stats["glitch_packets_lost_per_glitch_max"] = 0
         self.__stats["glitch_counter_total_glitches"] = 0
 
-        # Keeps a count of all events recorded against this rtpStream
+        # Keeps a count of all events recorded against this RtpReceiveStream
         self.__stats["stream_all_events_counter"] = 0
 
         ######## Moving glitch counters
@@ -983,18 +983,18 @@ class RtpStream(object):
     def killStream(self):
         # This kills the ResultsTransmitter object created by this stream  - because
         # Resultstransmitter runs as an automonomous thread created by this object.
-        # Therefore unless we kill it, this RtpStream object will never be allowed to die
+        # Therefore unless we kill it, this RtpReceiveStream object will never be allowed to die
         self.resultsTransmitter.kill()
 
         # Also kill the __calculateThread associated with this receive stream
         self.calculateThreadActiveFlag = False
 
-        # # Finally forcibly remove this RtpStream (itself) from rtpRxStreamsDict
+        # # Finally forcibly remove this RtpReceiveStream (itself) from rtpRxStreamsDict
         # self.rtpRxStreamsDictMutex.acquire()
         # try:
         #     del self.rtpRxStreamsDict[self.__stats["stream_syncSource"]]
         # except Exception as e:
-        #     Message.addMessage("ERR: RtpStream.killStream() (remove from rtpRxStreamsDict{})" + str(self.__stats["stream_syncSource"]))
+        #     Message.addMessage("ERR: RtpReceiveStream.killStream() (remove from rtpRxStreamsDict{})" + str(self.__stats["stream_syncSource"]))
         # self.rtpRxStreamsDictMutex.release()
 
     def getSocket(self):
@@ -1006,11 +1006,11 @@ class RtpStream(object):
 
     def setSocket(self, newSocket):
         # Thread-safe method that sets the UDP receive/transmit socket associated with the stream
-        # Message.addMessage("RtpStream.setSocket -old() " + str(id(self.socket)))
+        # Message.addMessage("RtpReceiveStream.setSocket -old() " + str(id(self.socket)))
         self.__udpSocketMutex.acquire()
         self.socket = newSocket
         self.__udpSocketMutex.release()
-        # Message.addMessage("RtpStream.setSocket -New() " + str(id(self.socket)))
+        # Message.addMessage("RtpReceiveStream.setSocket -New() " + str(id(self.socket)))
 
     def __calculateJitter(self, prevRtpPacket):
         # Iterate over self.rtpStream to get total count of data received in this batch of data, no. of packets and also calculate
@@ -4125,6 +4125,10 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
 # #####################
 def main(argv):
 
+    # foo = RtpStreams.Foo()
+    # print(foo)
+    # exit()
+
     # Term.initAlternateScreen()
     # Term.printAt(Fore.GREEN+"Hello\r",10,10)
     # Term.printAt("Hello", 1, 1,Term.CYAN)
@@ -4585,7 +4589,7 @@ def main(argv):
                                     Message.addMessage(Fore.GREEN + "INFO: " + str(rtpSyncSourceIdentifier) +
                                                        " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
                                     # Create and add the new stream to the rtpRxStreamsDict
-                                    newRtpStream = RtpStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, \
+                                    newRtpStream = RtpReceiveStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, \
                                                              UDP_RX_PORT, glitchEventTriggerThreshold, sock,
                                                              rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
