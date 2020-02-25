@@ -27,8 +27,8 @@ import pickle
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
 # Additonal libraries required (of my own making)
-from RtpStreams import RtpReceiveStream, RtpGenerator
-from Utils import Message, dtstrft, addRtpStreamToDict, removeRtpStreamFromDict
+from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults
+from Utils import Message, dtstrft, addRtpStreamToDict, removeRtpStreamFromDict, get_ip
 
 # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
 # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
@@ -431,29 +431,6 @@ def uTom(value):
         value = str(int(value)) + "u"
     return value
 
-
-
-def get_ip():
-    # Returns the IP address of the network interface currently used as the default route to the internet
-    # Lifted from here https://stackoverflow.com/questions/166506/finding-local-ip-addresses-using-pythons-stdlib
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        # doesn't even have to be reachable
-        s.connect(('10.255.255.255', 1))
-        IP = s.getsockname()[0]
-    except:
-        IP = '127.0.0.1'
-    finally:
-        s.close()
-    return IP
-
-def listCurrentThreads():
-    # Returns a string listing the names of the currently running threads
-    activeThreads = threading.enumerate()
-    s = ""
-    for x in activeThreads:
-        s += str(x.getName()) + ", "
-    return s
 
 
 def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMutex):

@@ -3,6 +3,8 @@
 
 import time
 import datetime
+import socket
+import threading
 
 # Formats a datetime.timedelta object as a simple string hh:mm:ss
 def dtstrft(timeDelta):
@@ -11,6 +13,29 @@ def dtstrft(timeDelta):
     minutes, seconds = divmod(remainder, 60)
 
     return str(hours).zfill(2)+":"+str(minutes).zfill(2)+":"+str(seconds).zfill(2)
+
+# Returns the IP address of the network interface currently used as the default route to the internet
+def get_ip():
+    # Lifted from here https://stackoverflow.com/questions/166506/finding-local-ip-addresses-using-pythons-stdlib
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
+
+# Returns a string listing the names of the currently running threads
+def listCurrentThreads():
+    activeThreads = threading.enumerate()
+    s = ""
+    for x in activeThreads:
+        s += str(x.getName()) + ", "
+    return s
+
 
 # This function will break a string into a list of tuples containing smaller strings (portions).
 def fragmentString(inputString, maxLength):

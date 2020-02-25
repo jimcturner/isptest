@@ -271,7 +271,7 @@ class Glitch(Event):
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
         optionalFields = "Duration,"+str(self.glitchLength)+", packet(s) lost,"+str(self.packetsLost)+\
-            ",Expected seq no"+str(self.expectedSequenceNo)+",Actual received seq no,"+ str(self.actualReceivedSequenceNo)
+            ",Expected seq no,"+str(self.expectedSequenceNo)+",Actual received seq no,"+ str(self.actualReceivedSequenceNo)
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
               ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
               ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
