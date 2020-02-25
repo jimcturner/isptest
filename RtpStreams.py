@@ -1534,7 +1534,7 @@ class RtpGenerator(object):
         # Set instance variable
         self.payloadLength = payloadLength_bytes
         # Regenerate payload based on new payload length
-        self.generatePayload(self.payloadLength)
+        self.generatePayload()
 
     def setTimeToLive(self, newTimeToLive):
         # Modifies the existing time to live value
