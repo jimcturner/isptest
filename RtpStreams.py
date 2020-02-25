@@ -1489,7 +1489,7 @@ class RtpGenerator(object):
         # assign to instance variable
         self.friendlyName = friendlyName
 
-    def generatePayload(self,length):
+    def generatePayload(self):
         # Generate random string of length 'length' to create a payload
         # Create string containing all uppercase and lowercase letters
         letters = string.ascii_letters
