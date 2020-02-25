@@ -1586,7 +1586,7 @@ class RtpGenerator(object):
         RTP_HEADER_LENGTH_BYTES = 12
 
         # Generate payload (consisting of a random string)
-        self.generatePayload(self.payloadLength)
+        self.generatePayload()
         # Attempt to create UDP socket
         try:
             txSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
