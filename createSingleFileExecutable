@@ -10,8 +10,8 @@ echo "Creating isptest executable archive file"
 echo "downloading dependancies into new subfolder $targetSubFolder"
 python -m pip --proxy www-cache.reith.bbc.co.uk:80 install  ${dependencies[@]} --target $targetSubFolder
 
-echo 'Copying __main__.py (main program code) into target subfolder $targetSubFolder for parcelling up with dependencies'
-cp __main__.py $targetSubFolder
+echo 'Copying __main__.py (main program code) and *.py files into target subfolder $targetSubFolder for parcelling up with dependencies'
+cp *.py $targetSubFolder
 
 echo "Creating $targetSubFolder.pyz file from contents of $targetSubFolder" 
 python3 -m zipapp -p "/usr/bin/env python" $targetSubFolder
