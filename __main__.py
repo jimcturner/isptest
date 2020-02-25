@@ -27,7 +27,7 @@ import pickle
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
 # Additonal libraries required (of my own making)
-from RtpStreams import RtpReceiveStream
+from RtpStreams import RtpReceiveStream, RtpGenerator
 from Utils import Message, dtstrft, addRtpStreamToDict, removeRtpStreamFromDict
 
 # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
@@ -1638,137 +1638,137 @@ class Term(object):
 #         del newData
 
 
-# Define a class to encompass the results sent back from the receiving to the transmitting side (via the
-# ResultsTransmitter and ResultsReceiver objects)
-# It does't perform any calculations itself (unlike RtpStream) but it does have similar getter methods for results,
-# which should allow displayThread to treat this like an RtpStream object without any additional code alteration
-class RtpStreamResults(object):
-    def __init__(self):
-        # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
-        self.__stats = {}
-
-        # Create private empty list to hold Events for this RtpStream object. Accessible via a getter method
-        self.__eventList = []
-
-        # No of historic events to keep in memory (before housekeeping)
-        self.historicEventsLimit  = 50
-
-        # Create mutex locks for data access
-        self.__accessRtpStreamStatsMutex = threading.Lock()         # for the stats dictionary
-        self.__accessRtpStreamEventListMutex = threading.Lock()     # for the eventsList
-
-        # Used to record when this object last received updated stats
-        self.lastUpdatedTimestamp = datetime.timedelta()
-
-
-    def updateStats(self, statsDict):
-        # Will copy statsDict into self.__stats
-        self.__accessRtpStreamStatsMutex.acquire()
-        # Empty the current contents of the dictionary
-        self.__stats.clear()
-        # Copy supplied Dict contents into self.__stats{}
-        self.__stats = deepcopy(statsDict)
-        # Release the mutex
-        self.__accessRtpStreamStatsMutex.release()
-        # update the lastUpdated timestamp
-        self.lastUpdatedTimestamp = datetime.datetime.now()
-
-    def updateEventsList(self, eventsList):
-        # Will take a list of new events and append them to the existing eventsList list
-        # NOTE: It won't check for duplicate entries. It will blindly just append to what's already there
-        # Take control of the mutex
-        self.__accessRtpStreamEventListMutex.acquire()
-        # Append the new events list to the existing list
-        self.__eventList.extend(eventsList)
-        # Release the mutex
-        self.__accessRtpStreamEventListMutex.release()
-        # update the lastUpdated timestamp
-        self.lastUpdatedTimestamp = datetime.datetime.now()
-        # Now create a message for each event added (showing the summary for each event)
-        for event in eventsList:
-            Message.addMessage(event.getSummary()["summary"])
-
-
-    # def setFriendlyName(self, friendlyName):
-    #     # Thread-safe method to set the friendly name field
-    #
-    #     # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
-    #     if len(friendlyName) < self.maxNameLength:
-    #         # Too short, so Pad out name to x chars
-    #         friendlyName += (self.maxNameLength - len(friendlyName)) * " "
-    #     else:
-    #         # Too big, so truncate
-    #         friendlyName = friendlyName[:self.maxNameLength]
-    #
-    #     self.__accessRtpStreamStatsMutex.acquire()
-    #     self.__stats["stream_friendly_name"]=friendlyName
-    #     self.__accessRtpStreamStatsMutex.release()
-    #     return friendlyName
-
-    # Define getter methods
-    def getRTPStreamID(self):
-        # Thread-safe method to access stream syncSource, src address, src port and name fields
-        self.__accessRtpStreamStatsMutex.acquire()
-        stats = self.__stats.copy()
-        self.__accessRtpStreamStatsMutex.release()
-        return stats["stream_syncSource"], stats["stream_srcAddress"], \
-               stats["stream_srcPort"], self.__stats["stream_friendly_name"]
-
-    # Thread-safe method for accessing all RtpStream stats
-    def getRtpStreamStats(self):
-        self.__accessRtpStreamStatsMutex.acquire()
-        stats = self.__stats.copy()
-        self.__accessRtpStreamStatsMutex.release()
-        return stats
-
-    def getRtpStreamStatsByFilter(self, keyFilter):
-        # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
-        # Returns a list of tuples
-        self.__accessRtpStreamStatsMutex.acquire()
-        stats = self.__stats.copy()
-        self.__accessRtpStreamStatsMutex.release()
-        # Filter keys of stats by startswith('filter') into a new dictionary
-        filteredStats = {k: v for k, v in stats.items() if k.startswith(keyFilter)}
-        return filteredStats
-
-    # Thread-safe method for accessing realtime RtpStream eventList
-    # No args: Returns the entire list
-    # 1 arg: Returns the last n events
-    # 2 args: returns the range specified (inclusive)
-    def getRTPStreamEventList(self, *args):
-        self.__accessRtpStreamEventListMutex.acquire()
-        # Create copy of events list
-        eventList = list(self.__eventList)
-        self.__accessRtpStreamEventListMutex.release()
-
-        if len(args) == 2:
-            # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
-            try:
-                # Slice the list
-                return eventList[args[0]:args[1] + 1]
-            except Exception as e:
-                Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
-                                   str(args[1]) + ") requested start and end indexes out of range: " + str(e))
-        elif len(args) == 1:
-            # If one arg supplied, return the last n events.
-            # IF event list not as long as n, return what does exist
-            try:
-                return eventList[(args[0] * -1):]
-            except:
-                return eventList
-        else:
-            return eventList
-
-    # Method to strip off the oldest events from the eventList once the threshold is reached
-    # Unlike the similar method in RtpStream, this does actually set/release mutex locks itself
-    def houseKeepEventList(self):
-        self.__accessRtpStreamEventListMutex.acquire()
-        # Check size of self.__eventList[] and therefore no of events to purge
-        noOfMessagesToPurge = len(self.__eventList) - self.historicEventsLimit
-        if noOfMessagesToPurge > 0:
-            # Remove first x events
-            del self.__eventList[:noOfMessagesToPurge]
-        self.__accessRtpStreamEventListMutex.release()
+# # Define a class to encompass the results sent back from the receiving to the transmitting side (via the
+# # ResultsTransmitter and ResultsReceiver objects)
+# # It does't perform any calculations itself (unlike RtpReceiveStream) but it does have similar getter methods for results,
+# # which should allow displayThread to treat this like an RtpStream object without any additional code alteration
+# class RtpStreamResults(object):
+#     def __init__(self):
+#         # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
+#         self.__stats = {}
+#
+#         # Create private empty list to hold Events for this RtpStream object. Accessible via a getter method
+#         self.__eventList = []
+#
+#         # No of historic events to keep in memory (before housekeeping)
+#         self.historicEventsLimit  = 50
+#
+#         # Create mutex locks for data access
+#         self.__accessRtpStreamStatsMutex = threading.Lock()         # for the stats dictionary
+#         self.__accessRtpStreamEventListMutex = threading.Lock()     # for the eventsList
+#
+#         # Used to record when this object last received updated stats
+#         self.lastUpdatedTimestamp = datetime.timedelta()
+#
+#
+#     def updateStats(self, statsDict):
+#         # Will copy statsDict into self.__stats
+#         self.__accessRtpStreamStatsMutex.acquire()
+#         # Empty the current contents of the dictionary
+#         self.__stats.clear()
+#         # Copy supplied Dict contents into self.__stats{}
+#         self.__stats = deepcopy(statsDict)
+#         # Release the mutex
+#         self.__accessRtpStreamStatsMutex.release()
+#         # update the lastUpdated timestamp
+#         self.lastUpdatedTimestamp = datetime.datetime.now()
+#
+#     def updateEventsList(self, eventsList):
+#         # Will take a list of new events and append them to the existing eventsList list
+#         # NOTE: It won't check for duplicate entries. It will blindly just append to what's already there
+#         # Take control of the mutex
+#         self.__accessRtpStreamEventListMutex.acquire()
+#         # Append the new events list to the existing list
+#         self.__eventList.extend(eventsList)
+#         # Release the mutex
+#         self.__accessRtpStreamEventListMutex.release()
+#         # update the lastUpdated timestamp
+#         self.lastUpdatedTimestamp = datetime.datetime.now()
+#         # Now create a message for each event added (showing the summary for each event)
+#         for event in eventsList:
+#             Message.addMessage(event.getSummary()["summary"])
+#
+#
+#     # def setFriendlyName(self, friendlyName):
+#     #     # Thread-safe method to set the friendly name field
+#     #
+#     #     # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
+#     #     if len(friendlyName) < self.maxNameLength:
+#     #         # Too short, so Pad out name to x chars
+#     #         friendlyName += (self.maxNameLength - len(friendlyName)) * " "
+#     #     else:
+#     #         # Too big, so truncate
+#     #         friendlyName = friendlyName[:self.maxNameLength]
+#     #
+#     #     self.__accessRtpStreamStatsMutex.acquire()
+#     #     self.__stats["stream_friendly_name"]=friendlyName
+#     #     self.__accessRtpStreamStatsMutex.release()
+#     #     return friendlyName
+#
+#     # Define getter methods
+#     def getRTPStreamID(self):
+#         # Thread-safe method to access stream syncSource, src address, src port and name fields
+#         self.__accessRtpStreamStatsMutex.acquire()
+#         stats = self.__stats.copy()
+#         self.__accessRtpStreamStatsMutex.release()
+#         return stats["stream_syncSource"], stats["stream_srcAddress"], \
+#                stats["stream_srcPort"], self.__stats["stream_friendly_name"]
+#
+#     # Thread-safe method for accessing all RtpStream stats
+#     def getRtpStreamStats(self):
+#         self.__accessRtpStreamStatsMutex.acquire()
+#         stats = self.__stats.copy()
+#         self.__accessRtpStreamStatsMutex.release()
+#         return stats
+#
+#     def getRtpStreamStatsByFilter(self, keyFilter):
+#         # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
+#         # Returns a list of tuples
+#         self.__accessRtpStreamStatsMutex.acquire()
+#         stats = self.__stats.copy()
+#         self.__accessRtpStreamStatsMutex.release()
+#         # Filter keys of stats by startswith('filter') into a new dictionary
+#         filteredStats = {k: v for k, v in stats.items() if k.startswith(keyFilter)}
+#         return filteredStats
+#
+#     # Thread-safe method for accessing realtime RtpStream eventList
+#     # No args: Returns the entire list
+#     # 1 arg: Returns the last n events
+#     # 2 args: returns the range specified (inclusive)
+#     def getRTPStreamEventList(self, *args):
+#         self.__accessRtpStreamEventListMutex.acquire()
+#         # Create copy of events list
+#         eventList = list(self.__eventList)
+#         self.__accessRtpStreamEventListMutex.release()
+#
+#         if len(args) == 2:
+#             # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
+#             try:
+#                 # Slice the list
+#                 return eventList[args[0]:args[1] + 1]
+#             except Exception as e:
+#                 Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
+#                                    str(args[1]) + ") requested start and end indexes out of range: " + str(e))
+#         elif len(args) == 1:
+#             # If one arg supplied, return the last n events.
+#             # IF event list not as long as n, return what does exist
+#             try:
+#                 return eventList[(args[0] * -1):]
+#             except:
+#                 return eventList
+#         else:
+#             return eventList
+#
+#     # Method to strip off the oldest events from the eventList once the threshold is reached
+#     # Unlike the similar method in RtpStream, this does actually set/release mutex locks itself
+#     def houseKeepEventList(self):
+#         self.__accessRtpStreamEventListMutex.acquire()
+#         # Check size of self.__eventList[] and therefore no of events to purge
+#         noOfMessagesToPurge = len(self.__eventList) - self.historicEventsLimit
+#         if noOfMessagesToPurge > 0:
+#             # Remove first x events
+#             del self.__eventList[:noOfMessagesToPurge]
+#         self.__accessRtpStreamEventListMutex.release()
 
 
 
@@ -2210,7 +2210,10 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
     # Flag to turn on/off error messages (verbosity level 1)
     showErrorsFlag = False
 
-    Message.addMessage("Waiting for incoming RTP streams on " + str(UDP_RX_IP) + ":" + str(UDP_RX_PORT))
+    if operationMode == 'RECEIVE':
+        Message.addMessage("Waiting for incoming RTP streams on " + str(UDP_RX_IP) + ":" + str(UDP_RX_PORT))
+    elif operationMode == 'TRANSMIT':
+        Message.addMessage("Waiting for receiving end to make contact..... ")
     while True:
 
         # Check to see if terminal has been resized
@@ -3297,552 +3300,553 @@ def __catchKeyboardPresses(operationMode, keyPressed):
             keyPressed[0] = ord(ch)
         time.sleep(0.1)
 
-# Define an RTP Generator that can run autonomously as a thread
-class RtpGenerator(object):
-
-    def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
-                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, friendlyName, *srcPort):
-        # The last argument (*srcPort) is optional. it allows you to specify a source port on creation
-
-        # Assign instance variables
-        self.UDP_TX_IP = UDP_TX_IP
-        self.UDP_TX_PORT = int(UDP_TX_PORT)
-        self.UDP_TX_SRC_PORT = 0
-        self.txRate = int(txRate)
-        self.txPeriod = 0  # Calculated from self.txRate
-        self.payloadLength = int(payloadLength)
-        self.txCounter_bytes = 0
-        self.txActualTxRate_bps = 0
-        self.txBps_1s = 0               # Used to 'sample' the actual tx rate
-        self.syncSourceIdentifier = int(syncSourceID)
-        self.rtpPayload = ""                 # The 'dummy data' sent in the packet
-        self.elapsedTime = datetime.timedelta()
-        self.maxNameLength = 10
-        # self.friendlyName = " "*self.maxNameLength
-        # On init, if no name supplied, set friendly name to be the same as the ID
-        if friendlyName == "":
-            self.setFriendlyName(self.syncSourceIdentifier)
-        else:
-            # if a friendly name is supplied, use it
-            self.setFriendlyName(friendlyName)
-
-        self.timeToLive = int(timeToLive)
-        self.enablePacketGeneration = True
-        self.packetsToSkip = 0 # Set by simulatePacketLoss()
-        self.jitterGenerationFlag = False
-        self.udpTxSocket = 0 # This is pointer to the socket created by __rtpGeneratorThread
-        self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
-        self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
-
-
-
-        # Test to see if a UDP source port was specified
-        if len(srcPort) > 0:
-            # Test to see if the supplied value is an int
-            try:
-                # check to see whether srcPort is a valid UDP port choice (has to be >1024)
-                if int(srcPort[0]) > 1024:
-                    self.UDP_TX_SRC_PORT = int(srcPort[0])
-            except Exception as e:
-                Message.addMessage("INFO: RtpGenerator.__init(): Invalid UDP source port."+str(srcPort)+", "+str(e))
-
-        # Start the generator thread
-        self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
-        self.rtpGeneratorThread.daemon = True # Thread will auto shutdown when the prog ends
-        self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
-        self.rtpGeneratorThread.start()
-
-        # create a stream results receiver object for this tx stream
-        self.rtpStreamResultsReceiver = ResultsReceiver(self)
-
-    def getRtpStreamStats(self):
-        # Returns a dictionary of useful stats
-        return {'Dest IP': self.UDP_TX_IP,
-                'Dest Port': self.UDP_TX_PORT,
-                'Tx Rate': self.txRate,
-                'Tx Rate (actual)': self.txActualTxRate_bps,
-                'Packet size': self.payloadLength,
-                'Bytes transmitted': self.txCounter_bytes,
-                'Sync Source ID': self.syncSourceIdentifier,
-                'Elapsed Time': self.elapsedTime,
-                'Friendly Name': self.friendlyName,
-                'Tx Source Port': self.UDP_TX_SRC_PORT,
-                'Time to live': self.timeToLive
-                }
-
-    def setFriendlyName(self, friendlyName):
-        # Ultimately this name will be transmitted as part of the stream (so that the receiver
-        # can auto-set the friendly name of the stream at the rx end)
-        # Currently it just sets an instance variable
-
-        # convert friendlyName into a string
-        friendlyName=str(friendlyName)
-        # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
-        if len(friendlyName) < self.maxNameLength:
-            # Too short, so Pad out name to x chars
-            friendlyName += (self.maxNameLength - len(friendlyName)) * " "
-        else:
-            # Too big, so truncate
-            friendlyName = friendlyName[:self.maxNameLength]
-        # assign to instance variable
-        self.friendlyName = friendlyName
-
-    def generatePayload(self,length):
-        # Generate random string of length 'length' to create a payload
-        # Create string containing all uppercase and lowercase letters
-        letters = string.ascii_letters
-        # iterate over stringLength picking random letters from
-        self.rtpPayload = ''.join(random.choice(letters) for i in range(self.payloadLength))
-
-    def setSyncSourceIdentifier(self,value):
-        # Sets the self self.syncSourceIdentifier value
-        # This is only allowed to be 32 bits long (specified by the RTP header)
-        # so mask input value for safety
-        if value < 0:
-            value = 0
-        maskedValue = value & 0xFFFFFFFF
-        self.syncSourceIdentifier=maskedValue
-
-    def calculateTxPeriod(self, newTxRate_bps):
-        UDP_HEADER_LENGTH_BYTES = 8
-        RTP_HEADER_LENGTH_BYTES = 12
-        # Calculates the required tx period for a given supplied txRate and payload length
-        # Takes into account the UDP and RTP headers, to hopefully derive a true 'interface' rate
-        txPeriod = (self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES) * 8.0 / newTxRate_bps
-        return txPeriod
-
-    def setTxRate(self, newTxRate_bps):
-        # Specify Minimum tx rate 100kbps
-        minimumRate=102400
-        if newTxRate_bps < minimumRate:
-            newTxRate_bps = minimumRate
-        # Update instance variable
-        self.txRate = newTxRate_bps
-        # Calculates then set the new txPeriod for a given newTxRate_bps
-        self.txPeriod = self.calculateTxPeriod(newTxRate_bps)
-        # Reset txBps_1s counter
-        self.txBps_1s = 0
-
-    def setPayloadLength(self, payloadLength_bytes):
-        # Modifies the payload length of this RTP TX stream
-        if payloadLength_bytes > 1488:
-            payloadLength_bytes = 1488
-        if payloadLength_bytes < 20:
-            payloadLength_bytes =20
-        # Set instance variable
-        self.payloadLength = payloadLength_bytes
-        # Regenerate payload based on new payload length
-        self.generatePayload(self.payloadLength)
-
-    def setTimeToLive(self, newTimeToLive):
-        # Modifies the existing time to live value
-        # Setting this to a -ve value will mean the tx stream object last for ever
-        self.timeToLive = newTimeToLive
-
-    def killStream(self):
-        # Kills the stream by setting the time to live to zero. This will cause the main thread to exit
-        self.setTimeToLive(0)
-        # Now kill corresponding RtpResultsReceiver object
-        self.rtpStreamResultsReceiver.kill()
-
-    def disableStream(self):
-        # Disables transmission of packets to simulate packet loss by clearing flag
-        # Sequence numbers incrementing will continue even during inhibiting of stream
-        self.enablePacketGeneration = False
-
-    def enableStream(self):
-        # Enables transmission of packets to simulate packet loss by setting flag
-        self.enablePacketGeneration = True
-
-    def getEnableStreamStatus(self):
-        # Returns the current status of self.enablePacketGeneration
-        return self.enablePacketGeneration
-
-    def simulatePacketLoss(self, packetsToSkip):
-        # Used to simulate packet loss by skipping x packets (whilst incrementing the seq no internally)
-        self.packetsToSkip = packetsToSkip
-
-    def enableJitter(self):
-        # Turns on simulated jitter on tx stream
-        self.jitterGenerationFlag = True
-
-    def disableJitter(self):
-        # Disables simulated jitter on tx stream
-        self.jitterGenerationFlag = False
-
-    def getJitterStatus(self):
-        # Returns the status of self.jitterGenerationFlag
-        return self.jitterGenerationFlag
-
-    def getUDPSocket(self):
-        # returns a reference to the socket created by __rtpGeneratorThread
-        return self.udpTxSocket
-    def __rtpGeneratorThread(self):
-
-        # Constants. Used in calculation of transmitted data rate
-        UDP_HEADER_LENGTH_BYTES = 8
-        RTP_HEADER_LENGTH_BYTES = 12
-
-        # Generate payload (consisting of a random string)
-        self.generatePayload(self.payloadLength)
-        # Attempt to create UDP socket
-        try:
-            txSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
-            # Message.addMessage(str(txSock.get))
-            # If a UDP source port has been specified, use it
-            if self.UDP_TX_SRC_PORT >1024:
-                # Bind to the socket, allows you to specify the source port
-                try:
-                    txSock.bind(('0.0.0.0',int(self.UDP_TX_SRC_PORT)))
-                    self.udpTxSocket = txSock
-                except Exception as e:
-                    Message.addMessage("ERR: RtpGenerator.__rtpGeneratorThread. txSock.bind (User supplied source port). "+ str(e))
-            else:
-                # Let the OS determine the source port
-                txSock.bind(('0.0.0.0', 0))
-
-                # Store the socket and OS generated source port in the instance var
-                self.udpTxSocket = txSock
-                self.UDP_TX_SRC_PORT = txSock.getsockname()[1]
-        except Exception as e:
-            Message.addMessage("ERR:\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Exiting\x1B[0m" + self.UDP_TX_IP + ":" + \
-                               str(self.UDP_TX_PORT) + ", " + str(e))
-            time.sleep(2)
-            exit()
-
-        msg = "INFO: TX stream thread started. Sending to " + self.UDP_TX_IP + ":" + str(self.UDP_TX_PORT) + \
-              ", " + str(self.txRate) + "bps, Length:" + str(self.payloadLength) +" bytes, src Port: "+ str(self.UDP_TX_SRC_PORT)
-        Message.addMessage(msg)
-
-        rtpParams = 0b01000000
-        rtpPayloadType = 0b00000000
-        rtpSequenceNo = 0
-
-        # Calculate tx period required to provide supplied txRate for a given stringLength
-        # Note: This is an estimate because time.sleep() is inherently unreliable so we have
-        # to recalculate once the generator is running by averaging over a 1 sec period
-        # txPeriod = self.payloadLength * 8.0 / self.txRate
-        self.txPeriod = self.calculateTxPeriod(self.txRate)
-
-        jitterPercentage = 50
-        maxDeviation = self.txPeriod * jitterPercentage / 100
-
-        # start elapsed timer
-        startTime = timer()
-
-        while True:
-            # Start an execution timer (if we know the time required to construct the packet we can deduct this from the
-            # txPeriod sleep time which should, in theory, reduce the jitter of the generator
-            calculationStartTime = timer()
-
-            # Create a 32 bit timestamp (needs truncating to 32 bits before passing to struct.pack)
-            # 0xFFFFFFFF is 32 '1's, so the '&' operation will throw away MSBs larger than this
-            rtpTimestamp = int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
-
-            # Construct 12 byte header
-            txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
-                                      self.syncSourceIdentifier)
-            MESSAGE = txRtpHeader + self.rtpPayload.encode('ascii')
-
-            # If all tx flags are set then transmit the rtp packet
-            if self.enablePacketGeneration == True and self.packetsToSkip < 1:
-                try:
-                    txSock.sendto(MESSAGE, (self.UDP_TX_IP, self.UDP_TX_PORT))
-                    # Update tx bytes counter (taking packet headers into account)
-                    self.txCounter_bytes += self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES
-                    # Update tx bps data counter (*8 converts bytes to bits)
-                    self.txBps_1s += (self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES) * 8
-
-                except Exception as e:
-                    Message.addMessage("\x1B[31m__rtpGenerator() txSock.sendto(). Exiting. \x1B[0m " + str(e))
-                    time.sleep(1)  # Throttle rate of error messages from this thread
-            else:
-                # Decrement self.packetsToSkip. Once this var reaches zero, packet generation will resume
-                self.packetsToSkip -= 1
-
-            ###########
-            # Increment rtp sequence number for next iteration of the loop
-            rtpSequenceNo += 1
-            # Seq no is only a 16 bit value, so reset at max value (65535)
-            if rtpSequenceNo > 65535:
-                rtpSequenceNo = 0
-                Message.addMessage("INFO: rtpGenerator. " + str(self.syncSourceIdentifier) + " Seq no wrapping to zero")
-            # If flag set, generate random delay centred around self.txPeriod (0.01 = 10mS period)
-            if self.jitterGenerationFlag == True:
-                jitter = random.uniform(-1 * maxDeviation, maxDeviation)
-            else:
-                jitter = 0
-
-            # Calculate (inevitable) error in tx rate (bps)
-            # If there is an error between the desired tx speed and the actual tx speed (due to timing inaccuracies of the time.sleep() command)
-            # dynamically modify the self.txPeriod to actually generate the desired rate
-            # 1 second timer
-
-            # Has 1 second elapsed?
-            if (timer() - startTime) >= 1 and self.enablePacketGeneration == True:
-                # Reset elapsed timer (for 1 second timer)
-                startTime = timer()
-
-                # Increment elapsed time counter by 1 second
-                self.elapsedTime += datetime.timedelta(seconds=1)
-
-                # Test actual tx rate (averaged over a second) against 99% of desired tx rate
-                if self.txBps_1s < (0.99 * self.txRate):
-                    # Data not being sent fast enough, so reduce txPeriod time
-                    # Measure difference between desired bps tx rate and actual bps tx rate
-                    txRateError = self.txRate - self.txBps_1s
-                    # Convert the difference a fraction by which will modify txPeriod
-                    errorFactor = (txRateError * 1.0 / self.txRate)
-                    # Modify txPeriod to compensate for error
-                    # Prevent overshoots of the desired rate, only reduce self.txPeriod by 'half' the error amount in one go
-                    self.txPeriod -= self.txPeriod * (errorFactor / 2.0)
-                    # Message.addMessage("DBUG: Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
-                    #                    str(self.txRate) + ", Actual tx rate:" + str(self.txBps_1s))
-                # Test for overshoots
-                if self.txBps_1s > (1.05 * self.txRate):
-                    # Data being sent too fast, so need to reduce
-                    # Measure difference between desired bps tx rate and actual bps tx rate
-                    txRateError = self.txBps_1s - self.txRate
-                    # Convert the difference a fraction by which will modify txPeriod
-                    errorFactor = (txRateError * 1.0 / self.txRate)
-                    # Reduce by 'half' the errorFactor (per adjustment) to prevent hunting
-                    self.txPeriod += self.txPeriod * (errorFactor / 2.0)
-                    # Message.addMessage("DBUG: Data rate too high. Reducing.)")
-
-                # Take copy of current actual tx rate
-                self.txActualTxRate_bps = self.txBps_1s
-                # Message.addMessage("DBUG: txActualTxRate_bps: "+str(bToMb((self.txActualTxRate_bps))))
-                # Clear counter
-                self.txBps_1s = 0
-
-                # Decrement timeToLive seconds counter but only if current value is +ve
-                # A -ve value is used to denote 'live for ever'
-                if self.timeToLive > 0:
-                    self.timeToLive -= 1
-
-            # The calculation time will be deducted from the sleep time, which should make the generator
-            # output less jittery (because the calculation time is taken into account)
-            calculationPeriod = timer() - calculationStartTime
-
-            compensatedTxPeriod = self.txPeriod + jitter - calculationPeriod
-            # Have to guard against a negative time value
-            if compensatedTxPeriod > 0:
-                # Sleep between packet transmission
-                time.sleep(compensatedTxPeriod)
-            else:
-                # print "__rtpGenerator() - non-positive compensatedTxPeriod value",compensatedTxPeriod,"\r"
-                pass
-
-            # Now housekeep the associated rtpTxStreamResults object for this stream
-            # Check to see that rtpTxStreamResultsDict contains this stream objects
-            if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
-                try:
-                    # Get a handle on the rtpTxStreamResults object
-                    rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                    if type(rtpTxStreamResults) == RtpStreamResults:
-                        # Invoke the housekeeping method to purge any really old events
-                        rtpTxStreamResults.houseKeepEventList()
-                except Exception as e:
-                    Message.addMessage("ERR: __rtpGenerator rtpTxStreamResults.houseKeepEventList(): " + str(e))
-
-
-            # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
-            if self.timeToLive ==0:
-                break
-class ResultsReceiver(object):
-    # An object that will act as a UDP receiver. It will receive server reports from ResultsTransmitter
-    # It is designed as a counterpart to class ResultsTransmitter
-    # It sets up a listener on the source port used by it's related RtpGenerator tx stream.
-    # Because you can't bind to the same addr/port twice, it therefore needs a reference to the
-    # UDP socket created within the RtpGenerator itself. This is obtained using the
-    # RtpGenerator.getUDPSocket() method
-    def __init__(self,rtpGeneratorObject):
-        self.relatedRtpGenerator = rtpGeneratorObject
-        self.udpSocket = 0
-
-        self.rtpTxStreamResultsDict = rtpGeneratorObject.rtpTxStreamResultsDict
-        self.rtpTxStreamResultsDictMutex = rtpGeneratorObject.rtpTxStreamResultsDictMutex
-
-        # Used a signal flag to shut the __resultsReceiverThread down
-        self.receiverActiveFlag = True
-
-        # Start the listener thread
-        self.resultsReceiverThread = threading.Thread(target=self.__resultsReceiverThread, args=())
-        self.resultsReceiverThread.daemon = True
-        self.resultsReceiverThread.setName(str(self.relatedRtpGenerator.syncSourceIdentifier) + ":ResultsReceiver")
-        self.resultsReceiverThread.start()
-
-
-    def kill(self):
-        # This method will kill the receiver thread by setting the self.receiverActiveFlag to false
-        self.receiverActiveFlag = False
-        Message.addMessage("INFO: ResultsReceiver.kill()")
-
-
-
-    def __resultsReceiverThread(self):
-        Message.addMessage("INFO: ResultsReceiver thread starting")
-
-        rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
-        lastReceivedFragment = 0  # Tracks the most recently received fragment
-
-        while self.receiverActiveFlag:
-            # Wait for relatedRtpGenerator object to set up a socket binding
-            self.udpSocket = self.relatedRtpGenerator.getUDPSocket()
-            if self.udpSocket != 0:
-                try:
-                    # Wait for data (blocking function call)
-                    data, addr = self.udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
-                    # Message.addMessage("DBUG: ResultsReceiver.__receiverThread()" + ", " + str(data))
-                    # attempt to unpickle the received data to yield a stats dictionary
-
-                    # Create empty dictionary to hold incoming stats updates
-                    stats = {}
-                    # Create empty list to store incoming events list updates
-                    latestEventsList =[]
-
-                    # First round of unpickling - extract the fragment (a tuple)
-                    try:
-                        fragment = pickle.loads(data)
-                        # detect first fragment
-                        if fragment[0] == 0:
-                            # Clear away any existing contents of rxMessage
-                            rxMssage = b""
-                            # Append the message portion of this fragment to rxMessage
-                            # rxMssage += fragment[3]
-                            rxMssage =b"".join([rxMssage,fragment[3]])
-
-                            # Record the index no of the last received fragment
-                            lastReceivedFragment = fragment[0]
-
-                        # Detect next expected fragment
-                        if fragment[0] == (lastReceivedFragment +1):
-                            # Append the message portion of this fragment to rxMessage
-                            # rxMssage += fragment[3]
-                            rxMssage =b"".join([rxMssage,fragment[3]])
-                            # Record the index no of the last received fragment
-                            lastReceivedFragment = fragment[0]
-
-                        # Detect final fragment of message
-                        if fragment[0] == (fragment[1] - 1):
-                            # Append the final message portion of this fragment to rxMessage
-                            # rxMssage += fragment[3]
-                            rxMssage =b"".join([rxMssage,fragment[3]])
-                            # Whole message has hopefully been reassembled
-                            # Now unpickle (for a second time) to reconstruct the originally pickled and tx'd Python object
-
-                            # We're expecting a dictionary containing a stats dictionary{} and an eventsList{} containing the
-                            # last 5 events
-                            try:
-                                # Attempt to reconsctruct the original message sent by ResultsTransmitter
-                                # unPickledMessage = pickle.loads(rxMssage, fix_imports=True)
-                                unPickledMessage = pickle.loads(rxMssage)
-                                # Message.addMessage("DBG:" + str(unPickledMessage))
-
-                                # Attempt to extract the stats dictionary and eventsList list
-                                try:
-                                    stats = unPickledMessage["stats"]
-                                    latestEventsList = unPickledMessage["eventList"]
-                                except Exception as e:
-                                    Message.addMessage(
-                                        "ERR: __resultsReceiverThread (error unpacking stats and eventList): " + str(e))
-
-                            except Exception as e:
-                                Message.addMessage("ERR: __resultsReceiverThread(pickle.loads(all fragments)): "+str(e))
-
-                        # Detect too many fragments
-                        if fragment[0] > (fragment[1] - 1):
-                            # More fragments than expected
-                            Message.addMessage("ERR: __resultsReceiverThread. More fragments received than expected")
-
-                    except Exception as e:
-                            Message.addMessage("ERR: __resultsReceiverThread(single fragment): Is Receiving running Python2 If so, switch to Python 2 at this end - Incompatible pickles?" + str(e))
-
-                    # Check if we have some new stats data
-                    if len(stats) > 0:
-                        try:
-                            # Firstly check to see a stream object with this id exists in self.rtpTxStreamResultsDict
-                            if stats["stream_syncSource"] in self.rtpTxStreamResultsDict:
-                                # If it does, add the new data
-                                self.rtpTxStreamResultsDict[stats["stream_syncSource"]].updateStats(stats)
-
-                            else:
-                                # Otherwise that stream object doesn't exist yet, so create it
-                                Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
-                                                   + str(stats["stream_syncSource"]))
-                                # Create new RtpStreamResults object
-                                rtpStreamResults = RtpStreamResults()
-                                # Immediately update the stats
-                                rtpStreamResults.updateStats(stats)
-                                # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
-                                addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults,
-                                                   self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
-                        except Exception as e:
-                            Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict or can't add new stream to rtpTxStreamResultsDict. " + str(e))
-
-                    # Check to see if the new eventList contains any data and also that there exists a stream object to add the data to
-                    if len(latestEventsList) > 0 and len(stats) > 0:
-                        try:
-                            # Message.addMessage("DBUG: **latestEventsList: " + str(latestEventsList[-1].eventNo))
-                            # Get handle on an (existing) rtpStreamResults object
-                            rtpStreamResults = self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
-                            # Work out whether the eventList contains any new events that we haven't already seen
-                            firstEventNoInNewList = latestEventsList[0].eventNo
-                            lastEventNoInNewList = latestEventsList[-1].eventNo
-
-                            # # Get latest known event no from the rtpStreamResults stream object
-                            existingEventsList = []
-                            try:
-                                existingEventsList = rtpStreamResults.getRTPStreamEventList(1) # Request last event in the list
-
-                                if len(existingEventsList) > 0:
-                                    # rtpStreamResults.updateEventsList(latestEventsList)
-                                    # # Extract the event no from the last known event
-                                    lastKnownEventNo = existingEventsList[-1].eventNo
-                                    # Message.addMessage("DBUG: firstEventNoInNewList: " + str(firstEventNoInNewList) + \
-                                    #                    ", lastEventNoInNewList: " + str(lastEventNoInNewList) + \
-                                    #                    ", lastKnownEventNo: " + str(lastKnownEventNo))
-
-                                    # Check if the latest item in the new list is more recent than the last item of the known list
-                                    if lastEventNoInNewList > lastKnownEventNo:
-                                        # Calculate how many new events have arrived
-                                        eventsToAdd = lastEventNoInNewList - lastKnownEventNo
-
-                                        # append the last n new events to the existing eventList
-                                        # check to see if the no of new events since last update exceeds
-                                        # length of latestEventsList[]
-                                        if eventsToAdd > len(latestEventsList):
-                                            eventsToAdd = len (latestEventsList)
-                                        # Slice latestEventsList to get a sublist of just the new events
-                                        newEvents = latestEventsList[(eventsToAdd * -1):]
-                                        # and append to existing events list
-                                        rtpStreamResults.updateEventsList(newEvents)
-                                else:
-                                    # existingEventsList is empty so append the entirety of latestEventsList
-                                    rtpStreamResults.updateEventsList(latestEventsList)
-                                # Message.addMessage("DBUG:**" + str(rtpStreamResults.getRTPStreamEventList(1)))
-                            except Exception as e:
-                                Message.addMessage(
-                                    "ERR:_resultsReceiverThread(). rtpStreamResults.getRTPStreamEventList(1) " + str(e))
-                        except Exception as e:
-                            Message.addMessage("ERR:_resultsReceiverThread(): rtpStreamResults.updateEventsList() " + str(e))
-
-                    # if len(stats) > 0:
-                    #     try:
-                    #         stream= self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
-                    #         x=stream.getRTPStreamEventList(1)
-                    #         if len(x) > 0:
-                    #             Message.addMessage("DBUG: Last known event: " + str(x[-1].type))
-                    #     except Exception as e:
-                    #         Message.addMessage("DBUG: wtf " + str(e))
-
-                # Catch all other exceptions
-                except Exception as e:
-                    Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
-            else:
-                # Wait 1 second before checking to see if self.udpSocket is now valid
-                time.sleep(1)
-        Message.addMessage("INFO: ResultsReceiver:__resultsReceiverThread ended")
+# # Define an RTP Generator that can run autonomously as a thread
+# class RtpGenerator(object):
+#
+#     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
+#                  rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, friendlyName, *srcPort):
+#         # The last argument (*srcPort) is optional. it allows you to specify a source port on creation
+#
+#         # Assign instance variables
+#         self.UDP_TX_IP = UDP_TX_IP
+#         self.UDP_TX_PORT = int(UDP_TX_PORT)
+#         self.UDP_TX_SRC_PORT = 0
+#         self.txRate = int(txRate)
+#         self.txPeriod = 0  # Calculated from self.txRate
+#         self.payloadLength = int(payloadLength)
+#         self.txCounter_bytes = 0
+#         self.txActualTxRate_bps = 0
+#         self.txBps_1s = 0               # Used to 'sample' the actual tx rate
+#         self.syncSourceIdentifier = int(syncSourceID)
+#         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
+#         self.elapsedTime = datetime.timedelta()
+#         self.maxNameLength = 10
+#         # self.friendlyName = " "*self.maxNameLength
+#         # On init, if no name supplied, set friendly name to be the same as the ID
+#         if friendlyName == "":
+#             self.setFriendlyName(self.syncSourceIdentifier)
+#         else:
+#             # if a friendly name is supplied, use it
+#             self.setFriendlyName(friendlyName)
+#
+#         self.timeToLive = int(timeToLive)
+#         self.enablePacketGeneration = True
+#         self.packetsToSkip = 0 # Set by simulatePacketLoss()
+#         self.jitterGenerationFlag = False
+#         self.udpTxSocket = 0 # This is pointer to the socket created by __rtpGeneratorThread
+#         self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
+#         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
+#
+#
+#
+#         # Test to see if a UDP source port was specified
+#         if len(srcPort) > 0:
+#             # Test to see if the supplied value is an int
+#             try:
+#                 # check to see whether srcPort is a valid UDP port choice (has to be >1024)
+#                 if int(srcPort[0]) > 1024:
+#                     self.UDP_TX_SRC_PORT = int(srcPort[0])
+#             except Exception as e:
+#                 Message.addMessage("INFO: RtpGenerator.__init(): Invalid UDP source port."+str(srcPort)+", "+str(e))
+#
+#         # Start the generator thread
+#         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
+#         self.rtpGeneratorThread.daemon = True # Thread will auto shutdown when the prog ends
+#         self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
+#         self.rtpGeneratorThread.start()
+#
+#         # create a stream results receiver object for this tx stream
+#         self.rtpStreamResultsReceiver = ResultsReceiver(self)
+#
+#     def getRtpStreamStats(self):
+#         # Returns a dictionary of useful stats
+#         return {'Dest IP': self.UDP_TX_IP,
+#                 'Dest Port': self.UDP_TX_PORT,
+#                 'Tx Rate': self.txRate,
+#                 'Tx Rate (actual)': self.txActualTxRate_bps,
+#                 'Packet size': self.payloadLength,
+#                 'Bytes transmitted': self.txCounter_bytes,
+#                 'Sync Source ID': self.syncSourceIdentifier,
+#                 'Elapsed Time': self.elapsedTime,
+#                 'Friendly Name': self.friendlyName,
+#                 'Tx Source Port': self.UDP_TX_SRC_PORT,
+#                 'Time to live': self.timeToLive
+#                 }
+#
+#     def setFriendlyName(self, friendlyName):
+#         # Ultimately this name will be transmitted as part of the stream (so that the receiver
+#         # can auto-set the friendly name of the stream at the rx end)
+#         # Currently it just sets an instance variable
+#
+#         # convert friendlyName into a string
+#         friendlyName=str(friendlyName)
+#         # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
+#         if len(friendlyName) < self.maxNameLength:
+#             # Too short, so Pad out name to x chars
+#             friendlyName += (self.maxNameLength - len(friendlyName)) * " "
+#         else:
+#             # Too big, so truncate
+#             friendlyName = friendlyName[:self.maxNameLength]
+#         # assign to instance variable
+#         self.friendlyName = friendlyName
+#
+#     def generatePayload(self,length):
+#         # Generate random string of length 'length' to create a payload
+#         # Create string containing all uppercase and lowercase letters
+#         letters = string.ascii_letters
+#         # iterate over stringLength picking random letters from
+#         self.rtpPayload = ''.join(random.choice(letters) for i in range(self.payloadLength))
+#
+#     def setSyncSourceIdentifier(self,value):
+#         # Sets the self self.syncSourceIdentifier value
+#         # This is only allowed to be 32 bits long (specified by the RTP header)
+#         # so mask input value for safety
+#         if value < 0:
+#             value = 0
+#         maskedValue = value & 0xFFFFFFFF
+#         self.syncSourceIdentifier=maskedValue
+#
+#     def calculateTxPeriod(self, newTxRate_bps):
+#         UDP_HEADER_LENGTH_BYTES = 8
+#         RTP_HEADER_LENGTH_BYTES = 12
+#         # Calculates the required tx period for a given supplied txRate and payload length
+#         # Takes into account the UDP and RTP headers, to hopefully derive a true 'interface' rate
+#         txPeriod = (self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES) * 8.0 / newTxRate_bps
+#         return txPeriod
+#
+#     def setTxRate(self, newTxRate_bps):
+#         # Specify Minimum tx rate 100kbps
+#         minimumRate=102400
+#         if newTxRate_bps < minimumRate:
+#             newTxRate_bps = minimumRate
+#         # Update instance variable
+#         self.txRate = newTxRate_bps
+#         # Calculates then set the new txPeriod for a given newTxRate_bps
+#         self.txPeriod = self.calculateTxPeriod(newTxRate_bps)
+#         # Reset txBps_1s counter
+#         self.txBps_1s = 0
+#
+#     def setPayloadLength(self, payloadLength_bytes):
+#         # Modifies the payload length of this RTP TX stream
+#         if payloadLength_bytes > 1488:
+#             payloadLength_bytes = 1488
+#         if payloadLength_bytes < 20:
+#             payloadLength_bytes =20
+#         # Set instance variable
+#         self.payloadLength = payloadLength_bytes
+#         # Regenerate payload based on new payload length
+#         self.generatePayload(self.payloadLength)
+#
+#     def setTimeToLive(self, newTimeToLive):
+#         # Modifies the existing time to live value
+#         # Setting this to a -ve value will mean the tx stream object last for ever
+#         self.timeToLive = newTimeToLive
+#
+#     def killStream(self):
+#         # Kills the stream by setting the time to live to zero. This will cause the main thread to exit
+#         self.setTimeToLive(0)
+#         # Now kill corresponding RtpResultsReceiver object
+#         self.rtpStreamResultsReceiver.kill()
+#
+#     def disableStream(self):
+#         # Disables transmission of packets to simulate packet loss by clearing flag
+#         # Sequence numbers incrementing will continue even during inhibiting of stream
+#         self.enablePacketGeneration = False
+#
+#     def enableStream(self):
+#         # Enables transmission of packets to simulate packet loss by setting flag
+#         self.enablePacketGeneration = True
+#
+#     def getEnableStreamStatus(self):
+#         # Returns the current status of self.enablePacketGeneration
+#         return self.enablePacketGeneration
+#
+#     def simulatePacketLoss(self, packetsToSkip):
+#         # Used to simulate packet loss by skipping x packets (whilst incrementing the seq no internally)
+#         self.packetsToSkip = packetsToSkip
+#
+#     def enableJitter(self):
+#         # Turns on simulated jitter on tx stream
+#         self.jitterGenerationFlag = True
+#
+#     def disableJitter(self):
+#         # Disables simulated jitter on tx stream
+#         self.jitterGenerationFlag = False
+#
+#     def getJitterStatus(self):
+#         # Returns the status of self.jitterGenerationFlag
+#         return self.jitterGenerationFlag
+#
+#     def getUDPSocket(self):
+#         # returns a reference to the socket created by __rtpGeneratorThread
+#         return self.udpTxSocket
+#     def __rtpGeneratorThread(self):
+#
+#         # Constants. Used in calculation of transmitted data rate
+#         UDP_HEADER_LENGTH_BYTES = 8
+#         RTP_HEADER_LENGTH_BYTES = 12
+#
+#         # Generate payload (consisting of a random string)
+#         self.generatePayload(self.payloadLength)
+#         # Attempt to create UDP socket
+#         try:
+#             txSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
+#             # Message.addMessage(str(txSock.get))
+#             # If a UDP source port has been specified, use it
+#             if self.UDP_TX_SRC_PORT >1024:
+#                 # Bind to the socket, allows you to specify the source port
+#                 try:
+#                     txSock.bind(('0.0.0.0',int(self.UDP_TX_SRC_PORT)))
+#                     self.udpTxSocket = txSock
+#                 except Exception as e:
+#                     Message.addMessage("ERR: RtpGenerator.__rtpGeneratorThread. txSock.bind (User supplied source port). "+ str(e))
+#             else:
+#                 # Let the OS determine the source port
+#                 txSock.bind(('0.0.0.0', 0))
+#
+#                 # Store the socket and OS generated source port in the instance var
+#                 self.udpTxSocket = txSock
+#                 self.UDP_TX_SRC_PORT = txSock.getsockname()[1]
+#         except Exception as e:
+#             Message.addMessage("ERR:\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Exiting\x1B[0m" + self.UDP_TX_IP + ":" + \
+#                                str(self.UDP_TX_PORT) + ", " + str(e))
+#             time.sleep(2)
+#             exit()
+#
+#         msg = "INFO: TX stream thread started. Sending to " + self.UDP_TX_IP + ":" + str(self.UDP_TX_PORT) + \
+#               ", " + str(self.txRate) + "bps, Length:" + str(self.payloadLength) +" bytes, src Port: "+ str(self.UDP_TX_SRC_PORT)
+#         Message.addMessage(msg)
+#
+#         rtpParams = 0b01000000
+#         rtpPayloadType = 0b00000000
+#         rtpSequenceNo = 0
+#
+#         # Calculate tx period required to provide supplied txRate for a given stringLength
+#         # Note: This is an estimate because time.sleep() is inherently unreliable so we have
+#         # to recalculate once the generator is running by averaging over a 1 sec period
+#         # txPeriod = self.payloadLength * 8.0 / self.txRate
+#         self.txPeriod = self.calculateTxPeriod(self.txRate)
+#
+#         jitterPercentage = 50
+#         maxDeviation = self.txPeriod * jitterPercentage / 100
+#
+#         # start elapsed timer
+#         startTime = timer()
+#
+#         while True:
+#             # Start an execution timer (if we know the time required to construct the packet we can deduct this from the
+#             # txPeriod sleep time which should, in theory, reduce the jitter of the generator
+#             calculationStartTime = timer()
+#
+#             # Create a 32 bit timestamp (needs truncating to 32 bits before passing to struct.pack)
+#             # 0xFFFFFFFF is 32 '1's, so the '&' operation will throw away MSBs larger than this
+#             rtpTimestamp = int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
+#
+#             # Construct 12 byte header
+#             txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
+#                                       self.syncSourceIdentifier)
+#             MESSAGE = txRtpHeader + self.rtpPayload.encode('ascii')
+#
+#             # If all tx flags are set then transmit the rtp packet
+#             if self.enablePacketGeneration == True and self.packetsToSkip < 1:
+#                 try:
+#                     txSock.sendto(MESSAGE, (self.UDP_TX_IP, self.UDP_TX_PORT))
+#                     # Update tx bytes counter (taking packet headers into account)
+#                     self.txCounter_bytes += self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES
+#                     # Update tx bps data counter (*8 converts bytes to bits)
+#                     self.txBps_1s += (self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES) * 8
+#
+#                 except Exception as e:
+#                     Message.addMessage("\x1B[31m__rtpGenerator() txSock.sendto(). Exiting. \x1B[0m " + str(e))
+#                     time.sleep(1)  # Throttle rate of error messages from this thread
+#             else:
+#                 # Decrement self.packetsToSkip. Once this var reaches zero, packet generation will resume
+#                 self.packetsToSkip -= 1
+#
+#             ###########
+#             # Increment rtp sequence number for next iteration of the loop
+#             rtpSequenceNo += 1
+#             # Seq no is only a 16 bit value, so reset at max value (65535)
+#             if rtpSequenceNo > 65535:
+#                 rtpSequenceNo = 0
+#                 Message.addMessage("INFO: rtpGenerator. " + str(self.syncSourceIdentifier) + " Seq no wrapping to zero")
+#             # If flag set, generate random delay centred around self.txPeriod (0.01 = 10mS period)
+#             if self.jitterGenerationFlag == True:
+#                 jitter = random.uniform(-1 * maxDeviation, maxDeviation)
+#             else:
+#                 jitter = 0
+#
+#             # Calculate (inevitable) error in tx rate (bps)
+#             # If there is an error between the desired tx speed and the actual tx speed (due to timing inaccuracies of the time.sleep() command)
+#             # dynamically modify the self.txPeriod to actually generate the desired rate
+#             # 1 second timer
+#
+#             # Has 1 second elapsed?
+#             if (timer() - startTime) >= 1 and self.enablePacketGeneration == True:
+#                 # Reset elapsed timer (for 1 second timer)
+#                 startTime = timer()
+#
+#                 # Increment elapsed time counter by 1 second
+#                 self.elapsedTime += datetime.timedelta(seconds=1)
+#
+#                 # Test actual tx rate (averaged over a second) against 99% of desired tx rate
+#                 if self.txBps_1s < (0.99 * self.txRate):
+#                     # Data not being sent fast enough, so reduce txPeriod time
+#                     # Measure difference between desired bps tx rate and actual bps tx rate
+#                     txRateError = self.txRate - self.txBps_1s
+#                     # Convert the difference a fraction by which will modify txPeriod
+#                     errorFactor = (txRateError * 1.0 / self.txRate)
+#                     # Modify txPeriod to compensate for error
+#                     # Prevent overshoots of the desired rate, only reduce self.txPeriod by 'half' the error amount in one go
+#                     self.txPeriod -= self.txPeriod * (errorFactor / 2.0)
+#                     # Message.addMessage("DBUG: Compensating for timing error - Actual txData rate too low. Desired tx rate:" +
+#                     #                    str(self.txRate) + ", Actual tx rate:" + str(self.txBps_1s))
+#                 # Test for overshoots
+#                 if self.txBps_1s > (1.05 * self.txRate):
+#                     # Data being sent too fast, so need to reduce
+#                     # Measure difference between desired bps tx rate and actual bps tx rate
+#                     txRateError = self.txBps_1s - self.txRate
+#                     # Convert the difference a fraction by which will modify txPeriod
+#                     errorFactor = (txRateError * 1.0 / self.txRate)
+#                     # Reduce by 'half' the errorFactor (per adjustment) to prevent hunting
+#                     self.txPeriod += self.txPeriod * (errorFactor / 2.0)
+#                     # Message.addMessage("DBUG: Data rate too high. Reducing.)")
+#
+#                 # Take copy of current actual tx rate
+#                 self.txActualTxRate_bps = self.txBps_1s
+#                 # Message.addMessage("DBUG: txActualTxRate_bps: "+str(bToMb((self.txActualTxRate_bps))))
+#                 # Clear counter
+#                 self.txBps_1s = 0
+#
+#                 # Decrement timeToLive seconds counter but only if current value is +ve
+#                 # A -ve value is used to denote 'live for ever'
+#                 if self.timeToLive > 0:
+#                     self.timeToLive -= 1
+#
+#             # The calculation time will be deducted from the sleep time, which should make the generator
+#             # output less jittery (because the calculation time is taken into account)
+#             calculationPeriod = timer() - calculationStartTime
+#
+#             compensatedTxPeriod = self.txPeriod + jitter - calculationPeriod
+#             # Have to guard against a negative time value
+#             if compensatedTxPeriod > 0:
+#                 # Sleep between packet transmission
+#                 time.sleep(compensatedTxPeriod)
+#             else:
+#                 # print "__rtpGenerator() - non-positive compensatedTxPeriod value",compensatedTxPeriod,"\r"
+#                 pass
+#
+#             # Now housekeep the associated rtpTxStreamResults object for this stream
+#             # Check to see that rtpTxStreamResultsDict contains this stream objects
+#             if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
+#                 try:
+#                     # Get a handle on the rtpTxStreamResults object
+#                     rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+#                     if type(rtpTxStreamResults) == RtpStreamResults:
+#                         # Invoke the housekeeping method to purge any really old events
+#                         rtpTxStreamResults.houseKeepEventList()
+#                 except Exception as e:
+#                     Message.addMessage("ERR: __rtpGenerator rtpTxStreamResults.houseKeepEventList(): " + str(e))
+#
+#
+#             # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
+#             if self.timeToLive ==0:
+#                 break
+
+# # An object that will act as a UDP receiver. It will receive server reports from ResultsTransmitter
+# class ResultsReceiver(object):
+#     # It is designed as a counterpart to class ResultsTransmitter
+#     # It sets up a listener on the source port used by it's related RtpGenerator tx stream.
+#     # Because you can't bind to the same addr/port twice, it therefore needs a reference to the
+#     # UDP socket created within the RtpGenerator itself. This is obtained using the
+#     # RtpGenerator.getUDPSocket() method
+#     def __init__(self,rtpGeneratorObject):
+#         self.relatedRtpGenerator = rtpGeneratorObject
+#         self.udpSocket = 0
+#
+#         self.rtpTxStreamResultsDict = rtpGeneratorObject.rtpTxStreamResultsDict
+#         self.rtpTxStreamResultsDictMutex = rtpGeneratorObject.rtpTxStreamResultsDictMutex
+#
+#         # Used a signal flag to shut the __resultsReceiverThread down
+#         self.receiverActiveFlag = True
+#
+#         # Start the listener thread
+#         self.resultsReceiverThread = threading.Thread(target=self.__resultsReceiverThread, args=())
+#         self.resultsReceiverThread.daemon = True
+#         self.resultsReceiverThread.setName(str(self.relatedRtpGenerator.syncSourceIdentifier) + ":ResultsReceiver")
+#         self.resultsReceiverThread.start()
+#
+#
+#     def kill(self):
+#         # This method will kill the receiver thread by setting the self.receiverActiveFlag to false
+#         self.receiverActiveFlag = False
+#         Message.addMessage("INFO: ResultsReceiver.kill()")
+#
+#
+#
+#     def __resultsReceiverThread(self):
+#         Message.addMessage("INFO: ResultsReceiver thread starting")
+#
+#         rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
+#         lastReceivedFragment = 0  # Tracks the most recently received fragment
+#
+#         while self.receiverActiveFlag:
+#             # Wait for relatedRtpGenerator object to set up a socket binding
+#             self.udpSocket = self.relatedRtpGenerator.getUDPSocket()
+#             if self.udpSocket != 0:
+#                 try:
+#                     # Wait for data (blocking function call)
+#                     data, addr = self.udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
+#                     # Message.addMessage("DBUG: ResultsReceiver.__receiverThread()" + ", " + str(data))
+#                     # attempt to unpickle the received data to yield a stats dictionary
+#
+#                     # Create empty dictionary to hold incoming stats updates
+#                     stats = {}
+#                     # Create empty list to store incoming events list updates
+#                     latestEventsList =[]
+#
+#                     # First round of unpickling - extract the fragment (a tuple)
+#                     try:
+#                         fragment = pickle.loads(data)
+#                         # detect first fragment
+#                         if fragment[0] == 0:
+#                             # Clear away any existing contents of rxMessage
+#                             rxMssage = b""
+#                             # Append the message portion of this fragment to rxMessage
+#                             # rxMssage += fragment[3]
+#                             rxMssage =b"".join([rxMssage,fragment[3]])
+#
+#                             # Record the index no of the last received fragment
+#                             lastReceivedFragment = fragment[0]
+#
+#                         # Detect next expected fragment
+#                         if fragment[0] == (lastReceivedFragment +1):
+#                             # Append the message portion of this fragment to rxMessage
+#                             # rxMssage += fragment[3]
+#                             rxMssage =b"".join([rxMssage,fragment[3]])
+#                             # Record the index no of the last received fragment
+#                             lastReceivedFragment = fragment[0]
+#
+#                         # Detect final fragment of message
+#                         if fragment[0] == (fragment[1] - 1):
+#                             # Append the final message portion of this fragment to rxMessage
+#                             # rxMssage += fragment[3]
+#                             rxMssage =b"".join([rxMssage,fragment[3]])
+#                             # Whole message has hopefully been reassembled
+#                             # Now unpickle (for a second time) to reconstruct the originally pickled and tx'd Python object
+#
+#                             # We're expecting a dictionary containing a stats dictionary{} and an eventsList{} containing the
+#                             # last 5 events
+#                             try:
+#                                 # Attempt to reconsctruct the original message sent by ResultsTransmitter
+#                                 # unPickledMessage = pickle.loads(rxMssage, fix_imports=True)
+#                                 unPickledMessage = pickle.loads(rxMssage)
+#                                 # Message.addMessage("DBG:" + str(unPickledMessage))
+#
+#                                 # Attempt to extract the stats dictionary and eventsList list
+#                                 try:
+#                                     stats = unPickledMessage["stats"]
+#                                     latestEventsList = unPickledMessage["eventList"]
+#                                 except Exception as e:
+#                                     Message.addMessage(
+#                                         "ERR: __resultsReceiverThread (error unpacking stats and eventList): " + str(e))
+#
+#                             except Exception as e:
+#                                 Message.addMessage("ERR: __resultsReceiverThread(pickle.loads(all fragments)): "+str(e))
+#
+#                         # Detect too many fragments
+#                         if fragment[0] > (fragment[1] - 1):
+#                             # More fragments than expected
+#                             Message.addMessage("ERR: __resultsReceiverThread. More fragments received than expected")
+#
+#                     except Exception as e:
+#                             Message.addMessage("ERR: __resultsReceiverThread(single fragment): Is Receiving running Python2 If so, switch to Python 2 at this end - Incompatible pickles?" + str(e))
+#
+#                     # Check if we have some new stats data
+#                     if len(stats) > 0:
+#                         try:
+#                             # Firstly check to see a stream object with this id exists in self.rtpTxStreamResultsDict
+#                             if stats["stream_syncSource"] in self.rtpTxStreamResultsDict:
+#                                 # If it does, add the new data
+#                                 self.rtpTxStreamResultsDict[stats["stream_syncSource"]].updateStats(stats)
+#
+#                             else:
+#                                 # Otherwise that stream object doesn't exist yet, so create it
+#                                 Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
+#                                                    + str(stats["stream_syncSource"]))
+#                                 # Create new RtpStreamResults object
+#                                 rtpStreamResults = RtpStreamResults()
+#                                 # Immediately update the stats
+#                                 rtpStreamResults.updateStats(stats)
+#                                 # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
+#                                 addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults,
+#                                                    self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+#                         except Exception as e:
+#                             Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict or can't add new stream to rtpTxStreamResultsDict. " + str(e))
+#
+#                     # Check to see if the new eventList contains any data and also that there exists a stream object to add the data to
+#                     if len(latestEventsList) > 0 and len(stats) > 0:
+#                         try:
+#                             # Message.addMessage("DBUG: **latestEventsList: " + str(latestEventsList[-1].eventNo))
+#                             # Get handle on an (existing) rtpStreamResults object
+#                             rtpStreamResults = self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
+#                             # Work out whether the eventList contains any new events that we haven't already seen
+#                             firstEventNoInNewList = latestEventsList[0].eventNo
+#                             lastEventNoInNewList = latestEventsList[-1].eventNo
+#
+#                             # # Get latest known event no from the rtpStreamResults stream object
+#                             existingEventsList = []
+#                             try:
+#                                 existingEventsList = rtpStreamResults.getRTPStreamEventList(1) # Request last event in the list
+#
+#                                 if len(existingEventsList) > 0:
+#                                     # rtpStreamResults.updateEventsList(latestEventsList)
+#                                     # # Extract the event no from the last known event
+#                                     lastKnownEventNo = existingEventsList[-1].eventNo
+#                                     # Message.addMessage("DBUG: firstEventNoInNewList: " + str(firstEventNoInNewList) + \
+#                                     #                    ", lastEventNoInNewList: " + str(lastEventNoInNewList) + \
+#                                     #                    ", lastKnownEventNo: " + str(lastKnownEventNo))
+#
+#                                     # Check if the latest item in the new list is more recent than the last item of the known list
+#                                     if lastEventNoInNewList > lastKnownEventNo:
+#                                         # Calculate how many new events have arrived
+#                                         eventsToAdd = lastEventNoInNewList - lastKnownEventNo
+#
+#                                         # append the last n new events to the existing eventList
+#                                         # check to see if the no of new events since last update exceeds
+#                                         # length of latestEventsList[]
+#                                         if eventsToAdd > len(latestEventsList):
+#                                             eventsToAdd = len (latestEventsList)
+#                                         # Slice latestEventsList to get a sublist of just the new events
+#                                         newEvents = latestEventsList[(eventsToAdd * -1):]
+#                                         # and append to existing events list
+#                                         rtpStreamResults.updateEventsList(newEvents)
+#                                 else:
+#                                     # existingEventsList is empty so append the entirety of latestEventsList
+#                                     rtpStreamResults.updateEventsList(latestEventsList)
+#                                 # Message.addMessage("DBUG:**" + str(rtpStreamResults.getRTPStreamEventList(1)))
+#                             except Exception as e:
+#                                 Message.addMessage(
+#                                     "ERR:_resultsReceiverThread(). rtpStreamResults.getRTPStreamEventList(1) " + str(e))
+#                         except Exception as e:
+#                             Message.addMessage("ERR:_resultsReceiverThread(): rtpStreamResults.updateEventsList() " + str(e))
+#
+#                     # if len(stats) > 0:
+#                     #     try:
+#                     #         stream= self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
+#                     #         x=stream.getRTPStreamEventList(1)
+#                     #         if len(x) > 0:
+#                     #             Message.addMessage("DBUG: Last known event: " + str(x[-1].type))
+#                     #     except Exception as e:
+#                     #         Message.addMessage("DBUG: wtf " + str(e))
+#
+#                 # Catch all other exceptions
+#                 except Exception as e:
+#                     Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
+#             else:
+#                 # Wait 1 second before checking to see if self.udpSocket is now valid
+#                 time.sleep(1)
+#         Message.addMessage("INFO: ResultsReceiver:__resultsReceiverThread ended")
 
 # # This function will break a string into a list of tuples containing smaller strings (portions).
 # def fragmentString(inputString, maxLength):
