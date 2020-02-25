@@ -1489,6 +1489,8 @@ class RtpGenerator(object):
             friendlyName = friendlyName[:self.maxNameLength]
         # assign to instance variable
         self.friendlyName = friendlyName
+        # Now regenerate payload
+        self.generatePayload()
 
     def generatePayload(self):
         # Generate random string of length 'length' to create a payload (prefaced with a specific header)
