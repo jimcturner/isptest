@@ -3,7 +3,7 @@
 # James Turner 20/2/20
 import socket
 import os
-# import binascii
+import binascii
 import sys
 import struct
 import time
@@ -961,9 +961,10 @@ class RtpReceiveStream(object):
                 self.__stats["packet_data_received_1S_bytes"] = bytesPerSecIncHeaders
 
                 # Calculate self.__stats["packet_payload_size_mean_1S_bytes"]
+                # Need to deduct 20 (8 bytes for the UDP header and 12 bytes for the RTP header)
                 if self.__stats["packet_counter_1S"] > 0:
                     self.__stats["packet_payload_size_mean_1S_bytes"] = \
-                        int(self.__stats["packet_data_received_1S_bytes"] / self.__stats["packet_counter_1S"])
+                        int(self.__stats["packet_data_received_1S_bytes"] / self.__stats["packet_counter_1S"]) - 20
                 # Clear running totals
                 runningTotalPacketsPerSecond = 0
                 runningTotalDataReceivedPerSecond = 0
@@ -1490,11 +1491,33 @@ class RtpGenerator(object):
         self.friendlyName = friendlyName
 
     def generatePayload(self):
-        # Generate random string of length 'length' to create a payload
+        # Generate random string of length 'length' to create a payload (prefaced with a specific header)
+        # Generate the 'isptest' header
+        # Header consists of value [uniqueValue(David's birthday)(short)][lengthOfFriendlyName(byte)][friendlyname]
+        header = b""    # Specify byte string
+        headerLength = 0
+        try:
+            # Note: a short is 16 bits - max value 65535
+            # Mask header values with 0xFFFF (2 bytes) and 0xFF (1 byte) to guard against overflows
+            header = struct.pack("!HB",(10518 & 0xFFFF), (len(self.friendlyName) & 0xFF))
+            # d = binascii.b2a_hex(header)
+            # headerLength = len(header)
+            # Message.addMessage("header1: " + str(d) + ", "  + ", " + str(headerLength))
+            # Append friendly name to header digits
+            header += str(self.friendlyName).encode('ascii')
+            headerLength = len(header)
+            # Message.addMessage("header2: " + str(d) + ", " + str(self.friendlyName) + ", " + str(headerLength))
+        except Exception as e:
+            Message.addMessage("ERR: RtpGenerator.generatePayload(). Header err: " + str(e))
+
         # Create string containing all uppercase and lowercase letters
         letters = string.ascii_letters
-        # iterate over stringLength picking random letters from
-        self.rtpPayload = ''.join(random.choice(letters) for i in range(self.payloadLength))
+        # Calculate length of required randome string after our header taken into account,
+        randomDataLength = self.payloadLength - headerLength
+        # iterate over stringLength picking random letters from 'letters'
+        randomDataString = ''.join(random.choice(letters) for i in range(randomDataLength))
+
+        self.rtpPayload = header + randomDataString
 
     def setSyncSourceIdentifier(self,value):
         # Sets the self self.syncSourceIdentifier value
