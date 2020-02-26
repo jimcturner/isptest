@@ -1557,7 +1557,14 @@ class RtpGenerator(object):
             header += str(self.friendlyName).encode('ascii')
             # Calculate total header length
             headerLength = len(header)
-            self.ISPTEST_HEADER_SIZE = len(header)
+            # Check to see that we haven't tried to create a header thats longer than that specified
+            # by the class var ISPTEST_HEADER_SIZE
+            if headerLength != RtpGenerator.ISPTEST_HEADER_SIZE:
+                Message.addMessage("INFO: RtpGenerator.generatePayload() Mismatch between headerLength and RtpGenerator.ISPTEST_HEADER_SIZE. Setting header to be blank ")
+                # The length of the header we've created doesn't match that specifed by RtpGenerator.ISPTEST_HEADER_SIZE therefore
+                # main() and RtpReceiveStream objects will be expecting the wrong length header and won't be able to
+                # decode it
+                header = b""
 
         except Exception as e:
             Message.addMessage("ERR: RtpGenerator.generatePayload(). Header err: " + str(e))
