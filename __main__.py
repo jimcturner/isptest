@@ -2405,9 +2405,8 @@ def main(argv):
                             # RTP header is 12 bytes long. Unpack it as an array.
                             # !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
                             RTP_HEADER_SIZE = 12
-                            # This is the size of my own header prefix values (3 bytes: a short followed by a byte)
-
-                            ISPTEST_HEADER_SIZE = 3
+                            # This is the size of my own header prefix values (18 bytes)
+                            ISPTEST_HEADER_SIZE = 18
                             rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
 
                             # Calculate the data payload size
@@ -2422,33 +2421,40 @@ def main(argv):
                             rtpSyncSourceIdentifier = rtpHeader[4]
 
                             # Attempt to extract and make sense of the payload (has it been sent by isptest)
-
-                            if payloadSize > 0:
-                                try:
-                                    # Substring the isptest header part of the payload
-                                    # isptestHeader = struct.unpack("!HB",data[RTP_HEADER_SIZE:(RTP_HEADER_SIZE + ISPTEST_HEADER_SIZE+1)])
-                                    isptestHeader = struct.unpack_from("!HB",data,RTP_HEADER_SIZE)
-                                    isptestHeaderIDField = isptestHeader[0]
-                                    isptestHeaderFriendlyNameLength = isptestHeader[1]
-                                    # Message.addMessage("Decode header: " + str(isptestHeaderIDField) + ", " + str(isptestHeaderFriendlyNameLength))
-                                    # Substring the friendly name
-
-                                    if int(isptestHeaderIDField) == 10518:
-                                        try:
-                                            friendlyName = data[(RTP_HEADER_SIZE+ISPTEST_HEADER_SIZE):\
-                                                                (RTP_HEADER_SIZE+ISPTEST_HEADER_SIZE+\
-                                                                 isptestHeaderFriendlyNameLength)]
-                                            Message.addMessage("friendly name: " + str(friendlyName))
-
-                                        except Exception as e:
-                                            Message.addMessage("ERR: main() Can't decode friendly name " + str(e))
-                                except Exception as e:
-                                    Message.addMessage("Decode header ERR: " + str(e))
+                            isptestHeaderData = b""
+                            if payloadSize > (ISPTEST_HEADER_SIZE - 1):
+                                # Substring the isptest header part of the payload
+                                isptestHeaderData = data[RTP_HEADER_SIZE:(RTP_HEADER_SIZE + ISPTEST_HEADER_SIZE)]
+                                # try:
+                                #
+                                #
+                                #     # isptestHeaderLength = len(isptestHeader)
+                                #     # # unpack the numerical data values from the header
+                                #     # isptestHeader =
+                                #
+                                #     # isptestHeader = struct.unpack("!HB",data[RTP_HEADER_SIZE:(RTP_HEADER_SIZE + ISPTEST_HEADER_SIZE+1)])
+                                #     # isptestHeader = struct.unpack_from("!HB",data,RTP_HEADER_SIZE)
+                                #     # isptestHeaderIDField = isptestHeader[0]
+                                #     # isptestHeaderFriendlyNameLength = isptestHeader[1]
+                                #     # Message.addMessage("Decode header: " + str(isptestHeader) + ", " + str(isptestHeaderLength))
+                                #     # Substring the friendly name
+                                #
+                                #     # if int(isptestHeaderIDField) == 10518:
+                                #     #     try:
+                                #     #         friendlyName = data[(RTP_HEADER_SIZE+ISPTEST_HEADER_SIZE):\
+                                #     #                             (RTP_HEADER_SIZE+ISPTEST_HEADER_SIZE+\
+                                #     #                              isptestHeaderFriendlyNameLength)]
+                                #     #         Message.addMessage("friendly name: " + str(friendlyName))
+                                #     #
+                                #     #     except Exception as e:
+                                #     #         Message.addMessage("ERR: main() Can't decode friendly name " + str(e))
+                                # except Exception as e:
+                                #     Message.addMessage("Decode header ERR: " + str(e))
                             # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
                             try:
                                 # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
                                 rtpRxStreamsDict[rtpSyncSourceIdentifier].addData(rtpSequenceNo, payloadSize, timeNow,
-                                                                                  rtpSyncSourceIdentifier)
+                                                                                  rtpSyncSourceIdentifier, isptestHeaderData)
 
                             except:
 

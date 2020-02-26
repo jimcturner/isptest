@@ -363,11 +363,12 @@ class MovingTotalEventCounter(object):
 # Define an object to hold data about an individual received rtp packet
 class RtpData(object):
     # Constructor method
-    def __init__(self, rtpSequenceNo, payloadSize, timestamp, syncSource):
+    def __init__(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData):
         self.rtpSequenceNo = rtpSequenceNo
         self.payloadSize = payloadSize
         self.timestamp = timestamp
         self.syncSource = syncSource
+        self.isptestHeaderData = isptestHeaderData
         # timeDelta will store the timestamp diff between this and the previous packet
         self.timeDelta = 0
         # jitter will store the diff between the timeDelta of this and the prev packet
@@ -807,7 +808,7 @@ class RtpReceiveStream(object):
                            str(self.__stats["stream_syncSource"]))
 
         # Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
-        lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(), self.__stats["stream_syncSource"])
+        lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(), self.__stats["stream_syncSource"], "")
 
         # Start the loop timer (used to provide a 1sec interval)
         loopTimerStart = timer()
@@ -827,7 +828,7 @@ class RtpReceiveStream(object):
         # Constants. Used in calculation of received data rate
         UDP_HEADER_LENGTH_BYTES = 8
         RTP_HEADER_LENGTH_BYTES = 12
-
+        ISPTEST_HEADER_SIZE = 18
 
         # Endless loop whilst permitted by the flag
         while self.calculateThreadActiveFlag == True:
@@ -1036,6 +1037,20 @@ class RtpReceiveStream(object):
                         removeRtpStreamFromDict(self.__stats["stream_syncSource"], self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
                 except Exception as e:
                     Message.addMessage("ERR: RtpStream.__calc..Thread. auto self.killStream: " + str(e))
+
+                if len(self.rtpStream) > 0 :
+                    # Extract ispheader data from first packet in this batch
+                    try:
+                        # substring the part of the data holding the numerical values
+                        isptestHeaderDataMessage = self.rtpStream[0].isptestHeaderData[:8]
+                        # substring the part of the data holding the friendly name of the stream
+                        isptestHeaderDataFriendlyName = self.rtpStream[0].isptestHeaderData[8:]
+                        # unpack the values from the struct
+                        isptestHeaderData = struct.unpack("!HBBBBBB",isptestHeaderDataMessage)
+                        Message.addMessage("Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
+                    except Exception as e:
+                        Message.addMessage("ERR: Decoded header: " + str(e))
+
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
             # Take the calculation time in microseconds and combine with the period between
@@ -1160,9 +1175,9 @@ class RtpReceiveStream(object):
             #                    " events removed"+str(oldSize)+">>"+str(newSize))
 
     # Define setter methods
-    def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource):
+    def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData):
         # Create a new rtp data object to hold the rtp packet data
-        newData = RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource)
+        newData = RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData)
 
         # NOW ADD DATA TO A LIST
 
@@ -1495,20 +1510,34 @@ class RtpGenerator(object):
     def generatePayload(self):
         # Generate random string of length 'length' to create a payload (prefaced with a specific header)
         # Generate the 'isptest' header
-        # Header consists of value [uniqueValue(David's birthday)(short)][lengthOfFriendlyName(byte)][friendlyname]
+        # Header consists of 18 bytes of data:
+        # [uniqueValue(David's birthday)(short, 2 bytes)
+        # [byte1] Message type (0: Traceroute)
+        # [byte2] Hop no
+        # [byte3][byte4][byte5][byte6] Hop id address octets
+        # [friendlyName] 10 bytes
+
         header = b""    # Specify byte string
         headerLength = 0
         try:
             # Note: a short is 16 bits - max value 65535
-            # Mask header values with 0xFFFF (2 bytes) and 0xFF (1 byte) to guard against overflows
-            header = struct.pack("!HB",(10518 & 0xFFFF), (len(self.friendlyName) & 0xFF))
-            # d = binascii.b2a_hex(header)
-            # headerLength = len(header)
-            # Message.addMessage("header1: " + str(d) + ", "  + ", " + str(headerLength))
+            uniqueValue = 10518 & 0xFFFF
+            # Create a sample traceroute message
+            messageData = [0 & 0xFF, # Message type 0: traceroute
+                           0 & 0xFF, # Traceroute Hop no
+                           10 & 0xFF, # IP address octet 1
+                           20 & 0xFF, # IP address octet 2
+                           30 & 0xFF, # IP address octet 3
+                           40  & 0xFF] # IP address octet 4
+
+            header = struct.pack("!HBBBBBB", uniqueValue, messageData[0], messageData[1], messageData[2],\
+                                 messageData[3], messageData[4], messageData[5],)
+
             # Append friendly name to header digits
             header += str(self.friendlyName).encode('ascii')
+            # Calculate total header length
             headerLength = len(header)
-            # Message.addMessage("header2: " + str(d) + ", " + str(self.friendlyName) + ", " + str(headerLength))
+
         except Exception as e:
             Message.addMessage("ERR: RtpGenerator.generatePayload(). Header err: " + str(e))
 
