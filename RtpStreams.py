@@ -1469,6 +1469,7 @@ class RtpGenerator(object):
         self.txBps_1s = 0               # Used to 'sample' the actual tx rate
         self.syncSourceIdentifier = int(syncSourceID)
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
+        self.payloadMutex = threading.Lock()
         self.elapsedTime = datetime.timedelta()
 
         # self.friendlyName = " "*self.maxNameLength
@@ -1486,8 +1487,6 @@ class RtpGenerator(object):
         self.udpTxSocket = 0 # This is pointer to the socket created by __rtpGeneratorThread
         self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
-
-
 
         # Test to see if a UDP source port was specified
         if len(srcPort) > 0:
@@ -1590,8 +1589,10 @@ class RtpGenerator(object):
         randomDataLength = self.payloadLength - headerLength
         # iterate over stringLength picking random letters from 'letters'
         randomDataString = ''.join(random.choice(letters) for i in range(randomDataLength))
-
+        # Now assign the complete payload (including header and random data) to the instance variable
+        self.payloadMutex.acquire()
         self.rtpPayload = header + randomDataString
+        self.payloadMutex.release()
 
     def setSyncSourceIdentifier(self,value):
         # Sets the self self.syncSourceIdentifier value
@@ -1741,7 +1742,10 @@ class RtpGenerator(object):
             # Construct 12 byte header
             txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
                                       self.syncSourceIdentifier)
+            # Now create the actual message to be send across the wire
+            self.payloadMutex.acquire()
             MESSAGE = txRtpHeader + self.rtpPayload.encode('ascii')
+            self.payloadMutex.release()
 
             # If all tx flags are set then transmit the rtp packet
             if self.enablePacketGeneration == True and self.packetsToSkip < 1:
