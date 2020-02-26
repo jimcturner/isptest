@@ -1047,12 +1047,18 @@ class RtpReceiveStream(object):
                     numericalHeaderDataLength = self.ISPTEST_HEADER_SIZE - self.maxNameLength
                     try:
                         # substring the part of the data holding the numerical values
-                        isptestHeaderDataMessage = self.rtpStream[0].isptestHeaderData[:numericalHeaderDataLength]
+                        isptestHeaderDataStruct = self.rtpStream[0].isptestHeaderData[:numericalHeaderDataLength]
                         # substring the part of the data holding the friendly name of the stream
                         isptestHeaderDataFriendlyName = self.rtpStream[0].isptestHeaderData[numericalHeaderDataLength:]
                         # unpack the values from the struct
-                        isptestHeaderData = struct.unpack("!HBBBBBB",isptestHeaderDataMessage)
-                        Message.addMessage("Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
+                        isptestHeaderData = struct.unpack("!HBBBBBB", isptestHeaderDataStruct)
+                        # Message.addMessage("INFO: Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
+                        # Check to see if we've managed to unpack the data
+                        if len(isptestHeaderData) > 0:
+                            # Check to see that if this a stream sent by an instance of isptest
+                            if isptestHeaderData[0] == RtpGenerator.getUniqueIDforISPTESTstreams():
+                                # If so, make use the friendly name field to name this receive stream
+                                self.__stats["stream_friendly_name"] = isptestHeaderDataFriendlyName
                     except Exception as e:
                         Message.addMessage("ERR: Decoded header: " + str(e))
 
@@ -1430,6 +1436,11 @@ class RtpGenerator(object):
     # This can be queried by the class method getMaxFriendlyNameLength()
     MAX_FRIENDLY_NAME_LENGTH = 10
 
+    # Specify a unique identifiying value (eg David's birthday) that will allow the reciever to
+    # identify that this stream is being set by an isptest transmitter (this is a 16 bit unsigned
+    # val, so 65535 is the max)
+    UNIQUE_ID_FOR_ISPTEST_STREAMS = 10518
+
     @classmethod
     def getMaxFriendlyNameLength(cls):
         return cls.MAX_FRIENDLY_NAME_LENGTH
@@ -1437,6 +1448,10 @@ class RtpGenerator(object):
     @classmethod
     def getIsptestHeaderSize(cls):
         return cls.ISPTEST_HEADER_SIZE
+
+    @classmethod
+    def getUniqueIDforISPTESTstreams(cls):
+        return cls.UNIQUE_ID_FOR_ISPTEST_STREAMS
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
                  rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, friendlyName, *srcPort):
@@ -1541,7 +1556,7 @@ class RtpGenerator(object):
         headerLength = 0
         try:
             # Note: a short is 16 bits - max value 65535
-            uniqueValue = 10518 & 0xFFFF
+            uniqueValue = RtpGenerator.UNIQUE_ID_FOR_ISPTEST_STREAMS & 0xFFFF
             # Create a sample traceroute message
             messageData = [0 & 0xFF, # Message type 0: traceroute
                            0 & 0xFF, # Traceroute Hop no
