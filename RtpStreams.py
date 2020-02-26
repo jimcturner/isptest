@@ -406,11 +406,15 @@ class RtpReceiveStream(object):
         self.__udpSocketMutex = threading.Lock()
 
         # Add a name field (which can be set with a friendly name (via a setter method) to identify the stream)
-        self.maxNameLength = 10
-        # self.__stats["stream_friendly_name"] = " " * self.maxNameLength
-        # On init, set friendly name to be the same as the sync source ID
+        # This value is pulled from the RtpGenerator object
+        self.maxNameLength = RtpGenerator.getMaxFriendlyNameLength()
+
+        # On init, set friendly name to be the same as the sync source ID (padded out with spaces)
         self.__stats["stream_friendly_name"] = \
             str(str(self.__stats["stream_syncSource"])[0:self.maxNameLength]).ljust(self.maxNameLength, " ")
+
+        # Query (and store) the length of the headers sent by RtpGenerator so we know how to decode them
+        self.ISPTEST_HEADER_SIZE = RtpGenerator.getIsptestHeaderSize()
 
         # Create empty list to hold rtp stream data as it is received by the socket
         self.rtpStreamData = []
@@ -828,7 +832,6 @@ class RtpReceiveStream(object):
         # Constants. Used in calculation of received data rate
         UDP_HEADER_LENGTH_BYTES = 8
         RTP_HEADER_LENGTH_BYTES = 12
-        ISPTEST_HEADER_SIZE = 18
 
         # Endless loop whilst permitted by the flag
         while self.calculateThreadActiveFlag == True:
@@ -1040,11 +1043,13 @@ class RtpReceiveStream(object):
 
                 if len(self.rtpStream) > 0 :
                     # Extract ispheader data from first packet in this batch
+                    # Calculate the split between the numerical data and the friendly name
+                    numericalHeaderDataLength = self.ISPTEST_HEADER_SIZE - self.maxNameLength
                     try:
                         # substring the part of the data holding the numerical values
-                        isptestHeaderDataMessage = self.rtpStream[0].isptestHeaderData[:8]
+                        isptestHeaderDataMessage = self.rtpStream[0].isptestHeaderData[:numericalHeaderDataLength]
                         # substring the part of the data holding the friendly name of the stream
-                        isptestHeaderDataFriendlyName = self.rtpStream[0].isptestHeaderData[8:]
+                        isptestHeaderDataFriendlyName = self.rtpStream[0].isptestHeaderData[numericalHeaderDataLength:]
                         # unpack the values from the struct
                         isptestHeaderData = struct.unpack("!HBBBBBB",isptestHeaderDataMessage)
                         Message.addMessage("Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
@@ -1417,6 +1422,21 @@ class RtpStreamResults(object):
 
 # Define an RTP Generator that can run autonomously as a thread
 class RtpGenerator(object):
+    # The size of the messages sent in the RtpGenerator payload
+    # This can be queried by the class method getIsptestHeaderSize()
+    ISPTEST_HEADER_SIZE = 18
+
+    # The maximum allowed stream friendly name length
+    # This can be queried by the class method getMaxFriendlyNameLength()
+    MAX_FRIENDLY_NAME_LENGTH = 10
+
+    @classmethod
+    def getMaxFriendlyNameLength(cls):
+        return cls.MAX_FRIENDLY_NAME_LENGTH
+
+    @classmethod
+    def getIsptestHeaderSize(cls):
+        return cls.ISPTEST_HEADER_SIZE
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
                  rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, friendlyName, *srcPort):
@@ -1435,7 +1455,7 @@ class RtpGenerator(object):
         self.syncSourceIdentifier = int(syncSourceID)
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
         self.elapsedTime = datetime.timedelta()
-        self.maxNameLength = 10
+
         # self.friendlyName = " "*self.maxNameLength
         # On init, if no name supplied, set friendly name to be the same as the ID
         if friendlyName == "":
@@ -1496,12 +1516,12 @@ class RtpGenerator(object):
         # convert friendlyName into a string
         friendlyName=str(friendlyName)
         # Truncate supplied name to x characters (truncated to preserve the screen layout) or else pad to 12 chars
-        if len(friendlyName) < self.maxNameLength:
+        if len(friendlyName) < RtpGenerator.MAX_FRIENDLY_NAME_LENGTH:
             # Too short, so Pad out name to x chars
-            friendlyName += (self.maxNameLength - len(friendlyName)) * " "
+            friendlyName += (RtpGenerator.MAX_FRIENDLY_NAME_LENGTH - len(friendlyName)) * " "
         else:
             # Too big, so truncate
-            friendlyName = friendlyName[:self.maxNameLength]
+            friendlyName = friendlyName[:RtpGenerator.MAX_FRIENDLY_NAME_LENGTH]
         # assign to instance variable
         self.friendlyName = friendlyName
         # Now regenerate payload
@@ -1537,6 +1557,7 @@ class RtpGenerator(object):
             header += str(self.friendlyName).encode('ascii')
             # Calculate total header length
             headerLength = len(header)
+            self.ISPTEST_HEADER_SIZE = len(header)
 
         except Exception as e:
             Message.addMessage("ERR: RtpGenerator.generatePayload(). Header err: " + str(e))
