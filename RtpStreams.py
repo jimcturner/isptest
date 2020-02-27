@@ -1300,7 +1300,10 @@ class ResultsTransmitter(object):
 # It does't perform any calculations itself (unlike RtpReceiveStream) but it does have similar getter methods for results,
 # which should allow displayThread to treat this like an RtpStream object without any additional code alteration
 class RtpStreamResults(object):
-    def __init__(self):
+    def __init__(self, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex):
+
+        self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
+        self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
         # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
         self.__stats = {}
 
@@ -1345,6 +1348,9 @@ class RtpStreamResults(object):
         for event in eventsList:
             Message.addMessage(event.getSummary()["summary"])
 
+    # This method will remove this stream object from the rtpTxStreamResultsDict dictionary
+    def killStream(self):
+        pass
 
     # def setFriendlyName(self, friendlyName):
     #     # Thread-safe method to set the friendly name field
@@ -1455,6 +1461,7 @@ class RtpGenerator(object):
         return cls.UNIQUE_ID_FOR_ISPTEST_STREAMS
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
+                 rtpTxStreamsDict, rtpTxStreamsDictMutex,\
                  rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, friendlyName, *srcPort):
         # The last argument (*srcPort) is optional. it allows you to specify a source port on creation
 
@@ -1487,6 +1494,9 @@ class RtpGenerator(object):
         self.packetsToSkip = 0 # Set by simulatePacketLoss()
         self.jitterGenerationFlag = False
         self.udpTxSocket = 0 # This is pointer to the socket created by __rtpGeneratorThread
+
+        self.rtpTxStreamsDict = rtpTxStreamsDict
+        self.rtpTxStreamsDictMutex = rtpTxStreamsDictMutex
         self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
 
@@ -1508,6 +1518,9 @@ class RtpGenerator(object):
 
         # create a stream results receiver object for this tx stream
         self.rtpStreamResultsReceiver = ResultsReceiver(self)
+
+        # Add the object to the specified dictionary with using rtpStreamID as the key
+        self.rtpTxStreamsDict[self.syncSourceIdentifier] = self
 
     def getRtpStreamStats(self):
         # Returns a dictionary of useful stats
@@ -1989,7 +2002,7 @@ class ResultsReceiver(object):
                                 Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
                                                    + str(stats["stream_syncSource"]))
                                 # Create new RtpStreamResults object
-                                rtpStreamResults = RtpStreamResults()
+                                rtpStreamResults = RtpStreamResults(self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
                                 # Immediately update the stats
                                 rtpStreamResults.updateStats(stats)
                                 # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}

@@ -881,9 +881,10 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     txRate = 1048576
 
                     rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, \
+                                                rtpTxStreamsDict, rtpTxStreamsDictMutex,\
                                                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, "", sourcePort)
-                    # Add the new stream to the rtpStreams dictionary
-                    addRtpStreamToDict(syncSourceID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
+                    # # Add the new stream to the rtpStreams dictionary
+                    # addRtpStreamToDict(syncSourceID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
                     Message.addMessage("[a] Added new " +  str(bToMb(txRate)) +"bps stream with id " + str(syncSourceID))
                     # Force redraw
                     redrawScreen = True
@@ -946,11 +947,12 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     rtpGenerator = RtpGenerator(txParameters["destIP"], txParameters["destPort"], txRate,
                                                 txParameters["payloadLength"], txParameters["syncSourceID"],
                                                 txParameters["timeToLive"], \
+                                                rtpTxStreamsDict, rtpTxStreamsDictMutex,\
                                                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
                                                 txParameters["friendlyName"], txParameters["srcPort"])
 
                     # Add the new stream to the rtpStreams dictionary
-                    addRtpStreamToDict(txParameters["syncSourceID"], rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
+                    # addRtpStreamToDict(txParameters["syncSourceID"], rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
 
                     # Force redraw
                     redrawScreen = True
@@ -2328,16 +2330,19 @@ def main(argv):
         # If UDP source port specified
         if UDP_TX_SRC_PORT >0:
             rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
-                                        payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec, \
+                                        payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
+                                        rtpTxStreamsDict, rtpTxStreamsDictMutex,
                                         rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
                                         RTP_TX_STREAM_FRIENDLY_NAME, UDP_TX_SRC_PORT)
         else:
             # Otherwise create a new RtpGenerator without specifiying thr source port (the OS will decide)
-            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,\
-                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, RTP_TX_STREAM_FRIENDLY_NAME)
+            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
+                                        rtpTxStreamsDict, rtpTxStreamsDictMutex,
+                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
+                                        RTP_TX_STREAM_FRIENDLY_NAME)
 
         # Add the tx stream to the rtpStreams dictionary
-        addRtpStreamToDict(SYNC_SOURCE_ID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
+        # addRtpStreamToDict(SYNC_SOURCE_ID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
 
         # Create a diskLogging Thread - pass rtpStream object to it
         diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,))
