@@ -1216,7 +1216,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                         # del rtpRxStreamsDict[idOfStreamToBeDeleted]
                         streamToBeDeleted.killStream()
                         # Remove the object from the dictionary
-                        removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpRxStreamsDict, rtpRxStreamsDictMutex)
+                        # removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
                     elif type(streamToBeDeleted) == RtpStreamResults:
                         Message.addMessage("Can't delete Results line for stream. " + str(idOfStreamToBeDeleted) +\

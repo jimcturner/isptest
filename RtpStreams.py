@@ -538,13 +538,14 @@ class RtpReceiveStream(object):
         # Also kill the __calculateThread associated with this receive stream
         self.calculateThreadActiveFlag = False
 
-        # # Finally forcibly remove this RtpReceiveStream (itself) from rtpRxStreamsDict
-        # self.rtpRxStreamsDictMutex.acquire()
-        # try:
-        #     del self.rtpRxStreamsDict[self.__stats["stream_syncSource"]]
-        # except Exception as e:
-        #     Message.addMessage("ERR: RtpReceiveStream.killStream() (remove from rtpRxStreamsDict{})" + str(self.__stats["stream_syncSource"]))
-        # self.rtpRxStreamsDictMutex.release()
+        # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
+        self.rtpRxStreamsDictMutex.acquire()
+        try:
+            Message.addMessage("Removing RtpReceiveStream object " + str(self.__stats["stream_syncSource"]))
+            del self.rtpRxStreamsDict[self.__stats["stream_syncSource"]]
+        except Exception as e:
+            Message.addMessage("ERR: RtpReceiveStream.killStream() (remove from rtpRxStreamsDict{})" + str(self.__stats["stream_syncSource"]))
+        self.rtpRxStreamsDictMutex.release()
 
 
     def getSocket(self):
