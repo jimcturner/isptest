@@ -1361,7 +1361,10 @@ class RtpStreamResults(object):
 
     # This method will remove this stream object from the rtpTxStreamResultsDict dictionary
     def killStream(self):
-        pass
+        self.rtpTxStreamResultsDictMutex.acquire()
+        Message.addMessage("Deleting RtpStreamResults object for stream: " + str(self.syncSourceID))
+        del self.rtpTxStreamResultsDict[self.syncSourceID]
+        self.rtpTxStreamResultsDictMutex.release()
 
     # def setFriendlyName(self, friendlyName):
     #     # Thread-safe method to set the friendly name field
@@ -1926,6 +1929,14 @@ class ResultsReceiver(object):
         # This method will kill the receiver thread by setting the self.receiverActiveFlag to false
         self.receiverActiveFlag = False
         Message.addMessage("INFO: ResultsReceiver.kill()")
+        # Finally, attempt to remove the RtpStreamResults object created by __resultsReceiverThread from
+        # the rtpTxStreamResultsDict
+
+        # Check to see if the RtpStreamResults object exists in rtpTxStreamResultsDict
+        if self.relatedRtpGenerator.syncSourceIdentifier in self.rtpTxStreamResultsDict:
+            # If so, invoke its killStream method (to remove itself from rtpTxStreamResultsDict
+            self.rtpTxStreamResultsDict[self.relatedRtpGenerator.syncSourceIdentifier].killStream()
+
 
 
 

@@ -1206,8 +1206,8 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                         # Additionally, remove the corrseponding RtpStreamResults object for this stream
                         Message.addMessage("INFO: Deleting ResultsReceiver for stream: " + str(idOfStreamToBeDeleted))
                         # Remove the object from the dictionary
-                        removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamResultsDict,
-                                                rtpTxStreamResultsDictMutex)
+                        # removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamResultsDict,
+                        #                         rtpTxStreamResultsDictMutex)
 
                     elif type(streamToBeDeleted) == RtpReceiveStream:
                         # It is an RtpReceiveStream (receiver) object
