@@ -512,7 +512,7 @@ class RtpReceiveStream(object):
 
         # Amount of time to elapse before a stream is believed completely dead (and automatically
         # destroyed)
-        self.streamIsDeadThreshold_s = 5
+        self.streamIsDeadThreshold_s = 30
 
         # Create a __calculateThread
         self.calculateThreadActiveFlag = True # Used as a signal to shut down the calculateThread
@@ -1064,9 +1064,9 @@ class RtpReceiveStream(object):
                             if isptestHeaderData[0] == RtpGenerator.getUniqueIDforISPTESTstreams():
                                 # If so, make use the friendly name field to name this receive stream
                                 self.__stats["stream_friendly_name"] = isptestHeaderDataFriendlyName
-                                Message.addMessage(isptestHeaderDataFriendlyName)
+                                # Message.addMessage(isptestHeaderDataFriendlyName)
                     except Exception as e:
-                        Message.addMessage("ERR: Decoded header: " + str(e))
+                        Message.addMessage("ERR: Decoded header: " + str(e) + str(self.rtpStream[0].isptestHeaderData))
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
