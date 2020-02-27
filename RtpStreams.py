@@ -512,7 +512,7 @@ class RtpReceiveStream(object):
 
         # Amount of time to elapse before a stream is believed completely dead (and automatically
         # destroyed)
-        self.streamIsDeadThreshold_s = 30
+        self.streamIsDeadThreshold_s = 5
 
         # Create a __calculateThread
         self.calculateThreadActiveFlag = True # Used as a signal to shut down the calculateThread
@@ -1043,8 +1043,6 @@ class RtpReceiveStream(object):
                         # Kill itself
                         self.killStream()
 
-                        # Finally remove itself from the rtpRxStreamsDict
-                        removeRtpStreamFromDict(self.__stats["stream_syncSource"], self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
                 except Exception as e:
                     Message.addMessage("ERR: RtpStream.__calc..Thread. auto self.killStream: " + str(e))
 
