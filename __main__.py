@@ -28,7 +28,7 @@ from terminaltables import SingleTable  # Used for pretty tables in displayThrea
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults
-from Utils import Message, dtstrft, addRtpStreamToDict, removeRtpStreamFromDict, get_ip
+from Utils import *
 
 # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
 # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
@@ -1200,10 +1200,10 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                         # It is a generator object
                         Message.addMessage("[d] Deleting Tx Stream: " + str(idOfStreamToBeDeleted))
                         # Remove the stream from the rtpTxStreamsDict dictionary
-                        removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamsDict, rtpTxStreamsDictMutex)
+                        # removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamsDict, rtpTxStreamsDictMutex)
                         # Instruct the RtpGenerator object to die
                         streamToBeDeleted.killStream()
-                        # Additionally, remove the corrseponding Results Receiver for this stream
+                        # Additionally, remove the corrseponding RtpStreamResults object for this stream
                         Message.addMessage("INFO: Deleting ResultsReceiver for stream: " + str(idOfStreamToBeDeleted))
                         # Remove the object from the dictionary
                         removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamResultsDict,

@@ -110,11 +110,11 @@ def removeRtpStreamFromDict(streamID, rtpStreamsDict, rtpStreamsDictMutex):
 
 # A shortcut function that will create a new entry in the supplied dictionary
 # It is used to (safely) populate rtpTxStreamsDict, rtpRxStreamsDict and rtpStreamResultsDict
-def addRtpStreamToDict(rtpStreamID, rtpStream, rtpStreamsDict, rtpStreamsDictMutex):
-    rtpStreamsDictMutex.acquire()
-    # Add the object to the specified dictionary with using rtpStreamID as the key
-    rtpStreamsDict[rtpStreamID] = rtpStream
-    rtpStreamsDictMutex.release()
+# def addRtpStreamToDict(rtpStreamID, rtpStream, rtpStreamsDict, rtpStreamsDictMutex):
+#     rtpStreamsDictMutex.acquire()
+#     # Add the object to the specified dictionary with using rtpStreamID as the key
+#     rtpStreamsDict[rtpStreamID] = rtpStream
+#     rtpStreamsDictMutex.release()
 
 
 

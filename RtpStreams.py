@@ -20,7 +20,7 @@ from copy import deepcopy
 import pickle
 
 # Additonal libraries required (of my own making)
-from Utils import Message, dtstrft, removeRtpStreamFromDict, addRtpStreamToDict, fragmentString
+from Utils import *
 
 
 class Foo(object):
@@ -545,6 +545,7 @@ class RtpReceiveStream(object):
         # except Exception as e:
         #     Message.addMessage("ERR: RtpReceiveStream.killStream() (remove from rtpRxStreamsDict{})" + str(self.__stats["stream_syncSource"]))
         # self.rtpRxStreamsDictMutex.release()
+
 
     def getSocket(self):
         # Thread-safe method that returns the receive UDP socket associated with this stream
@@ -1681,6 +1682,11 @@ class RtpGenerator(object):
         self.setTimeToLive(0)
         # Now kill corresponding RtpResultsReceiver object
         self.rtpStreamResultsReceiver.kill()
+        # Finally, remove this RtpGenerator object from rtpTxStreamsDict
+        self.rtpTxStreamsDictMutex.acquire()
+        Message.addMessage("INFO: Deleting RtpGenerator for stream: " + str(self.syncSourceIdentifier))
+        del self.rtpTxStreamsDict[self.syncSourceIdentifier]
+        self.rtpTxStreamsDictMutex.release()
 
     def disableStream(self):
         # Disables transmission of packets to simulate packet loss by clearing flag
