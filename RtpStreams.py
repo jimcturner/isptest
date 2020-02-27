@@ -1300,10 +1300,11 @@ class ResultsTransmitter(object):
 # It does't perform any calculations itself (unlike RtpReceiveStream) but it does have similar getter methods for results,
 # which should allow displayThread to treat this like an RtpStream object without any additional code alteration
 class RtpStreamResults(object):
-    def __init__(self, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex):
+    def __init__(self, syncSourceID, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex):
 
         self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
+        self.syncSourceID = syncSourceID
         # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
         self.__stats = {}
 
@@ -1320,6 +1321,10 @@ class RtpStreamResults(object):
         # Used to record when this object last received updated stats
         self.lastUpdatedTimestamp = datetime.timedelta()
 
+        #Add this new RtpStreamResults object to the rtpTxStreamResultsDict
+        self.rtpTxStreamResultsDictMutex.acquire()
+        self.rtpTxStreamResultsDict[self.syncSourceID] = self
+        self.rtpTxStreamResultsDictMutex.release()
 
     def updateStats(self, statsDict):
         # Will copy statsDict into self.__stats
@@ -1520,7 +1525,9 @@ class RtpGenerator(object):
         self.rtpStreamResultsReceiver = ResultsReceiver(self)
 
         # Add the object to the specified dictionary with using rtpStreamID as the key
+        self.rtpTxStreamsDictMutex.acquire()
         self.rtpTxStreamsDict[self.syncSourceIdentifier] = self
+        self.rtpTxStreamsDictMutex.release()
 
     def getRtpStreamStats(self):
         # Returns a dictionary of useful stats
@@ -2002,12 +2009,14 @@ class ResultsReceiver(object):
                                 Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
                                                    + str(stats["stream_syncSource"]))
                                 # Create new RtpStreamResults object
-                                rtpStreamResults = RtpStreamResults(self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+                                rtpStreamResults = RtpStreamResults(stats["stream_syncSource"],
+                                                                    self.rtpTxStreamResultsDict,
+                                                                    self.rtpTxStreamResultsDictMutex)
                                 # Immediately update the stats
                                 rtpStreamResults.updateStats(stats)
                                 # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
-                                addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults,
-                                                   self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+                                # addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults,
+                                #                    self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
                         except Exception as e:
                             Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict or can't add new stream to rtpTxStreamResultsDict. " + str(e))
 
