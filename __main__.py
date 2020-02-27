@@ -1199,32 +1199,20 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     if type(streamToBeDeleted) == RtpGenerator:
                         # It is a generator object
                         Message.addMessage("[d] Deleting Tx Stream: " + str(idOfStreamToBeDeleted))
-                        # Remove the stream from the rtpTxStreamsDict dictionary
-                        # removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamsDict, rtpTxStreamsDictMutex)
-                        # Instruct the RtpGenerator object to die
+                        # Instruct the RtpGenerator object to die (and it's associated corrseponding RtpStreamResults, if it exists)
                         streamToBeDeleted.killStream()
                         # Additionally, remove the corrseponding RtpStreamResults object for this stream
-                        Message.addMessage("INFO: Deleting ResultsReceiver for stream: " + str(idOfStreamToBeDeleted))
-                        # Remove the object from the dictionary
-                        # removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamResultsDict,
-                        #                         rtpTxStreamResultsDictMutex)
+
 
                     elif type(streamToBeDeleted) == RtpReceiveStream:
                         # It is an RtpReceiveStream (receiver) object
                         Message.addMessage("[d] Deleting Rx Stream: " + str(idOfStreamToBeDeleted))
                         # Safely shutdown the RtpStream object itself
-                        # del rtpRxStreamsDict[idOfStreamToBeDeleted]
                         streamToBeDeleted.killStream()
-                        # Remove the object from the dictionary
-                        # removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
                     elif type(streamToBeDeleted) == RtpStreamResults:
                         Message.addMessage("Can't delete Results line for stream. " + str(idOfStreamToBeDeleted) +\
                                            " Did you mean to delete the transmit stream instead?")
-                        # # It is an RtpStream (receiver) object
-                        # Message.addMessage("INFO: Deleting ResultsReceiver for stream: " + str(idOfStreamToBeDeleted))
-                        # # Remove the object from the dictionary
-                        # removeRtpStreamFromDict(idOfStreamToBeDeleted, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex)
 
                     # Force redraw
                     redrawScreen = True

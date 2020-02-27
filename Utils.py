@@ -99,14 +99,14 @@ def unfragmentString(fragments):
 
 # This function will delete the specified streamID from an rtpRxStreamsDict{}
 # It uses mutexes, so should be thread safe
-def removeRtpStreamFromDict(streamID, rtpStreamsDict, rtpStreamsDictMutex):
-    rtpStreamsDictMutex.acquire()
-    try:
-        # Attempt to remove the rtpStream from the dictionary
-        del rtpStreamsDict[streamID]
-    except Exception as e:
-        Message.addMessage("ERR: deleteRtpStreamObject(): ["+str(streamID)+"], "+str(e))
-    rtpStreamsDictMutex.release()
+# def removeRtpStreamFromDict(streamID, rtpStreamsDict, rtpStreamsDictMutex):
+#     rtpStreamsDictMutex.acquire()
+#     try:
+#         # Attempt to remove the rtpStream from the dictionary
+#         del rtpStreamsDict[streamID]
+#     except Exception as e:
+#         Message.addMessage("ERR: deleteRtpStreamObject(): ["+str(streamID)+"], "+str(e))
+#     rtpStreamsDictMutex.release()
 
 # A shortcut function that will create a new entry in the supplied dictionary
 # It is used to (safely) populate rtpTxStreamsDict, rtpRxStreamsDict and rtpStreamResultsDict
