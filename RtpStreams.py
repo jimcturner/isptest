@@ -524,6 +524,11 @@ class RtpReceiveStream(object):
         # create a stream results transmitter object for this rx stream
         self.resultsTransmitter = ResultsTransmitter(self)
 
+        # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
+        self.rtpRxStreamsDictMutex.acquire()
+        self.rtpRxStreamsDict[self.__stats["stream_syncSource"]] = self
+        self.rtpRxStreamsDictMutex.release()
+
     def killStream(self):
         # This kills the ResultsTransmitter object created by this stream  - because
         # Resultstransmitter runs as an automonomous thread created by this object.

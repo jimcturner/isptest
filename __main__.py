@@ -2454,8 +2454,8 @@ def main(argv):
                                                              UDP_RX_PORT, glitchEventTriggerThreshold, sock,
                                                              rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
-                                    addRtpStreamToDict(rtpSyncSourceIdentifier, newRtpStream, rtpRxStreamsDict,
-                                                       rtpRxStreamsDictMutex)
+                                    # addRtpStreamToDict(rtpSyncSourceIdentifier, newRtpStream, rtpRxStreamsDict,
+                                    #                    rtpRxStreamsDictMutex)
 
                                     # Now delete the entry from the temporary dict
                                     rtpRxStreamTempDict.pop(rtpSyncSourceIdentifier, None)
