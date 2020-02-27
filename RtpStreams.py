@@ -1469,7 +1469,8 @@ class RtpGenerator(object):
         self.txBps_1s = 0               # Used to 'sample' the actual tx rate
         self.syncSourceIdentifier = int(syncSourceID)
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
-        self.payloadMutex = threading.Lock()
+        self.isptestHeader = ""
+        self.payloadMutex = threading.Lock()    # Used to control access to self.rtpPayload and self.isptestHeader
         self.elapsedTime = datetime.timedelta()
 
         # self.friendlyName = " "*self.maxNameLength
@@ -1538,11 +1539,25 @@ class RtpGenerator(object):
             friendlyName = friendlyName[:RtpGenerator.MAX_FRIENDLY_NAME_LENGTH]
         # assign to instance variable
         self.friendlyName = friendlyName
-        # Now regenerate payload
-        self.generatePayload()
+
 
     def generatePayload(self):
-        # Generate random string of length 'length' to create a payload (prefaced with a specific header)
+        # Generate random string of length 'length' to create a payload of length self.payloadLength
+        # (but taking into account the length of the isptest payload
+
+        # Create string containing all uppercase and lowercase letters
+        letters = string.ascii_letters
+        # Calculate length of required randome string after our header taken into account,
+        randomDataLength = self.payloadLength - RtpGenerator.ISPTEST_HEADER_SIZE
+        # iterate over stringLength picking random letters from 'letters'
+        randomDataString = ''.join(random.choice(letters) for i in range(randomDataLength))
+        # Now assign the complete payload (including header and random data) to the instance variable
+        self.payloadMutex.acquire()
+        self.rtpPayload = randomDataString
+        self.payloadMutex.release()
+
+    # Generates the isptest (this program) specific header to convey extra info (like the friendly name) to the receiver
+    def generateIsptestHeader(self):
         # Generate the 'isptest' header
         # Header consists of 18 bytes of data:
         # [uniqueValue(David's birthday)(short, 2 bytes)
@@ -1551,21 +1566,21 @@ class RtpGenerator(object):
         # [byte3][byte4][byte5][byte6] Hop id address octets
         # [friendlyName] 10 bytes
 
-        header = b""    # Specify byte string
-        headerLength = 0
+        header = b""  # Specify byte string
+        headerLength = 0  # Set initial value
         try:
             # Note: a short is 16 bits - max value 65535
             uniqueValue = RtpGenerator.UNIQUE_ID_FOR_ISPTEST_STREAMS & 0xFFFF
             # Create a sample traceroute message
-            messageData = [0 & 0xFF, # Message type 0: traceroute
-                           0 & 0xFF, # Traceroute Hop no
-                           10 & 0xFF, # IP address octet 1
-                           20 & 0xFF, # IP address octet 2
-                           30 & 0xFF, # IP address octet 3
-                           40  & 0xFF] # IP address octet 4
+            messageData = [0 & 0xFF,  # Message type 0: traceroute
+                           0 & 0xFF,  # Traceroute Hop no
+                           10 & 0xFF,  # IP address octet 1
+                           20 & 0xFF,  # IP address octet 2
+                           30 & 0xFF,  # IP address octet 3
+                           40 & 0xFF]  # IP address octet 4
 
-            header = struct.pack("!HBBBBBB", uniqueValue, messageData[0], messageData[1], messageData[2],\
-                                 messageData[3], messageData[4], messageData[5],)
+            header = struct.pack("!HBBBBBB", uniqueValue, messageData[0], messageData[1], messageData[2], \
+                                 messageData[3], messageData[4], messageData[5], )
 
             # Append friendly name to header digits
             header += str(self.friendlyName).encode('ascii')
@@ -1574,7 +1589,8 @@ class RtpGenerator(object):
             # Check to see that we haven't tried to create a header thats longer than that specified
             # by the class var ISPTEST_HEADER_SIZE
             if headerLength != RtpGenerator.ISPTEST_HEADER_SIZE:
-                Message.addMessage("INFO: RtpGenerator.generatePayload() Mismatch between headerLength and RtpGenerator.ISPTEST_HEADER_SIZE. Setting header to be blank ")
+                Message.addMessage(
+                    "INFO: RtpGenerator.generatePayload() Mismatch between headerLength and RtpGenerator.ISPTEST_HEADER_SIZE. Setting header to be blank ")
                 # The length of the header we've created doesn't match that specifed by RtpGenerator.ISPTEST_HEADER_SIZE therefore
                 # main() and RtpReceiveStream objects will be expecting the wrong length header and won't be able to
                 # decode it
@@ -1583,16 +1599,11 @@ class RtpGenerator(object):
         except Exception as e:
             Message.addMessage("ERR: RtpGenerator.generatePayload(). Header err: " + str(e))
 
-        # Create string containing all uppercase and lowercase letters
-        letters = string.ascii_letters
-        # Calculate length of required randome string after our header taken into account,
-        randomDataLength = self.payloadLength - headerLength
-        # iterate over stringLength picking random letters from 'letters'
-        randomDataString = ''.join(random.choice(letters) for i in range(randomDataLength))
-        # Now assign the complete payload (including header and random data) to the instance variable
+        # Now assign the complete header to the instance variable
         self.payloadMutex.acquire()
-        self.rtpPayload = header + randomDataString
+        self.isptestHeader = header
         self.payloadMutex.release()
+
 
     def setSyncSourceIdentifier(self,value):
         # Sets the self self.syncSourceIdentifier value
@@ -1742,9 +1753,11 @@ class RtpGenerator(object):
             # Construct 12 byte header
             txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
                                       self.syncSourceIdentifier)
+            # Force an update of the isptest header
+            self.generateIsptestHeader()
             # Now create the actual message to be send across the wire
             self.payloadMutex.acquire()
-            MESSAGE = txRtpHeader + self.rtpPayload.encode('ascii')
+            MESSAGE = txRtpHeader + self.isptestHeader + self.rtpPayload.encode('ascii')
             self.payloadMutex.release()
 
             # If all tx flags are set then transmit the rtp packet
