@@ -1049,7 +1049,7 @@ class RtpReceiveStream(object):
                         # substring the part of the data holding the numerical values
                         isptestHeaderDataStruct = self.rtpStream[0].isptestHeaderData[:numericalHeaderDataLength]
                         # substring the part of the data holding the friendly name of the stream
-                        isptestHeaderDataFriendlyName = self.rtpStream[0].isptestHeaderData[numericalHeaderDataLength:]
+                        isptestHeaderDataFriendlyName = str(self.rtpStream[0].isptestHeaderData[numericalHeaderDataLength:].decode('utf-8'))
                         # unpack the values from the struct
                         isptestHeaderData = struct.unpack("!HBBBBBB", isptestHeaderDataStruct)
                         # Message.addMessage("INFO: Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
@@ -1059,6 +1059,7 @@ class RtpReceiveStream(object):
                             if isptestHeaderData[0] == RtpGenerator.getUniqueIDforISPTESTstreams():
                                 # If so, make use the friendly name field to name this receive stream
                                 self.__stats["stream_friendly_name"] = isptestHeaderDataFriendlyName
+                                Message.addMessage(isptestHeaderDataFriendlyName)
                     except Exception as e:
                         Message.addMessage("ERR: Decoded header: " + str(e))
 
