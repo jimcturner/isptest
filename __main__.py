@@ -613,11 +613,12 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
         views.append([Term.FG(Term.RED)+"Tx Streams",
                       [["#", 0],  # Used as an index[]
                        ["Name", 'Friendly Name'],
+                       ["Src\nPort", 'Tx Source Port'],
                        ["Dest\n IP", 'Dest IP'],
                        ["Dest\nPort", 'Dest Port'],
                        ["Sync\nsrcID", 'Sync Source ID'],
-                       ["Tx Rate\n bps", 'Tx Rate'],
-                       ["Length\n(bytes)", 'Packet size'],
+                       ["Tx\nbps", 'Tx Rate'],
+                       ["Size", 'Packet size'],
                        ["Bytes\n tx'd", 'Bytes transmitted'],
                        [" Time\nremain", 'Time to live']
                        ],availableRtpTxStreamList])
