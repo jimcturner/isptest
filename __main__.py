@@ -883,8 +883,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                     rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, \
                                                 rtpTxStreamsDict, rtpTxStreamsDictMutex,\
                                                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, "", sourcePort)
-                    # # Add the new stream to the rtpStreams dictionary
-                    # addRtpStreamToDict(syncSourceID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
+
                     Message.addMessage("[a] Added new " +  str(bToMb(txRate)) +"bps stream with id " + str(syncSourceID))
                     # Force redraw
                     redrawScreen = True
@@ -950,9 +949,6 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
                                                 rtpTxStreamsDict, rtpTxStreamsDictMutex,\
                                                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
                                                 txParameters["friendlyName"], txParameters["srcPort"])
-
-                    # Add the new stream to the rtpStreams dictionary
-                    # addRtpStreamToDict(txParameters["syncSourceID"], rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
 
                     # Force redraw
                     redrawScreen = True
@@ -2329,9 +2325,6 @@ def main(argv):
                                         rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
                                         RTP_TX_STREAM_FRIENDLY_NAME)
 
-        # Add the tx stream to the rtpStreams dictionary
-        # addRtpStreamToDict(SYNC_SOURCE_ID, rtpGenerator, rtpTxStreamsDict, rtpTxStreamsDictMutex)
-
         # Create a diskLogging Thread - pass rtpStream object to it
         diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,))
         diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
@@ -2441,9 +2434,6 @@ def main(argv):
                                     newRtpStream = RtpReceiveStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, \
                                                              UDP_RX_PORT, glitchEventTriggerThreshold, sock,
                                                              rtpRxStreamsDict, rtpRxStreamsDictMutex)
-
-                                    # addRtpStreamToDict(rtpSyncSourceIdentifier, newRtpStream, rtpRxStreamsDict,
-                                    #                    rtpRxStreamsDictMutex)
 
                                     # Now delete the entry from the temporary dict
                                     rtpRxStreamTempDict.pop(rtpSyncSourceIdentifier, None)

@@ -1448,12 +1448,31 @@ class RtpStreamResults(object):
 
 # Define an RTP Generator that can run autonomously as a thread
 class RtpGenerator(object):
+    # How this works:
+    # When started:-
+    #   The RtpGenerator constructor  creates an instance of ResultsReceiver
+    #   (which sets up a UDP receiver thread to collect the results sent by RtpReceiveStream at the far end)
+    #   If the ResultsReceiver object does receive some data, it will spawn a RtpStreamResults object
+    #   which will hold the stats and events for the performance of the RtpGenerator stream that started it all
+
+    # On close:-
+    #   The RtpGenerator.killStream() method will:-
+    #       1)force the time to live to zero (which will cause the object to delete itself
+    #       2)call the corresponding ResultsReceiver.kill() method which will:-
+    #           1)Cause the the ResultsReceiver receive thread to cease (killing the object)
+    #           2) Check to see if a corresponding RtpStreamResults object exists for this stream ID, and if so
+    #              call it's RtpStreamResults.killStream() method. This will cause the object to remove itself
+    #              from the rtpTxStreamResultsDict{} which will then mean the object ceases to exist also.
+
+
+
+
     # The size of the messages sent in the RtpGenerator payload
-    # This can be queried by the class method getIsptestHeaderSize()
+    # This can be queried by the class method getIsptestHeaderSize() (and is consumed by RtpReceiveStream and main())
     ISPTEST_HEADER_SIZE = 18
 
     # The maximum allowed stream friendly name length
-    # This can be queried by the class method getMaxFriendlyNameLength()
+    # This can be queried by the class method getMaxFriendlyNameLength() (and is consumed by RtpReceiveStream and main())
     MAX_FRIENDLY_NAME_LENGTH = 10
 
     # Specify a unique identifiying value (eg David's birthday) that will allow the reciever to
