@@ -8,6 +8,7 @@ import socket
 import os
 # import binascii
 import sys
+import signal # used for trappoing ctrl-c (SIGINT)
 import struct
 import time
 import datetime
@@ -574,21 +575,245 @@ def humanise(key,value):
     else:
         return value
 
+# A class that will be responsible for rendering the display and catching keyboard output
+class UI(object):
+    # def __init__(self,operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
+    #                 rtpRxStreamsDict, rtpRxStreamsDictMutex,
+    #                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT):
+    def __init__(self):
+
+        self.keysPressedThreadActive = True
+        self.renderDisplayThreadActive = True
+        # Stores the last pressed keystroke
+        self.keyPressed=''
+
+        self.enableGetch = threading.Event()
+        self.keyPressedEvent = threading.Event()
+
+        # Declare lists to hold list of available rx and tx streams that can be displayed
+
+        # These lists are a list of tuples [x,y,z] where
+        # [x=streamID (as a string), y=the tx/rx object itself, z=an index value]
+        #
+        # The array is populated by the use of the utility function __updateAvailableStreamsList()
+        # Meanwhile, main() is maintaining two dictionaries, rtpTxStreamsDict and rtpRxStreamsDict
+        # The issue with these dictionaries is that the order of them can change (when you iterate through them) making them
+        # unsuitable for __displayThread which needs to maintain a chronological order of streams added/removed for display
+        # and control purposes
+        #
+        # Therefore the job of __updateAvailableStreamsList() is to poll the supplied dictionary and synchronise any changes
+        # (additions or deletions) in the dictionaries to the corresponding lists
+
+        availableRtpRxStreamList = []
+        availableRtpTxStreamList = []
+        availableRtpTxResultsList = []
+
+        selectedView = 0  # Keeps track of which view is currently being displayed
+        selectedTableRow = 0  # Keeps track of the selected row on the stream table
+
+        # Create/Start the display rendering thread
+        self.renderDisplayThread = threading.Thread(target=self.__renderDisplayThread, args=())
+        self.renderDisplayThread.daemon = True # Thread will auto shutdown
+        self.renderDisplayThread.setName("__renderDisplayThread")
+        self.renderDisplayThread.start()
+
+        # Create/Start the keyboard thread
+        self.keysPressedThread = threading.Thread(target=self.__keysPressedThread, args=())
+        self.keysPressedThread.daemon = True
+        self.keysPressedThread.setName("keysPressedThread")
+        self.keysPressedThread.start()
+
+        # Reset the keyPressedEvent event
+        self.keyPressedEvent.clear()
+        # Arm the getch thread
+        self.enableGetch.set()
+
+    # A cross-platform method to catch keypresses (and not echo them to the screen)
+    def __getch(self, timeout):
+        # Define a getch() function to catch keystrokes (for control of the RTP Generator thread)
+        # This code has been lifted from https://gist.github.com/jfktrey/8928865
+        if platform.system() == "Windows":
+            import msvcrt
+            return msvcrt.getch()
+
+        else:
+            import tty, termios, sys
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(sys.stdin.fileno())
+                ch = sys.stdin.read(1)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            # Return the ascii value of the key pressed
+            return ord(ch)
+
+    # A method to destroy this UI object and all associated threads
+    def kill(self):
+        print ("kill() method called\r")
+        # End the _keysPressedThread
+        self.keysPressedThreadActive = False
+
+        # End the __renderDisplayThread
+        self.renderDisplayThreadActive = False
+
+    def __drawStreamsTable(self):
+        pass
+    def __drawMessageTable(self):
+        pass
+
+    def __renderTopToolbar(self):
+        pass
+
+    def __updateClock(self):
+        pass
+
+    def __renderBottomToolbar(self):
+        pass
+
+    # Cursor right
+    def __onNavigateRight(self):
+        pass
+
+    # Cursor left
+    def __onNavigateLeft(self):
+        pass
+
+    # Cursor up
+    def __onNavigateUp(self):
+        pass
+
+    # Cursor down
+    def __onNavigateDown(self):
+        pass
+
+    # 's' pressed
+    def __onEnterFriendlyName(self):
+        pass
+
+    # 'a' pressed (only when in Tx or Loopback mode)
+    def __onAddTxStream(self):
+        pass
+
+    # 'd'
+    def __onDeleteStream(self):
+        pass
+
+    # 'm' pressed
+    def __onIncreaseTxRate(self):
+        pass
+
+    # 'n' pressed
+    def __onDecreaseTxRate(self):
+        pass
+
+    # 'j'
+    def __onIncreaseTimeToLive(self):
+        pass
+
+    # 'h'
+    def __onDecreaseTimeToLive(self):
+        pass
+
+    # 'l'
+    def __onIncreasePayloadSize(self):
+        pass
+
+    # 'k'
+    def __onDecreasePayloadSize(self):
+        pass
+
+    # 'p'
+    def __onIncrementSyncSourceID(self):
+        pass
+
+    # 'o'
+    def __onDecrementSyncSourceID(self):
+        pass
+
+    # 'e'
+    def __onToggleErrorMessages(self):
+        pass
+
+    # 'z'
+    def __onTogglePacketGenerationOnOff(self):
+        pass
+
+    # 'x'
+    def __onToggleJitterSimulationOnOff(self):
+        pass
+
+    # 'c'
+    def __onInsertMinorPacketLoss(self):
+        pass
+
+    # 'v'
+    def __onInsertMajorPacketloss(self):
+        pass
+
+    # 't'
+    def __onAboutDialogue(self):
+        pass
+
+
+    # Autonomous thread to render the screen and parse keyboard presses
+    def __renderDisplayThread(self):
+        secs = 0
+        while self.renderDisplayThreadActive == True:
+            self.keyPressedEvent.wait(timeout=5)
+            # Has the timeout been exceeded with no key pressed
+            if self.keyPressed == '':
+                print ("UI " + str(secs) + " Timeout exceeded\r")
+            else:
+                print ("UI " + str(secs) + " Key pressed: " + str(self.keyPressed) + "\r")
+                # Check for Ctrl -C
+                if self.keyPressed == 3:
+                    print ("ctrl-c\r")
+                    self.kill()
+                else:
+                    # Now clear the 'key pressed event' flag (because we've processed this key press)
+                    self.keyPressedEvent.clear()
+                    # Now re-arm the getch thread
+                    self.enableGetch.set()
+            secs += 5
+
+    # Autonomous thread to monitor key presses
+    def __keysPressedThread(self):
+
+        while self.keysPressedThreadActive == True:
+            # Wait for getch to be enabled
+            self.enableGetch.wait()
+            # Capture keyboard presses via the getch method (with a 1 second timeout)
+            self.keyPressed = "" #clear the keyboard buffer
+            ch = self.__getch(1)
+            # Check to see if a key has been pressed
+            if ch != "":
+                # If a key has been pressed, store it
+                self.keyPressed = ch
+                # Signal that a key has been pressed
+                self.keyPressedEvent.set()
+                # Now disarm key checking (until it is re-enabled elsewhere)
+                self.enableGetch.clear()
+
+
+
+
 
 def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
                     rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT):
 
     # Declare lists to hold list of available rx and tx streams that can be displayed
+
     # These lists are a list of tuples [x,y,z] where
     # [x=streamID (as a string), y=the tx/rx object itself, z=an index value]
-
+    #
     # The array is populated by the use of the utility function __updateAvailableStreamsList()
     # Meanwhile, main() is maintaining two dictionaries, rtpTxStreamsDict and rtpRxStreamsDict
     # The issue with these dictionaries is that the order of them can change (when you iterate through them) making them
     # unsuitable for __displayThread which needs to maintain a chronological order of streams added/removed for display
     # and control purposes
-
+    #
     # Therefore the job of __updateAvailableStreamsList() is to poll the supplied dictionary and synchronise any changes
     # (additions or deletions) in the dictionaries to the corresponding lists
 
@@ -1956,6 +2181,20 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
 # #####################
 def main(argv):
 
+    x = UI()
+    y = 0
+
+    # Define signal handler for ctrl- C
+    def signal_handler(sig, frame):
+        print('You pressed Ctrl+C!')
+        x.kill()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    while True:
+        print ("main() " + str(y) + ", " + str(listCurrentThreads()) + str(x.renderDisplayThreadActive) + str(x.keysPressedThreadActive)+"\r")
+        y += 1
+        time.sleep(1)
     # foo = RtpStreams.Foo()
     # print(foo)
     # exit()
