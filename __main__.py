@@ -659,6 +659,7 @@ class UI(object):
 
     def __drawStreamsTable(self):
         pass
+
     def __drawMessageTable(self):
         pass
 
@@ -2180,6 +2181,11 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
 # Main prog starts here
 # #####################
 def main(argv):
+
+    while True:
+        x = GetchWithTimeout()
+        print ("timeout?\r")
+        print (str(x) + "\r")
 
     x = UI()
     y = 0
