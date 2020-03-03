@@ -585,10 +585,10 @@ class UI(object):
         self.keysPressedThreadActive = True
         self.renderDisplayThreadActive = True
         # Stores the last pressed keystroke
-        self.keyPressed=''
+        self.keyPressed = None
 
         self.enableGetch = threading.Event()
-        self.keyPressedEvent = threading.Event()
+        self.wakeUpUI = threading.Event()
 
         # Declare lists to hold list of available rx and tx streams that can be displayed
 
@@ -613,49 +613,56 @@ class UI(object):
 
         # Create/Start the display rendering thread
         self.renderDisplayThread = threading.Thread(target=self.__renderDisplayThread, args=())
-        self.renderDisplayThread.daemon = True # Thread will auto shutdown
+        self.renderDisplayThread.daemon = False
         self.renderDisplayThread.setName("__renderDisplayThread")
         self.renderDisplayThread.start()
 
         # Create/Start the keyboard thread
         self.keysPressedThread = threading.Thread(target=self.__keysPressedThread, args=())
-        self.keysPressedThread.daemon = True
-        self.keysPressedThread.setName("keysPressedThread")
+        self.keysPressedThread.daemon = False
+        self.keysPressedThread.setName("__keysPressedThread")
         self.keysPressedThread.start()
 
         # Reset the keyPressedEvent event
-        self.keyPressedEvent.clear()
+        self.wakeUpUI.clear()
         # Arm the getch thread
         self.enableGetch.set()
 
     # A cross-platform method to catch keypresses (and not echo them to the screen)
-    def __getch(self, timeout):
+    def __getch(self):
         # Define a getch() function to catch keystrokes (for control of the RTP Generator thread)
         # This code has been lifted from https://gist.github.com/jfktrey/8928865
         if platform.system() == "Windows":
             import msvcrt
-            return msvcrt.getch()
+            time.sleep(0.2) # 0.2sec timeout
+            if msvcrt.kbhit():
+                return ord(msvcrt.getch())
+            else:
+                print("Getch timeout\r")
+                return None
 
         else:
             import tty, termios, sys
+            from select import select   # For timeout functionality
             fd = sys.stdin.fileno()
             old_settings = termios.tcgetattr(fd)
             try:
                 tty.setraw(sys.stdin.fileno())
-                ch = sys.stdin.read(1)
+                # Add additional lines for a 1 sec timeout
+                [i, o, e] = select([sys.stdin.fileno()], [], [], 1)
+                # ch = sys.stdin.read(1)
+                if i:
+                    ch = sys.stdin.read(1)
+                else:
+                    ch = ""
             finally:
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             # Return the ascii value of the key pressed
-            return ord(ch)
-
-    # A method to destroy this UI object and all associated threads
-    def kill(self):
-        print ("kill() method called\r")
-        # End the _keysPressedThread
-        self.keysPressedThreadActive = False
-
-        # End the __renderDisplayThread
-        self.renderDisplayThreadActive = False
+            try:
+                return ord(ch)
+            except:
+                print("Getch timeout\r")
+                return None
 
     def __drawStreamsTable(self):
         pass
@@ -755,15 +762,27 @@ class UI(object):
     # 't'
     def __onAboutDialogue(self):
         pass
+        # A method to destroy this UI object and all associated threads
 
+    def kill(self):
+        print ("kill() method called\r")
+        # End the _keysPressedThread
+        self.keysPressedThreadActive = False
+        # self.keysPressedThread.join()
+        # print("Keys pressed thread finished")
+
+        # End the __renderDisplayThread
+        self.renderDisplayThreadActive = False
+
+        sys.exit()
 
     # Autonomous thread to render the screen and parse keyboard presses
     def __renderDisplayThread(self):
         secs = 0
         while self.renderDisplayThreadActive == True:
-            self.keyPressedEvent.wait(timeout=5)
+            self.wakeUpUI.wait(timeout=2)
             # Has the timeout been exceeded with no key pressed
-            if self.keyPressed == '':
+            if self.keyPressed == None:
                 print ("UI " + str(secs) + " Timeout exceeded\r")
             else:
                 print ("UI " + str(secs) + " Key pressed: " + str(self.keyPressed) + "\r")
@@ -772,12 +791,13 @@ class UI(object):
                     print ("ctrl-c\r")
                     self.kill()
                 else:
-                    # Now clear the 'key pressed event' flag (because we've processed this key press)
-                    self.keyPressedEvent.clear()
-                    # Now re-arm the getch thread
-                    self.enableGetch.set()
-            secs += 5
-
+                    pass
+            # Now clear the 'wakeupUI event' flag (because we've processed this key press)
+            self.wakeUpUI.clear()
+            # Now re-arm the getch thread
+            self.enableGetch.set()
+            secs += 2
+        print ("__renderDisplapThread ended")
     # Autonomous thread to monitor key presses
     def __keysPressedThread(self):
 
@@ -785,20 +805,17 @@ class UI(object):
             # Wait for getch to be enabled
             self.enableGetch.wait()
             # Capture keyboard presses via the getch method (with a 1 second timeout)
-            self.keyPressed = "" #clear the keyboard buffer
-            ch = self.__getch(1)
+            self.keyPressed = None  #clear the keyboard buffer
+            ch = self.__getch()
             # Check to see if a key has been pressed
-            if ch != "":
+            if ch != None:
                 # If a key has been pressed, store it
                 self.keyPressed = ch
                 # Signal that a key has been pressed
-                self.keyPressedEvent.set()
+                self.wakeUpUI.set()
                 # Now disarm key checking (until it is re-enabled elsewhere)
                 self.enableGetch.clear()
-
-
-
-
+        print("__keysPressedThread ending\r")
 
 def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
@@ -2177,30 +2194,29 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
 
 ####################################################################################
 
+# Define signal handler for ctrl- C
+# def signal_handler(sig, frame):
+#     print("signal _handler: you pressed Ctrl+C!\r")
+#     # x.kill()
+#     sys.exit(0)
 
 # Main prog starts here
 # #####################
 def main(argv):
 
-    while True:
-        x = GetchWithTimeout()
-        print ("timeout?\r")
-        print (str(x) + "\r")
+    # signal.signal(signal.SIGINT, signal_handler)
+    # signal.signal(signal.SIGTERM, signal_handler)
 
     x = UI()
     y = 0
 
-    # Define signal handler for ctrl- C
-    def signal_handler(sig, frame):
-        print('You pressed Ctrl+C!')
-        x.kill()
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, signal_handler)
     while True:
-        print ("main() " + str(y) + ", " + str(listCurrentThreads()) + str(x.renderDisplayThreadActive) + str(x.keysPressedThreadActive)+"\r")
+        # print ("main() " + str(y) + ", " + str(listCurrentThreads()) + str(x.renderDisplayThreadActive) + str(x.keysPressedThreadActive)+"\r")
+        print ("main: " + str(y) + ", " + str(listCurrentThreads()) + "\r")
         y += 1
         time.sleep(1)
+        if y > 10:
+            sys.exit()
     # foo = RtpStreams.Foo()
     # print(foo)
     # exit()
