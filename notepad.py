@@ -320,6 +320,7 @@ def main(argv):
     except ServiceExit:
         # Gracefully Terminate the running threads if a SIGTERM ot SIGINT signal received (from the OS, not the keyboard).
         # This code will execute if a 'ServiceExit' exception is raised
+        # See here: https://www.g-loaded.eu/2016/11/24/how-to-terminate-running-python-threads-using-signals/
 
         print ("main() called UI.kill()\r")
         ui.kill()
