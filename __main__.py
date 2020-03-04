@@ -2194,18 +2194,29 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
 
 ####################################################################################
 
-# Define signal handler for ctrl- C
-# def signal_handler(sig, frame):
-#     print("signal _handler: you pressed Ctrl+C!\r")
-#     # x.kill()
-#     sys.exit(0)
+class GracefulShutdown(Exception):
+    """
+    Custom exception which is used to trigger the clean exit
+    of all running threads and the main program.
+
+    """
+    # It might not look important, but it is!
+    # This empty class provides a means of forcing main() to jumpt out of whatever while() loop it's in under normal
+    # running conditions to execute the shutdown sequence
+    pass
+
+# Define a call back function to handle SIGINT and SIGTERM messages from the OS
+# Note: This won't trap keyboard Ctrl-C. These events are caught in the keysPressed Thread via getch()
+def signalHhandler(signum, frame):
+    print('Caught signal ' + str(signum) + "\r")
+    raise GracefulShutdown
 
 # Main prog starts here
 # #####################
 def main(argv):
 
-    # signal.signal(signal.SIGINT, signal_handler)
-    # signal.signal(signal.SIGTERM, signal_handler)
+    # signal.signal(signal.SIGINT, signalHandler)
+    # signal.signal(signal.SIGTERM, signalHandler)
 
     x = UI()
     y = 0
