@@ -196,7 +196,6 @@ def main(argv):
         print ("main() called UI.kill()\r")
         ui.kill()
 
-
     print ("exiting\r")
 
 
