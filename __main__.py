@@ -581,14 +581,26 @@ class UI(object):
     #                 rtpRxStreamsDict, rtpRxStreamsDictMutex,
     #                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT):
     def __init__(self, shutdownFlag):
+        # Threading.Event object used to signal Ctrl-C shutdown request to main()
         self.shutdownFlag = shutdownFlag
+
+        # Thread running flags
         self.keysPressedThreadActive = True
         self.renderDisplayThreadActive = True
+        self.detectTerminalSizeThreadActive = True
+
         # Stores the last pressed keystroke
         self.keyPressed = None
 
+        # Enables keyboard key press detection via __getch()
         self.enableGetch = threading.Event()
         self.wakeUpUI = threading.Event()
+
+        # Flag to trigger redrawing of the screen
+        self.redrawScreen = True
+        # Get initial size of terminal
+        self.currentTermWidth, self.currentTermHeight = Term.getTerminalSize()
+
 
         # Declare lists to hold list of available rx and tx streams that can be displayed
 
@@ -611,6 +623,13 @@ class UI(object):
         selectedView = 0  # Keeps track of which view is currently being displayed
         selectedTableRow = 0  # Keeps track of the selected row on the stream table
 
+        # Create/start a thread to monitor the size of the terminal window
+        self.detectTerminalSizeThread = threading.Thread(target=self.__detectTerminalSizeThread, args=())
+        self.detectTerminalSizeThread.daemon = False
+        self.detectTerminalSizeThread.setName("__detectTerminalSizeThread")
+        self.detectTerminalSizeThread.start()
+
+
         # Create/Start the display rendering thread
         self.renderDisplayThread = threading.Thread(target=self.__renderDisplayThread, args=())
         self.renderDisplayThread.daemon = False
@@ -622,6 +641,7 @@ class UI(object):
         self.keysPressedThread.daemon = False
         self.keysPressedThread.setName("__keysPressedThread")
         self.keysPressedThread.start()
+
 
         # Reset the keyPressedEvent event
         self.wakeUpUI.clear()
@@ -637,8 +657,8 @@ class UI(object):
             # Block until the thread ends
             print("UI.kill() Waiting for __keysPressedThread to end\r")
             self.keysPressedThread.join()
-        else:
-            print("UI.kill() keysPressedThread.is_alive() didn't return True\r")
+        # else:
+        #     print("UI.kill() keysPressedThread.is_alive() didn't return True\r")
 
         if self.renderDisplayThread.is_alive():
             # End the __renderDisplayThread
@@ -646,8 +666,15 @@ class UI(object):
             # Block until the thread ends
             print("UI.kill() Waiting for renderDisplayThread to end\r")
             self.renderDisplayThread.join()
-        else:
-            print("UI.kill() renderDisplayThread.is_alive() didn't return True\r")
+        if self.detectTerminalSizeThread.is_alive():
+            # End the __detectTerminalSizeThread
+            self.detectTerminalSizeThreadActive = False
+            # Block until the thread ends
+            print("UI.kill() Waiting for detectTerminalSizeThread to end\r")
+            self.detectTerminalSizeThread.join()
+
+        # else:
+        #     print("UI.kill() renderDisplayThread.is_alive() didn't return True\r")
 
     # A cross-platform method to catch keypresses (and not echo them to the screen)
     def __getch(self):
@@ -789,11 +816,11 @@ class UI(object):
     # Autonomous thread to render the screen and parse keyboard presses
     def __renderDisplayThread(self):
         while self.renderDisplayThreadActive == True:
+            # Wait for the wakeUpUi Event (or a timeout, whichever first)
             self.wakeUpUI.wait(timeout=2)
-            # Has the timeout been exceeded with no key pressed
+
             # print ("__renderDisplayThread() " + str(self.keyPressed)+"\r")
             if self.keyPressed == None:
-                # print ("UI " + str(secs) + " Timeout exceeded\r")
                 pass
             elif self.keyPressed == 3:
                 self.keyPressed = None
@@ -807,26 +834,48 @@ class UI(object):
             self.wakeUpUI.clear()
             # Now re-arm the getch thread
             self.enableGetch.set()
-        print ("__renderDisplapThread ended")
+        print ("UI.__renderDisplayThread ended")
+
+    # Autonomous thread to monitor the size of the terminal window
+    def __detectTerminalSizeThread(self):
+        while self.detectTerminalSizeThreadActive == True:
+            # Check to see if terminal has been resized
+            # NOTE: Safe max print area height seems to be currentTermHeight -1
+            w, h = Term.getTerminalSize()
+            if (w != self.currentTermWidth) or (h != self.currentTermHeight):
+                # If it has, set a flag
+                self.redrawScreen = True
+                # And store the new values
+                self.currentTermWidth = w
+                self.currentTermHeight = h
+                Message.addMessage(
+                    "INFO: Terminal size has changed to " + str(self.currentTermWidth) + "," + str(self.currentTermHeight))
+                print(str(self.currentTermWidth) + ", " + str(self.currentTermHeight) + "\r")
+
+            time.sleep(0.2)
+        print ("UI.__detectTerminalSizeThread ended\r")
+
 
     # Autonomous thread to monitor key presses
     def __keysPressedThread(self):
 
         while self.keysPressedThreadActive == True:
-            # Wait for getch to be enabled
-            self.enableGetch.wait()
-            # Capture keyboard presses via the getch method (with a 1 second timeout)
-            self.keyPressed = None  #clear the keyboard buffer
-            ch = self.__getch()
-            # Check to see if a key has been pressed
-            if ch != None:
-                # If a key has been pressed, store it
-                self.keyPressed = ch
-                # Signal that a key has been pressed
-                self.wakeUpUI.set()
-                # Now disarm key checking (until it is re-enabled elsewhere)
-                self.enableGetch.clear()
-        print("__keysPressedThread ending\r")
+            # Wait for getch to be enabled (with a timeout)
+            self.enableGetch.wait(timeout= 2)
+            # Confirm that enableGetch was actually set (or was it just a timeout)
+            if self.enableGetch.is_set():
+                # Capture keyboard presses via the getch method (with a 1 second timeout)
+                self.keyPressed = None  #clear the keyboard buffer
+                ch = self.__getch()
+                # Check to see if a key has been pressed
+                if ch != None:
+                    # If a key has been pressed, store it
+                    self.keyPressed = ch
+                    # Signal that a key has been pressed
+                    self.wakeUpUI.set()
+                    # Now disarm key checking (until it is re-enabled elsewhere)
+                    self.enableGetch.clear()
+        print("UI.__keysPressedThread ended\r")
 
 def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
