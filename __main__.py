@@ -580,8 +580,8 @@ class UI(object):
     # def __init__(self,operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
     #                 rtpRxStreamsDict, rtpRxStreamsDictMutex,
     #                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT):
-    def __init__(self, uiShutdownFlag):
-        self.uiShutdownFlag = uiShutdownFlag
+    def __init__(self, shutdownFlag):
+        self.shutdownFlag = shutdownFlag
         self.keysPressedThreadActive = True
         self.renderDisplayThreadActive = True
         # Stores the last pressed keystroke
@@ -788,7 +788,6 @@ class UI(object):
 
     # Autonomous thread to render the screen and parse keyboard presses
     def __renderDisplayThread(self):
-        secs = 0
         while self.renderDisplayThreadActive == True:
             self.wakeUpUI.wait(timeout=2)
             # Has the timeout been exceeded with no key pressed
@@ -800,8 +799,7 @@ class UI(object):
                 self.keyPressed = None
                 print ("UI: you pressed Ctrl-C. Setting self.uiShutdownFlag\r")
                 # Set uiShutdownFlag. This will be monitored by main()
-                self.uiShutdownFlag.set()
-
+                self.shutdownFlag.set()
 
             else:
                 print ("UI: key pressed not known: " + str(self.keyPressed))
@@ -809,7 +807,6 @@ class UI(object):
             self.wakeUpUI.clear()
             # Now re-arm the getch thread
             self.enableGetch.set()
-            secs += 2
         print ("__renderDisplapThread ended")
 
     # Autonomous thread to monitor key presses
@@ -2084,7 +2081,7 @@ def __catchKeyboardPresses(operationMode, keyPressed):
         time.sleep(0.1)
 
 
-def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
+def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutdownFlag,):
     # Autonomous thread to iterate over rtpStreamsDict and poll RtpStream eventLists for new events
     # and write them  to disk
     Message.addMessage("INFO: diskLoggerThread starting")
@@ -2116,6 +2113,10 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
         Message.addMessage("DBUG:__diskLoggerThread " + str(e))
 
     while True:
+        # Check status of shutdownFlag
+        if shutdownFlag.is_set():
+            # If down, break out of the endless while loop
+            break
         # Get dictionary of available rtpRxStreams as a list
         # This will return a list of tuples [0]= sync Source id, [1]=the actual RtpStream object
         availableRtpRxStreamList = []
@@ -2200,10 +2201,8 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex):
         for stream in orphanStreamsToDelete:
             Message.addMessage("INFO: _diskLoggerThread: Deleting orphan stream " + str(stream) + " from lastWrittenEventNoDict")
             del lastWrittenEventNoDict[stream]
-
-
-
         time.sleep(1)
+    print("_diskLoggerThread ending\r")
 
 
 ####################################################################################
@@ -2219,7 +2218,7 @@ class GracefulShutdown(Exception):
     # running conditions to execute the shutdown sequence
     pass
 
-# Define a call back function to handle SIGINT and SIGTERM messages from the OS
+# Define a callback function to handle SIGINT and SIGTERM messages from the OS
 # Note: This won't trap keyboard Ctrl-C. These events are caught in the keysPressed Thread via getch()
 def signalHandler(signum, frame):
     print('Caught signal ' + str(signum) + "\r")
@@ -2495,16 +2494,8 @@ def main(argv):
 
     # Check for no no option supplied:
     if MODE=="":
-        print ("No mode option specified. Do you want Transmit/Receive mode?. Use -h for help")
+        print ("No mode option specified. Do you want Transmit or Receive mode?. Use -h for help")
         exit()
-
-
-    runOnce = True
-
-    # Create dummy list to allow 'pass by reference' (i.e a 'pointer')
-    # The first (and only) item of this 'list' will be our pointer
-    keyPressed = ['']
-
 
     # Create a dictionaries for all streams
     rtpTxStreamsDict ={}
@@ -2538,16 +2529,17 @@ def main(argv):
     # displayThread.daemon = True  # Thread will auto shutdown when the prog ends
     # displayThread.setName("__displayThread")
     # displayThread.start()
-        # Register signal handler for SIGINT and SIGTERM
+
+    # Register signal handler for SIGINT and SIGTERM
     signal.signal(signal.SIGINT, signalHandler)
     signal.signal(signal.SIGTERM, signalHandler)
 
     # Create a UI object (which will spawn a renderDisplay and catchKeyboardPresses thread)
     # Create flag that will be used by UI to signal back to main() that a shutdown has been requested
-    uiShutdownFlag = threading.Event()
+    shutdownFlag = threading.Event()
     # Make sure flag is initially cleared
-    uiShutdownFlag.clear()
-    ui = UI(uiShutdownFlag)
+    shutdownFlag.clear()
+    ui = UI(shutdownFlag)
 
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
@@ -2567,7 +2559,7 @@ def main(argv):
                                         RTP_TX_STREAM_FRIENDLY_NAME)
 
         # Create a diskLogging Thread - pass rtpStream object to it
-        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,))
+        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, shutdownFlag,))
         diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
         diskLoggerThread.setName("__diskLoggerThread")
         diskLoggerThread.start()
@@ -2615,7 +2607,7 @@ def main(argv):
                     exit()
 
                 # Create a diskLogging Thread - pass rtpStream object to it
-                diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpRxStreamsDict, rtpRxStreamsDictMutex,))
+                diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,))
                 diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
                 diskLoggerThread.setName("__diskLoggerThread")
                 diskLoggerThread.start()
@@ -2740,8 +2732,8 @@ def main(argv):
                             rtpRxStreamTempDict.pop(stream, None)
 
                     # Finally, check to see if the UI thread has signalled a shutdown request
-                    if uiShutdownFlag.is_set():
-                        print ("main() uiShutdownFlag.is_set(). Raising ServiceExit Exception\r")
+                    if shutdownFlag.is_set():
+                        print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
                         raise GracefulShutdown
 
                 # If program execution gets here, the udp socket must have been corrupted
@@ -2749,8 +2741,8 @@ def main(argv):
                 refreshRtpStreamSocketsFlag = True
 
                 # Finally, check to see if the UI thread has signalled a shutdown request
-                if uiShutdownFlag.is_set():
-                    print ("main() uiShutdownFlag.is_set(). Raising ServiceExit Exception\r")
+                if shutdownFlag.is_set():
+                    print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
                     raise GracefulShutdown
 
                 time.sleep(1)
@@ -2760,13 +2752,14 @@ def main(argv):
             while True:
                 Term.printAt(str(listCurrentThreads()),1,1)
                 # Finally, check to see if the UI thread has signalled a shutdown request
-                if uiShutdownFlag.is_set():
-                    print ("main() uiShutdownFlag.is_set(). Raising ServiceExit Exception\r")
+                if shutdownFlag.is_set():
+                    print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
                     raise GracefulShutdown
                 time.sleep(1)
 
     # This code will execute if the GracefulShutdown Exception is raised
     except GracefulShutdown:
+        Term.clearScreen()
         Term.printAt("Main() GracefulShutdown in progress",1,1)
         ui.kill()
         # Next:
