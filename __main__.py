@@ -819,19 +819,91 @@ class UI(object):
             # Wait for the wakeUpUi Event (or a timeout, whichever first)
             self.wakeUpUI.wait(timeout=2)
 
+            #Parse keyboard commands
             # print ("__renderDisplayThread() " + str(self.keyPressed)+"\r")
             if self.keyPressed == None:
                 pass
-            elif self.keyPressed == 3:
-                self.keyPressed = None
-                print ("UI: you pressed Ctrl-C. Setting self.uiShutdownFlag\r")
-                # Set uiShutdownFlag. This will be monitored by main()
-                self.shutdownFlag.set()
-
             else:
-                print ("UI: key pressed not known: " + str(self.keyPressed))
-            # Now clear the 'wakeupUI event' flag (because we've processed this key press)
-            self.wakeUpUI.clear()
+                # 'Ctrl-C' - request shutdown
+                if self.keyPressed == 3:
+                    # Set uiShutdownFlag. This will be monitored by main()
+                    self.shutdownFlag.set()
+                # Cursor Right
+                elif self.keyPressed == 67 or self.keyPressed == 77:
+                    self.__onNavigateRight()
+                # Cursor left
+                elif self.keyPressed == 68 or self.keyPressed == 75:
+                    self.__onNavigateRight()
+                # Cursor up
+                elif self.keyPressed == 65 or self.keyPressed == 72:
+                    self.__onNavigateUp()
+                # Cursor down
+                elif self.keyPressed == 66 or self.keyPressed == 80:
+                    self.__onNavigateDown()
+                # 's' Set friendly name
+                elif self.keyPressed == ord('s'):
+                    self.__onEnterFriendlyName()
+                # 'a' Add TX stream
+                elif self.keyPressed == ord('a'):
+                    self.__onAddTxStream()
+                # 'd' Delete stream
+                elif self.keyPressed == ord('d'):
+                    self.__onDeleteStream()
+                # 't' About dialogue
+                elif self.keyPressed == ord('t'):
+                    self.__onAboutDialogue()
+                # 'm' Increase tx rate of selected stream
+                elif self.keyPressed == ord('m'):
+                    self.__onIncreaseTxRate()
+                # 'n' Decrease tx rate of selected stream
+                elif self.keyPressed == ord('n'):
+                    self.__onDecreaseTxRate()
+                # 'j' Increase Tx Stream Time to Live
+                elif self.keyPressed == ord('j'):
+                    self.__onIncreaseTimeToLive()
+                # 'h' Decrease Tx Stream Time to Live
+                elif self.keyPressed == ord('h'):
+                    self.__onDecreaseTimeToLive()
+                # 'l' Increase payload size
+                elif self.keyPressed == ord('l'):
+                    self.__onIncreasePayloadSize()
+                # 'k' Decrease payload size
+                elif self.keyPressed == ord('k'):
+                    self.__onDecreasePayloadSize()
+                # 'p' Increment sync source ID of stream
+                elif self.keyPressed == ord('p'):
+                    self.__onIncrementSyncSourceID()
+                # 'o' Decrement sync source ID of stream
+                elif self.keyPressed == ord('o'):
+                    self.__onDecrementSyncSourceID()
+                # 'e' Toggle error messages on/off
+                elif self.keyPressed == ord('e'):
+                    self.__onToggleErrorMessages()
+
+                # Special features
+                # 'z' Toggle packet generation on/off for selected stream
+                elif self.keyPressed == ord('z'):
+                    self.__onTogglePacketGenerationOnOff()
+                # 'x' Toggle jitter simulation for selected stream
+                elif self.keyPressed == ord('x'):
+                    self.__onToggleJitterSimulationOnOff()
+                # 'c' Insert minor packet loss for selected stream
+                elif self.keyPressed == ord('c'):
+                    self.__onInsertMinorPacketLoss()
+                # 'v' Insert major packet loss for selected stream
+                elif self.keyPressed == ord('v'):
+                    self.__onInsertMajorPacketloss()
+                else:
+                    # print ("UI: key pressed not known: " + str(self.keyPressed))
+                    pass
+                # Clear key buffer
+                self.keyPressed = None
+                # Trigger a screen redraw
+                self.redrawScreen = True
+                # Now clear the 'wakeupUI event' flag (because we've processed this key press)
+                self.wakeUpUI.clear()
+
+
             # Now re-arm the getch thread
             self.enableGetch.set()
         print ("UI.__renderDisplayThread ended")
@@ -850,15 +922,12 @@ class UI(object):
                 self.currentTermHeight = h
                 Message.addMessage(
                     "INFO: Terminal size has changed to " + str(self.currentTermWidth) + "," + str(self.currentTermHeight))
-                print(str(self.currentTermWidth) + ", " + str(self.currentTermHeight) + "\r")
-
             time.sleep(0.2)
         print ("UI.__detectTerminalSizeThread ended\r")
 
 
     # Autonomous thread to monitor key presses
     def __keysPressedThread(self):
-
         while self.keysPressedThreadActive == True:
             # Wait for getch to be enabled (with a timeout)
             self.enableGetch.wait(timeout= 2)
