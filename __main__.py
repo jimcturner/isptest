@@ -940,7 +940,7 @@ class UI(object):
     # Autonomous thread to render the screen and parse keyboard presses
     def __renderDisplayThread(self):
         while self.renderDisplayThreadActive == True:
-            # Blocking Wait for the wakeUpUi Event (or a timeout, whichever first)
+            # Blocking Wait for the wakeUpUi Event (or a 1 sectimeout, whichever first)
             self.wakeUpUI.wait(timeout=1)
             # Now clear the 'wakeupUI event' flag (because we've processed this key press)
             self.wakeUpUI.clear()
@@ -954,6 +954,9 @@ class UI(object):
                 self.__renderBottomToolbar()
 
             self.__updateClock()
+            if len(self.rtpRxStreamsDict) > 0:
+                for stream in self.rtpRxStreamsDict:
+                    Term.printAt(str(stream),1,5)
 
 
 
@@ -2757,6 +2760,9 @@ def main(argv):
                     sock = socket.socket(socket.AF_INET,  # Internet
                                          socket.SOCK_DGRAM)  # UDP
                     # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    # Set a timeout of 1 second. This should mean that socket.recvfrom() only blocks for a maximum
+                    # of 1 second if there's no data incoming
+                    sock.settimeout(1)
                     sock.bind((UDP_RX_IP, UDP_RX_PORT))
 
                     # If this a 'regeneration' of the existing socket, we need to inform all the existing RtpStream objects of the change
