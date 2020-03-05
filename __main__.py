@@ -580,8 +580,8 @@ class UI(object):
     # def __init__(self,operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
     #                 rtpRxStreamsDict, rtpRxStreamsDictMutex,
     #                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT):
-    def __init__(self):
-
+    def __init__(self, uiShutdownFlag):
+        self.uiShutdownFlag = uiShutdownFlag
         self.keysPressedThreadActive = True
         self.renderDisplayThreadActive = True
         # Stores the last pressed keystroke
@@ -628,22 +628,43 @@ class UI(object):
         # Arm the getch thread
         self.enableGetch.set()
 
+    def kill(self):
+        print ("UI.kill() method called\r")
+        # Signal the __keysPressedThread to end
+        if self.keysPressedThread.is_alive():
+            self.keysPressedThreadActive = False
+            # Block until the thread ends
+            print("UI.kill() Waiting for __keysPressedThread to end\r")
+            self.keysPressedThread.join()
+        else:
+            print("UI.kill() keysPressedThread.is_alive() didn't return True\r")
+
+        if self.renderDisplayThread.is_alive():
+            # End the __renderDisplayThread
+            self.renderDisplayThreadActive = False
+            # Block until the thread ends
+            print("UI.kill() Waiting for renderDisplayThread to end\r")
+            self.renderDisplayThread.join()
+        else:
+            print("UI.kill() renderDisplayThread.is_alive() didn't return True\r")
+
+        # A cross-platform method to catch keypresses (and not echo them to the screen)
     # A cross-platform method to catch keypresses (and not echo them to the screen)
     def __getch(self):
         # Define a getch() function to catch keystrokes (for control of the RTP Generator thread)
         # This code has been lifted from https://gist.github.com/jfktrey/8928865
         if platform.system() == "Windows":
             import msvcrt
-            time.sleep(0.2) # 0.2sec timeout
+            time.sleep(0.2)  # 0.2sec timeout
             if msvcrt.kbhit():
                 return ord(msvcrt.getch())
             else:
-                print("Getch timeout\r")
+                # print("Getch timeout\r")
                 return None
 
         else:
             import tty, termios, sys
-            from select import select   # For timeout functionality
+            from select import select  # For timeout functionality
             fd = sys.stdin.fileno()
             old_settings = termios.tcgetattr(fd)
             try:
@@ -659,9 +680,10 @@ class UI(object):
                 termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
             # Return the ascii value of the key pressed
             try:
+                # print ("getch() " + str (ord(ch)) + "\r")
                 return ord(ch)
             except:
-                print("Getch timeout\r")
+                # print("Getch timeout\r")
                 return None
 
     def __drawStreamsTable(self):
@@ -764,40 +786,32 @@ class UI(object):
         pass
         # A method to destroy this UI object and all associated threads
 
-    def kill(self):
-        print ("kill() method called\r")
-        # End the _keysPressedThread
-        self.keysPressedThreadActive = False
-        # self.keysPressedThread.join()
-        # print("Keys pressed thread finished")
-
-        # End the __renderDisplayThread
-        self.renderDisplayThreadActive = False
-
-        sys.exit()
-
     # Autonomous thread to render the screen and parse keyboard presses
     def __renderDisplayThread(self):
         secs = 0
         while self.renderDisplayThreadActive == True:
             self.wakeUpUI.wait(timeout=2)
             # Has the timeout been exceeded with no key pressed
+            # print ("__renderDisplayThread() " + str(self.keyPressed)+"\r")
             if self.keyPressed == None:
-                print ("UI " + str(secs) + " Timeout exceeded\r")
+                # print ("UI " + str(secs) + " Timeout exceeded\r")
+                pass
+            elif self.keyPressed == 3:
+                self.keyPressed = None
+                print ("UI: you pressed Ctrl-C. Setting self.uiShutdownFlag\r")
+                # Set uiShutdownFlag. This will be monitored by main()
+                self.uiShutdownFlag.set()
+
+
             else:
-                print ("UI " + str(secs) + " Key pressed: " + str(self.keyPressed) + "\r")
-                # Check for Ctrl -C
-                if self.keyPressed == 3:
-                    print ("ctrl-c\r")
-                    self.kill()
-                else:
-                    pass
+                print ("UI: key pressed not known: " + str(self.keyPressed))
             # Now clear the 'wakeupUI event' flag (because we've processed this key press)
             self.wakeUpUI.clear()
             # Now re-arm the getch thread
             self.enableGetch.set()
             secs += 2
         print ("__renderDisplapThread ended")
+
     # Autonomous thread to monitor key presses
     def __keysPressedThread(self):
 
@@ -2215,22 +2229,6 @@ def signalHandler(signum, frame):
 # #####################
 def main(argv):
 
-    # Register signal handler for SIGINT and SIGTERM
-    signal.signal(signal.SIGINT, signalHandler)
-    signal.signal(signal.SIGTERM, signalHandler)
-
-    # Create a UI object (which will spawn a renderDisplay and catchKeyboardPresses thread)
-    ui = UI()
-
-    try:
-        #Endless while loop
-        while True:
-            print ("main: " + str(listCurrentThreads()) + "\r")
-            time.sleep(1)
-
-        # Until
-    except GracefulShutdown:
-
     # Invoke colorama init() method to allow ansi escape sequences to work on Windows
     init(autoreset=True)
 
@@ -2526,20 +2524,30 @@ def main(argv):
     # Create an associated mutex
     rtpTxStreamResultsDictMutex = threading.Lock()
 
-    # Start keyboard monitoring thread
-    catchKeyboardPresses = threading.Thread(target=__catchKeyboardPresses, args=(MODE, keyPressed,))
-    catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
-    catchKeyboardPresses.setName("__catchKeyboardPresses")
-    catchKeyboardPresses.start()
+    # # Start keyboard monitoring thread
+    # catchKeyboardPresses = threading.Thread(target=__catchKeyboardPresses, args=(MODE, keyPressed,))
+    # catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
+    # catchKeyboardPresses.setName("__catchKeyboardPresses")
+    # catchKeyboardPresses.start()
+    #
+    # # Create a display thread
+    # displayThread = threading.Thread(target=__displayThread,
+    #                                  args=(MODE, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
+    #                                        rtpRxStreamsDict, rtpRxStreamsDictMutex,
+    #                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT,))
+    # displayThread.daemon = True  # Thread will auto shutdown when the prog ends
+    # displayThread.setName("__displayThread")
+    # displayThread.start()
+        # Register signal handler for SIGINT and SIGTERM
+    signal.signal(signal.SIGINT, signalHandler)
+    signal.signal(signal.SIGTERM, signalHandler)
 
-    # Create a display thread
-    displayThread = threading.Thread(target=__displayThread,
-                                     args=(MODE, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
-                                           rtpRxStreamsDict, rtpRxStreamsDictMutex,
-                                           rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT,))
-    displayThread.daemon = True  # Thread will auto shutdown when the prog ends
-    displayThread.setName("__displayThread")
-    displayThread.start()
+    # Create a UI object (which will spawn a renderDisplay and catchKeyboardPresses thread)
+    # Create flag that will be used by UI to signal back to main() that a shutdown has been requested
+    uiShutdownFlag = threading.Event()
+    # Make sure flag is initially cleared
+    uiShutdownFlag.clear()
+    ui = UI(uiShutdownFlag)
 
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
@@ -2566,6 +2574,8 @@ def main(argv):
 
     # Main program execution loops
     try:
+
+
         if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
             # Flag to signal whether RtpStream (Receive stream) socket vars have to be refreshed.
             # This will happen if the receive socket has to be recreated (due to an OS (Windows) error
@@ -2729,21 +2739,18 @@ def main(argv):
                             # Delete the stream (key) from the dictionary as not wanted
                             rtpRxStreamTempDict.pop(stream, None)
 
-                    # Finally, check that the renderDisplay and catchKeyboardPresses threads are still running
-                    # If not, trigger a graceful exit of the program.
-                    if not ui.renderDisplayThread.is_alive() and not ui.keysPressedThread.is_alive():
-                        print("main() renderDisplayThread and keysPressedThread not running. Shutting down")
-                        # Raise an exception to cause main() to break
+                    # Finally, check to see if the UI thread has signalled a shutdown request
+                    if uiShutdownFlag.is_set():
+                        print ("main() uiShutdownFlag.is_set(). Raising ServiceExit Exception\r")
                         raise GracefulShutdown
 
                 # If program execution gets here, the udp socket must have been corrupted
                 Message.addMessage(Term.WhiRed + "WARNING. Recreating UDP receive socket. Glitches might not be genuine")
                 refreshRtpStreamSocketsFlag = True
-                # Finally, check that the renderDisplay and catchKeyboardPresses threads are still running
-                # If not, trigger a graceful exit of the program.
-                if not ui.renderDisplayThread.is_alive() and not ui.keysPressedThread.is_alive():
-                    print("main() renderDisplayThread and keysPressedThread not running. Shutting down")
-                    # Raise an exception to cause main() to break
+
+                # Finally, check to see if the UI thread has signalled a shutdown request
+                if uiShutdownFlag.is_set():
+                    print ("main() uiShutdownFlag.is_set(). Raising ServiceExit Exception\r")
                     raise GracefulShutdown
 
                 time.sleep(1)
@@ -2751,11 +2758,10 @@ def main(argv):
         # Infinite loop to sit in (if in TRANSMIT mode)
         elif MODE == 'TRANSMIT':
             while True:
-                # Check that the renderDisplay and catchKeyboardPresses threads are still running
-                # If not, trigger a graceful exit of the program.
-                if not ui.renderDisplayThread.is_alive() and not ui.keysPressedThread.is_alive():
-                    print("main() renderDisplayThread and keysPressedThread not running. Shutting down")
-                    # Raise an exception to cause main() to break
+                Term.printAt(str(listCurrentThreads()),1,1)
+                # Finally, check to see if the UI thread has signalled a shutdown request
+                if uiShutdownFlag.is_set():
+                    print ("main() uiShutdownFlag.is_set(). Raising ServiceExit Exception\r")
                     raise GracefulShutdown
                 time.sleep(1)
 
@@ -2763,6 +2769,10 @@ def main(argv):
     except GracefulShutdown:
         Term.printAt("Main() GracefulShutdown in progress",1,1)
         ui.kill()
+        # Next:
+        # Stop DiskLogger
+        # Kill all stream objects
+
 
 
 

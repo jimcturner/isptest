@@ -145,7 +145,7 @@ class UI(object):
                 # Now disarm key checking (until it is re-enabled elsewhere)
                 self.enableGetch.clear()
             self.getchCounter += 1
-        print("__keysPressedThread ending\r")
+        print("UI: __keysPressedThread ending\r")
 
 class ServiceExit(Exception):
   """
@@ -168,8 +168,9 @@ def main(argv):
     print('Starting main program\r')
     # Start the job threads
     try:
-        # Create flag that will be used by UI to signal to main() that a shutdown has been requested
+        # Create flag that will be used by UI to signal back to main() that a shutdown has been requested
         uiShutdownFlag = threading.Event()
+        # Make sure flag is initially cleared
         uiShutdownFlag.clear()
         ui = UI(uiShutdownFlag)
 
