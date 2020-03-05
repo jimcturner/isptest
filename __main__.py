@@ -863,6 +863,9 @@ class UI(object):
             if self.keyPressed == 3:
                 # Set uiShutdownFlag. This will be monitored by main()
                 self.shutdownFlag.set()
+                # Force an update of the while loop in __renderDisplayThread (to expedite shutdown - otherwise, we
+                # have to wait for the self.wakeUpUI timeout
+                self.wakeUpUI.set()
             # Cursor Right
             elif self.keyPressed == 67 or self.keyPressed == 77:
                 self.__onNavigateRight()
@@ -956,7 +959,7 @@ class UI(object):
             self.__updateClock()
             if len(self.rtpRxStreamsDict) > 0:
                 for stream in self.rtpRxStreamsDict:
-                    Term.printAt(str(stream),1,5)
+                    Term.printAt(str(self.rtpRxStreamsDict[stream].getRtpStreamStatsByKey("packet_data_received_total_bytes")),1,5)
 
 
 
