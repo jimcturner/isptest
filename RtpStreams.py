@@ -1149,6 +1149,17 @@ class RtpReceiveStream(object):
         filteredStats = {k: v for k, v in stats.items() if k.startswith(keyFilter)}
         return filteredStats
 
+    def getRtpStreamStatsByKey(self, key):
+        # Thread safe method to retrive a single stats item by key
+        # If the key doesn't exist, it will return None type
+        self.__accessRtpStreamStatsMutex.acquire()
+        stats = self.__stats.copy()
+        self.__accessRtpStreamStatsMutex.release()
+        if key in stats:
+            return stats[key]
+        else:
+            return None
+
     # Thread-safe method for accessing realtime RtpStream eventList
     # No args: Returns the entire list
     # 1 arg: Returns the last n events
@@ -1407,6 +1418,17 @@ class RtpStreamResults(object):
         filteredStats = {k: v for k, v in stats.items() if k.startswith(keyFilter)}
         return filteredStats
 
+    def getRtpStreamStatsByKey(self, key):
+        # Thread safe method to retrive a single stats item by key
+        # If the key doesn't exist, it will return None type
+        self.__accessRtpStreamStatsMutex.acquire()
+        stats = self.__stats.copy()
+        self.__accessRtpStreamStatsMutex.release()
+        if key in stats:
+            return stats[key]
+        else:
+            return None
+
     # Thread-safe method for accessing realtime RtpStream eventList
     # No args: Returns the entire list
     # 1 arg: Returns the last n events
@@ -1570,6 +1592,15 @@ class RtpGenerator(object):
                 'Tx Source Port': self.UDP_TX_SRC_PORT,
                 'Time to live': self.timeToLive
                 }
+
+    def getRtpStreamStatsByKey(self, key):
+        # Method to retrieve a single stats item by key
+        # If the key doesn't exist, it will return None type
+        stats = self.getRtpStreamStats()
+        if key in stats:
+            return stats[key]
+        else:
+            return None
 
     def setFriendlyName(self, friendlyName):
         # Ultimately this name will be transmitted as part of the stream (so that the receiver

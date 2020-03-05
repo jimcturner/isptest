@@ -577,10 +577,22 @@ def humanise(key,value):
 
 # A class that will be responsible for rendering the display and catching keyboard output
 class UI(object):
-    # def __init__(self,operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
-    #                 rtpRxStreamsDict, rtpRxStreamsDictMutex,
-    #                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT):
-    def __init__(self, shutdownFlag):
+    def __init__(self,operationMode, specialFeaturesModeFlag,
+                    rtpTxStreamsDict, rtpTxStreamsDictMutex,
+                    rtpRxStreamsDict, rtpRxStreamsDictMutex,
+                    rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
+                    UDP_RX_IP, UDP_RX_PORT, shutdownFlag):
+
+        self.operationMode = operationMode
+        self.specialFeaturesModeFlag = specialFeaturesModeFlag
+        self.rtpTxStreamsDict = rtpTxStreamsDict
+        self.rtpTxStreamsDictMutex = rtpTxStreamsDictMutex
+        self.rtpRxStreamsDict = rtpRxStreamsDict
+        self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
+        self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
+        self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
+        self.UDP_RX_IP = UDP_RX_IP
+        self.UDP_RX_PORT = UDP_RX_PORT
         # Threading.Event object used to signal Ctrl-C shutdown request to main()
         self.shutdownFlag = shutdownFlag
 
@@ -601,6 +613,12 @@ class UI(object):
         # Get initial size of terminal
         self.currentTermWidth, self.currentTermHeight = Term.getTerminalSize()
 
+        # Screen label showing the available key commands (depending upon mode)
+        self.keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abou[t]"
+
+        self.txStreamModifierCommandsString = "TX  modifier: [o/p] src ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
+        # Extra command strip for 'special features' mode
+        self.extraKeyCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
 
         # Declare lists to hold list of available rx and tx streams that can be displayed
 
@@ -719,14 +737,36 @@ class UI(object):
     def __drawMessageTable(self):
         pass
 
+    def __initialiseScreen(self):
+        Term.clearTerminalScrollbackBuffer()
+        Term.setBackgroundColour(Term.BLUE)
+
     def __renderTopToolbar(self):
-        pass
+        Term.printTitleBar("IBEOO ISP Analyser V1.1", 1, Term.BLACK, Term.WHITE)
+        # Print operation mode (plus receive IP:Port if in Receive mode)
+        if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
+            Term.printAt(self.operationMode + " MODE", 1, 1, Term.BLACK, Term.WHITE)
+        elif self.operationMode == 'RECEIVE':
+            Term.printAt(self.operationMode + " " + str(self.UDP_RX_IP) + ":" + \
+                         str(self.UDP_RX_PORT), 1, 1, Term.BLACK, Term.WHITE)
 
     def __updateClock(self):
-        pass
+        # Update clock on top RHS of screen
+        Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
 
     def __renderBottomToolbar(self):
-        pass
+        Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 1), Term.WHITE)
+        # Print list of key commands
+        Term.printAt(self.keyCommandsString, 1, (self.currentTermHeight - 1), Term.BLACK, Term.WHITE)
+        # For tx mode, add an extra row of commands
+        if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
+            Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 2), Term.WHITE)
+            Term.printAt(self.txStreamModifierCommandsString, 1, (self.currentTermHeight - 2), Term.BLACK, Term.WHITE)
+
+            # For special features mode, add yet another row of commands
+            if self.specialFeaturesModeFlag == True:
+                Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 3), Term.WHITE)
+                Term.printAt(self.extraKeyCommandsString, 1, (self.currentTermHeight - 3), Term.BLACK, Term.WHITE)
 
     # Cursor right
     def __onNavigateRight(self):
@@ -812,96 +852,109 @@ class UI(object):
     def __onAboutDialogue(self):
         pass
 
+    # Tests the key pressed, and calls the appropriate method
+    def __parseKeyPressed(self):
+        # Parse keyboard commands
+        # print ("__renderDisplayThread() " + str(self.keyPressed)+"\r")
+        if self.keyPressed == None:
+            pass
+        else:
+            # 'Ctrl-C' - request shutdown
+            if self.keyPressed == 3:
+                # Set uiShutdownFlag. This will be monitored by main()
+                self.shutdownFlag.set()
+            # Cursor Right
+            elif self.keyPressed == 67 or self.keyPressed == 77:
+                self.__onNavigateRight()
+            # Cursor left
+            elif self.keyPressed == 68 or self.keyPressed == 75:
+                self.__onNavigateRight()
+            # Cursor up
+            elif self.keyPressed == 65 or self.keyPressed == 72:
+                self.__onNavigateUp()
+            # Cursor down
+            elif self.keyPressed == 66 or self.keyPressed == 80:
+                self.__onNavigateDown()
+            # 's' Set friendly name
+            elif self.keyPressed == ord('s'):
+                self.__onEnterFriendlyName()
+            # 'a' Add TX stream
+            elif self.keyPressed == ord('a'):
+                self.__onAddTxStream()
+            # 'd' Delete stream
+            elif self.keyPressed == ord('d'):
+                self.__onDeleteStream()
+            # 't' About dialogue
+            elif self.keyPressed == ord('t'):
+                self.__onAboutDialogue()
+            # 'm' Increase tx rate of selected stream
+            elif self.keyPressed == ord('m'):
+                self.__onIncreaseTxRate()
+            # 'n' Decrease tx rate of selected stream
+            elif self.keyPressed == ord('n'):
+                self.__onDecreaseTxRate()
+            # 'j' Increase Tx Stream Time to Live
+            elif self.keyPressed == ord('j'):
+                self.__onIncreaseTimeToLive()
+            # 'h' Decrease Tx Stream Time to Live
+            elif self.keyPressed == ord('h'):
+                self.__onDecreaseTimeToLive()
+            # 'l' Increase payload size
+            elif self.keyPressed == ord('l'):
+                self.__onIncreasePayloadSize()
+            # 'k' Decrease payload size
+            elif self.keyPressed == ord('k'):
+                self.__onDecreasePayloadSize()
+            # 'p' Increment sync source ID of stream
+            elif self.keyPressed == ord('p'):
+                self.__onIncrementSyncSourceID()
+            # 'o' Decrement sync source ID of stream
+            elif self.keyPressed == ord('o'):
+                self.__onDecrementSyncSourceID()
+            # 'e' Toggle error messages on/off
+            elif self.keyPressed == ord('e'):
+                self.__onToggleErrorMessages()
+
+            # Special features
+            # 'z' Toggle packet generation on/off for selected stream
+            elif self.keyPressed == ord('z'):
+                self.__onTogglePacketGenerationOnOff()
+            # 'x' Toggle jitter simulation for selected stream
+            elif self.keyPressed == ord('x'):
+                self.__onToggleJitterSimulationOnOff()
+            # 'c' Insert minor packet loss for selected stream
+            elif self.keyPressed == ord('c'):
+                self.__onInsertMinorPacketLoss()
+            # 'v' Insert major packet loss for selected stream
+            elif self.keyPressed == ord('v'):
+                self.__onInsertMajorPacketloss()
+            else:
+                # print ("UI: key pressed not known: " + str(self.keyPressed))
+                pass
+            # Clear key buffer
+            self.keyPressed = None
+            # Trigger a screen redraw
+            self.redrawScreen = True
+
 
     # Autonomous thread to render the screen and parse keyboard presses
     def __renderDisplayThread(self):
         while self.renderDisplayThreadActive == True:
-            # Wait for the wakeUpUi Event (or a timeout, whichever first)
-            self.wakeUpUI.wait(timeout=2)
+            # Blocking Wait for the wakeUpUi Event (or a timeout, whichever first)
+            self.wakeUpUI.wait(timeout=1)
+            # Now clear the 'wakeupUI event' flag (because we've processed this key press)
+            self.wakeUpUI.clear()
+            # Determine which key pressed, and call the appropriate method
+            self.__parseKeyPressed()
 
-            #Parse keyboard commands
-            # print ("__renderDisplayThread() " + str(self.keyPressed)+"\r")
-            if self.keyPressed == None:
-                pass
-            else:
-                # 'Ctrl-C' - request shutdown
-                if self.keyPressed == 3:
-                    # Set uiShutdownFlag. This will be monitored by main()
-                    self.shutdownFlag.set()
-                # Cursor Right
-                elif self.keyPressed == 67 or self.keyPressed == 77:
-                    self.__onNavigateRight()
-                # Cursor left
-                elif self.keyPressed == 68 or self.keyPressed == 75:
-                    self.__onNavigateRight()
-                # Cursor up
-                elif self.keyPressed == 65 or self.keyPressed == 72:
-                    self.__onNavigateUp()
-                # Cursor down
-                elif self.keyPressed == 66 or self.keyPressed == 80:
-                    self.__onNavigateDown()
-                # 's' Set friendly name
-                elif self.keyPressed == ord('s'):
-                    self.__onEnterFriendlyName()
-                # 'a' Add TX stream
-                elif self.keyPressed == ord('a'):
-                    self.__onAddTxStream()
-                # 'd' Delete stream
-                elif self.keyPressed == ord('d'):
-                    self.__onDeleteStream()
-                # 't' About dialogue
-                elif self.keyPressed == ord('t'):
-                    self.__onAboutDialogue()
-                # 'm' Increase tx rate of selected stream
-                elif self.keyPressed == ord('m'):
-                    self.__onIncreaseTxRate()
-                # 'n' Decrease tx rate of selected stream
-                elif self.keyPressed == ord('n'):
-                    self.__onDecreaseTxRate()
-                # 'j' Increase Tx Stream Time to Live
-                elif self.keyPressed == ord('j'):
-                    self.__onIncreaseTimeToLive()
-                # 'h' Decrease Tx Stream Time to Live
-                elif self.keyPressed == ord('h'):
-                    self.__onDecreaseTimeToLive()
-                # 'l' Increase payload size
-                elif self.keyPressed == ord('l'):
-                    self.__onIncreasePayloadSize()
-                # 'k' Decrease payload size
-                elif self.keyPressed == ord('k'):
-                    self.__onDecreasePayloadSize()
-                # 'p' Increment sync source ID of stream
-                elif self.keyPressed == ord('p'):
-                    self.__onIncrementSyncSourceID()
-                # 'o' Decrement sync source ID of stream
-                elif self.keyPressed == ord('o'):
-                    self.__onDecrementSyncSourceID()
-                # 'e' Toggle error messages on/off
-                elif self.keyPressed == ord('e'):
-                    self.__onToggleErrorMessages()
+            ########## Start rendering the screen
+            if self.redrawScreen:
+                self.__initialiseScreen()
+                self.__renderTopToolbar()
+                self.__renderBottomToolbar()
 
-                # Special features
-                # 'z' Toggle packet generation on/off for selected stream
-                elif self.keyPressed == ord('z'):
-                    self.__onTogglePacketGenerationOnOff()
-                # 'x' Toggle jitter simulation for selected stream
-                elif self.keyPressed == ord('x'):
-                    self.__onToggleJitterSimulationOnOff()
-                # 'c' Insert minor packet loss for selected stream
-                elif self.keyPressed == ord('c'):
-                    self.__onInsertMinorPacketLoss()
-                # 'v' Insert major packet loss for selected stream
-                elif self.keyPressed == ord('v'):
-                    self.__onInsertMajorPacketloss()
-                else:
-                    # print ("UI: key pressed not known: " + str(self.keyPressed))
-                    pass
-                # Clear key buffer
-                self.keyPressed = None
-                # Trigger a screen redraw
-                self.redrawScreen = True
-                # Now clear the 'wakeupUI event' flag (because we've processed this key press)
-                self.wakeUpUI.clear()
+            self.__updateClock()
+
 
 
             # Now re-arm the getch thread
@@ -2657,7 +2710,11 @@ def main(argv):
     shutdownFlag = threading.Event()
     # Make sure flag is initially cleared
     shutdownFlag.clear()
-    ui = UI(shutdownFlag)
+    ui = UI(MODE, specialFeaturesModeFlag,\
+        rtpTxStreamsDict, rtpTxStreamsDictMutex,\
+        rtpRxStreamsDict, rtpRxStreamsDictMutex,\
+        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,\
+        UDP_RX_IP, UDP_RX_PORT,shutdownFlag)
 
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
@@ -2868,8 +2925,8 @@ def main(argv):
         # Infinite loop to sit in (if in TRANSMIT mode)
         elif MODE == 'TRANSMIT':
             while True:
-                Term.printAt(str(listCurrentThreads()),1,1)
-                # Finally, check to see if the UI thread has signalled a shutdown request
+                # Term.printAt(str(listCurrentThreads()),1,1)
+                # Periodically check to see if the UI thread has signalled a shutdown request
                 if shutdownFlag.is_set():
                     print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
                     raise GracefulShutdown
