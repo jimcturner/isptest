@@ -628,6 +628,7 @@ class UI(object):
         # Arm the getch thread
         self.enableGetch.set()
 
+    # A method to destroy this UI object and all associated threads
     def kill(self):
         print ("UI.kill() method called\r")
         # Signal the __keysPressedThread to end
@@ -648,7 +649,6 @@ class UI(object):
         else:
             print("UI.kill() renderDisplayThread.is_alive() didn't return True\r")
 
-        # A cross-platform method to catch keypresses (and not echo them to the screen)
     # A cross-platform method to catch keypresses (and not echo them to the screen)
     def __getch(self):
         # Define a getch() function to catch keystrokes (for control of the RTP Generator thread)
@@ -784,7 +784,7 @@ class UI(object):
     # 't'
     def __onAboutDialogue(self):
         pass
-        # A method to destroy this UI object and all associated threads
+
 
     # Autonomous thread to render the screen and parse keyboard presses
     def __renderDisplayThread(self):
