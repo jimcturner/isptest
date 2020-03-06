@@ -819,7 +819,12 @@ class UI(object):
             import msvcrt
             time.sleep(0.2)  # 0.2sec timeout
             if msvcrt.kbhit():
-                return ord(msvcrt.getch())
+                    # return ord(msvcrt.getch())
+                ch = msvcrt.getch()
+                    # Trap Escape sequences prefix codes (only interested in the final digit - Windows esc seq start with 224,x)
+                while ord(ch) == 224:
+                    ch = msvcrt.getch()
+                return ord(ch)
             else:
                 # print("Getch timeout\r")
                 return None
@@ -836,7 +841,7 @@ class UI(object):
                 # ch = sys.stdin.read(1)
                 if i:
                     ch = sys.stdin.read(1)
-                    # Trap Escape sequences prefix codes (only interested in the final digit)
+                    # Trap Escape sequences prefix codes (only interested in the final digit - Linux esc seq start with 27,91,x)
                     while ord(ch) == 27 or ord(ch) == 91:
                         ch = sys.stdin.read(1)
 
