@@ -757,6 +757,14 @@ class UI(object):
         #                ["", ""],
         #                ],DATASET_TO_DISPLAY,ROW_SELECTOR])
 
+        # Stores the most recent message - used to determine whether we need to redraw the message table
+        self.lastMessageAdded = ""
+
+        # Get Initial snapshot of current verbosity level
+        self.intialVerbosityLevel = Message.verbosityLevel
+        # Flag to turn on/off error messages (verbosity level 1)
+        self.showErrorsFlag = False
+
 
         # Create/start a thread to monitor the size of the terminal window
         self.detectTerminalSizeThread = threading.Thread(target=self.__detectTerminalSizeThread, args=())
@@ -1051,8 +1059,51 @@ class UI(object):
             Term.setBackgroundColourSingleLine(1, x, Term.BLUE)
         Term.printTable(tableRowsRendered, xPos, yPos, tableWidth, Term.BLACK, Term.WHITE)
 
+    ##################### Create table showing messages - only redraws if there are new messages
     def __drawMessageTable(self):
-        pass
+        ##################### Create table showing messages - only redraws if there are new messages
+        redrawMessageTable = False
+        # Message table should fill lower half of window
+        yPos = int(self.currentTermHeight / 2) + 2
+        # Every toolbar at the bottom of the screen will allow less room for messages
+        maxNoOfMessagesThatWillFitScreen = int(self.currentTermHeight / 2) - 9
+
+        # Get last x messages. Make a deep copy as we're going to add blankspace padding
+        messages = deepcopy(Message.getMessages(maxNoOfMessagesThatWillFitScreen))
+        if len(messages) > 0:
+            if self.lastMessageAdded != messages[-1][1]:
+                # New messages have been added, so set the redraw flag
+                redrawMessageTable = True
+            # Take a copy of the most recent message for next time around the loop
+            lastMessageAdded = messages[-1][1]
+
+        if redrawMessageTable or self.redrawScreen:
+            redrawMessageTable = False  # Clear flag
+            # Now iterate over actual messages to make sure they're not too long for display
+            # If they are, truncate them. (Terminal width - 12 chars) seems to work
+            # If they're too short, make them longer (to fill the space)
+            maxMessageDisplayLength = self.currentTermWidth - 12
+            for message in messages:
+                # If message to long to fit the screen, truncate it
+                if len(message[1]) > maxMessageDisplayLength:
+                    message[1] = message[1][:maxMessageDisplayLength - 2]
+                else:
+                    # Otherwise pad the message out with spaces
+                    paddingLength = (maxMessageDisplayLength - 2) - len(message[1])
+                    if paddingLength > 0:
+                        paddingString = " " * paddingLength
+                        try:
+                            message[1] += paddingString
+                        except Exception as e:
+                            Message.addMessage("__displayThread: Invalid message")
+
+            if len(messages) > 0:
+                width, height, tableData = createTable(messages, "Messages")
+                # Overwrite previous messages table
+                for y in range(yPos, yPos + (maxNoOfMessagesThatWillFitScreen + 3)):
+                    Term.setBackgroundColourSingleLine(1, y, Term.BLUE)
+                Term.printTable(tableData, 2, yPos, width, Term.BLACK, Term.WHITE)
+        del messages[:]
 
     def __initialiseScreen(self):
         # Set up display window
@@ -1267,9 +1318,9 @@ class UI(object):
                 # print ("UI: key pressed not known: " + str(self.keyPressed))
                 pass
             # # Clear key buffer
-            # self.keyPressed = None
-            # # Trigger a screen redraw
-            # self.redrawScreen = True
+            self.keyPressed = None
+            # Trigger a screen redraw
+            self.redrawScreen = True
 
     # Utility method to create create an up to date list, from a dictionary (taking additions and deletions into account)
     def __updateAvailableStreamsList(self, rtpStreamList, rtpStreamDict, rtpStreamDictMutex):
@@ -1428,34 +1479,37 @@ class UI(object):
             self.wakeUpUI.clear()
 
             # Update available streams lists
-            # self.__updateAvailableStreamsList(self.availableRtpRxStreamList, self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
-            # self.__updateAvailableStreamsList(self.availableRtpTxStreamList, self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex)
-            # self.__updateAvailableStreamsList(self.availableRtpTxResultsList, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+            if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
+                self.__updateAvailableStreamsList(self.availableRtpTxStreamList, self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex)
+                self.__updateAvailableStreamsList(self.availableRtpTxResultsList, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+            elif self.operationMode == 'RECEIVE':
+                self.__updateAvailableStreamsList(self.availableRtpRxStreamList, self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
 
             # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
-            # if len(self.availableRtpTxStreamList) > 0:
-            #     latestTxStream = self.availableRtpTxStreamList[-1][1]
-            #     # Take a deep copy so that we're not dependent upon this stream existing
-            #     self.latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
+            if len(self.availableRtpTxStreamList) > 0:
+                latestTxStream = self.availableRtpTxStreamList[-1][1]
+                # Take a deep copy so that we're not dependent upon this stream existing
+                self.latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
 
             # Determine which key pressed, and call the appropriate method
-            Term.printAt(str(datetime.datetime.now()) + ", Before: " + str(self.selectedView) + ", " + str(self.keyPressed), 1, 10, Fore.BLACK)
+            # Term.printAt(str(datetime.datetime.now()) + ", Before: " + str(self.selectedView) + ", " + str(self.keyPressed), 1, 10, Fore.BLACK)
             self.__parseKeyPressed()
-            Term.printAt(str(datetime.datetime.now()) + ", After: " + str(self.selectedView) + ", " + str(self.keyPressed), 1, 11, Fore.BLACK)
+            # Term.printAt(str(datetime.datetime.now()) + ", After: " + str(self.selectedView) + ", " + str(self.keyPressed), 1, 11, Fore.BLACK)
 
             ########## Start rendering the screen
-            # if self.redrawScreen:
-            #     # Clear flag
-            #     self.redrawScreen = False
-            #     Term.setBackgroundColour(Term.BLUE)
-            #     self.__renderTopToolbar()
-            #     self.__renderBottomToolbar()
-            Term.printAt(str(datetime.datetime.now()) + ", " + str(self.selectedView), 1, 10, Fore.BLACK)
+            if self.redrawScreen:
+                Term.setBackgroundColour(Term.BLUE)
+                self.__renderTopToolbar()
+                self.__renderBottomToolbar()
+                self.__drawNavigationBar()
+            # Term.printAt(str(datetime.datetime.now()) + ", " + str(self.selectedView), 1, 10, Fore.BLACK)
+
             # Update the clock on the top toolbar
-            # self.__updateClock()
-            # draw the stream stable
-            self.__drawNavigationBar()
-            # self.__drawStreamsTable()
+            self.__updateClock()
+            # draw the stream table
+            self.__drawStreamsTable()
+            # draw the messages table
+            self.__drawMessageTable()
 
             # if len(self.rtpRxStreamsDict) > 0:
             #     for stream in self.rtpRxStreamsDict:
@@ -1468,6 +1522,8 @@ class UI(object):
             # if len(self.rtpTxStreamsDict) > 0:
             #     for stream in self.rtpTxStreamsDict:
             #         Term.printAt(str(self.rtpTxStreamsDict[stream].getRtpStreamStatsByKey("Tx Rate (actual)")),1,6)
+            # Clear flag
+            self.redrawScreen = False
 
             # Now re-arm the getch thread
             self.enableGetch.set()
@@ -1502,7 +1558,7 @@ class UI(object):
                 # Capture keyboard presses via the getch method (with a 1 second timeout)
                 self.keyPressed = None  #clear the keyboard buffer
                 ch = self.__getch()
-                Term.printAt("getch() : " + str(ch), 1, 7)
+                # Term.printAt("getch() : " + str(ch), 1, 7)
                 # Check to see if a genuine key has been pressed
 
                 if ch != None:
@@ -3266,6 +3322,13 @@ def main(argv):
             # (and their corresponding ResultsTransmitters) are sharing a reference to this single socket, this is a problem.
             refreshRtpStreamSocketsFlag = False
 
+            # Create a diskLogging Thread - pass rtpStream object to it
+            diskLoggerThread = threading.Thread(target=__diskLoggerThread,
+                                                args=(MODE, rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,))
+            diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
+            diskLoggerThread.setName("__diskLoggerThread")
+            diskLoggerThread.start()
+
             while True:
                 # Create receive UDP socket
                 try:
@@ -3298,12 +3361,6 @@ def main(argv):
                     Message.addMessage(str(e))
                     time.sleep(2)
                     exit()
-
-                # Create a diskLogging Thread - pass rtpStream object to it
-                diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,))
-                diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
-                diskLoggerThread.setName("__diskLoggerThread")
-                diskLoggerThread.start()
 
                 data = b""       # Will hold the data received - specify a bytes string
 
