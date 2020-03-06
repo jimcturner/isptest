@@ -3358,7 +3358,7 @@ def main(argv):
                 except Exception as e:
                     Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on "+UDP_RX_IP+":"+str(UDP_RX_PORT)+", "+str(e)+\
                         ". Try another port. Exiting"+Term.FG(Term.RESET))
-                    Message.addMessage(str(e))
+                    Message.addMessage("__main(): " + str(e))
                     time.sleep(2)
                     exit()
 
@@ -3448,11 +3448,17 @@ def main(argv):
                         # Now delete contents of data[]
                         data = b""
 
+                    # Catch timeout exception (and ignore it)
+                    except socket.timeout:
+                        # Message.addMessage("DBUG: main() recvfrom. timeout exception")
+                        pass
+
+                    # Catch all other exceptions
                     except Exception as e:
                         Message.addMessage(Term.WhiRed + "ERR: __main()sock.recvfrom():" + UDP_RX_IP + ":" + \
                             str(UDP_RX_PORT) + ", " + str(id(sock)))
 
-                        Message.addMessage(str(e))
+                        Message.addMessage("__main() recvfrom: " + str(e))
                         try:
                             # Close existing socket
                             sock.close()
