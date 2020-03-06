@@ -613,20 +613,13 @@ class UI(object):
         # Get initial size of terminal
         self.currentTermWidth, self.currentTermHeight = Term.getTerminalSize()
 
-        # Screen label showing the available key commands (depending upon mode)
-        self.keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abou[t]"
-
-        self.txStreamModifierCommandsString = "TX  modifier: [o/p] src ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
-        # Extra command strip for 'special features' mode
-        self.extraKeyCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
-
         # Declare lists to hold list of available rx and tx streams that can be displayed
 
         # These lists are a list of tuples [x,y,z] where
         # [x=streamID (as a string), y=the tx/rx object itself, z=an index value]
         #
         # The array is populated by the use of the utility function __updateAvailableStreamsList()
-        # Meanwhile, main() is maintaining two dictionaries, rtpTxStreamsDict and rtpRxStreamsDict
+        # Meanwhile, main() is declaring three dictionaries, rtpTxStreamsDict, rtpTxResultsDict and  rtpRxStreamsDict
         # The issue with these dictionaries is that the order of them can change (when you iterate through them) making them
         # unsuitable for __displayThread which needs to maintain a chronological order of streams added/removed for display
         # and control purposes
@@ -634,12 +627,136 @@ class UI(object):
         # Therefore the job of __updateAvailableStreamsList() is to poll the supplied dictionary and synchronise any changes
         # (additions or deletions) in the dictionaries to the corresponding lists
 
-        availableRtpRxStreamList = []
-        availableRtpTxStreamList = []
-        availableRtpTxResultsList = []
+        self.availableRtpRxStreamList = []
+        self.availableRtpTxStreamList = []
+        self.availableRtpTxResultsList = []
 
-        selectedView = 0  # Keeps track of which view is currently being displayed
-        selectedTableRow = 0  # Keeps track of the selected row on the stream table
+        self.selectedView = 0  # Keeps track of which view is currently being displayed
+        self.selectedTableRow = 0  # Keeps track of the selected row on the stream table
+        self.streamTableFirstRow = 0  # Tracks the current starting row of the stream table data
+        self.streamTableLastRow = 0  # Tracks the current end row of the stream table data
+
+        # Screen label showing the available key commands (depending upon mode)
+        self.keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abou[t]"
+
+        self.txStreamModifierCommandsString = "TX  modifier: [o/p] src ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
+        # Extra command strip for 'special features' mode
+        self.extraKeyCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
+
+        # define views, tables headings and keys
+        # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
+        # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
+        # views =[name of view 1, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],
+        #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],dataSet[]]
+        # view [n][0] will be the name of the view (used to generate the navigation bar)
+        # view [n][1] is a tuple containing [column title, the stats dictionary key relating to that parameter]
+        # view [n][2] is a reference to the dataset for this view
+        self.views = []
+
+        if self.operationMode == 'LOOPBACK' or self.operationMode == 'TRANSMIT':
+            self.views.append([Term.FG(Term.RED) + "Tx Streams",
+                          [["#", 0],  # Used as an index[]
+                           ["Name", 'Friendly Name'],
+                           ["Src\nPort", 'Tx Source Port'],
+                           ["Dest\n IP", 'Dest IP'],
+                           ["Dest\nPort", 'Dest Port'],
+                           ["Sync\nsrcID", 'Sync Source ID'],
+                           ["Tx\nbps", 'Tx Rate'],
+                           ["Size", 'Packet size'],
+                           ["Bytes\n tx'd", 'Bytes transmitted'],
+                           [" Time\nremain", 'Time to live']
+                           ], self.availableRtpTxStreamList])
+
+        # If actually the receiving end, use availableRtpRxStreamList[] as a source for the stream tables
+        if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
+            self.streamResultsDataSet = self.availableRtpRxStreamList
+
+        # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
+        else:
+            self.streamResultsDataSet = self.availableRtpTxResultsList
+
+        self.views.append(["Summary",
+                      [["#", 0],  # Used as an index
+                       ["Name", "stream_friendly_name"],
+                       ["Src Addr", "stream_srcAddress"],
+                       # ["port", "stream_srcPort"],
+                       ["bps", "packet_data_received_1S_bytes"],
+                       ["Pkts\nlost", "glitch_packets_lost_total_count"],
+                       [" %\nloss", "glitch_packets_lost_total_percent"],
+                       ["Last\nglitch", "glitch_most_recent_timestamp"],
+                       ["glitch\nperiod", "glitch_mean_time_between_glitches"],
+                       ["Count", "glitch_counter_total_glitches"]
+                       # ["CPU\n %","stream_processor_utilisation_percent"]
+                       ], self.streamResultsDataSet])
+
+        self.views.append(["Stream",
+                      [["#", 0],  # Used as an index
+                       ["Name", "stream_friendly_name"],
+                       ["Sync \nSrcID", "stream_syncSource"],
+                       ["Src Addr", "stream_srcAddress"],
+                       ["Src\nport", "stream_srcPort"],
+                       ["Dst Addr", "stream_rxAddress"],
+                       ["Dst\nport", "stream_rxPort"],
+                       ["  Time\nelapsed", "stream_time_elapsed_total"]
+                       ], self.streamResultsDataSet])
+
+        self.views.append(["Packet",
+                      [["#", 0],  # Used as an index[]
+                       ["Name", "stream_friendly_name"],
+                       ["First Seen\npacket", "packet_first_packet_received_timestamp"],
+                       ["Last seen\npacket", "packet_last_seen_received_timestamp"],
+                       ["pack\np/s", "packet_counter_1S"],
+                       ["Length\n(bytes)", "packet_payload_size_mean_1S_bytes"],
+                       ["Recv\nperiod", "packet_mean_receive_period_uS"],
+                       ["Bytes\nRcvd", "packet_data_received_total_bytes"],
+                       ["CPU\n %", "stream_processor_utilisation_percent"]
+                       # ["",""],
+                       ], self.streamResultsDataSet])
+
+        self.views.append(["Glitch",
+                      [["#", 0],  # Used as an index[]
+                       ["Name", "stream_friendly_name"],
+                       ["Mean\nloss", "glitch_packets_lost_per_glitch_mean"],
+                       ["Max\nloss", "glitch_packets_lost_per_glitch_max"],
+                       ["Total\nloss", "glitch_packets_lost_total_count"],
+                       ["Mean\nduration", "glitch_mean_glitch_duration"],
+                       ["Max\nduration", "glitch_max_glitch_duration"],
+                       ["Total\nGlitch", "glitch_counter_total_glitches"],
+                       ["Ignored", "glitch_glitches_ignored_counter"],
+                       ["Threshold", "glitch_Event_Trigger_Threshold_packets"]
+                       ], self.streamResultsDataSet])
+
+        self.views.append(["Historic",
+                      [["#", 0],  # Used as an index[],
+                       ["Name\n", "stream_friendly_name"],
+                       ["24Hr\n", "historic_glitch_counter_last_24Hr"],
+                       ["1Hr\n", "historic_glitch_counter_last_1Hr"],
+                       ["10Min\n", "historic_glitch_counter_last_10Min"],
+                       ["1Min\n", "historic_glitch_counter_last_1Min"],
+                       ["10Sec\n", "historic_glitch_counter_last_10Sec"]
+                       # ["", ""],
+                       ], self.streamResultsDataSet])
+
+        self.views.append(["Jitter",
+                      [["#", 0],  # Used as an index[]
+                       ["Name", "stream_friendly_name"],
+                       ["Long term\n  mean", "jitter_long_term_uS"],
+                       ["Min", "jitter_min_uS"],
+                       ["Max", "jitter_max_uS"],
+                       ["Range", "jitter_range_uS"],
+                       ["1S \nmean", "jitter_mean_1S_uS"]
+                       ], self.streamResultsDataSet])
+
+        # views.append(["Misc",
+        #               [["#", 0],  # Used as an index[]
+        #                ["", ""],
+        #                ["", ""],
+        #                ["", ""],
+        #                ["", ""],
+        #                ["", ""],
+        #                ["", ""],
+        #                ],DATASET_TO_DISPLAY,ROW_SELECTOR])
+
 
         # Create/start a thread to monitor the size of the terminal window
         self.detectTerminalSizeThread = threading.Thread(target=self.__detectTerminalSizeThread, args=())
@@ -719,6 +836,10 @@ class UI(object):
                 # ch = sys.stdin.read(1)
                 if i:
                     ch = sys.stdin.read(1)
+                    # Trap Escape sequences prefix codes (only interested in the final digit)
+                    while ord(ch) == 27 or ord(ch) == 91:
+                        ch = sys.stdin.read(1)
+
                 else:
                     ch = ""
             finally:
@@ -731,15 +852,207 @@ class UI(object):
                 # print("Getch timeout\r")
                 return None
 
+    ######### Print Navigation bar (shows the available views)
+    def __drawNavigationBar(self):
+        navigationBar = ""  # Clear navigation bar for next time
+        # Iterate over the views definition extracting the name of the view (view[0])
+        # and create a printable string with colour coding
+        # If the view is currently selected, black on white, otherwise black on cyan
+        for view in self.views:
+            if view[0] == self.views[self.selectedView][0]:
+                # If this is the 'current' view, create black on white
+                navigationBar += Term.BlaWh + " " + view[0] + " " + Term.WhiBlu + " "
+            else:
+                # Otherwise create as dimmed white on cyan
+                navigationBar += Term.BlaCy + " " + view[0] + " " + Term.WhiBlu + " "
+        # To avoid stale characters appearing on the second line, do a periodic clear of line 2
+        Term.setBackgroundColourSingleLine(1, 2, Term.BLUE)
+        # Print the rendered nav bar
+        Term.printAt(navigationBar, 2, 3)
+
+    ######### Print Navigation bar (shows the available views)
     def __drawStreamsTable(self):
-        pass
+        # Step 1) Establish the titles, data source and row selector (key list) for the table
+
+        # Create a title row
+        titleRow = []
+        # Create a list of keys that will be accessed for this view
+        keyList = []
+        # Extract the column titles and stats keys for the current view
+        for view in self.views:
+            # Is this view the currently selected view?
+            if view[0] == self.views[self.selectedView][0]:
+                # view[1] represents a tuple containing a column title and a key pair
+                columns = view[1]
+                for column in columns:
+                    titleRow.append(column[0])
+                    keyList.append(column[1])
+
+        # Create a table data list with the title row at the head
+        tableData = [titleRow]
+
+        # Step 2) Populate the remaining table rows with data
+        # Calculate the maximum no. of rows that can be displayed in the stream table - determined by the terminal height
+        streamTableNoOfRows = int(self.currentTermHeight / 2) - 9
+
+        # Get a handle on the dataset to be displayed in this particular table
+        # The dataset is pointed to by the 3rd element of each view array
+        dataSetToDisplay = self.views[self.selectedView][2]
+        streamTableDataSetLength = len(dataSetToDisplay)
+
+        if streamTableDataSetLength == 0:
+            self.selectedTableRow = 0
+
+        # Attempt to create the table data
+        if streamTableDataSetLength > 0:
+            if self.selectedTableRow == 0:
+                self.streamTableFirstRow = 0
+
+            # Is the last selected row outside the range of data (this could happen if the
+            # data gets modified whilst the table is not being displayed
+            if self.selectedTableRow > (streamTableDataSetLength - 1):
+                # If so, point the selector to the last item on the list
+                self.selectedTableRow = (streamTableDataSetLength - 1)
+
+            # Are we about to scroll off the end of the currenty displayed rows?
+            if self.selectedTableRow > self.streamTableLastRow:
+                # If so, increment the index of the first row
+                self.streamTableFirstRow = self.selectedTableRow - streamTableNoOfRows + 1
+
+            # Are we about to scroll off the top of the currently displayed rows?
+            if self.selectedTableRow < self.streamTableFirstRow:
+                # If so, decrement the index of the first row
+                self.streamTableFirstRow = self.selectedTableRow
+
+            # Calculate the last row to display based on the starting row and the height of the table
+            self.streamTableLastRow = self.streamTableFirstRow + streamTableNoOfRows - 1
+
+            # Will the last row be outside the actual range of available stream?
+            if self.streamTableLastRow > (streamTableDataSetLength - 1):
+                # If so, set streamTableLastRow to point to the last line of the available data array
+                self.streamTableLastRow = streamTableDataSetLength - 1
+                # And add appropriate padding if required
+                streamTableBlankRowsToAdd = streamTableNoOfRows - (self.streamTableLastRow - self.streamTableFirstRow) - 1
+            else:
+                streamTableBlankRowsToAdd = 0
+
+        else:
+            # No data to display, so padding out the table instead
+            streamTableBlankRowsToAdd = streamTableNoOfRows
+        try:
+            # Confirm that there are some available streams
+            if streamTableDataSetLength > 0:
+                # Iterate over a specified portion of the dataSetToDisplay[]
+                for x in range(self.streamTableFirstRow, self.streamTableLastRow + 1):
+                    # Isolate the stream from the dataSetToDisplay[]
+                    streamData = dataSetToDisplay[x]
+                    # Retrieve the stats dictionary for that key
+                    streamDataStats = streamData[1].getRtpStreamStats()
+                    # iterate over the keys list for each stream - this will list in a new tableData row per stream
+                    tableRow = []  # Create new row to hold the data
+                    ###################################### These are the lines that actually populate the table
+                    for key in keyList:
+                        # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
+                        # which is stored as the third element of a streamData tuple in the dataSetToDisplay[]
+                        if key == 0:
+                            # Grab the index number and assign to table cell
+                            # The index stored in the array is zero indexed, but for useability, start the
+                            # displayed no starting from 1
+                            tableCell = str(streamData[2] + 1)
+
+                        else:
+                            # This is a normal cell with a lookup key specified in the view definition
+                            try:
+                                # Retrieve the data from the rtpStream object by looking up it's key
+                                # Attempt to humanise the data based on object type or clues given by the key name
+                                tableCell = str(self.__humanise(key, streamDataStats[key]))
+
+                                try:
+                                    # Now attempt to colour code the table based on some tests
+                                    # is it a receive stream?
+                                    if type(streamData[1]) == RtpReceiveStream or type(
+                                            streamData[1]) == RtpStreamResults:
+                                        # If so, test the stream stats
+                                        if streamDataStats["packet_data_received_1S_bytes"] == 0:
+                                            # If so, make the row red
+                                            tableCell = Term.FG(Term.RED) + tableCell
+
+                                        if type(streamData[1]) == RtpStreamResults:
+                                            # If so, check to see that the data is fresh by looking at the
+                                            # timestamp inside RtpStreamResults
+                                            # If no fresh data received after 5 seconds, assume there's a problem
+                                            # and colour code the stream red
+                                            if (datetime.datetime.now() - streamData[1].lastUpdatedTimestamp) > \
+                                                    datetime.timedelta(seconds=5):
+                                                tableCell = Term.FG(Term.RED) + tableCell
+
+                                    # is it a transmit stream?
+                                    if type(streamData[1]) == RtpGenerator:
+                                        if streamDataStats["Time to live"] == 0:
+                                            # If tx stream has 'died', dim
+                                            tableCell = Term.DIM + tableCell
+                                except Exception as e:
+                                    Message.addMessage(
+                                        "ERR: __displayThread: (colour coding of stream tables) " + str(e) + "**")
+
+                            except Exception as e:
+                                # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
+                                tableCell = "keyErr"
+                                Message.addMessage("ERR: __displayThread (for key in keyList): " + str(e))
+
+                        # Check to see if this is the currently selected stream
+                        # If so, highlight the row on the table
+                        if streamData[2] == self.selectedTableRow:
+                            # prefix tableCell with White-on-black ASCII code
+                            tableCell = Term.WhBla + str(tableCell)
+                        else:
+                            # Normal text: prefix tableCell with Black-on-White ASCII code
+                            tableCell = Term.BlaWh + str(tableCell)
+                        # Append the formatted table cell data to the tableRow list
+                        tableRow.append(tableCell)
+                    # Now append this complete row to the tableData list (of lists)
+                    tableData.append(tableRow)
+                    del tableRow
+            ###################################### End of lines that actually add data
+            # If the table isn't large enough yet, pad it out with blanks to the length set by streamTableNoOfRows
+            if streamTableBlankRowsToAdd > 0:
+                for x in range(0, streamTableBlankRowsToAdd):
+                    # Create a blank list with the same no. of blanks as there are table columns
+                    tableRow = [] * len(titleRow)
+                    tableData.append(tableRow)
+
+        except Exception as e:
+            Message.addMessage("ERR: __displayThread. streamTable. selected row (" + str(self.selectedTableRow) + \
+                               ") doesn't exist. (streamTableDataSetLength:" + str(
+                streamTableDataSetLength) + "), " + str(e))
+
+        # Step 3) Render the table
+        table = SingleTable(tableData)
+        # Remove all padding to save space on the screen
+        table.padding_left = 0
+        table.padding_right = 0
+        if streamTableDataSetLength > 0:
+            table.title = str(self.selectedTableRow + 1) + "/" + str(streamTableDataSetLength)
+        else:
+            table.title = "0/0"
+        tableWidth = table.table_width
+        tableRowsRendered = table.table.splitlines()
+        xPos = 2
+        yPos = 4
+        tableHeight = len(tableRowsRendered)
+        # To stop the screen getting corrupted (by tables of different widths), clear the lines behind
+        # the table, just in case
+        for x in range(yPos, yPos + tableHeight + 2):
+            Term.setBackgroundColourSingleLine(1, x, Term.BLUE)
+        Term.printTable(tableRowsRendered, xPos, yPos, tableWidth, Term.BLACK, Term.WHITE)
 
     def __drawMessageTable(self):
         pass
 
     def __initialiseScreen(self):
+        # Set up display window
+        Term.initAlternateScreen()
         Term.clearTerminalScrollbackBuffer()
-        Term.setBackgroundColour(Term.BLUE)
 
     def __renderTopToolbar(self):
         Term.printTitleBar("IBEOO ISP Analyser V1.1", 1, Term.BLACK, Term.WHITE)
@@ -770,19 +1083,33 @@ class UI(object):
 
     # Cursor right
     def __onNavigateRight(self):
-        pass
+        self.selectedView += 1
+        # Prevent an 'out of range' view being selected
+        if self.selectedView > (len(self.views) - 1):
+            self.selectedView = len(self.views) - 1
 
     # Cursor left
     def __onNavigateLeft(self):
-        pass
+        self.selectedView -= 1
+        # Prevent an 'out of range' view being selected
+        if self.selectedView < 0:
+            self.selectedView = 0
 
     # Cursor up
     def __onNavigateUp(self):
-        pass
+        # Decrement the row selector associated with this view
+        self.selectedTableRow -= 1
+        # Bounds check
+        if self.selectedTableRow < 0:
+            self.selectedTableRow = 0
 
     # Cursor down
     def __onNavigateDown(self):
-        pass
+        # Increment the row selector associated with this view
+        self.selectedTableRow += 1
+        # Bounds check the data set associated with this view
+        if self.selectedTableRow > (len(self.views[self.selectedView][2]) - 1):
+            self.selectedTableRow = len(self.views[self.selectedView][2]) - 1
 
     # 's' pressed
     def __onEnterFriendlyName(self):
@@ -871,7 +1198,7 @@ class UI(object):
                 self.__onNavigateRight()
             # Cursor left
             elif self.keyPressed == 68 or self.keyPressed == 75:
-                self.__onNavigateRight()
+                self.__onNavigateLeft()
             # Cursor up
             elif self.keyPressed == 65 or self.keyPressed == 72:
                 self.__onNavigateUp()
@@ -934,37 +1261,212 @@ class UI(object):
             else:
                 # print ("UI: key pressed not known: " + str(self.keyPressed))
                 pass
-            # Clear key buffer
-            self.keyPressed = None
-            # Trigger a screen redraw
-            self.redrawScreen = True
+            # # Clear key buffer
+            # self.keyPressed = None
+            # # Trigger a screen redraw
+            # self.redrawScreen = True
 
+    # Utility method to create create an up to date list, from a dictionary (taking additions and deletions into account)
+    def __updateAvailableStreamsList(self, rtpStreamList, rtpStreamDict, rtpStreamDictMutex):
+        # This is a utility function for UI.__renderDisplayThread
+        # It's job is to compare the current working list inn use by __displayThread (currentStreamList[])
+        # with the rtpStreamDict{} dictionary of active rtpRxStreams or rtpTxStreams (maintained by main())
+        # If will replicate any additions/deletions to objects in rtpStreamDict{} to currentStreamList[]
+        # Crucially, the order of currentStreamList[] will be maintained so that it will represent a
+        # chronological record of the order in which streams were added. This is very useful for display purposes
+        # because __displayThread relies upon the index no of the entries in currentStreamList[]
+
+        # It's a bit like a C function in that it doesn't return anything. Instead, the arguments supplied
+        # (a list and a dictionary) are mutable, and therefore act like pointers. Therefore this function
+        # can manipulate them directly.
+
+        # 1) Iterate over keys of rtpStreamDict{} to get latest list of streams
+        rtpStreamDictMutex.acquire()
+        newStreamsList = []
+        for k, v in rtpStreamDict.items():
+            newStreamsList.append(k)
+        rtpStreamDictMutex.release()
+
+        # 2) Create sublist of current known rtpStreamList
+        currentStreamsList = []
+        for k in rtpStreamList:
+            currentStreamsList.append(k[0])
+
+        # 3) Do set(new)^set(current) to get difference between the two lists (as another list)
+        diff = set(currentStreamsList) ^ set(newStreamsList)
+        # 4) do set(new)&set(diff) to get add list
+        addList = set(newStreamsList) & set(diff)
+        # 5) do set (current)&set(diff) to get del list
+        deleteList = set(currentStreamsList) & set(diff)
+
+        # 6) Add new streams to rtpStreamList
+        for streamID in addList:
+            # Create tuple containing the stream id, the stream object itself and an index
+            x = [streamID, rtpStreamDict[streamID], 0]
+            # Append the new tuple to rtpStreamList[]
+            rtpStreamList.append(x)
+            Message.addMessage(
+                "INFO: __updateAvailableStreamsList() Added stream: " + str(x[0]) + ", " + str(type(x[1])))
+        for streamID in deleteList:
+            # Iterate over tuples in rtpStreamList[] searching for a match
+            for index, stream in enumerate(rtpStreamList):
+                if stream[0] == streamID:
+                    # If stream found, delete that tuple from the list
+                    Message.addMessage(
+                        "INFO: __updateAvailableStreamsList() Removing stream " + str(stream[0]) + ", " + str(
+                            type(stream[1])))
+                    try:
+                        rtpStreamList.pop(index)
+                    except Exception as e:
+                        Message.addMessage("ERR: __updateAvailableStreamsList: " + str(e))
+                    break
+
+        # 8) Check that rtpStreamList and rtpStreamDict are actually looking at the same objects in memory
+        # It's possible that duplicate streams with the same stream ID can lead to orphan streams remaining
+        # in rtpStreamList.
+        # To check, we actually need to compare the objects in both lists of objects. Using the 'is' keyword
+        # confirms that they are the same object (as opposed to the same type of object)
+        rtpStreamDictMutex.acquire()
+        for stream in rtpStreamList:
+            try:
+                if stream[1] is not rtpStreamDict[stream[0]]:
+                    Message.addMessage("ERR:__updateAvailableStreamsList() Object mismatch for streamID " + str(
+                        stream[0]) + ". Repointing to correct object")
+                    # Now re-point rtpStreamList to the correct version of that object
+                    # by assigning the correct object to the entry in rtpStreamList[]
+                    stream[1] = rtpStreamDict[stream[0]]
+            except Exception as e:
+                Message.addMessage("ERR:__updateAvailableStreamsList(), rtpStreamDictkey error for stream " + str(
+                    stream[0]) + ", " + str(e))
+        rtpStreamDictMutex.release()
+        # 9) delete newStreamsList, currentStreamsList, diff, addList and deleteList
+        del newStreamsList
+        del currentStreamsList
+        del diff
+        del addList
+        del deleteList
+
+        # 10) Optionally recalculate rtpStreamList indices - Note these shouldn't change unless a stream has been deleted
+        for index, stream in enumerate(rtpStreamList):
+            # Write the list index value to the third element of the stream tuple
+            stream[2] = index
+
+    # This function tests the supplied key against some specified key values, and formats the corresponding value
+    # to make it more readable
+    def __humanise(self, key, value):
+        # This function tests the supplied key against some specified key values, and formats the corresponding value
+        # to make it more readable
+        if key == "packet_data_received_1S_bytes":
+            # We want this value in bps
+            # Convert bytes to bits
+            value *= 8
+            value = bToMb(value)
+            return value
+
+        if key == "stream_syncSource" or key == 'Sync Source ID':
+            value = str(value).rjust(10)
+
+        # Render dates concisely
+        if type(value) == datetime.datetime:
+            value = value.strftime("%d/%m %H:%M:%S")
+            return value
+
+        if type(value) == datetime.timedelta:
+            # Pass to (my) dtstrft() function to create a much shorter string
+            return dtstrft(value)
+
+        if key == "packet_data_received_total_bytes" or key == "Bytes transmitted":
+            value = bToMb(value) + "B"
+            return value
+
+        if key == key == 'Tx Rate':
+            value = bToMb(value)
+            return value
+
+        if key.find('percent') > 0:
+            # Convert % value to an integer
+            value = int(value)
+            return value
+
+        if key.find('_uS') > 0:
+            # If > 1000uS, express as a mS
+            if int(value) > 1000 or int(value) < -1000:
+                value = str(int(value / 1000)) + "mS"
+            else:
+                # Append _uS to the value
+                value = str(int(value)) + "uS"
+            return value
+
+        if key == 'Time to live':
+            # If this is am endless stream (created with a negative time to live)
+            if value < 0:
+                value = "forever"
+            else:
+                value = datetime.timedelta(seconds=value)
+            return value
+
+        if key == "stream_srcAddress" or key == "stream_rxAddress" or key == 'Dest IP':
+            # Should pad ip addresses to the max no of characters aaa.bbb.ccc.ddd
+            value = value.ljust(15)
+            return value
+
+        else:
+            return value
 
     # Autonomous thread to render the screen and parse keyboard presses
     def __renderDisplayThread(self):
+        self.__initialiseScreen()
         while self.renderDisplayThreadActive == True:
-            # Blocking Wait for the wakeUpUi Event (or a 1 sectimeout, whichever first)
+            # Blocking Wait for the wakeUpUi Event (or a 1 sec timeout, whichever first)
             self.wakeUpUI.wait(timeout=1)
             # Now clear the 'wakeupUI event' flag (because we've processed this key press)
             self.wakeUpUI.clear()
+
+            # Update available streams lists
+            # self.__updateAvailableStreamsList(self.availableRtpRxStreamList, self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
+            # self.__updateAvailableStreamsList(self.availableRtpTxStreamList, self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex)
+            # self.__updateAvailableStreamsList(self.availableRtpTxResultsList, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+
+            # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
+            # if len(self.availableRtpTxStreamList) > 0:
+            #     latestTxStream = self.availableRtpTxStreamList[-1][1]
+            #     # Take a deep copy so that we're not dependent upon this stream existing
+            #     self.latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
+
             # Determine which key pressed, and call the appropriate method
+            Term.printAt(str(datetime.datetime.now()) + ", Before: " + str(self.selectedView) + ", " + str(self.keyPressed), 1, 10, Fore.BLACK)
             self.__parseKeyPressed()
+            Term.printAt(str(datetime.datetime.now()) + ", After: " + str(self.selectedView) + ", " + str(self.keyPressed), 1, 11, Fore.BLACK)
 
             ########## Start rendering the screen
-            if self.redrawScreen:
-                self.__initialiseScreen()
-                self.__renderTopToolbar()
-                self.__renderBottomToolbar()
+            # if self.redrawScreen:
+            #     # Clear flag
+            #     self.redrawScreen = False
+            #     Term.setBackgroundColour(Term.BLUE)
+            #     self.__renderTopToolbar()
+            #     self.__renderBottomToolbar()
+            Term.printAt(str(datetime.datetime.now()) + ", " + str(self.selectedView), 1, 10, Fore.BLACK)
+            # Update the clock on the top toolbar
+            # self.__updateClock()
+            # draw the stream stable
+            self.__drawNavigationBar()
+            # self.__drawStreamsTable()
 
-            self.__updateClock()
-            if len(self.rtpRxStreamsDict) > 0:
-                for stream in self.rtpRxStreamsDict:
-                    Term.printAt(str(self.rtpRxStreamsDict[stream].getRtpStreamStatsByKey("packet_data_received_total_bytes")),1,5)
-
-
+            # if len(self.rtpRxStreamsDict) > 0:
+            #     for stream in self.rtpRxStreamsDict:
+            #         Term.printAt(str(self.rtpRxStreamsDict[stream].getRtpStreamStatsByKey("packet_data_received_total_bytes")),1,5)
+            #
+            # elif len(self.rtpTxStreamResultsDict) > 0:
+            #     for stream in self.rtpTxStreamResultsDict:
+            #         Term.printAt(str(self.rtpTxStreamResultsDict[stream].getRtpStreamStatsByKey("packet_data_received_total_bytes")),1,5)
+            #
+            # if len(self.rtpTxStreamsDict) > 0:
+            #     for stream in self.rtpTxStreamsDict:
+            #         Term.printAt(str(self.rtpTxStreamsDict[stream].getRtpStreamStatsByKey("Tx Rate (actual)")),1,6)
 
             # Now re-arm the getch thread
             self.enableGetch.set()
+
         print ("UI.__renderDisplayThread ended")
 
     # Autonomous thread to monitor the size of the terminal window
@@ -989,13 +1491,15 @@ class UI(object):
     def __keysPressedThread(self):
         while self.keysPressedThreadActive == True:
             # Wait for getch to be enabled (with a timeout)
-            self.enableGetch.wait(timeout= 2)
+            self.enableGetch.wait(timeout = 2)
             # Confirm that enableGetch was actually set (or was it just a timeout)
             if self.enableGetch.is_set():
                 # Capture keyboard presses via the getch method (with a 1 second timeout)
                 self.keyPressed = None  #clear the keyboard buffer
                 ch = self.__getch()
-                # Check to see if a key has been pressed
+                Term.printAt("getch() : " + str(ch), 1, 7)
+                # Check to see if a genuine key has been pressed
+
                 if ch != None:
                     # If a key has been pressed, store it
                     self.keyPressed = ch
