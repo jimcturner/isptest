@@ -635,7 +635,8 @@ class UI(object):
         self.selectedTableRow = 0  # Keeps track of the selected row on the stream table
         self.streamTableFirstRow = 0  # Tracks the current starting row of the stream table data
         self.streamTableLastRow = 0  # Tracks the current end row of the stream table data
-
+        self.selectedStream = None  # Tracks the stream currently highlighted in the streams table
+        self.selectedStreamID = 0 # Tracks the sync source ID of the stream currebtly highlighted
         # Screen label showing the available key commands (depending upon mode)
         self.keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abou[t]"
 
@@ -1207,9 +1208,41 @@ class UI(object):
             else:
                 Message.addMessage("ERR: No previous Tx stream stats to copy from. New stream not added")
 
-    # 'd'
+    # 'd' -  Delete selected stream
     def __onDeleteStream(self):
-        pass
+        # Delete selected stream (selected table row)
+
+        # Confirm that the dataset associated with this view actually has some data in it
+        if self.selectedStream != None:
+            try:
+
+                Message.addMessage(
+                    "INFO: streamToDelete: " + str(self.selectedStreamID) + " of type " + str(type(self.selectedStream)))
+
+                # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
+                if type(self.selectedStream) == RtpGenerator:
+                    # It is a generator object
+                    Message.addMessage("[d] Deleting Tx Stream: " + str(self.selectedStreamID))
+                    # Instruct the RtpGenerator object to die (and it's associated corrseponding RtpStreamResults, if it exists)
+                    self.selectedStream.killStream()
+                    # Additionally, remove the corrseponding RtpStreamResults object for this stream
+
+
+                elif type(self.selectedStream) == RtpReceiveStream:
+                    # It is an RtpReceiveStream (receiver) object
+                    Message.addMessage("[d] Deleting Rx Stream: " + str(self.selectedStreamID))
+                    # Safely shutdown the RtpStream object itself
+                    self.selectedStream.killStream()
+
+                elif type(self.selectedStream) == RtpStreamResults:
+                    Message.addMessage("Can't delete Results line for stream. " + str(self.selectedStreamID) + \
+                                       " Did you mean to delete the transmit stream instead?")
+
+
+            except Exception as e:
+                Message.addMessage(
+                    "ERR: __displayThread. [d] Delete Stream request failed: " + str(self.selectedStreamID) +
+                    ", " + str(e))
 
     # 'm' pressed
     def __onIncreaseTxRate(self):
@@ -1523,10 +1556,14 @@ class UI(object):
                 # Take a deep copy so that we're not dependent upon this stream existing
                 self.latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
 
+            # Get a handle on the currently highlighted stream and corresponding sync source ID
+            # Confirm that the streamList associated with this view actual has data in it
+            if len(self.views[self.selectedView][2]) > 0:
+                self.selectedStream = self.views[self.selectedView][2][self.selectedTableRow][1]
+                self.selectedStreamID = self.views[self.selectedView][2][self.selectedTableRow][0]
+
             # Determine which key pressed, and call the appropriate method
-            # Term.printAt(str(datetime.datetime.now()) + ", Before: " + str(self.selectedView) + ", " + str(self.keyPressed), 1, 10, Fore.BLACK)
             self.__parseKeyPressed()
-            # Term.printAt(str(datetime.datetime.now()) + ", After: " + str(self.selectedView) + ", " + str(self.keyPressed), 1, 11, Fore.BLACK)
 
             ########## Start rendering the screen
             if self.redrawScreen:
