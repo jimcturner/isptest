@@ -1722,6 +1722,12 @@ class UI(object):
     # Autonomous thread to render the screen and parse keyboard presses
     def __renderDisplayThread(self):
         self.__initialiseScreen()
+        if self.operationMode == 'RECEIVE':
+            Message.addMessage("Waiting for incoming RTP streams on " + str(self.UDP_RX_IP) + ":" + str(self.UDP_RX_PORT))
+        elif self.operationMode == 'TRANSMIT':
+            Message.addMessage("Waiting for receiving end to make contact..... ")
+
+        # Endless 'state-driven' loop to render the screen
         while self.renderDisplayThreadActive == True:
             # Blocking Wait for the wakeUpUi Event (or a 1 sec timeout, whichever first)
             self.wakeUpUI.wait(timeout=1)
@@ -1835,1257 +1841,1257 @@ class UI(object):
                     self.enableGetch.clear()
         print("UI.__keysPressedThread ended\r")
 
-def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
-                    rtpRxStreamsDict, rtpRxStreamsDictMutex,
-                    rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT):
-
-    # Declare lists to hold list of available rx and tx streams that can be displayed
-
-    # These lists are a list of tuples [x,y,z] where
-    # [x=streamID (as a string), y=the tx/rx object itself, z=an index value]
-    #
-    # The array is populated by the use of the utility function __updateAvailableStreamsList()
-    # Meanwhile, main() is maintaining two dictionaries, rtpTxStreamsDict and rtpRxStreamsDict
-    # The issue with these dictionaries is that the order of them can change (when you iterate through them) making them
-    # unsuitable for __displayThread which needs to maintain a chronological order of streams added/removed for display
-    # and control purposes
-    #
-    # Therefore the job of __updateAvailableStreamsList() is to poll the supplied dictionary and synchronise any changes
-    # (additions or deletions) in the dictionaries to the corresponding lists
-
-    availableRtpRxStreamList = []
-    availableRtpTxStreamList = []
-    availableRtpTxResultsList = []
-
-    selectedView = 0  # Keeps track of which view is currently being displayed
-    selectedTableRow = 0    # Keeps track of the selected row on the stream table
-
-    # define views, tables headings and keys
-    # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
-    # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
-    # views =[name of view 1, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],
-    #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],dataSet[]]
-    # view [n][0] will be the name of the view (used to generate the navigation bar)
-    # view [n][1] is a tuple containing [column title, the stats dictionary key relating to that parameter]
-    # view [n][2] is a reference to the dataset for this view
-    views = []
-
-    if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
-        views.append([Term.FG(Term.RED)+"Tx Streams",
-                      [["#", 0],  # Used as an index[]
-                       ["Name", 'Friendly Name'],
-                       ["Src\nPort", 'Tx Source Port'],
-                       ["Dest\n IP", 'Dest IP'],
-                       ["Dest\nPort", 'Dest Port'],
-                       ["Sync\nsrcID", 'Sync Source ID'],
-                       ["Tx\nbps", 'Tx Rate'],
-                       ["Size", 'Packet size'],
-                       ["Bytes\n tx'd", 'Bytes transmitted'],
-                       [" Time\nremain", 'Time to live']
-                       ],availableRtpTxStreamList])
-
-    # If actually the receiving end, use availableRtpRxStreamList[] as a source for the stream tables
-    if operationMode == 'RECEIVE': #or operationMode == 'LOOPBACK':
-        streamResultsDataSet = availableRtpRxStreamList
-
-    # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
-    else:
-        streamResultsDataSet = availableRtpTxResultsList
-
-
-    views.append(["Summary",
-                  [["#",0], # Used as an index
-                   ["Name", "stream_friendly_name"],
-                   ["Src Addr", "stream_srcAddress"],
-                   #["port", "stream_srcPort"],
-                   ["bps", "packet_data_received_1S_bytes"],
-                   ["Pkts\nlost", "glitch_packets_lost_total_count"],
-                   [" %\nloss", "glitch_packets_lost_total_percent"],
-                   ["Last\nglitch","glitch_most_recent_timestamp"],
-                   ["glitch\nperiod","glitch_mean_time_between_glitches"],
-                   ["Count","glitch_counter_total_glitches"]
-                   #["CPU\n %","stream_processor_utilisation_percent"]
-                   ],streamResultsDataSet])
-
-    views.append(["Stream",
-                  [["#",0], # Used as an index
-                   ["Name", "stream_friendly_name"],
-                   ["Sync \nSrcID", "stream_syncSource"],
-                   ["Src Addr", "stream_srcAddress"],
-                   ["Src\nport", "stream_srcPort"],
-                   ["Dst Addr", "stream_rxAddress"],
-                   ["Dst\nport", "stream_rxPort"],
-                   ["  Time\nelapsed","stream_time_elapsed_total"]
-                   ],streamResultsDataSet])
-
-    views.append(["Packet",
-                  [["#",0], # Used as an index[]
-                   ["Name", "stream_friendly_name"],
-                   ["First Seen\npacket","packet_first_packet_received_timestamp"],
-                   ["Last seen\npacket","packet_last_seen_received_timestamp"],
-                   ["pack\np/s","packet_counter_1S"],
-                   ["Length\n(bytes)","packet_payload_size_mean_1S_bytes"],
-                   ["Recv\nperiod","packet_mean_receive_period_uS"],
-                   ["Bytes\nRcvd","packet_data_received_total_bytes"],
-                   ["CPU\n %", "stream_processor_utilisation_percent"]
-                   #["",""],
-                   ],streamResultsDataSet])
-
-    views.append(["Glitch",
-                  [["#", 0],  # Used as an index[]
-                   ["Name", "stream_friendly_name"],
-                   ["Mean\nloss", "glitch_packets_lost_per_glitch_mean"],
-                   ["Max\nloss", "glitch_packets_lost_per_glitch_max"],
-                   ["Total\nloss", "glitch_packets_lost_total_count"],
-                   ["Mean\nduration", "glitch_mean_glitch_duration"],
-                   ["Max\nduration", "glitch_max_glitch_duration"],
-                   ["Total\nGlitch", "glitch_counter_total_glitches"],
-                   ["Ignored", "glitch_glitches_ignored_counter"],
-                   ["Threshold", "glitch_Event_Trigger_Threshold_packets"]
-                   ],streamResultsDataSet])
-
-    views.append(["Historic",
-                  [["#", 0],  # Used as an index[],
-                   ["Name\n", "stream_friendly_name"],
-                   ["24Hr\n", "historic_glitch_counter_last_24Hr"],
-                   ["1Hr\n", "historic_glitch_counter_last_1Hr"],
-                   ["10Min\n", "historic_glitch_counter_last_10Min"],
-                   ["1Min\n", "historic_glitch_counter_last_1Min"],
-                   ["10Sec\n", "historic_glitch_counter_last_10Sec"]
-                   #["", ""],
-                   ],streamResultsDataSet])
-
-    views.append(["Jitter",
-                  [["#", 0],  # Used as an index[]
-                   ["Name", "stream_friendly_name"],
-                   ["Long term\n  mean", "jitter_long_term_uS"],
-                   ["Min", "jitter_min_uS"],
-                   ["Max", "jitter_max_uS"],
-                   ["Range", "jitter_range_uS"],
-                   ["1S \nmean", "jitter_mean_1S_uS"]
-                   ],streamResultsDataSet])
-
-    # views.append(["Misc",
-    #               [["#", 0],  # Used as an index[]
-    #                ["", ""],
-    #                ["", ""],
-    #                ["", ""],
-    #                ["", ""],
-    #                ["", ""],
-    #                ["", ""],
-    #                ],DATASET_TO_DISPLAY,ROW_SELECTOR])
-
-    # Screen label showing the availablle key commands (depending upon mode)
-    keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abou[t]"
-
-
-    txStreamModifierCommandsString = "TX  modifier: [o/p] src ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
-    # Extra command strip for 'special features' mode
-    extraKeyCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
-
-    streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
-    streamTableLastRow = 0 # Tracks the current end row of the stream table data
-
-    # store the most recent message - used to determine whether we need to redraw
-    # The message table
-    lastMessageAdded = ""
-    redrawMessageTable = False
-
-    redrawScreen = True
-
-    # Grab initial terminal dimensions
-    currentTermWidth, currentTermHeight = Term.getTerminalSize()
-    # Set up display window
-    Term.initAlternateScreen()
-
-    # start elapsed timer for clock refresh
-    displayThread_clockTimer = timer()
-
-    # Redraw/refresh period for stream table
-    streamTableRefreshPeriod = 2
-    # start elapsed timer for streamTable refresh
-    displayThread_streamTableRefreshTimer = timer()
-
-    # Get Initial snapshot of current verbosity level
-    intialVerbosityLevel = Message.verbosityLevel
-    # Flag to turn on/off error messages (verbosity level 1)
-    showErrorsFlag = False
-
-    if operationMode == 'RECEIVE':
-        Message.addMessage("Waiting for incoming RTP streams on " + str(UDP_RX_IP) + ":" + str(UDP_RX_PORT))
-    elif operationMode == 'TRANSMIT':
-        Message.addMessage("Waiting for receiving end to make contact..... ")
-    while True:
-
-        # Check to see if terminal has been resized
-        # NOTE: Safe max print area height seems to be currentTermHeight -1
-        w, h = Term.getTerminalSize()
-        if (w != currentTermWidth) or (h != currentTermHeight):
-            # If it has, set a flag
-            redrawScreen = True
-            # And store the new values
-            currentTermWidth = w
-            currentTermHeight = h
-            Message.addMessage("INFO: Terminal size has changed to "+str(currentTermWidth)+","+str(currentTermHeight))
-            redrawMessageTable = True
-
-        # Update available streams lists
-        __updateAvailableStreamsList(availableRtpRxStreamList,rtpRxStreamsDict, rtpRxStreamsDictMutex)
-        __updateAvailableStreamsList(availableRtpTxStreamList,rtpTxStreamsDict, rtpTxStreamsDictMutex)
-        __updateAvailableStreamsList(availableRtpTxResultsList,rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex)
-
-        # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
-        if len(availableRtpTxStreamList) > 0:
-            latestTxStream = availableRtpTxStreamList[-1][1]
-            # Take a deep copy so that we're not dependent upon this stream existing
-            latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
-
-        # Force a screen redraw
-        if keyPressed[0] == 'redraw_screen':
-            redrawScreen = True
-
-
-        if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
-            keyPressed[0]=''    # Clear key buffer
-            selectedView += 1
-            # Prevent an 'out of range' view being selected
-            if selectedView > (len(views)-1):
-                selectedView = len(views)-1
-            redrawScreen = True
-
-        if (keyPressed[0]=='CursorLeft'):
-            keyPressed[0] = ''  # Clear key buffer
-            selectedView -= 1
-            # Prevent an 'out of range' view being selected
-            if selectedView < 0:
-                selectedView = 0
-            redrawScreen = True
-
-        if (keyPressed[0]=='CursorUp'):
-            # Scroll the highlight stream up the list
-            keyPressed[0] = ''  # Clear key buffer
-
-            # Decrement the row selector associated with this view
-            selectedTableRow -= 1
-            # Bounds check
-            if selectedTableRow < 0:
-                selectedTableRow = 0
-
-            redrawScreen = True
-
-        if (keyPressed[0] == 'CursorDown'):
-            # Scroll the selected stream down
-            keyPressed[0] = ''  # Clear key buffer
-
-            # Increment the row selector associated with this view
-            selectedTableRow += 1
-            # Bounds check the data set associated with this view
-            if selectedTableRow > (len(views[selectedView][2]) - 1):
-                selectedTableRow = len(views[selectedView][2]) - 1
-
-            redrawScreen = True
-
-        if (keyPressed[0] == 'Enter'):
-            keyPressed[0] = ''  # Clear key buffer
-            Message.addMessage("INFO: Enter")
-
-        if (keyPressed[0] == 'newFriendlyNameEntered'):
-            keyPressed[0] = ''  # Clear key buffer
-            # Get handle on selected stream
-            streamToBeModified = views[selectedView][2][selectedTableRow][1]
-            idOfStreamToBeModified = views[selectedView][2][selectedTableRow][0]
-
-            try:
-                # Capture name string from keyPressed[] (second element)
-                newFriendlyName=keyPressed[1]
-                del keyPressed[1]  # Remove key buffer array now eve stored it
-                Message.addMessage("INFO: new friendlyNameEntered: "+newFriendlyName + " for stream " + str(idOfStreamToBeModified))
-                # Attempt to modify the stream name (but only if this is an RtpStream (a receiver) or RtpGenerstor object
-                # (RtpStreamResults objects are just display versions of the RtpStream objects created at the receiver)
-                if type(streamToBeModified) == RtpReceiveStream or type(streamToBeModified) == RtpGenerator:
-                    streamToBeModified.setFriendlyName(newFriendlyName)
-                if type(streamToBeModified) == RtpStreamResults:
-                    Message.addMessage("You can't change the name of a Results Stream. Modify name in the Tx tab instea")
-
-            except Exception as e:
-                Message.addMessage(Term.FG((Term.RED))+"ERR: __displayThread() newFriendlyNameEntered: "+ str(e))
-            # redrawScreen = True
-            # Re-render bottom status bar
-            Term.setBackgroundColourSingleLine(1, (currentTermHeight - 1), Term.WHITE)
-
-            # Force redraw
-            redrawScreen = True
-
-
-        if keyPressed[0] == 'addTXStreamWithDefaults':
-            keyPressed[0] = ''  # Clear key buffer
-            # Attempt to add a new tx stream (if we're in loopback or transmit mode)
-            # If a tx stream already exists, the new stream will be created with an incremented
-            # source UDP port and an incremented sync source id.
-            # If there are no current streams, the new stream will be created with a random
-            # UDP source port and a random sync source id
-            if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
-
-                # Grab the stats of the most recent added tx stream, and make a copy derived from it's settings
-                # Check that there are actually some stream settings to copy
-                if len(latestTxStreamStats) > 0 :
-
-                    # Use stats of existing tx stream to derive setup parameters for new stream
-                    syncSourceID = latestTxStreamStats['Sync Source ID'] + 1
-                    sourcePort = latestTxStreamStats['Tx Source Port'] + 1
-                    destPort = latestTxStreamStats['Dest Port']
-                    destAddr = latestTxStreamStats['Dest IP']
-                    packetLength = latestTxStreamStats['Packet size']
-
-                    # As a default, set time to live to be 1hr
-                    timeToLive = 3600
-                    # As a default, set tx rate to be 1 Mbps
-                    txRate = 1048576
-
-                    rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, \
-                                                rtpTxStreamsDict, rtpTxStreamsDictMutex,\
-                                                rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, "", sourcePort)
-
-                    Message.addMessage("[a] Added new " +  str(bToMb(txRate)) +"bps stream with id " + str(syncSourceID))
-                    # Force redraw
-                    redrawScreen = True
-                else:
-                    Message.addMessage("ERR: No previous Tx stream stats to copy from. New stream not added")
-
-        if keyPressed[0] == 'addTXStreamWithArgs':
-            # Attempt to create a new stream based on the user entered parameters
-            keyPressed[0] = ''  # Clear key buffer
-            try:
-                # Capture dict containing the new parameters from keyPressed[] (second element)
-                txParameters=deepcopy(keyPressed[1])
-                # txParameters = {}
-                # txParameters["destIP"] = "10.56.60.143"
-                # txParameters["destPort"] = 5000
-                # txParameters["srcPort"] =2000
-                # txParameters["syncSourceID"] = 1234567890
-                # txParameters["payloadLength"] = 1000
-                # txParameters["txRate"] = "2m"
-                # txParameters["timeToLive"] = 120
-                # txParameters["friendlyName"] = "dave"
-
-
-                del keyPressed[1]  # Remove key buffer array now eve stored it
-                Message.addMessage("addTXStreamWithArgs" + str(txParameters))
-
-                # Attempt to create a new stream using the user-entered stream parameters
-
-                try:
-                    # attempt to extract tx rate using regex to split into numerical and string parts
-                    txRate = 0
-                    splitArg = re.split(r'(\d+)', txParameters["txRate"])
-                    # Extract numerical part
-                    x = int(splitArg[1])
-                    # Extract string part
-                    multiplier = splitArg[2]
-
-                    if multiplier == 'k' or multiplier == 'K':
-                        txRate = x * 1024
-                    elif multiplier == 'm' or multiplier == 'M':
-                        txRate = x * 1024 * 1024
-                    else:
-                        Message.addMessage("Invalid bandwidth specified. Unknown multiplier: " + str(multiplier))
-                        break
-
-                    Message.addMessage(str(txParameters["destIP"]) + ", " + str(txParameters["destPort"]) + ", " + \
-                                       str(txRate) + ", " + str(txParameters["payloadLength"]) + ", " + \
-                                       str(txParameters["syncSourceID"]) + ", " + \
-                                       str(txParameters["timeToLive"]) + ", " + str(txParameters["friendlyName"]) + \
-                                       ", " + str(txParameters["srcPort"]))
-
-
-                    # Validate supplied IP address
-                    try:
-                        socket.inet_aton(txParameters["destIP"])
-                    except Exception as e:
-                        Message.addMessage ("Invalid Dest IP address supplied: " + str(txParameters["destIP"]))
-
-                    # add new Rtp generator
-                    rtpGenerator = RtpGenerator(txParameters["destIP"], txParameters["destPort"], txRate,
-                                                txParameters["payloadLength"], txParameters["syncSourceID"],
-                                                txParameters["timeToLive"], \
-                                                rtpTxStreamsDict, rtpTxStreamsDictMutex,\
-                                                rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
-                                                txParameters["friendlyName"], txParameters["srcPort"])
-
-                    # Force redraw
-                    redrawScreen = True
-
-                except Exception as e:
-                    Message.addMessage("Can't create new stream as specified")
-            except:
-                pass
-
-        ch = keyPressed[0]
-
-        if keyPressed[0] == ord('m'):
-            # Increase tx rate of selected stream
-            keyPressed[0] = ''  # Clear key buffer
-            # Confirm that a tx stream exists
-            if len(availableRtpTxStreamList)>0:
-                # Get handle on selected stream
-                streamToBeModified = views[selectedView][2][selectedTableRow][1]
-                streamID = views[selectedView][2][selectedTableRow][0]
-                # Now check that this is a generator object
-                if type(streamToBeModified) == RtpGenerator:
-                    # Get tx rate from currently selected stream
-                    stats=streamToBeModified.getRtpStreamStats()
-                    currentTxRate=int(stats['Tx Rate'])
-                    # If less than 1Mbps increment by 256kbps
-                    if currentTxRate < 1048576:
-                        newTxRate = currentTxRate+262144
-                        streamToBeModified.setTxRate(newTxRate)
-                    # Otherwise increment by 500kbps
-                    else:
-                        newTxRate = currentTxRate + 524288
-                        streamToBeModified.setTxRate(newTxRate)
-                    # Verify new rate set
-                    stats = streamToBeModified.getRtpStreamStats()
-                    currentTxRate = int(stats['Tx Rate'])
-                    Message.addMessage("[m] Stream " + str(streamID) + " tx rate increased to " + str(bToMb(currentTxRate)))
-
-                    # Force redraw
-                    redrawScreen = True
-
-        if keyPressed[0] == ord('n'):
-            # Decrease tx rate of selected stream
-            keyPressed[0] = ''  # Clear key buffer
-            # Confirm that a tx stream exists
-            if len(availableRtpTxStreamList) > 0:
-                # Get handle on selected stream
-                streamToBeModified = views[selectedView][2][selectedTableRow][1]
-                streamID = views[selectedView][2][selectedTableRow][0]
-                # Now check that this is a generator object
-                if type(streamToBeModified) == RtpGenerator:
-                    # Get tx rate from currently selected stream
-                    stats = streamToBeModified.getRtpStreamStats()
-                    currentTxRate = int(stats['Tx Rate'])
-
-                    # If less than 1Mbps decrement by 256kbps
-                    if currentTxRate < 1048576:
-                        newTxRate = currentTxRate - 262144
-                        streamToBeModified.setTxRate(newTxRate)
-                    # Otherwise decrement by 512kbps
-                    else:
-                        newTxRate = currentTxRate - 524288
-                        streamToBeModified.setTxRate(newTxRate)
-
-                    # Verify new rate set
-                    stats = streamToBeModified.getRtpStreamStats()
-                    currentTxRate = int(stats['Tx Rate'])
-                    Message.addMessage("[n] Stream " + str(streamID) + " tx rate decreased to " + str(bToMb(currentTxRate)))
-                    # Force redraw
-                    redrawScreen = True
-
-        if keyPressed[0] == ord('h') or keyPressed[0] == ord('j'):
-            # Decrease/Increase time to live of selected stream
-            modifier = 0
-            if keyPressed[0] == ord('h'):
-                # Decrease time to live
-                modifier = -1
-            else:
-                # Increase time to live
-                modifier = 1
-
-            keyPressed[0] = ''  # Clear key buffer
-
-            # Confirm that a tx stream exists
-            if len(availableRtpTxStreamList) > 0:
-                # Get handle on selected stream
-                streamToBeModified = views[selectedView][2][selectedTableRow][1]
-                streamID = views[selectedView][2][selectedTableRow][0]
-                # Now check that this is a generator object
-                if type(streamToBeModified) == RtpGenerator:
-                    # Get time to live rate from currently selected stream
-                    stats = streamToBeModified.getRtpStreamStats()
-                    currentTTL = int(stats['Time to live']) # Retrieve time to live (in seconds)
-                    if modifier < 0:
-                        # Decrease time to live by 1hr (3600 secs), or else make 'forever' by setting as -1
-                        newTTL = currentTTL - 3600
-                        # If the new calculated value is -ve, interpret as 'forever'
-                        if newTTL < 0:
-                            # Set stream TTL to 'forever'
-                            streamToBeModified.setTimeToLive(-1)
-                            Message.addMessage("[h] Setting stream " + str(streamID) + " time to live to 'forever'")
-                        else:
-                            # Otherwise update the stream with the new calculated TTL
-                            streamToBeModified.setTimeToLive(newTTL)
-                            Message.addMessage("[h] Setting stream " + str(streamID) + " time to live to dur " + dtstrft(datetime.timedelta(seconds=newTTL)))
-
-                    elif modifier > 0:
-                        # Increase time to live by 1hr (3600 secs)
-                        newTTL = currentTTL + 3600
-                        # Update the stream with the new calculated TTL
-                        streamToBeModified.setTimeToLive(newTTL)
-                        Message.addMessage("[j] Setting stream " + str(streamID) + " time to live to dur " + dtstrft(
-                            datetime.timedelta(seconds=newTTL)))
-
-
-        if keyPressed[0] == ord('l'):
-            # Increase payload size of selected stream
-            keyPressed[0] = ''  # Clear key buffer
-            # Confirm that a tx stream exists
-            if len(availableRtpTxStreamList) > 0:
-                # Get handle on selected stream
-                streamToBeModified = views[selectedView][2][selectedTableRow][1]
-                streamID = views[selectedView][2][selectedTableRow][0]
-                # Now check that this is a generator object
-                if type(streamToBeModified) == RtpGenerator:
-                    # Get the stats dictionary from the RtpGenerator object
-                    stats = streamToBeModified.getRtpStreamStats()
-                    # Get current payload size
-                    currentTxPayloadSize = int(stats['Packet size'])
-                    # Increment current size by 10 bytes
-                    streamToBeModified.setPayloadLength(currentTxPayloadSize+10)
-
-                    # Verify new payload size
-                    stats = streamToBeModified.getRtpStreamStats()
-                    currentTxPayloadSize = int(stats['Packet size'])
-                    Message.addMessage(
-                        "[l] Stream " + str(streamID) + " packet size increased to " + str(currentTxPayloadSize) + " bytes")
-
-                    # Force redraw
-                    redrawScreen = True
-
-        if keyPressed[0] == ord('k'):
-            # Decrease payload size of selected stream
-            keyPressed[0] = ''  # Clear key buffer
-            # Confirm that a tx stream exists
-            if len(availableRtpTxStreamList) > 0:
-                # Get handle on selected stream
-                streamToBeModified = views[selectedView][2][selectedTableRow][1]
-                streamID = views[selectedView][2][selectedTableRow][0]
-                # Now check that this is a generator object
-                if type(streamToBeModified) == RtpGenerator:
-                    # Get the stats dictionary from the RtpGenerator object
-                    stats = streamToBeModified.getRtpStreamStats()
-                    # Get current payload size
-                    currentTxPayloadSize = int(stats['Packet size'])
-                    # Increment current size by 10 bytes
-                    streamToBeModified.setPayloadLength(currentTxPayloadSize - 10)
-
-                    # Verify new payload size
-                    stats = streamToBeModified.getRtpStreamStats()
-                    currentTxPayloadSize = int(stats['Packet size'])
-                    Message.addMessage(
-                        "[k] Stream " + str(streamID) + " packet size decreased to " + str(
-                            currentTxPayloadSize) + " bytes")
-                    # Force redraw
-                    redrawScreen = True
-
-        if keyPressed[0] == ord('p'):
-            # Increase sync source ID of selected stream
-            keyPressed[0] = ''  # Clear key buffer
-            # Confirm that a tx stream exists
-            if len(availableRtpTxStreamList) > 0:
-                # Get handle on selected stream
-                streamToBeModified = views[selectedView][2][selectedTableRow][1]
-                streamID = views[selectedView][2][selectedTableRow][0]
-                # Now check that this is a generator object
-                if type(streamToBeModified) == RtpGenerator:
-                    # Get the stats dictionary from the RtpGenerator object
-                    stats = streamToBeModified.getRtpStreamStats()
-                    # Get current Sync source ID
-                    currentSyncSourceID = int(stats['Sync Source ID'])
-                    # Increment sync source by 1
-                    streamToBeModified.setSyncSourceIdentifier(currentSyncSourceID+1)
-
-                    # Verify new sync source id
-                    stats = streamToBeModified.getRtpStreamStats()
-                    currentSyncSourceID = int(stats['Sync Source ID'])
-                    Message.addMessage(
-                        "[p] Stream " + str(streamID) + " sync source id changed to " + str(currentSyncSourceID))
-                    # Force redraw
-                    redrawScreen = True
-
-        if keyPressed[0] == ord('o'):
-            # Decrease sync source ID of selected stream
-            keyPressed[0] = ''  # Clear key buffer
-            # Confirm that a tx stream exists
-            if len(availableRtpTxStreamList) > 0:
-                # Get handle on selected stream
-                streamToBeModified = views[selectedView][2][selectedTableRow][1]
-                streamID = views[selectedView][2][selectedTableRow][0]
-                # Now check that this is a generator object
-                if type(streamToBeModified) == RtpGenerator:
-                    # Get the stats dictionary from the RtpGenerator object
-                    stats = streamToBeModified.getRtpStreamStats()
-                    # Get current Sync source ID
-                    currentSyncSourceID = int(stats['Sync Source ID'])
-                    # Decrement sync source by 1
-                    streamToBeModified.setSyncSourceIdentifier(currentSyncSourceID-1)
-                    # Verify new sync source id
-                    stats = streamToBeModified.getRtpStreamStats()
-                    currentSyncSourceID = int(stats['Sync Source ID'])
-                    Message.addMessage(
-                        "[o] Stream " + str(streamID) + " sync source id changed to " + str(currentSyncSourceID))
-                    # Force redraw
-                    redrawScreen = True
-
-        if keyPressed[0] == ord('e'):
-            # Toggle error messages on/off
-            keyPressed[0] = ''  # Clear key buffer
-            if showErrorsFlag == False:
-                # Set flag to true
-                showErrorsFlag = True
-                # Force a change of Message verbosity level to show errors
-                Message.setVerbosity(1)
-                Message.addMessage("[e] Error messages on")
-            else:
-                # Set flag to false
-                showErrorsFlag = False
-                # Force a change of Message verbosity back to intial setting
-                Message.setVerbosity(intialVerbosityLevel)
-                Message.addMessage("[e] Reverting to initial verbosity level")
-
-        if keyPressed[0] == ord('d'):
-            # Delete selected stream (selected table row)
-            keyPressed[0] = ''  # Clear key buffer
-            # Confirm that the dataset associated with this view actually has some data in it
-            if len(views[selectedView][2]) > 0:
-                try:
-                    # Get handle on selected stream
-                    streamToBeDeleted = views[selectedView][2][selectedTableRow][1]
-                    idOfStreamToBeDeleted = views[selectedView][2][selectedTableRow][0]
-                    Message.addMessage("INFO: streamToDelete: "+str(idOfStreamToBeDeleted) + " of type " + str(type(streamToBeDeleted)))
-
-                    # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
-                    if type(streamToBeDeleted) == RtpGenerator:
-                        # It is a generator object
-                        Message.addMessage("[d] Deleting Tx Stream: " + str(idOfStreamToBeDeleted))
-                        # Instruct the RtpGenerator object to die (and it's associated corrseponding RtpStreamResults, if it exists)
-                        streamToBeDeleted.killStream()
-                        # Additionally, remove the corrseponding RtpStreamResults object for this stream
-
-
-                    elif type(streamToBeDeleted) == RtpReceiveStream:
-                        # It is an RtpReceiveStream (receiver) object
-                        Message.addMessage("[d] Deleting Rx Stream: " + str(idOfStreamToBeDeleted))
-                        # Safely shutdown the RtpStream object itself
-                        streamToBeDeleted.killStream()
-
-                    elif type(streamToBeDeleted) == RtpStreamResults:
-                        Message.addMessage("Can't delete Results line for stream. " + str(idOfStreamToBeDeleted) +\
-                                           " Did you mean to delete the transmit stream instead?")
-
-                    # Force redraw
-                    redrawScreen = True
-
-                except Exception as e:
-                    Message.addMessage("ERR: __displayThread. [d] Delete Stream request failed: "+str(idOfStreamToBeDeleted)+
-                                       ", "+str(e))
-
-
-        # Monitor keyPressed[] for a Ctrl-C
-        if keyPressed[0] == 'Ctrl-C':
-            keyPressed[0] = ''  # Clear key buffer
-            # Term.printAt("Ctrl-C pressed. Exiting",1,1,Term.FG(Term.RED))
-            # # Send exit signal to main thread (via keyPressed[0])
-            # keyPressed[0] = 'exit'
-
-        # Add extra key checking when in 'special features' mode
-        if specialFeaturesModeFlag == True:
-            if keyPressed[0] == ord('z'):
-                # Toggle packet generation on/off for the selected stream
-                keyPressed[0] = ''  # Clear key buffer
-                # Confirm that the current view has any streams within its data set
-                if len(views[selectedView][2]) > 0:
-                    try:
-                        # Get handle on selected stream
-                        stream = views[selectedView][2][selectedTableRow][1]
-                        idOfStream = views[selectedView][2][selectedTableRow][0]
-
-                        # Confirm that the stream is an RtpGenerator
-                        if type(stream) == RtpGenerator:
-                            # Get current transit status and toggle accordingly
-                            if stream.getEnableStreamStatus():
-                                # If currently enabled, disable it
-                                stream.disableStream()
-                                Message.addMessage("[z] Stream "+str(idOfStream)+" disabled")
-                            else:
-                                # otherwise, enable it
-                                stream.enableStream()
-                                Message.addMessage("[z] Stream " + str(idOfStream) + " enabled")
-                    except Exception as e:
-                        Message.addMessage("ERR: __displayThread [z] enable/disable stream. " + str(e))
-
-            if keyPressed[0] == ord('x'):
-                # Toggle packet jitter simulation on/off for the selected stream
-                keyPressed[0] = ''  # Clear key buffer
-                # Confirm that the current view has any streams within its data set
-                if len(views[selectedView][2]) > 0:
-                    try:
-                        # Get handle on selected stream
-                        stream = views[selectedView][2][selectedTableRow][1]
-                        idOfStream = views[selectedView][2][selectedTableRow][0]
-
-                        # Confirm that the stream is an RtpGenerator
-                        if type(stream) == RtpGenerator:
-                            if stream.getJitterStatus():
-                                # if jitter simulation currently enabled, disable it
-                                stream.disableJitter()
-                                Message.addMessage("[x] Stream " + str(idOfStream) + " jitter simulation disabled")
-                            else:
-                                stream.enableJitter()
-                                Message.addMessage("[x] Stream " + str(idOfStream) + " jitter simulation enabled")
-
-                    except Exception as e:
-                        Message.addMessage("ERR: __displayThread [x] enabled/disable jitter simulation. " + str(e))
-
-            if keyPressed[0] == ord('c'):
-                # Insert minor packet loss for the selected stream (< glitch threshold)
-                keyPressed[0] = ''  # Clear key buffer
-                # Confirm that the current view has any streams within its data set
-                if len(views[selectedView][2]) > 0:
-                    try:
-                        # Get handle on selected stream
-                        stream = views[selectedView][2][selectedTableRow][1]
-                        idOfStream = views[selectedView][2][selectedTableRow][0]
-
-                        # Confirm that the stream is an RtpGenerator
-                        if type(stream) == RtpGenerator:
-                            # Get current glitch threshold from first available rx stream
-                            if len(availableRtpRxStreamList)>0:
-                                rtpRxStream=availableRtpRxStreamList[0][1]
-                                glitchLength_packets=rtpRxStream.getRtpStreamStats()["glitch_Event_Trigger_Threshold_packets"]
-                            else:
-                                # If not available set a default value of 1 packet
-                                glitchLength_packets = 1
-                            # Simulate packet loss
-                            stream.simulatePacketLoss(glitchLength_packets)
-                            Message.addMessage("[c] Stream " + str(idOfStream) + " simulate minor packet loss")
-
-                    except Exception as e:
-                        Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
-
-            if keyPressed[0] == ord('v'):
-                # Insert significant packet loss for the selected stream (>= glitch threshold)
-                keyPressed[0] = ''  # Clear key buffer
-                # Confirm that the current view has any streams within its data set
-                if len(views[selectedView][2]) > 0:
-                    try:
-                        # Get handle on selected stream
-                        stream = views[selectedView][2][selectedTableRow][1]
-                        idOfStream = views[selectedView][2][selectedTableRow][0]
-
-                        # Confirm that the stream is an RtpGenerator
-                        if type(stream) == RtpGenerator:
-                            # Get current glitch threshold from first available rx stream
-                            if len(availableRtpRxStreamList)>0:
-                                rtpRxStream=availableRtpRxStreamList[0][1]
-                                glitchLength_packets=rtpRxStream.getRtpStreamStats()["glitch_Event_Trigger_Threshold_packets"] + 1
-                            else:
-                                # If not available set a default value of 20 packets
-                                glitchLength_packets = 20
-                            # Simulate packet loss
-                            stream.simulatePacketLoss(glitchLength_packets)
-                            Message.addMessage("[v] Stream " + str(idOfStream) + " simulate major packet loss")
-
-                    except Exception as e:
-                        Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
-
-        if keyPressed[0] == 'redrawScreen':
-            keyPressed[0] = ''  # Clear key buffer
-            # Force redraw
-            redrawScreen = True
-
-
-        ############################# Screen drawing starts here
-        if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
-            Term.clearTerminalScrollbackBuffer()
-            Term.setBackgroundColour(Term.BLUE)
-            Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
-            # Print operation mode (plus receive IP:Port if in Receive mode)
-            if operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK':
-                Term.printAt(operationMode+" MODE", 1, 1, Term.BLACK, Term.WHITE)
-            elif operationMode == 'RECEIVE':
-                Term.printAt(operationMode + " " + str(UDP_RX_IP) + ":" +\
-                             str(UDP_RX_PORT), 1, 1, Term.BLACK, Term.WHITE)
-
-
-            # Print bottom strip, solid line
-            Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
-            # Print list of key commands
-            Term.printAt(keyCommandsString, 1, (currentTermHeight -1), Term.BLACK, Term.WHITE)
-            # For tx mode, add an extra row of commands
-            if operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK':
-                Term.setBackgroundColourSingleLine(1, (currentTermHeight - 2), Term.WHITE)
-                Term.printAt(txStreamModifierCommandsString, 1, (currentTermHeight - 2), Term.BLACK, Term.WHITE)
-
-                # For special features mode, add yet another row of commands
-                if specialFeaturesModeFlag == True:
-                    Term.setBackgroundColourSingleLine(1, (currentTermHeight - 3), Term.WHITE)
-                    Term.printAt(extraKeyCommandsString, 1, (currentTermHeight - 3), Term.BLACK, Term.WHITE)
-
-
-        # Redraw changing screen elements - but not if redrawing has been inhibited
-        if not (keyPressed[0] == 'inhibit_redraw'):
-            ######### Print clock on RHS of screen
-            # Has 1 second elapsed, or is the redrawScreen flag set?
-            if (timer() - displayThread_clockTimer) >= 1 or (redrawScreen is True):
-                displayThread_clockTimer = timer() # reset timer
-                # Update clock on top RHS of screen
-                Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
-
-                # Display last five events (in descending order)
-                # s=""
-                # if len(availableRtpTxResultsList) > 0:
-                #     # Iterate over availableRtpTxResultsList
-                #     for stream in availableRtpTxResultsList:
-                #         # We want to display: [streamID], eventNo:Type, eventNo:Type....
-                #         eventList = stream[1].getRTPStreamEventList(5) # get last 5 events
-                #         s += "[" + str(stream[0]) + "] "    # Prefix with stream id
-                #         # for event in eventList:
-                #         for x in range(len(eventList)-1,-1,-1):
-                #             # s+= str(event.eventNo) + ":" + str(event.type) + ", "
-                #             s += str(eventList[x].eventNo) + ":" + str(eventList[x].type) + ", "
-                #         Message.addMessage("INFO: Last five events: " + s)
-                #         s =""
-
-                # Message.addMessage("DBUG: Current threads: " + str(listCurrentThreads()))
-                # s = ""
-                # for stream in availableRtpRxStreamList:
-                #     s+= str(id(stream[1].getSocket())) + ", "
-                # Message.addMessage(s)
-            ######### Print Navigation bar (shows the available views) - shouldn't change much, so only a periodic redraw
-
-                navigationBar = ""  # Clear navigation bar for next time
-                # Iterate over the views definition extracting the name of the view (view[0])
-                # and create a printable string with colour coding
-                # If the view is currently selected, black on white, otherwise black on cyan
-                for view in views:
-                    if view[0] == views[selectedView][0]:
-                        # If this is the 'current' view, create black on white
-                        navigationBar += Term.BlaWh + " " + view[0] + " " + Term.WhiBlu + " "
-                    else:
-                        # Otherwise create as dimmed white on cyan
-                        navigationBar += Term.BlaCy + " " + view[0] + " " + Term.WhiBlu + " "
-                # To avoid stale characters appearing on the second line, do a periodic clear of line 2
-                Term.setBackgroundColourSingleLine(1, 2, Term.BLUE)
-                # Print the rendered nav bar
-                Term.printAt(navigationBar,2,3)
-
-            #### Auto generate a table of the selected view based on the view[] definitions
-            if ((timer() - displayThread_streamTableRefreshTimer) >= streamTableRefreshPeriod) or redrawScreen is True:
-                # Reset displayThread_streamTableRefreshTimer
-                displayThread_streamTableRefreshTimer =timer()
-
-                # Step 1) Establish the titles, data source and row selector (key list) for the table
-
-                # Create a title row
-                titleRow=[]
-                # Create a list of keys that will be accessed for this view
-                keyList = []
-                # Extract the column titles and stats keys for the current view
-                for view in views:
-                    # Is this view the currently selected view?
-                    if view[0] == views[selectedView][0]:
-                        # view[1] represents a tuple containing a column title and a key pair
-                        columns = view[1]
-                        for column in columns:
-                            titleRow.append(column[0])
-                            keyList.append(column[1])
-
-                # Create a table data list with the title row at the head
-                tableData = [titleRow]
-
-                # Step 2) Populate the remaining table rows with data
-                # Calculate the maximum no. of rows that can be displayed in the stream table - determined by the terminal height
-                streamTableNoOfRows = int(currentTermHeight / 2) - 9
-
-                # Get a handle on the dataset to be displayed in this particular table
-                # The dataset is pointed to by the 3rd element of each view array
-                dataSetToDisplay=views[selectedView][2]
-                streamTableDataSetLength = len(dataSetToDisplay)
-
-                if streamTableDataSetLength == 0:
-                    selectedTableRow = 0
-
-                # Attempt to create the table data
-                if streamTableDataSetLength >0:
-                    if selectedTableRow ==0:
-                        streamTableFirstRow =0
-
-                    # Is the last selected row outside the range of data (this could happen if the
-                    # data gets modified whilst the table is not being displayed
-                    if selectedTableRow > (streamTableDataSetLength - 1):
-                        # If so, point the selector to the last item on the list
-                        selectedTableRow = (streamTableDataSetLength - 1)
-
-                    # Are we about to scroll off the end of the currenty displayed rows?
-                    if selectedTableRow > streamTableLastRow:
-                        # If so, increment the index of the first row
-                        streamTableFirstRow =selectedTableRow - streamTableNoOfRows + 1
-
-                    # Are we about to scroll off the top of the currently displayed rows?
-                    if selectedTableRow < streamTableFirstRow:
-                        # If so, decrement the index of the first row
-                        streamTableFirstRow=selectedTableRow
-
-
-                    # Calculate the last row to display based on the starting row and the height of the table
-                    streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
-
-                    # Will the last row be outside the actual range of available stream?
-                    if streamTableLastRow > (streamTableDataSetLength -1):
-                        #If so, set streamTableLastRow to point to the last line of the available data array
-                        streamTableLastRow = streamTableDataSetLength - 1
-                        # And add appropriate padding if required
-                        streamTableBlankRowsToAdd = streamTableNoOfRows - (streamTableLastRow - streamTableFirstRow) - 1
-                    else:
-                        streamTableBlankRowsToAdd = 0
-
-                else:
-                    # No data to display, so padding out the table instead
-                    streamTableBlankRowsToAdd = streamTableNoOfRows
-                try:
-                    # Confirm that there are some available streams
-                    if streamTableDataSetLength > 0:
-                        # Iterate over a specified portion of the dataSetToDisplay[]
-                        for x in range(streamTableFirstRow, streamTableLastRow+1):
-                            # Isolate the stream from the dataSetToDisplay[]
-                            streamData = dataSetToDisplay[x]
-                            # Retrieve the stats dictionary for that key
-                            streamDataStats = streamData[1].getRtpStreamStats()
-                            # iterate over the keys list for each stream - this will list in a new tableData row per stream
-                            tableRow = []  # Create new row to hold the data
-                             ###################################### These are the lines that actually populate the table
-                            for key in keyList:
-                                # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
-                                # which is stored as the third element of a streamData tuple in the dataSetToDisplay[]
-                                if key ==0:
-                                    # Grab the index number and assign to table cell
-                                    # The index stored in the array is zero indexed, but for useability, start the
-                                    # displayed no starting from 1
-                                    tableCell = str(streamData[2] + 1)
-
-                                else:
-                                    # This is a normal cell with a lookup key specified in the view definition
-                                    try:
-                                        # Retrieve the data from the rtpStream object by looking up it's key
-                                        # Attempt to humanise the data based on object type or clues given by the key name
-                                        tableCell=str(humanise(key,streamDataStats[key]))
-
-                                        try:
-                                            # Now attempt to colour code the table based on some tests
-                                            # is it a receive stream?
-                                            if type(streamData[1]) == RtpReceiveStream or type(streamData[1]) == RtpStreamResults:
-                                                # If so, test the stream stats
-                                                if streamDataStats["packet_data_received_1S_bytes"] == 0:
-                                                    # If so, make the row red
-                                                    tableCell=Term.FG(Term.RED)+tableCell
-
-                                                if type(streamData[1]) == RtpStreamResults:
-                                                    # If so, check to see that the data is fresh by looking at the
-                                                    # timestamp inside RtpStreamResults
-                                                    # If no fresh data received after 5 seconds, assume there's a problem
-                                                    # and colour code the stream red
-                                                    if (datetime.datetime.now() - streamData[1].lastUpdatedTimestamp) >\
-                                                            datetime.timedelta(seconds = 5):
-                                                        tableCell = Term.FG(Term.RED) + tableCell
-
-
-                                            # is it a transmit stream?
-                                            if type(streamData[1]) == RtpGenerator:
-                                                if streamDataStats["Time to live"] == 0:
-                                                    # If tx stream has 'died', dim
-                                                    tableCell = Term.DIM+tableCell
-                                        except Exception as e:
-                                            Message.addMessage("ERR: __displayThread: (colour coding of stream tables) "+str(e)+"**")
-
-                                    except Exception as e:
-                                        # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
-                                        tableCell="keyErr"
-                                        Message.addMessage("ERR: __displayThread (for key in keyList): "+str(e))
-
-                                # Check to see if this is the currently selected stream
-                                # If so, highlight the row on the table
-                                if streamData[2] == selectedTableRow:
-                                    # prefix tableCell with White-on-black ASCII code
-                                    tableCell = Term.WhBla + str(tableCell)
-                                else:
-                                    # Normal text: prefix tableCell with Black-on-White ASCII code
-                                    tableCell = Term.BlaWh + str(tableCell)
-                                # Append the formatted table cell data to the tableRow list
-                                tableRow.append(tableCell)
-                            # Now append this complete row to the tableData list (of lists)
-                            tableData.append(tableRow)
-                            del tableRow
-                    ###################################### End of lines that actually add data
-                    # If the table isn't large enough yet, pad it out with blanks to the length set by streamTableNoOfRows
-                    if streamTableBlankRowsToAdd > 0:
-                        for x in range(0,streamTableBlankRowsToAdd):
-                            # Create a blank list with the same no. of blanks as there are table columns
-                            tableRow = []*len(titleRow)
-                            tableData.append(tableRow)
-
-                except Exception as e:
-                    Message.addMessage("ERR: __displayThread. streamTable. selected row ("+str(selectedTableRow)+\
-                                       ") doesn't exist. (streamTableDataSetLength:"+str(streamTableDataSetLength)+"), " + str(e))
-
-                # Step 3) Render the table
-                table = SingleTable(tableData)
-                # Remove all padding to save space on the screen
-                table.padding_left = 0
-                table.padding_right = 0
-                if streamTableDataSetLength >0:
-                    table.title = str(selectedTableRow + 1)+"/"+str(streamTableDataSetLength)
-                else:
-                    table.title = "0/0"
-                tableWidth = table.table_width
-                tableRowsRendered = table.table.splitlines()
-                xPos = 2
-                yPos = 4
-                tableHeight=len(tableRowsRendered)
-                # To stop the screen getting corrupted (by tables of different widths), clear the lines behind
-                # the table, just in case
-                for x in range (yPos,yPos+tableHeight+2):
-                    Term.setBackgroundColourSingleLine(1,x,Term.BLUE)
-                Term.printTable(tableRowsRendered, xPos, yPos, tableWidth, Term.BLACK, Term.WHITE)
-
-
-
-            ##################### Create table showing messages - only redraws if there are new messages
-
-            # Message table should fill lower half of window
-            yPos = int(currentTermHeight/2) + 2
-            # Every toolbar at the bottom of the screen will allow less room for messages
-            maxNoOfMessagesThatWillFitScreen = int(currentTermHeight/2) - 9
-
-            # Get last x messages. Make a deep copy as we're going to add blankspace padding
-            messages = deepcopy(Message.getMessages(maxNoOfMessagesThatWillFitScreen))
-            if len(messages) > 0:
-                if lastMessageAdded != messages[-1][1]:
-                    # New messages have been added, so set the redraw flag
-                    redrawMessageTable=True
-                # Take a copy of the most recent message for next time around the loop
-                lastMessageAdded = messages[-1][1]
-
-            if redrawMessageTable or redrawScreen:
-                redrawMessageTable = False  # Clear flag
-                # Now iterate over actual messages to make sure they're not too long for display
-                # If they are, truncate them. (Terminal width - 12 chars) seems to work
-                # If they're too short, make them longer (to fill the space)
-                maxMessageDisplayLength=currentTermWidth - 12
-                for message in messages:
-                    # If message to long to fit the screen, truncate it
-                    if len(message[1])>maxMessageDisplayLength:
-                        message[1] = message[1][:maxMessageDisplayLength-2]
-                    else:
-                        # Otherwise pad the message out with spaces
-                        paddingLength=(maxMessageDisplayLength-2) -len(message[1])
-                        if paddingLength >0:
-                            paddingString = " " * paddingLength
-                            try:
-                                message[1] += paddingString
-                            except Exception as e:
-                                Message.addMessage("__displayThread: Invalid message")
-
-                if len(messages) > 0:
-                    width, height, tableData = createTable(messages, "Messages")
-                    # Overwrite previous messages table
-                    for y in range(yPos,yPos + (maxNoOfMessagesThatWillFitScreen + 3)):
-                        Term.setBackgroundColourSingleLine(1,y,Term.BLUE)
-                    Term.printTable(tableData,2,yPos,width,Term.BLACK,Term.WHITE)
-            del messages [:]
-        redrawScreen =False
-        time.sleep(0.2)
+# def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
+#                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
+#                     rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT):
+#
+#     # Declare lists to hold list of available rx and tx streams that can be displayed
+#
+#     # These lists are a list of tuples [x,y,z] where
+#     # [x=streamID (as a string), y=the tx/rx object itself, z=an index value]
+#     #
+#     # The array is populated by the use of the utility function __updateAvailableStreamsList()
+#     # Meanwhile, main() is maintaining two dictionaries, rtpTxStreamsDict and rtpRxStreamsDict
+#     # The issue with these dictionaries is that the order of them can change (when you iterate through them) making them
+#     # unsuitable for __displayThread which needs to maintain a chronological order of streams added/removed for display
+#     # and control purposes
+#     #
+#     # Therefore the job of __updateAvailableStreamsList() is to poll the supplied dictionary and synchronise any changes
+#     # (additions or deletions) in the dictionaries to the corresponding lists
+#
+#     availableRtpRxStreamList = []
+#     availableRtpTxStreamList = []
+#     availableRtpTxResultsList = []
+#
+#     selectedView = 0  # Keeps track of which view is currently being displayed
+#     selectedTableRow = 0    # Keeps track of the selected row on the stream table
+#
+#     # define views, tables headings and keys
+#     # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
+#     # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
+#     # views =[name of view 1, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],
+#     #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],dataSet[]]
+#     # view [n][0] will be the name of the view (used to generate the navigation bar)
+#     # view [n][1] is a tuple containing [column title, the stats dictionary key relating to that parameter]
+#     # view [n][2] is a reference to the dataset for this view
+#     views = []
+#
+#     if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
+#         views.append([Term.FG(Term.RED)+"Tx Streams",
+#                       [["#", 0],  # Used as an index[]
+#                        ["Name", 'Friendly Name'],
+#                        ["Src\nPort", 'Tx Source Port'],
+#                        ["Dest\n IP", 'Dest IP'],
+#                        ["Dest\nPort", 'Dest Port'],
+#                        ["Sync\nsrcID", 'Sync Source ID'],
+#                        ["Tx\nbps", 'Tx Rate'],
+#                        ["Size", 'Packet size'],
+#                        ["Bytes\n tx'd", 'Bytes transmitted'],
+#                        [" Time\nremain", 'Time to live']
+#                        ],availableRtpTxStreamList])
+#
+#     # If actually the receiving end, use availableRtpRxStreamList[] as a source for the stream tables
+#     if operationMode == 'RECEIVE': #or operationMode == 'LOOPBACK':
+#         streamResultsDataSet = availableRtpRxStreamList
+#
+#     # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
+#     else:
+#         streamResultsDataSet = availableRtpTxResultsList
+#
+#
+#     views.append(["Summary",
+#                   [["#",0], # Used as an index
+#                    ["Name", "stream_friendly_name"],
+#                    ["Src Addr", "stream_srcAddress"],
+#                    #["port", "stream_srcPort"],
+#                    ["bps", "packet_data_received_1S_bytes"],
+#                    ["Pkts\nlost", "glitch_packets_lost_total_count"],
+#                    [" %\nloss", "glitch_packets_lost_total_percent"],
+#                    ["Last\nglitch","glitch_most_recent_timestamp"],
+#                    ["glitch\nperiod","glitch_mean_time_between_glitches"],
+#                    ["Count","glitch_counter_total_glitches"]
+#                    #["CPU\n %","stream_processor_utilisation_percent"]
+#                    ],streamResultsDataSet])
+#
+#     views.append(["Stream",
+#                   [["#",0], # Used as an index
+#                    ["Name", "stream_friendly_name"],
+#                    ["Sync \nSrcID", "stream_syncSource"],
+#                    ["Src Addr", "stream_srcAddress"],
+#                    ["Src\nport", "stream_srcPort"],
+#                    ["Dst Addr", "stream_rxAddress"],
+#                    ["Dst\nport", "stream_rxPort"],
+#                    ["  Time\nelapsed","stream_time_elapsed_total"]
+#                    ],streamResultsDataSet])
+#
+#     views.append(["Packet",
+#                   [["#",0], # Used as an index[]
+#                    ["Name", "stream_friendly_name"],
+#                    ["First Seen\npacket","packet_first_packet_received_timestamp"],
+#                    ["Last seen\npacket","packet_last_seen_received_timestamp"],
+#                    ["pack\np/s","packet_counter_1S"],
+#                    ["Length\n(bytes)","packet_payload_size_mean_1S_bytes"],
+#                    ["Recv\nperiod","packet_mean_receive_period_uS"],
+#                    ["Bytes\nRcvd","packet_data_received_total_bytes"],
+#                    ["CPU\n %", "stream_processor_utilisation_percent"]
+#                    #["",""],
+#                    ],streamResultsDataSet])
+#
+#     views.append(["Glitch",
+#                   [["#", 0],  # Used as an index[]
+#                    ["Name", "stream_friendly_name"],
+#                    ["Mean\nloss", "glitch_packets_lost_per_glitch_mean"],
+#                    ["Max\nloss", "glitch_packets_lost_per_glitch_max"],
+#                    ["Total\nloss", "glitch_packets_lost_total_count"],
+#                    ["Mean\nduration", "glitch_mean_glitch_duration"],
+#                    ["Max\nduration", "glitch_max_glitch_duration"],
+#                    ["Total\nGlitch", "glitch_counter_total_glitches"],
+#                    ["Ignored", "glitch_glitches_ignored_counter"],
+#                    ["Threshold", "glitch_Event_Trigger_Threshold_packets"]
+#                    ],streamResultsDataSet])
+#
+#     views.append(["Historic",
+#                   [["#", 0],  # Used as an index[],
+#                    ["Name\n", "stream_friendly_name"],
+#                    ["24Hr\n", "historic_glitch_counter_last_24Hr"],
+#                    ["1Hr\n", "historic_glitch_counter_last_1Hr"],
+#                    ["10Min\n", "historic_glitch_counter_last_10Min"],
+#                    ["1Min\n", "historic_glitch_counter_last_1Min"],
+#                    ["10Sec\n", "historic_glitch_counter_last_10Sec"]
+#                    #["", ""],
+#                    ],streamResultsDataSet])
+#
+#     views.append(["Jitter",
+#                   [["#", 0],  # Used as an index[]
+#                    ["Name", "stream_friendly_name"],
+#                    ["Long term\n  mean", "jitter_long_term_uS"],
+#                    ["Min", "jitter_min_uS"],
+#                    ["Max", "jitter_max_uS"],
+#                    ["Range", "jitter_range_uS"],
+#                    ["1S \nmean", "jitter_mean_1S_uS"]
+#                    ],streamResultsDataSet])
+#
+#     # views.append(["Misc",
+#     #               [["#", 0],  # Used as an index[]
+#     #                ["", ""],
+#     #                ["", ""],
+#     #                ["", ""],
+#     #                ["", ""],
+#     #                ["", ""],
+#     #                ["", ""],
+#     #                ],DATASET_TO_DISPLAY,ROW_SELECTOR])
+#
+#     # Screen label showing the availablle key commands (depending upon mode)
+#     keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abou[t]"
+#
+#
+#     txStreamModifierCommandsString = "TX  modifier: [o/p] src ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
+#     # Extra command strip for 'special features' mode
+#     extraKeyCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
+#
+#     streamTableFirstRow = 0 # Tracks the current starting row of the stream table data
+#     streamTableLastRow = 0 # Tracks the current end row of the stream table data
+#
+#     # store the most recent message - used to determine whether we need to redraw
+#     # The message table
+#     lastMessageAdded = ""
+#     redrawMessageTable = False
+#
+#     redrawScreen = True
+#
+#     # Grab initial terminal dimensions
+#     currentTermWidth, currentTermHeight = Term.getTerminalSize()
+#     # Set up display window
+#     Term.initAlternateScreen()
+#
+#     # start elapsed timer for clock refresh
+#     displayThread_clockTimer = timer()
+#
+#     # Redraw/refresh period for stream table
+#     streamTableRefreshPeriod = 2
+#     # start elapsed timer for streamTable refresh
+#     displayThread_streamTableRefreshTimer = timer()
+#
+#     # Get Initial snapshot of current verbosity level
+#     intialVerbosityLevel = Message.verbosityLevel
+#     # Flag to turn on/off error messages (verbosity level 1)
+#     showErrorsFlag = False
+#
+#     if operationMode == 'RECEIVE':
+#         Message.addMessage("Waiting for incoming RTP streams on " + str(UDP_RX_IP) + ":" + str(UDP_RX_PORT))
+#     elif operationMode == 'TRANSMIT':
+#         Message.addMessage("Waiting for receiving end to make contact..... ")
+#     while True:
+#
+#         # Check to see if terminal has been resized
+#         # NOTE: Safe max print area height seems to be currentTermHeight -1
+#         w, h = Term.getTerminalSize()
+#         if (w != currentTermWidth) or (h != currentTermHeight):
+#             # If it has, set a flag
+#             redrawScreen = True
+#             # And store the new values
+#             currentTermWidth = w
+#             currentTermHeight = h
+#             Message.addMessage("INFO: Terminal size has changed to "+str(currentTermWidth)+","+str(currentTermHeight))
+#             redrawMessageTable = True
+#
+#         # Update available streams lists
+#         __updateAvailableStreamsList(availableRtpRxStreamList,rtpRxStreamsDict, rtpRxStreamsDictMutex)
+#         __updateAvailableStreamsList(availableRtpTxStreamList,rtpTxStreamsDict, rtpTxStreamsDictMutex)
+#         __updateAvailableStreamsList(availableRtpTxResultsList,rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex)
+#
+#         # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
+#         if len(availableRtpTxStreamList) > 0:
+#             latestTxStream = availableRtpTxStreamList[-1][1]
+#             # Take a deep copy so that we're not dependent upon this stream existing
+#             latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
+#
+#         # Force a screen redraw
+#         if keyPressed[0] == 'redraw_screen':
+#             redrawScreen = True
+#
+#
+#         if (keyPressed[0]=='CursorRight'):    # Cursor right pressed?
+#             keyPressed[0]=''    # Clear key buffer
+#             selectedView += 1
+#             # Prevent an 'out of range' view being selected
+#             if selectedView > (len(views)-1):
+#                 selectedView = len(views)-1
+#             redrawScreen = True
+#
+#         if (keyPressed[0]=='CursorLeft'):
+#             keyPressed[0] = ''  # Clear key buffer
+#             selectedView -= 1
+#             # Prevent an 'out of range' view being selected
+#             if selectedView < 0:
+#                 selectedView = 0
+#             redrawScreen = True
+#
+#         if (keyPressed[0]=='CursorUp'):
+#             # Scroll the highlight stream up the list
+#             keyPressed[0] = ''  # Clear key buffer
+#
+#             # Decrement the row selector associated with this view
+#             selectedTableRow -= 1
+#             # Bounds check
+#             if selectedTableRow < 0:
+#                 selectedTableRow = 0
+#
+#             redrawScreen = True
+#
+#         if (keyPressed[0] == 'CursorDown'):
+#             # Scroll the selected stream down
+#             keyPressed[0] = ''  # Clear key buffer
+#
+#             # Increment the row selector associated with this view
+#             selectedTableRow += 1
+#             # Bounds check the data set associated with this view
+#             if selectedTableRow > (len(views[selectedView][2]) - 1):
+#                 selectedTableRow = len(views[selectedView][2]) - 1
+#
+#             redrawScreen = True
+#
+#         if (keyPressed[0] == 'Enter'):
+#             keyPressed[0] = ''  # Clear key buffer
+#             Message.addMessage("INFO: Enter")
+#
+#         if (keyPressed[0] == 'newFriendlyNameEntered'):
+#             keyPressed[0] = ''  # Clear key buffer
+#             # Get handle on selected stream
+#             streamToBeModified = views[selectedView][2][selectedTableRow][1]
+#             idOfStreamToBeModified = views[selectedView][2][selectedTableRow][0]
+#
+#             try:
+#                 # Capture name string from keyPressed[] (second element)
+#                 newFriendlyName=keyPressed[1]
+#                 del keyPressed[1]  # Remove key buffer array now eve stored it
+#                 Message.addMessage("INFO: new friendlyNameEntered: "+newFriendlyName + " for stream " + str(idOfStreamToBeModified))
+#                 # Attempt to modify the stream name (but only if this is an RtpStream (a receiver) or RtpGenerstor object
+#                 # (RtpStreamResults objects are just display versions of the RtpStream objects created at the receiver)
+#                 if type(streamToBeModified) == RtpReceiveStream or type(streamToBeModified) == RtpGenerator:
+#                     streamToBeModified.setFriendlyName(newFriendlyName)
+#                 if type(streamToBeModified) == RtpStreamResults:
+#                     Message.addMessage("You can't change the name of a Results Stream. Modify name in the Tx tab instea")
+#
+#             except Exception as e:
+#                 Message.addMessage(Term.FG((Term.RED))+"ERR: __displayThread() newFriendlyNameEntered: "+ str(e))
+#             # redrawScreen = True
+#             # Re-render bottom status bar
+#             Term.setBackgroundColourSingleLine(1, (currentTermHeight - 1), Term.WHITE)
+#
+#             # Force redraw
+#             redrawScreen = True
+#
+#
+#         if keyPressed[0] == 'addTXStreamWithDefaults':
+#             keyPressed[0] = ''  # Clear key buffer
+#             # Attempt to add a new tx stream (if we're in loopback or transmit mode)
+#             # If a tx stream already exists, the new stream will be created with an incremented
+#             # source UDP port and an incremented sync source id.
+#             # If there are no current streams, the new stream will be created with a random
+#             # UDP source port and a random sync source id
+#             if operationMode == 'LOOPBACK' or operationMode == 'TRANSMIT':
+#
+#                 # Grab the stats of the most recent added tx stream, and make a copy derived from it's settings
+#                 # Check that there are actually some stream settings to copy
+#                 if len(latestTxStreamStats) > 0 :
+#
+#                     # Use stats of existing tx stream to derive setup parameters for new stream
+#                     syncSourceID = latestTxStreamStats['Sync Source ID'] + 1
+#                     sourcePort = latestTxStreamStats['Tx Source Port'] + 1
+#                     destPort = latestTxStreamStats['Dest Port']
+#                     destAddr = latestTxStreamStats['Dest IP']
+#                     packetLength = latestTxStreamStats['Packet size']
+#
+#                     # As a default, set time to live to be 1hr
+#                     timeToLive = 3600
+#                     # As a default, set tx rate to be 1 Mbps
+#                     txRate = 1048576
+#
+#                     rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, \
+#                                                 rtpTxStreamsDict, rtpTxStreamsDictMutex,\
+#                                                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, "", sourcePort)
+#
+#                     Message.addMessage("[a] Added new " +  str(bToMb(txRate)) +"bps stream with id " + str(syncSourceID))
+#                     # Force redraw
+#                     redrawScreen = True
+#                 else:
+#                     Message.addMessage("ERR: No previous Tx stream stats to copy from. New stream not added")
+#
+#         if keyPressed[0] == 'addTXStreamWithArgs':
+#             # Attempt to create a new stream based on the user entered parameters
+#             keyPressed[0] = ''  # Clear key buffer
+#             try:
+#                 # Capture dict containing the new parameters from keyPressed[] (second element)
+#                 txParameters=deepcopy(keyPressed[1])
+#                 # txParameters = {}
+#                 # txParameters["destIP"] = "10.56.60.143"
+#                 # txParameters["destPort"] = 5000
+#                 # txParameters["srcPort"] =2000
+#                 # txParameters["syncSourceID"] = 1234567890
+#                 # txParameters["payloadLength"] = 1000
+#                 # txParameters["txRate"] = "2m"
+#                 # txParameters["timeToLive"] = 120
+#                 # txParameters["friendlyName"] = "dave"
+#
+#
+#                 del keyPressed[1]  # Remove key buffer array now eve stored it
+#                 Message.addMessage("addTXStreamWithArgs" + str(txParameters))
+#
+#                 # Attempt to create a new stream using the user-entered stream parameters
+#
+#                 try:
+#                     # attempt to extract tx rate using regex to split into numerical and string parts
+#                     txRate = 0
+#                     splitArg = re.split(r'(\d+)', txParameters["txRate"])
+#                     # Extract numerical part
+#                     x = int(splitArg[1])
+#                     # Extract string part
+#                     multiplier = splitArg[2]
+#
+#                     if multiplier == 'k' or multiplier == 'K':
+#                         txRate = x * 1024
+#                     elif multiplier == 'm' or multiplier == 'M':
+#                         txRate = x * 1024 * 1024
+#                     else:
+#                         Message.addMessage("Invalid bandwidth specified. Unknown multiplier: " + str(multiplier))
+#                         break
+#
+#                     Message.addMessage(str(txParameters["destIP"]) + ", " + str(txParameters["destPort"]) + ", " + \
+#                                        str(txRate) + ", " + str(txParameters["payloadLength"]) + ", " + \
+#                                        str(txParameters["syncSourceID"]) + ", " + \
+#                                        str(txParameters["timeToLive"]) + ", " + str(txParameters["friendlyName"]) + \
+#                                        ", " + str(txParameters["srcPort"]))
+#
+#
+#                     # Validate supplied IP address
+#                     try:
+#                         socket.inet_aton(txParameters["destIP"])
+#                     except Exception as e:
+#                         Message.addMessage ("Invalid Dest IP address supplied: " + str(txParameters["destIP"]))
+#
+#                     # add new Rtp generator
+#                     rtpGenerator = RtpGenerator(txParameters["destIP"], txParameters["destPort"], txRate,
+#                                                 txParameters["payloadLength"], txParameters["syncSourceID"],
+#                                                 txParameters["timeToLive"], \
+#                                                 rtpTxStreamsDict, rtpTxStreamsDictMutex,\
+#                                                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
+#                                                 txParameters["friendlyName"], txParameters["srcPort"])
+#
+#                     # Force redraw
+#                     redrawScreen = True
+#
+#                 except Exception as e:
+#                     Message.addMessage("Can't create new stream as specified")
+#             except:
+#                 pass
+#
+#         ch = keyPressed[0]
+#
+#         if keyPressed[0] == ord('m'):
+#             # Increase tx rate of selected stream
+#             keyPressed[0] = ''  # Clear key buffer
+#             # Confirm that a tx stream exists
+#             if len(availableRtpTxStreamList)>0:
+#                 # Get handle on selected stream
+#                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+#                 streamID = views[selectedView][2][selectedTableRow][0]
+#                 # Now check that this is a generator object
+#                 if type(streamToBeModified) == RtpGenerator:
+#                     # Get tx rate from currently selected stream
+#                     stats=streamToBeModified.getRtpStreamStats()
+#                     currentTxRate=int(stats['Tx Rate'])
+#                     # If less than 1Mbps increment by 256kbps
+#                     if currentTxRate < 1048576:
+#                         newTxRate = currentTxRate+262144
+#                         streamToBeModified.setTxRate(newTxRate)
+#                     # Otherwise increment by 500kbps
+#                     else:
+#                         newTxRate = currentTxRate + 524288
+#                         streamToBeModified.setTxRate(newTxRate)
+#                     # Verify new rate set
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     currentTxRate = int(stats['Tx Rate'])
+#                     Message.addMessage("[m] Stream " + str(streamID) + " tx rate increased to " + str(bToMb(currentTxRate)))
+#
+#                     # Force redraw
+#                     redrawScreen = True
+#
+#         if keyPressed[0] == ord('n'):
+#             # Decrease tx rate of selected stream
+#             keyPressed[0] = ''  # Clear key buffer
+#             # Confirm that a tx stream exists
+#             if len(availableRtpTxStreamList) > 0:
+#                 # Get handle on selected stream
+#                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+#                 streamID = views[selectedView][2][selectedTableRow][0]
+#                 # Now check that this is a generator object
+#                 if type(streamToBeModified) == RtpGenerator:
+#                     # Get tx rate from currently selected stream
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     currentTxRate = int(stats['Tx Rate'])
+#
+#                     # If less than 1Mbps decrement by 256kbps
+#                     if currentTxRate < 1048576:
+#                         newTxRate = currentTxRate - 262144
+#                         streamToBeModified.setTxRate(newTxRate)
+#                     # Otherwise decrement by 512kbps
+#                     else:
+#                         newTxRate = currentTxRate - 524288
+#                         streamToBeModified.setTxRate(newTxRate)
+#
+#                     # Verify new rate set
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     currentTxRate = int(stats['Tx Rate'])
+#                     Message.addMessage("[n] Stream " + str(streamID) + " tx rate decreased to " + str(bToMb(currentTxRate)))
+#                     # Force redraw
+#                     redrawScreen = True
+#
+#         if keyPressed[0] == ord('h') or keyPressed[0] == ord('j'):
+#             # Decrease/Increase time to live of selected stream
+#             modifier = 0
+#             if keyPressed[0] == ord('h'):
+#                 # Decrease time to live
+#                 modifier = -1
+#             else:
+#                 # Increase time to live
+#                 modifier = 1
+#
+#             keyPressed[0] = ''  # Clear key buffer
+#
+#             # Confirm that a tx stream exists
+#             if len(availableRtpTxStreamList) > 0:
+#                 # Get handle on selected stream
+#                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+#                 streamID = views[selectedView][2][selectedTableRow][0]
+#                 # Now check that this is a generator object
+#                 if type(streamToBeModified) == RtpGenerator:
+#                     # Get time to live rate from currently selected stream
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     currentTTL = int(stats['Time to live']) # Retrieve time to live (in seconds)
+#                     if modifier < 0:
+#                         # Decrease time to live by 1hr (3600 secs), or else make 'forever' by setting as -1
+#                         newTTL = currentTTL - 3600
+#                         # If the new calculated value is -ve, interpret as 'forever'
+#                         if newTTL < 0:
+#                             # Set stream TTL to 'forever'
+#                             streamToBeModified.setTimeToLive(-1)
+#                             Message.addMessage("[h] Setting stream " + str(streamID) + " time to live to 'forever'")
+#                         else:
+#                             # Otherwise update the stream with the new calculated TTL
+#                             streamToBeModified.setTimeToLive(newTTL)
+#                             Message.addMessage("[h] Setting stream " + str(streamID) + " time to live to dur " + dtstrft(datetime.timedelta(seconds=newTTL)))
+#
+#                     elif modifier > 0:
+#                         # Increase time to live by 1hr (3600 secs)
+#                         newTTL = currentTTL + 3600
+#                         # Update the stream with the new calculated TTL
+#                         streamToBeModified.setTimeToLive(newTTL)
+#                         Message.addMessage("[j] Setting stream " + str(streamID) + " time to live to dur " + dtstrft(
+#                             datetime.timedelta(seconds=newTTL)))
+#
+#
+#         if keyPressed[0] == ord('l'):
+#             # Increase payload size of selected stream
+#             keyPressed[0] = ''  # Clear key buffer
+#             # Confirm that a tx stream exists
+#             if len(availableRtpTxStreamList) > 0:
+#                 # Get handle on selected stream
+#                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+#                 streamID = views[selectedView][2][selectedTableRow][0]
+#                 # Now check that this is a generator object
+#                 if type(streamToBeModified) == RtpGenerator:
+#                     # Get the stats dictionary from the RtpGenerator object
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     # Get current payload size
+#                     currentTxPayloadSize = int(stats['Packet size'])
+#                     # Increment current size by 10 bytes
+#                     streamToBeModified.setPayloadLength(currentTxPayloadSize+10)
+#
+#                     # Verify new payload size
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     currentTxPayloadSize = int(stats['Packet size'])
+#                     Message.addMessage(
+#                         "[l] Stream " + str(streamID) + " packet size increased to " + str(currentTxPayloadSize) + " bytes")
+#
+#                     # Force redraw
+#                     redrawScreen = True
+#
+#         if keyPressed[0] == ord('k'):
+#             # Decrease payload size of selected stream
+#             keyPressed[0] = ''  # Clear key buffer
+#             # Confirm that a tx stream exists
+#             if len(availableRtpTxStreamList) > 0:
+#                 # Get handle on selected stream
+#                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+#                 streamID = views[selectedView][2][selectedTableRow][0]
+#                 # Now check that this is a generator object
+#                 if type(streamToBeModified) == RtpGenerator:
+#                     # Get the stats dictionary from the RtpGenerator object
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     # Get current payload size
+#                     currentTxPayloadSize = int(stats['Packet size'])
+#                     # Increment current size by 10 bytes
+#                     streamToBeModified.setPayloadLength(currentTxPayloadSize - 10)
+#
+#                     # Verify new payload size
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     currentTxPayloadSize = int(stats['Packet size'])
+#                     Message.addMessage(
+#                         "[k] Stream " + str(streamID) + " packet size decreased to " + str(
+#                             currentTxPayloadSize) + " bytes")
+#                     # Force redraw
+#                     redrawScreen = True
+#
+#         if keyPressed[0] == ord('p'):
+#             # Increase sync source ID of selected stream
+#             keyPressed[0] = ''  # Clear key buffer
+#             # Confirm that a tx stream exists
+#             if len(availableRtpTxStreamList) > 0:
+#                 # Get handle on selected stream
+#                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+#                 streamID = views[selectedView][2][selectedTableRow][0]
+#                 # Now check that this is a generator object
+#                 if type(streamToBeModified) == RtpGenerator:
+#                     # Get the stats dictionary from the RtpGenerator object
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     # Get current Sync source ID
+#                     currentSyncSourceID = int(stats['Sync Source ID'])
+#                     # Increment sync source by 1
+#                     streamToBeModified.setSyncSourceIdentifier(currentSyncSourceID+1)
+#
+#                     # Verify new sync source id
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     currentSyncSourceID = int(stats['Sync Source ID'])
+#                     Message.addMessage(
+#                         "[p] Stream " + str(streamID) + " sync source id changed to " + str(currentSyncSourceID))
+#                     # Force redraw
+#                     redrawScreen = True
+#
+#         if keyPressed[0] == ord('o'):
+#             # Decrease sync source ID of selected stream
+#             keyPressed[0] = ''  # Clear key buffer
+#             # Confirm that a tx stream exists
+#             if len(availableRtpTxStreamList) > 0:
+#                 # Get handle on selected stream
+#                 streamToBeModified = views[selectedView][2][selectedTableRow][1]
+#                 streamID = views[selectedView][2][selectedTableRow][0]
+#                 # Now check that this is a generator object
+#                 if type(streamToBeModified) == RtpGenerator:
+#                     # Get the stats dictionary from the RtpGenerator object
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     # Get current Sync source ID
+#                     currentSyncSourceID = int(stats['Sync Source ID'])
+#                     # Decrement sync source by 1
+#                     streamToBeModified.setSyncSourceIdentifier(currentSyncSourceID-1)
+#                     # Verify new sync source id
+#                     stats = streamToBeModified.getRtpStreamStats()
+#                     currentSyncSourceID = int(stats['Sync Source ID'])
+#                     Message.addMessage(
+#                         "[o] Stream " + str(streamID) + " sync source id changed to " + str(currentSyncSourceID))
+#                     # Force redraw
+#                     redrawScreen = True
+#
+#         if keyPressed[0] == ord('e'):
+#             # Toggle error messages on/off
+#             keyPressed[0] = ''  # Clear key buffer
+#             if showErrorsFlag == False:
+#                 # Set flag to true
+#                 showErrorsFlag = True
+#                 # Force a change of Message verbosity level to show errors
+#                 Message.setVerbosity(1)
+#                 Message.addMessage("[e] Error messages on")
+#             else:
+#                 # Set flag to false
+#                 showErrorsFlag = False
+#                 # Force a change of Message verbosity back to intial setting
+#                 Message.setVerbosity(intialVerbosityLevel)
+#                 Message.addMessage("[e] Reverting to initial verbosity level")
+#
+#         if keyPressed[0] == ord('d'):
+#             # Delete selected stream (selected table row)
+#             keyPressed[0] = ''  # Clear key buffer
+#             # Confirm that the dataset associated with this view actually has some data in it
+#             if len(views[selectedView][2]) > 0:
+#                 try:
+#                     # Get handle on selected stream
+#                     streamToBeDeleted = views[selectedView][2][selectedTableRow][1]
+#                     idOfStreamToBeDeleted = views[selectedView][2][selectedTableRow][0]
+#                     Message.addMessage("INFO: streamToDelete: "+str(idOfStreamToBeDeleted) + " of type " + str(type(streamToBeDeleted)))
+#
+#                     # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
+#                     if type(streamToBeDeleted) == RtpGenerator:
+#                         # It is a generator object
+#                         Message.addMessage("[d] Deleting Tx Stream: " + str(idOfStreamToBeDeleted))
+#                         # Instruct the RtpGenerator object to die (and it's associated corrseponding RtpStreamResults, if it exists)
+#                         streamToBeDeleted.killStream()
+#                         # Additionally, remove the corrseponding RtpStreamResults object for this stream
+#
+#
+#                     elif type(streamToBeDeleted) == RtpReceiveStream:
+#                         # It is an RtpReceiveStream (receiver) object
+#                         Message.addMessage("[d] Deleting Rx Stream: " + str(idOfStreamToBeDeleted))
+#                         # Safely shutdown the RtpStream object itself
+#                         streamToBeDeleted.killStream()
+#
+#                     elif type(streamToBeDeleted) == RtpStreamResults:
+#                         Message.addMessage("Can't delete Results line for stream. " + str(idOfStreamToBeDeleted) +\
+#                                            " Did you mean to delete the transmit stream instead?")
+#
+#                     # Force redraw
+#                     redrawScreen = True
+#
+#                 except Exception as e:
+#                     Message.addMessage("ERR: __displayThread. [d] Delete Stream request failed: "+str(idOfStreamToBeDeleted)+
+#                                        ", "+str(e))
+#
+#
+#         # Monitor keyPressed[] for a Ctrl-C
+#         if keyPressed[0] == 'Ctrl-C':
+#             keyPressed[0] = ''  # Clear key buffer
+#             # Term.printAt("Ctrl-C pressed. Exiting",1,1,Term.FG(Term.RED))
+#             # # Send exit signal to main thread (via keyPressed[0])
+#             # keyPressed[0] = 'exit'
+#
+#         # Add extra key checking when in 'special features' mode
+#         if specialFeaturesModeFlag == True:
+#             if keyPressed[0] == ord('z'):
+#                 # Toggle packet generation on/off for the selected stream
+#                 keyPressed[0] = ''  # Clear key buffer
+#                 # Confirm that the current view has any streams within its data set
+#                 if len(views[selectedView][2]) > 0:
+#                     try:
+#                         # Get handle on selected stream
+#                         stream = views[selectedView][2][selectedTableRow][1]
+#                         idOfStream = views[selectedView][2][selectedTableRow][0]
+#
+#                         # Confirm that the stream is an RtpGenerator
+#                         if type(stream) == RtpGenerator:
+#                             # Get current transit status and toggle accordingly
+#                             if stream.getEnableStreamStatus():
+#                                 # If currently enabled, disable it
+#                                 stream.disableStream()
+#                                 Message.addMessage("[z] Stream "+str(idOfStream)+" disabled")
+#                             else:
+#                                 # otherwise, enable it
+#                                 stream.enableStream()
+#                                 Message.addMessage("[z] Stream " + str(idOfStream) + " enabled")
+#                     except Exception as e:
+#                         Message.addMessage("ERR: __displayThread [z] enable/disable stream. " + str(e))
+#
+#             if keyPressed[0] == ord('x'):
+#                 # Toggle packet jitter simulation on/off for the selected stream
+#                 keyPressed[0] = ''  # Clear key buffer
+#                 # Confirm that the current view has any streams within its data set
+#                 if len(views[selectedView][2]) > 0:
+#                     try:
+#                         # Get handle on selected stream
+#                         stream = views[selectedView][2][selectedTableRow][1]
+#                         idOfStream = views[selectedView][2][selectedTableRow][0]
+#
+#                         # Confirm that the stream is an RtpGenerator
+#                         if type(stream) == RtpGenerator:
+#                             if stream.getJitterStatus():
+#                                 # if jitter simulation currently enabled, disable it
+#                                 stream.disableJitter()
+#                                 Message.addMessage("[x] Stream " + str(idOfStream) + " jitter simulation disabled")
+#                             else:
+#                                 stream.enableJitter()
+#                                 Message.addMessage("[x] Stream " + str(idOfStream) + " jitter simulation enabled")
+#
+#                     except Exception as e:
+#                         Message.addMessage("ERR: __displayThread [x] enabled/disable jitter simulation. " + str(e))
+#
+#             if keyPressed[0] == ord('c'):
+#                 # Insert minor packet loss for the selected stream (< glitch threshold)
+#                 keyPressed[0] = ''  # Clear key buffer
+#                 # Confirm that the current view has any streams within its data set
+#                 if len(views[selectedView][2]) > 0:
+#                     try:
+#                         # Get handle on selected stream
+#                         stream = views[selectedView][2][selectedTableRow][1]
+#                         idOfStream = views[selectedView][2][selectedTableRow][0]
+#
+#                         # Confirm that the stream is an RtpGenerator
+#                         if type(stream) == RtpGenerator:
+#                             # Get current glitch threshold from first available rx stream
+#                             if len(availableRtpRxStreamList)>0:
+#                                 rtpRxStream=availableRtpRxStreamList[0][1]
+#                                 glitchLength_packets=rtpRxStream.getRtpStreamStats()["glitch_Event_Trigger_Threshold_packets"]
+#                             else:
+#                                 # If not available set a default value of 1 packet
+#                                 glitchLength_packets = 1
+#                             # Simulate packet loss
+#                             stream.simulatePacketLoss(glitchLength_packets)
+#                             Message.addMessage("[c] Stream " + str(idOfStream) + " simulate minor packet loss")
+#
+#                     except Exception as e:
+#                         Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
+#
+#             if keyPressed[0] == ord('v'):
+#                 # Insert significant packet loss for the selected stream (>= glitch threshold)
+#                 keyPressed[0] = ''  # Clear key buffer
+#                 # Confirm that the current view has any streams within its data set
+#                 if len(views[selectedView][2]) > 0:
+#                     try:
+#                         # Get handle on selected stream
+#                         stream = views[selectedView][2][selectedTableRow][1]
+#                         idOfStream = views[selectedView][2][selectedTableRow][0]
+#
+#                         # Confirm that the stream is an RtpGenerator
+#                         if type(stream) == RtpGenerator:
+#                             # Get current glitch threshold from first available rx stream
+#                             if len(availableRtpRxStreamList)>0:
+#                                 rtpRxStream=availableRtpRxStreamList[0][1]
+#                                 glitchLength_packets=rtpRxStream.getRtpStreamStats()["glitch_Event_Trigger_Threshold_packets"] + 1
+#                             else:
+#                                 # If not available set a default value of 20 packets
+#                                 glitchLength_packets = 20
+#                             # Simulate packet loss
+#                             stream.simulatePacketLoss(glitchLength_packets)
+#                             Message.addMessage("[v] Stream " + str(idOfStream) + " simulate major packet loss")
+#
+#                     except Exception as e:
+#                         Message.addMessage("ERR: __displayThread [c] add packet loss. " + str(e))
+#
+#         if keyPressed[0] == 'redrawScreen':
+#             keyPressed[0] = ''  # Clear key buffer
+#             # Force redraw
+#             redrawScreen = True
+#
+#
+#         ############################# Screen drawing starts here
+#         if redrawScreen and not (keyPressed[0] == 'inhibit_redraw'):
+#             Term.clearTerminalScrollbackBuffer()
+#             Term.setBackgroundColour(Term.BLUE)
+#             Term.printTitleBar("IBEOO ISP Analyser V1.0", 1, Term.BLACK, Term.WHITE)
+#             # Print operation mode (plus receive IP:Port if in Receive mode)
+#             if operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK':
+#                 Term.printAt(operationMode+" MODE", 1, 1, Term.BLACK, Term.WHITE)
+#             elif operationMode == 'RECEIVE':
+#                 Term.printAt(operationMode + " " + str(UDP_RX_IP) + ":" +\
+#                              str(UDP_RX_PORT), 1, 1, Term.BLACK, Term.WHITE)
+#
+#
+#             # Print bottom strip, solid line
+#             Term.setBackgroundColourSingleLine(1, (currentTermHeight -1), Term.WHITE)
+#             # Print list of key commands
+#             Term.printAt(keyCommandsString, 1, (currentTermHeight -1), Term.BLACK, Term.WHITE)
+#             # For tx mode, add an extra row of commands
+#             if operationMode == 'TRANSMIT' or operationMode == 'LOOPBACK':
+#                 Term.setBackgroundColourSingleLine(1, (currentTermHeight - 2), Term.WHITE)
+#                 Term.printAt(txStreamModifierCommandsString, 1, (currentTermHeight - 2), Term.BLACK, Term.WHITE)
+#
+#                 # For special features mode, add yet another row of commands
+#                 if specialFeaturesModeFlag == True:
+#                     Term.setBackgroundColourSingleLine(1, (currentTermHeight - 3), Term.WHITE)
+#                     Term.printAt(extraKeyCommandsString, 1, (currentTermHeight - 3), Term.BLACK, Term.WHITE)
+#
+#
+#         # Redraw changing screen elements - but not if redrawing has been inhibited
+#         if not (keyPressed[0] == 'inhibit_redraw'):
+#             ######### Print clock on RHS of screen
+#             # Has 1 second elapsed, or is the redrawScreen flag set?
+#             if (timer() - displayThread_clockTimer) >= 1 or (redrawScreen is True):
+#                 displayThread_clockTimer = timer() # reset timer
+#                 # Update clock on top RHS of screen
+#                 Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
+#
+#                 # Display last five events (in descending order)
+#                 # s=""
+#                 # if len(availableRtpTxResultsList) > 0:
+#                 #     # Iterate over availableRtpTxResultsList
+#                 #     for stream in availableRtpTxResultsList:
+#                 #         # We want to display: [streamID], eventNo:Type, eventNo:Type....
+#                 #         eventList = stream[1].getRTPStreamEventList(5) # get last 5 events
+#                 #         s += "[" + str(stream[0]) + "] "    # Prefix with stream id
+#                 #         # for event in eventList:
+#                 #         for x in range(len(eventList)-1,-1,-1):
+#                 #             # s+= str(event.eventNo) + ":" + str(event.type) + ", "
+#                 #             s += str(eventList[x].eventNo) + ":" + str(eventList[x].type) + ", "
+#                 #         Message.addMessage("INFO: Last five events: " + s)
+#                 #         s =""
+#
+#                 # Message.addMessage("DBUG: Current threads: " + str(listCurrentThreads()))
+#                 # s = ""
+#                 # for stream in availableRtpRxStreamList:
+#                 #     s+= str(id(stream[1].getSocket())) + ", "
+#                 # Message.addMessage(s)
+#             ######### Print Navigation bar (shows the available views) - shouldn't change much, so only a periodic redraw
+#
+#                 navigationBar = ""  # Clear navigation bar for next time
+#                 # Iterate over the views definition extracting the name of the view (view[0])
+#                 # and create a printable string with colour coding
+#                 # If the view is currently selected, black on white, otherwise black on cyan
+#                 for view in views:
+#                     if view[0] == views[selectedView][0]:
+#                         # If this is the 'current' view, create black on white
+#                         navigationBar += Term.BlaWh + " " + view[0] + " " + Term.WhiBlu + " "
+#                     else:
+#                         # Otherwise create as dimmed white on cyan
+#                         navigationBar += Term.BlaCy + " " + view[0] + " " + Term.WhiBlu + " "
+#                 # To avoid stale characters appearing on the second line, do a periodic clear of line 2
+#                 Term.setBackgroundColourSingleLine(1, 2, Term.BLUE)
+#                 # Print the rendered nav bar
+#                 Term.printAt(navigationBar,2,3)
+#
+#             #### Auto generate a table of the selected view based on the view[] definitions
+#             if ((timer() - displayThread_streamTableRefreshTimer) >= streamTableRefreshPeriod) or redrawScreen is True:
+#                 # Reset displayThread_streamTableRefreshTimer
+#                 displayThread_streamTableRefreshTimer =timer()
+#
+#                 # Step 1) Establish the titles, data source and row selector (key list) for the table
+#
+#                 # Create a title row
+#                 titleRow=[]
+#                 # Create a list of keys that will be accessed for this view
+#                 keyList = []
+#                 # Extract the column titles and stats keys for the current view
+#                 for view in views:
+#                     # Is this view the currently selected view?
+#                     if view[0] == views[selectedView][0]:
+#                         # view[1] represents a tuple containing a column title and a key pair
+#                         columns = view[1]
+#                         for column in columns:
+#                             titleRow.append(column[0])
+#                             keyList.append(column[1])
+#
+#                 # Create a table data list with the title row at the head
+#                 tableData = [titleRow]
+#
+#                 # Step 2) Populate the remaining table rows with data
+#                 # Calculate the maximum no. of rows that can be displayed in the stream table - determined by the terminal height
+#                 streamTableNoOfRows = int(currentTermHeight / 2) - 9
+#
+#                 # Get a handle on the dataset to be displayed in this particular table
+#                 # The dataset is pointed to by the 3rd element of each view array
+#                 dataSetToDisplay=views[selectedView][2]
+#                 streamTableDataSetLength = len(dataSetToDisplay)
+#
+#                 if streamTableDataSetLength == 0:
+#                     selectedTableRow = 0
+#
+#                 # Attempt to create the table data
+#                 if streamTableDataSetLength >0:
+#                     if selectedTableRow ==0:
+#                         streamTableFirstRow =0
+#
+#                     # Is the last selected row outside the range of data (this could happen if the
+#                     # data gets modified whilst the table is not being displayed
+#                     if selectedTableRow > (streamTableDataSetLength - 1):
+#                         # If so, point the selector to the last item on the list
+#                         selectedTableRow = (streamTableDataSetLength - 1)
+#
+#                     # Are we about to scroll off the end of the currenty displayed rows?
+#                     if selectedTableRow > streamTableLastRow:
+#                         # If so, increment the index of the first row
+#                         streamTableFirstRow =selectedTableRow - streamTableNoOfRows + 1
+#
+#                     # Are we about to scroll off the top of the currently displayed rows?
+#                     if selectedTableRow < streamTableFirstRow:
+#                         # If so, decrement the index of the first row
+#                         streamTableFirstRow=selectedTableRow
+#
+#
+#                     # Calculate the last row to display based on the starting row and the height of the table
+#                     streamTableLastRow = streamTableFirstRow + streamTableNoOfRows -1
+#
+#                     # Will the last row be outside the actual range of available stream?
+#                     if streamTableLastRow > (streamTableDataSetLength -1):
+#                         #If so, set streamTableLastRow to point to the last line of the available data array
+#                         streamTableLastRow = streamTableDataSetLength - 1
+#                         # And add appropriate padding if required
+#                         streamTableBlankRowsToAdd = streamTableNoOfRows - (streamTableLastRow - streamTableFirstRow) - 1
+#                     else:
+#                         streamTableBlankRowsToAdd = 0
+#
+#                 else:
+#                     # No data to display, so padding out the table instead
+#                     streamTableBlankRowsToAdd = streamTableNoOfRows
+#                 try:
+#                     # Confirm that there are some available streams
+#                     if streamTableDataSetLength > 0:
+#                         # Iterate over a specified portion of the dataSetToDisplay[]
+#                         for x in range(streamTableFirstRow, streamTableLastRow+1):
+#                             # Isolate the stream from the dataSetToDisplay[]
+#                             streamData = dataSetToDisplay[x]
+#                             # Retrieve the stats dictionary for that key
+#                             streamDataStats = streamData[1].getRtpStreamStats()
+#                             # iterate over the keys list for each stream - this will list in a new tableData row per stream
+#                             tableRow = []  # Create new row to hold the data
+#                              ###################################### These are the lines that actually populate the table
+#                             for key in keyList:
+#                                 # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
+#                                 # which is stored as the third element of a streamData tuple in the dataSetToDisplay[]
+#                                 if key ==0:
+#                                     # Grab the index number and assign to table cell
+#                                     # The index stored in the array is zero indexed, but for useability, start the
+#                                     # displayed no starting from 1
+#                                     tableCell = str(streamData[2] + 1)
+#
+#                                 else:
+#                                     # This is a normal cell with a lookup key specified in the view definition
+#                                     try:
+#                                         # Retrieve the data from the rtpStream object by looking up it's key
+#                                         # Attempt to humanise the data based on object type or clues given by the key name
+#                                         tableCell=str(humanise(key,streamDataStats[key]))
+#
+#                                         try:
+#                                             # Now attempt to colour code the table based on some tests
+#                                             # is it a receive stream?
+#                                             if type(streamData[1]) == RtpReceiveStream or type(streamData[1]) == RtpStreamResults:
+#                                                 # If so, test the stream stats
+#                                                 if streamDataStats["packet_data_received_1S_bytes"] == 0:
+#                                                     # If so, make the row red
+#                                                     tableCell=Term.FG(Term.RED)+tableCell
+#
+#                                                 if type(streamData[1]) == RtpStreamResults:
+#                                                     # If so, check to see that the data is fresh by looking at the
+#                                                     # timestamp inside RtpStreamResults
+#                                                     # If no fresh data received after 5 seconds, assume there's a problem
+#                                                     # and colour code the stream red
+#                                                     if (datetime.datetime.now() - streamData[1].lastUpdatedTimestamp) >\
+#                                                             datetime.timedelta(seconds = 5):
+#                                                         tableCell = Term.FG(Term.RED) + tableCell
+#
+#
+#                                             # is it a transmit stream?
+#                                             if type(streamData[1]) == RtpGenerator:
+#                                                 if streamDataStats["Time to live"] == 0:
+#                                                     # If tx stream has 'died', dim
+#                                                     tableCell = Term.DIM+tableCell
+#                                         except Exception as e:
+#                                             Message.addMessage("ERR: __displayThread: (colour coding of stream tables) "+str(e)+"**")
+#
+#                                     except Exception as e:
+#                                         # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
+#                                         tableCell="keyErr"
+#                                         Message.addMessage("ERR: __displayThread (for key in keyList): "+str(e))
+#
+#                                 # Check to see if this is the currently selected stream
+#                                 # If so, highlight the row on the table
+#                                 if streamData[2] == selectedTableRow:
+#                                     # prefix tableCell with White-on-black ASCII code
+#                                     tableCell = Term.WhBla + str(tableCell)
+#                                 else:
+#                                     # Normal text: prefix tableCell with Black-on-White ASCII code
+#                                     tableCell = Term.BlaWh + str(tableCell)
+#                                 # Append the formatted table cell data to the tableRow list
+#                                 tableRow.append(tableCell)
+#                             # Now append this complete row to the tableData list (of lists)
+#                             tableData.append(tableRow)
+#                             del tableRow
+#                     ###################################### End of lines that actually add data
+#                     # If the table isn't large enough yet, pad it out with blanks to the length set by streamTableNoOfRows
+#                     if streamTableBlankRowsToAdd > 0:
+#                         for x in range(0,streamTableBlankRowsToAdd):
+#                             # Create a blank list with the same no. of blanks as there are table columns
+#                             tableRow = []*len(titleRow)
+#                             tableData.append(tableRow)
+#
+#                 except Exception as e:
+#                     Message.addMessage("ERR: __displayThread. streamTable. selected row ("+str(selectedTableRow)+\
+#                                        ") doesn't exist. (streamTableDataSetLength:"+str(streamTableDataSetLength)+"), " + str(e))
+#
+#                 # Step 3) Render the table
+#                 table = SingleTable(tableData)
+#                 # Remove all padding to save space on the screen
+#                 table.padding_left = 0
+#                 table.padding_right = 0
+#                 if streamTableDataSetLength >0:
+#                     table.title = str(selectedTableRow + 1)+"/"+str(streamTableDataSetLength)
+#                 else:
+#                     table.title = "0/0"
+#                 tableWidth = table.table_width
+#                 tableRowsRendered = table.table.splitlines()
+#                 xPos = 2
+#                 yPos = 4
+#                 tableHeight=len(tableRowsRendered)
+#                 # To stop the screen getting corrupted (by tables of different widths), clear the lines behind
+#                 # the table, just in case
+#                 for x in range (yPos,yPos+tableHeight+2):
+#                     Term.setBackgroundColourSingleLine(1,x,Term.BLUE)
+#                 Term.printTable(tableRowsRendered, xPos, yPos, tableWidth, Term.BLACK, Term.WHITE)
+#
+#
+#
+#             ##################### Create table showing messages - only redraws if there are new messages
+#
+#             # Message table should fill lower half of window
+#             yPos = int(currentTermHeight/2) + 2
+#             # Every toolbar at the bottom of the screen will allow less room for messages
+#             maxNoOfMessagesThatWillFitScreen = int(currentTermHeight/2) - 9
+#
+#             # Get last x messages. Make a deep copy as we're going to add blankspace padding
+#             messages = deepcopy(Message.getMessages(maxNoOfMessagesThatWillFitScreen))
+#             if len(messages) > 0:
+#                 if lastMessageAdded != messages[-1][1]:
+#                     # New messages have been added, so set the redraw flag
+#                     redrawMessageTable=True
+#                 # Take a copy of the most recent message for next time around the loop
+#                 lastMessageAdded = messages[-1][1]
+#
+#             if redrawMessageTable or redrawScreen:
+#                 redrawMessageTable = False  # Clear flag
+#                 # Now iterate over actual messages to make sure they're not too long for display
+#                 # If they are, truncate them. (Terminal width - 12 chars) seems to work
+#                 # If they're too short, make them longer (to fill the space)
+#                 maxMessageDisplayLength=currentTermWidth - 12
+#                 for message in messages:
+#                     # If message to long to fit the screen, truncate it
+#                     if len(message[1])>maxMessageDisplayLength:
+#                         message[1] = message[1][:maxMessageDisplayLength-2]
+#                     else:
+#                         # Otherwise pad the message out with spaces
+#                         paddingLength=(maxMessageDisplayLength-2) -len(message[1])
+#                         if paddingLength >0:
+#                             paddingString = " " * paddingLength
+#                             try:
+#                                 message[1] += paddingString
+#                             except Exception as e:
+#                                 Message.addMessage("__displayThread: Invalid message")
+#
+#                 if len(messages) > 0:
+#                     width, height, tableData = createTable(messages, "Messages")
+#                     # Overwrite previous messages table
+#                     for y in range(yPos,yPos + (maxNoOfMessagesThatWillFitScreen + 3)):
+#                         Term.setBackgroundColourSingleLine(1,y,Term.BLUE)
+#                     Term.printTable(tableData,2,yPos,width,Term.BLACK,Term.WHITE)
+#             del messages [:]
+#         redrawScreen =False
+#         time.sleep(0.2)
 
 
 # Define a thread that will trap keys pressed
-def __catchKeyboardPresses(operationMode, keyPressed):
-    Message.addMessage("INFO: Starting __catchKeyboardPresses thread")
-    # OSX and Windows seem to return different codes for the cursor keys, so check for both
-    while True:
-        ch = Term.getch()
-        if ch != "":
-            Message.addMessage("DBUG: keyPressed[0] " +str(ch) + ", " + str(ord(ch)))
-
-
-        if ord(ch)==67 or ord(ch)==77:
-            # Right cursor key
-            keyPressed[0] = 'CursorRight'
-
-        elif ord(ch)==68 or ord(ch)==75:
-            # Left cursor key
-            keyPressed[0] = 'CursorLeft'
-
-        elif ord(ch)==65 or ord(ch)==72:
-            # Up cursor key
-            keyPressed[0] = 'CursorUp'
-
-        elif ord(ch) == 66 or ord(ch)==80:
-            # Down cursor key
-            keyPressed[0] = 'CursorDown'
-
-        # elif ord(ch)==3:
-        #     # Ctrl-C
-        #     keyPressed[0] = 'Ctrl-C'
-
-        # Not dependable because cursor keys also send '27'
-        # elif ord(ch)==27:
-        #     # Esc
-        #     keyPressed[0] = 'Esc'
-
-        elif ord(ch) == 13:
-            # Esc
-            keyPressed[0] = 'Enter'
-
-
-        # Special case if 's' pressed
-        elif ord(ch) == ord('s'):
-            ch == ''    # Clear keybuffer
-            # provide input prompt -used to edit a stream name
-
-            # Print user prompt on penultimate line of terminal
-            termW, termH = Term.getTerminalSize()
-
-            # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
-            keyPressed[0]='inhibit_redraw'
-            # Generate and print ascii string to move cursor to start of penultimate line
-            print(str(Term.XY(1,(termH - 2))))
-            # Request user input
-            # Cludge to make input code compatible for Python2 and Python3
-            # Python 2 uses the command raw_input() to get user input,
-            # whereas Python3 uses input().
-            # This cludge attempts to redefine raw_input() as input () (if it exists)
-            # so that input() can be used by both versions
-            try:
-                friendlyName = input("Enter friendly name for stream> ")
-                # Now signal to _displayThread that a friendly name has been entered
-                # Pass the friendly name as the second arg of keyPressed[]
-                keyPressed[0]='newFriendlyNameEntered'
-                keyPressed.append(str(friendlyName))
-            except:
-                pass
-
-        # Special case if 'a' pressed (add additional tx stream)
-        elif ord(ch) == ord('a'):
-            ch == ''    # Clear keybuffer
-            # Check we're in transmit mode
-            if operationMode == 'TRANSMIT':
-                keyPressed[0] = 'addTXStreamWithDefaults'
-                # Commented out 'add custom stream code for this version)
-                # Get current terminal size
-                # termW, termH = Term.getTerminalSize()
-                # # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
-                # keyPressed[0] = 'inhibit_redraw'
-                #
-                # # Re-render bottom status bar (to overwrite key commands text)
-                # Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)
-                # # Generate and print ascii string to move cursor to start of penultimate line
-                # print(str(Term.XY(1, (termH - 2))))
-                # # Generate use prompts:-
-                # response = input("[Enter] to add stream with defaults (1Mbps) or [s] to specify tx parameters:")
-                # if response == '':
-                #     keyPressed[0] = 'addTXStreamWithDefaults'
-                # elif response == 's':
-                #     # Dict to store user entered tx parameters
-                #     txParameters ={}
-                #     # Re-render bottom status bar (to overwrite key commands text)
-                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)
-                #     # Generate and print ascii string to move cursor to start of penultimate line
-                #     print(str(Term.XY(1, (termH - 2))))
-                #     # Generate user prompts:-
-                #     # Dest IP addr
-                #     response = input("Enter destination ip address: ")
-                #     # Add settings to dict
-                #     txParameters["destIP"] = response
-                #
-                #     # Dest UDP port
-                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                #     print(str(Term.XY(1, (termH - 2))))     # Move cursor
-                #     response = input("Enter destination port: ")    # Generate prompt
-                #     txParameters["destPort"] = response # Store in dictionary
-                #
-                #     # Source UDP port
-                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                #     response = input("Enter optional UDP source port: ")  # Generate prompt
-                #     if response != "":
-                #         txParameters["srcPort"] = response  # Store in dictionary (if supplied, otherwise don't)
-                #
-                #     # Sync source ID
-                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                #     response = input("Enter sync source id: ")  # Generate prompt
-                #     txParameters["syncSourceID"] = response  # Store in dictionary (if supplied, otherwise don't)
-                #
-                #     # Payload length
-                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                #     response = input("Enter payload length (bytes): ")  # Generate prompt
-                #     txParameters["payloadLength"] = response  # Store in dictionary (if supplied, otherwise don't)
-                #
-                #     # Tx rate (in bps)
-                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                #     response = input("Enter tx Rate (with suffix [k]bps or [m]bps: ")  # Generate prompt
-                #     txParameters["txRate"] = response  # Store in dictionary (if supplied, otherwise don't)
-                #
-                #     # Lifetime (in secs)
-                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                #     response = input("Enter time to live (in seconds): ")  # Generate prompt
-                #     txParameters["timeToLive"] = response  # Store in dictionary (if supplied, otherwise don't)
-                #
-                #     # Friendly name
-                #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
-                #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
-                #     response = input("Enter friendly name (10 chars max): ")  # Generate prompt
-                #     txParameters["friendlyName"] = response  # Store in dictionary (if supplied, otherwise don't)
-                #
-                #     # Now signal to _displayThread that a custom tx stream has been specified
-                #     # Pass the dict containing the parameters as the second arg of keyPressed[]
-                #     keyPressed[0] = 'addTXStreamWithArgs'
-                #     keyPressed.append(txParameters)
-                #
-                # else:
-                #     # Force a screen redraw
-                #     keyPressed[0] = "redrawScreen"
-
-        # Special case if 't' pressed ('about' dialog - need to inhibit screen)
-        elif ord(ch) == ord('t'): # 't'
-            ch == ''  # Clear keybuffer
-            # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
-            keyPressed[0] = 'inhibit_redraw'
-            # Create a dialogue box (using a table with a single cell and no headings)
-            maxWidth = 55
-            tableContents ="BBC IBEOO Team ISP Analyser V1.0 (beta)".center(maxWidth," ")+\
-                "\n\n" + "(c) James Turner 2020".center(maxWidth," ")+ \
-                "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
-                "\n" + " measurement tool supporting multiple tx/tx streams".center(maxWidth, " ") + \
-                "\n" + "  and event logging".center(maxWidth, " ") + \
-                           "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth," ")+\
-                "\n\n\n\n" +\
-                "Press the [any] key to continue".center(maxWidth," ")
-
-            # Create a single-celled table
-            aboutDialogue = SingleTable([[tableContents]])
-            aboutDialogue.title = "About"
-            width = aboutDialogue.table_width
-            height = tableContents.count('\n') + 2
-
-            # Get Terminal size so we can centre the table
-            termW, termH = Term.getTerminalSize()
-            xPos = int((termW - width)/2)
-            yPos = int((termH-height)/2)
-
-            Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
-            # Wait for a key press
-            Term.getch()
-            # re-enable screen redrawing (by clearing 'inhibit_redraw' from keyPressed[0]
-            keyPressed[0] = 'redraw_screen'
-
-
-        else:
-            # Return the integer ascii value of the key pressed to keyPressed[]
-            keyPressed[0] = ord(ch)
-        time.sleep(0.1)
+# def __catchKeyboardPresses(operationMode, keyPressed):
+#     Message.addMessage("INFO: Starting __catchKeyboardPresses thread")
+#     # OSX and Windows seem to return different codes for the cursor keys, so check for both
+#     while True:
+#         ch = Term.getch()
+#         if ch != "":
+#             Message.addMessage("DBUG: keyPressed[0] " +str(ch) + ", " + str(ord(ch)))
+#
+#
+#         if ord(ch)==67 or ord(ch)==77:
+#             # Right cursor key
+#             keyPressed[0] = 'CursorRight'
+#
+#         elif ord(ch)==68 or ord(ch)==75:
+#             # Left cursor key
+#             keyPressed[0] = 'CursorLeft'
+#
+#         elif ord(ch)==65 or ord(ch)==72:
+#             # Up cursor key
+#             keyPressed[0] = 'CursorUp'
+#
+#         elif ord(ch) == 66 or ord(ch)==80:
+#             # Down cursor key
+#             keyPressed[0] = 'CursorDown'
+#
+#         # elif ord(ch)==3:
+#         #     # Ctrl-C
+#         #     keyPressed[0] = 'Ctrl-C'
+#
+#         # Not dependable because cursor keys also send '27'
+#         # elif ord(ch)==27:
+#         #     # Esc
+#         #     keyPressed[0] = 'Esc'
+#
+#         elif ord(ch) == 13:
+#             # Esc
+#             keyPressed[0] = 'Enter'
+#
+#
+#         # Special case if 's' pressed
+#         elif ord(ch) == ord('s'):
+#             ch == ''    # Clear keybuffer
+#             # provide input prompt -used to edit a stream name
+#
+#             # Print user prompt on penultimate line of terminal
+#             termW, termH = Term.getTerminalSize()
+#
+#             # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
+#             keyPressed[0]='inhibit_redraw'
+#             # Generate and print ascii string to move cursor to start of penultimate line
+#             print(str(Term.XY(1,(termH - 2))))
+#             # Request user input
+#             # Cludge to make input code compatible for Python2 and Python3
+#             # Python 2 uses the command raw_input() to get user input,
+#             # whereas Python3 uses input().
+#             # This cludge attempts to redefine raw_input() as input () (if it exists)
+#             # so that input() can be used by both versions
+#             try:
+#                 friendlyName = input("Enter friendly name for stream> ")
+#                 # Now signal to _displayThread that a friendly name has been entered
+#                 # Pass the friendly name as the second arg of keyPressed[]
+#                 keyPressed[0]='newFriendlyNameEntered'
+#                 keyPressed.append(str(friendlyName))
+#             except:
+#                 pass
+#
+#         # Special case if 'a' pressed (add additional tx stream)
+#         elif ord(ch) == ord('a'):
+#             ch == ''    # Clear keybuffer
+#             # Check we're in transmit mode
+#             if operationMode == 'TRANSMIT':
+#                 keyPressed[0] = 'addTXStreamWithDefaults'
+#                 # Commented out 'add custom stream code for this version)
+#                 # Get current terminal size
+#                 # termW, termH = Term.getTerminalSize()
+#                 # # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
+#                 # keyPressed[0] = 'inhibit_redraw'
+#                 #
+#                 # # Re-render bottom status bar (to overwrite key commands text)
+#                 # Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)
+#                 # # Generate and print ascii string to move cursor to start of penultimate line
+#                 # print(str(Term.XY(1, (termH - 2))))
+#                 # # Generate use prompts:-
+#                 # response = input("[Enter] to add stream with defaults (1Mbps) or [s] to specify tx parameters:")
+#                 # if response == '':
+#                 #     keyPressed[0] = 'addTXStreamWithDefaults'
+#                 # elif response == 's':
+#                 #     # Dict to store user entered tx parameters
+#                 #     txParameters ={}
+#                 #     # Re-render bottom status bar (to overwrite key commands text)
+#                 #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)
+#                 #     # Generate and print ascii string to move cursor to start of penultimate line
+#                 #     print(str(Term.XY(1, (termH - 2))))
+#                 #     # Generate user prompts:-
+#                 #     # Dest IP addr
+#                 #     response = input("Enter destination ip address: ")
+#                 #     # Add settings to dict
+#                 #     txParameters["destIP"] = response
+#                 #
+#                 #     # Dest UDP port
+#                 #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+#                 #     print(str(Term.XY(1, (termH - 2))))     # Move cursor
+#                 #     response = input("Enter destination port: ")    # Generate prompt
+#                 #     txParameters["destPort"] = response # Store in dictionary
+#                 #
+#                 #     # Source UDP port
+#                 #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+#                 #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+#                 #     response = input("Enter optional UDP source port: ")  # Generate prompt
+#                 #     if response != "":
+#                 #         txParameters["srcPort"] = response  # Store in dictionary (if supplied, otherwise don't)
+#                 #
+#                 #     # Sync source ID
+#                 #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+#                 #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+#                 #     response = input("Enter sync source id: ")  # Generate prompt
+#                 #     txParameters["syncSourceID"] = response  # Store in dictionary (if supplied, otherwise don't)
+#                 #
+#                 #     # Payload length
+#                 #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+#                 #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+#                 #     response = input("Enter payload length (bytes): ")  # Generate prompt
+#                 #     txParameters["payloadLength"] = response  # Store in dictionary (if supplied, otherwise don't)
+#                 #
+#                 #     # Tx rate (in bps)
+#                 #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+#                 #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+#                 #     response = input("Enter tx Rate (with suffix [k]bps or [m]bps: ")  # Generate prompt
+#                 #     txParameters["txRate"] = response  # Store in dictionary (if supplied, otherwise don't)
+#                 #
+#                 #     # Lifetime (in secs)
+#                 #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+#                 #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+#                 #     response = input("Enter time to live (in seconds): ")  # Generate prompt
+#                 #     txParameters["timeToLive"] = response  # Store in dictionary (if supplied, otherwise don't)
+#                 #
+#                 #     # Friendly name
+#                 #     Term.setBackgroundColourSingleLine(1, (termH - 1), Term.WHITE)  # Overwrite previous prompt
+#                 #     print(str(Term.XY(1, (termH - 2))))  # Move cursor
+#                 #     response = input("Enter friendly name (10 chars max): ")  # Generate prompt
+#                 #     txParameters["friendlyName"] = response  # Store in dictionary (if supplied, otherwise don't)
+#                 #
+#                 #     # Now signal to _displayThread that a custom tx stream has been specified
+#                 #     # Pass the dict containing the parameters as the second arg of keyPressed[]
+#                 #     keyPressed[0] = 'addTXStreamWithArgs'
+#                 #     keyPressed.append(txParameters)
+#                 #
+#                 # else:
+#                 #     # Force a screen redraw
+#                 #     keyPressed[0] = "redrawScreen"
+#
+#         # Special case if 't' pressed ('about' dialog - need to inhibit screen)
+#         elif ord(ch) == ord('t'): # 't'
+#             ch == ''  # Clear keybuffer
+#             # Inhibit screen redraws whilst waiting for input (otherwise cursor position will be hijacked by __displayThread)
+#             keyPressed[0] = 'inhibit_redraw'
+#             # Create a dialogue box (using a table with a single cell and no headings)
+#             maxWidth = 55
+#             tableContents ="BBC IBEOO Team ISP Analyser V1.0 (beta)".center(maxWidth," ")+\
+#                 "\n\n" + "(c) James Turner 2020".center(maxWidth," ")+ \
+#                 "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
+#                 "\n" + " measurement tool supporting multiple tx/tx streams".center(maxWidth, " ") + \
+#                 "\n" + "  and event logging".center(maxWidth, " ") + \
+#                            "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth," ")+\
+#                 "\n\n\n\n" +\
+#                 "Press the [any] key to continue".center(maxWidth," ")
+#
+#             # Create a single-celled table
+#             aboutDialogue = SingleTable([[tableContents]])
+#             aboutDialogue.title = "About"
+#             width = aboutDialogue.table_width
+#             height = tableContents.count('\n') + 2
+#
+#             # Get Terminal size so we can centre the table
+#             termW, termH = Term.getTerminalSize()
+#             xPos = int((termW - width)/2)
+#             yPos = int((termH-height)/2)
+#
+#             Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
+#             # Wait for a key press
+#             Term.getch()
+#             # re-enable screen redrawing (by clearing 'inhibit_redraw' from keyPressed[0]
+#             keyPressed[0] = 'redraw_screen'
+#
+#
+#         else:
+#             # Return the integer ascii value of the key pressed to keyPressed[]
+#             keyPressed[0] = ord(ch)
+#         time.sleep(0.1)
 
 
 def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutdownFlag,):
