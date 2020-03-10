@@ -1316,19 +1316,61 @@ class UI(object):
 
     # 'l'
     def __onIncreasePayloadSize(self):
-        pass
+        self.__modifyPayloadSize(1)
 
     # 'k'
     def __onDecreasePayloadSize(self):
-        pass
+        self.__modifyPayloadSize(-1)
+
+    # Called from __onIncreasePayloadSize() and __onDecreasePayloadSize(). Direction flag determines increment/decrement
+    def __modifyPayloadSize(self, direction):
+        # bounds limit the input
+        if direction < 0:
+            # For all negative values, set direction to -1
+            direction = -1
+        else:
+            # For all other values, set direction to '1'
+            direction = 1
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            # Get current payload size
+            currentTxPayloadSize = int(self.selectedStream.getRtpStreamStatsByKey('Packet size'))
+            # Increment/decrement current size by 10 bytes
+            self.selectedStream.setPayloadLength(currentTxPayloadSize + (10 * direction))
+            # Verify new payload size
+            currentTxPayloadSize = int(self.selectedStream.getRtpStreamStatsByKey('Packet size'))
+            Message.addMessage(
+                " Stream " + str(self.selectedStreamID) + " packet size changed to " + str(currentTxPayloadSize) + " bytes")
 
     # 'p'
     def __onIncrementSyncSourceID(self):
-        pass
+        self.__modifySyncSourceID(1)
 
     # 'o'
     def __onDecrementSyncSourceID(self):
-        pass
+        self.__modifySyncSourceID(-1)
+
+    # Called from __onIncrementSyncSourceID() and __onDecrementSyncSourceID(). Increments/decrements according to dir flag
+    def __modifySyncSourceID(self, direction):
+        # bounds limit the input
+        if direction < 0:
+            # For all negative values, set direction to -1
+            direction = -1
+        else:
+            # For all other values, set direction to '1'
+            direction = 1
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            # Get current Sync source ID
+            currentSyncSourceID = int(self.selectedStream.getRtpStreamStatsByKey('Sync Source ID'))
+            # Increment/decrement  sync source by 1
+            self.selectedStream.setSyncSourceIdentifier(currentSyncSourceID + (1 * direction))
+            # Verify new sync source id
+            currentSyncSourceID = int(self.selectedStream.getRtpStreamStatsByKey('Sync Source ID'))
+            Message.addMessage(
+                " Stream " + str(self.selectedStreamID) + " sync source id changed to " + str(currentSyncSourceID))
+
+
 
     # 'e'
     def __onToggleErrorMessages(self):
