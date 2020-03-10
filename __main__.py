@@ -824,6 +824,8 @@ class UI(object):
     def __getch(self):
         # Define a getch() function to catch keystrokes (for control of the RTP Generator thread)
         # This code has been lifted from https://gist.github.com/jfktrey/8928865
+        # It implements a 1sec timeout (on Linux) or 0.2secs (Windows). If no key was detected in the mean time,
+        # it will return None
         if platform.system() == "Windows":
             import msvcrt
             time.sleep(0.2)  # 0.2sec timeout
@@ -1449,9 +1451,39 @@ class UI(object):
                                " packets)")
 
 
-    # 't'
+    # 't' - display the About dialogue
     def __onAboutDialogue(self):
-        pass
+        # Create a dialogue box (using a table with a single cell and no headings)
+        # NOTE: This is a blocking method
+
+        maxWidth = 55
+        tableContents = "BBC IBEOO Team ISP Analyser V1.1 (beta)".center(maxWidth, " ") + \
+                        "\n\n" + "(c) James Turner 2020".center(maxWidth, " ") + \
+                        "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
+                        "\n" + " measurement tool supporting multiple tx/tx streams".center(maxWidth, " ") + \
+                        "\n" + "  and event logging".center(maxWidth, " ") + \
+                        "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth, " ") + \
+                        "\n\n\n\n" + \
+                        "Press the [any] key to continue".center(maxWidth, " ")
+
+        # Create a single-celled table
+        aboutDialogue = SingleTable([[tableContents]])
+        aboutDialogue.title = "About"
+        width = aboutDialogue.table_width
+        height = tableContents.count('\n') + 2
+
+        # Get Terminal size so we can centre the table
+        termW, termH = Term.getTerminalSize()
+        xPos = int((termW - width) / 2)
+        yPos = int((termH - height) / 2)
+
+        Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
+        # Wait for a key press
+        ch = None
+        # Endless loop until either a key is pressed or the self.renderDisplayThreadActive flag is cleared
+        while ch == None or self.renderDisplayThreadActive == False:
+            # Blocking call to self.__getch() with timeout
+            ch = self.__getch()
 
     # Tests the key pressed, and calls the appropriate method
     def __parseKeyPressed(self):
