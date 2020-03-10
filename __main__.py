@@ -1238,11 +1238,11 @@ class UI(object):
                     Message.addMessage("Can't delete Results line for stream. " + str(self.selectedStreamID) + \
                                        " Did you mean to delete the transmit stream instead?")
 
-
             except Exception as e:
                 Message.addMessage(
                     "ERR: __displayThread. [d] Delete Stream request failed: " + str(self.selectedStreamID) +
                     ", " + str(e))
+
 
     # 'm' pressed
     def __onIncreaseTxRate(self):
@@ -1558,9 +1558,20 @@ class UI(object):
 
             # Get a handle on the currently highlighted stream and corresponding sync source ID
             # Confirm that the streamList associated with this view actual has data in it
-            if len(self.views[self.selectedView][2]) > 0:
+            lengthOfDataSetToDisplay = len(self.views[self.selectedView][2])
+            if lengthOfDataSetToDisplay > 0:
+                # Now confirm that we're not off the end of the list of streams (possible if the last stream
+                # in the list was deleted)
+                if self.selectedTableRow > (lengthOfDataSetToDisplay - 1):
+                    # If so, point the selector to the last item on the list
+                    self.selectedTableRow = (lengthOfDataSetToDisplay - 1)
+
                 self.selectedStream = self.views[self.selectedView][2][self.selectedTableRow][1]
                 self.selectedStreamID = self.views[self.selectedView][2][self.selectedTableRow][0]
+            else:
+            # Otherwise, if there are no streams available, se the instance variables accordingly
+                self.selectedStream = None
+                self.selectedStreamID = 0
 
             # Determine which key pressed, and call the appropriate method
             self.__parseKeyPressed()
