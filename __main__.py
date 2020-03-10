@@ -1374,23 +1374,80 @@ class UI(object):
 
     # 'e'
     def __onToggleErrorMessages(self):
-        pass
+        if self.showErrorsFlag == False:
+            # Set flag to true
+            self.showErrorsFlag = True
+            # Force a change of Message verbosity level to show errors
+            Message.setVerbosity(1)
+            Message.addMessage("[e] Error messages on")
+        else:
+            # Set flag to false
+            self.showErrorsFlag = False
+            # Force a change of Message verbosity back to intial setting
+            Message.setVerbosity(self.intialVerbosityLevel)
+            Message.addMessage("[e] Reverting to initial verbosity level")
 
     # 'z'
     def __onTogglePacketGenerationOnOff(self):
-        pass
+        # Confirm special features enabled and selected stream is an RtpGenerator
+        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
+            # Get current transit status and toggle accordingly
+            if self.selectedStream.getEnableStreamStatus():
+                # If currently enabled, disable it
+                self.selectedStream.disableStream()
+                Message.addMessage("[z] Stream " + str(self.selectedStreamID) + " packet generation disabled")
+            else:
+                # otherwise, enable it
+                self.selectedStream.enableStream()
+                Message.addMessage("[z] Stream " + str(self.selectedStreamID) + " packet generation enabled")
+
 
     # 'x'
     def __onToggleJitterSimulationOnOff(self):
-        pass
+        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
+            if self.selectedStream.getJitterStatus():
+                # if jitter simulation currently enabled, disable it
+                self.selectedStream.disableJitter()
+                Message.addMessage("[x] Stream " + str(self.selectedStreamID) + " jitter simulation disabled")
+            else:
+                self.selectedStream.enableJitter()
+                Message.addMessage("[x] Stream " + str(self.selectedStreamID) + " jitter simulation enabled")
 
     # 'c'
     def __onInsertMinorPacketLoss(self):
-        pass
+        # Insert minor packet loss for the selected stream (< glitch threshold)
+        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
+            # As a default, set an arbitrarily low no of packets to lose
+            packetsToLose = 1
+            # Otherwise, get current glitch threshold from first available Stream Results objects (if available)
+            if (len(self.availableRtpTxResultsList) > 0):
+                receiverGlitchThreshold = \
+                    int(self.availableRtpTxResultsList[0][1].getRtpStreamStatsByKey(
+                        "glitch_Event_Trigger_Threshold_packets"))
+                packetsToLose = receiverGlitchThreshold - 1
+
+            # Simulate packet loss
+            self.selectedStream.simulatePacketLoss(packetsToLose)
+            Message.addMessage(
+                "[c] Stream " + str(self.selectedStreamID) + " simulate minor packet loss (" + str(packetsToLose) + \
+                " packets)")
 
     # 'v'
     def __onInsertMajorPacketloss(self):
-        pass
+        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
+            # As a default, set an arbitrarily high no of packets to lose
+            packetsToLose =20
+            # Otherwise, get current glitch threshold from first available Stream Results objects (if available)
+            if (len(self.availableRtpTxResultsList) > 0):
+                receiverGlitchThreshold = \
+                    int(self.availableRtpTxResultsList[0][1].getRtpStreamStatsByKey("glitch_Event_Trigger_Threshold_packets"))
+                packetsToLose = receiverGlitchThreshold + 1
+
+            # Simulate packet loss
+            self.selectedStream.simulatePacketLoss(packetsToLose)
+            Message.addMessage("[v] Stream " + str(self.selectedStreamID) + " simulate major packet loss (" + str(packetsToLose) +\
+                               " packets)")
+
 
     # 't'
     def __onAboutDialogue(self):
@@ -2398,7 +2455,7 @@ def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStr
             # # Send exit signal to main thread (via keyPressed[0])
             # keyPressed[0] = 'exit'
 
-        # Add extra key checkling when in 'special features' mode
+        # Add extra key checking when in 'special features' mode
         if specialFeaturesModeFlag == True:
             if keyPressed[0] == ord('z'):
                 # Toggle packet generation on/off for the selected stream
