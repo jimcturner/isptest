@@ -1246,19 +1246,73 @@ class UI(object):
 
     # 'm' pressed
     def __onIncreaseTxRate(self):
-        pass
+        self.__modifyTxRate(1)
 
     # 'n' pressed
     def __onDecreaseTxRate(self):
-        pass
+        self.__modifyTxRate(-1)
+
+    # This is called by __onIncreaseTxRate() and  __onDecreaseTxRate() and is the method that actually does the work
+    def __modifyTxRate(self, direction):
+        # If called with a +ve value it will increase the tx rate, if called with a -1 it will reduce the tx rate
+
+        # bounds limit the input
+        if direction < 0:
+            # For all negative values, set direction to -1
+            direction = -1
+        else:
+            # For all other values, set direction to '1'
+            direction = 1
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            # Get tx rate from currently selected stream
+            currentTxRate = int(self.selectedStream.getRtpStreamStatsByKey('Tx Rate'))
+            # If less than 1Mbps increment/decrement by 256kbps
+            if currentTxRate < 1048576:
+                newTxRate = currentTxRate + (262144 * direction)
+                self.selectedStream.setTxRate(newTxRate)
+            # Otherwise increment/decrement by 500kbps
+            else:
+                newTxRate = currentTxRate + (524288 * direction)
+                self.selectedStream.setTxRate(newTxRate)
 
     # 'j'
     def __onIncreaseTimeToLive(self):
-        pass
+        self.__modifyTimeToLive(1)
 
     # 'h'
     def __onDecreaseTimeToLive(self):
-        pass
+        self.__modifyTimeToLive(-1)
+
+    # This is called by __onIncreaseTimeToLive() and __onDecreaseTimeToLive() and is the actual worker method
+    def __modifyTimeToLive(self, direction):
+
+        # If called with a +ve value it will increase the TTL, if called with a -1 it will reduce the TTL
+        # bounds limit the input
+        if direction < 0:
+            # For all negative values, set direction to -1
+            direction = -1
+        else:
+            # For all other values, set direction to '1'
+            direction = 1
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            # Get TTL of currently selected stream
+            currentTTL = int(self.selectedStream.getRtpStreamStatsByKey('Time to live'))
+            # Calculate new TTL (either adding/removing time, or setting 'forever')
+            # Add/subtract 1hr (3600 secs)
+            newTTL = currentTTL + (3600 * direction)
+            # If the new calculated value is -ve, interpret as 'forever'
+            if newTTL < 0:
+                # Set stream TTL to 'forever'
+                self.selectedStream.setTimeToLive(-1)
+                Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to 'forever'")
+            else:
+                # Otherwise update the stream with the new calculated TTL
+                self.selectedStream.setTimeToLive(newTTL)
+                Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + dtstrft(
+                    datetime.timedelta(seconds=newTTL)))
+
 
     # 'l'
     def __onIncreasePayloadSize(self):
