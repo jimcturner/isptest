@@ -3702,13 +3702,13 @@ def main(argv):
             # Temporary list to hold the streams currently in rtpTxStreamsDict
             tempStreamList = []
             # take a copy of the rtpTxStreamsDict to iterate over
-            for streamID in rtpTxStreamsDict:
+            for stream in rtpTxStreamsDict:
                 # Take a copy of the key value (the stream ID)
-                tempStreamList.append(streamID)
+                tempStreamList.append(stream)
             # Now iterate of the new streamList, calling .killStream() on all the objects within
             for stream in tempStreamList:
                 print("Killing stream " + str(stream) + "\n")
-                # rtpTxStreamsDict[stream].killStream()
+                stream.killStream()
         # Next:
         # Stop DiskLogger
         # Kill all stream objects
