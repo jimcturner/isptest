@@ -96,6 +96,19 @@ def unfragmentString(fragments):
     except Exception as e:
         Message.addMessage("ERR: unfragmentString() "+ str(e))
 
+# Utility function convert a value in bytes to kB or MB with a suffix
+def bToMb(value):
+    # Utility function convert a value in bytes to kB or MB with a suffix
+    if value >= 1048576:
+        # Convert bytes to Mb
+        value = round(value / 1048576.0, 1)
+        return str(value) + "M"
+    elif value >= 1024:
+        # Convert bytes to kb
+        value = int(value / 1024)
+        return str(value) + "k"
+    else:
+        return str(value)
 
 # This function will delete the specified streamID from an rtpRxStreamsDict{}
 # It uses mutexes, so should be thread safe

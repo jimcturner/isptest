@@ -397,18 +397,18 @@ class Term(object):
         # return (width-4), height, table.table.splitlines()
         return width, height, table.table.splitlines()
 
-def bToMb(value):
-    # Utility function convert a value in bytes to kB or MB with a suffix
-    if value >= 1048576:
-        # Convert bytes to Mb
-        value = round(value / 1048576.0, 1)
-        return str(value) + "M"
-    elif value >= 1024:
-        # Convert bytes to kb
-        value = int(value / 1024)
-        return str(value) + "k"
-    else:
-        return str(value)
+# def bToMb(value):
+#     # Utility function convert a value in bytes to kB or MB with a suffix
+#     if value >= 1048576:
+#         # Convert bytes to Mb
+#         value = round(value / 1048576.0, 1)
+#         return str(value) + "M"
+#     elif value >= 1024:
+#         # Convert bytes to kb
+#         value = int(value / 1024)
+#         return str(value) + "k"
+#     else:
+#         return str(value)
 
 def uTom(value):
     # Utility function to convert a value in micros to millies (eg uS to mS)
@@ -420,7 +420,6 @@ def uTom(value):
         # Append u to the value
         value = str(int(value)) + "u"
     return value
-
 
 
 def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMutex):
@@ -503,66 +502,66 @@ def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMute
         stream[2]=index
 
 
-def humanise(key,value):
-    # This function tests the supplied key against a list, and formats the corresponding value to make it more readable
-    if key=="packet_data_received_1S_bytes":
-        #We want this value in bps
-        # Convert bytes to bits
-        value *= 8
-        value=bToMb(value)
-        return value
-
-    if key == "stream_syncSource" or key == 'Sync Source ID':
-        value = str(value).rjust(10)
-
-    # Render dates concisely
-    if type(value) == datetime.datetime:
-        value = value.strftime("%d/%m %H:%M:%S")
-        return value
-
-    if type(value) == datetime.timedelta:
-        # Pass to (my) dtstrft() function to create a much shorter string
-        return dtstrft(value)
-
-
-    if key=="packet_data_received_total_bytes" or key=="Bytes transmitted":
-        value = bToMb(value)+"B"
-        return value
-
-    if key == key=='Tx Rate':
-        value = bToMb(value)
-        return value
-
-
-    if key.find('percent') > 0:
-        # Convert % value to an integer
-        value = int(value)
-        return value
-
-    if key.find('_uS') > 0:
-        # If > 1000uS, express as a mS
-        if int(value) > 1000 or int(value) < -1000:
-            value = str(int(value/1000))+"mS"
-        else:
-            # Append _uS to the value
-            value = str(int(value))+"uS"
-        return value
-
-    if key == 'Time to live':
-        # If this is am endless stream (created with a negative time to live)
-        if value < 0:
-            value="forever"
-        else:
-            value=datetime.timedelta(seconds=value)
-        return value
-
-    if key == "stream_srcAddress" or key == "stream_rxAddress" or key == 'Dest IP':
-        # Should pad ip addresses to the max no of characters aaa.bbb.ccc.ddd
-        value =value.ljust(15)
-        return value
-
-    else:
-        return value
+# def humanise(key,value):
+#     # This function tests the supplied key against a list, and formats the corresponding value to make it more readable
+#     if key=="packet_data_received_1S_bytes":
+#         #We want this value in bps
+#         # Convert bytes to bits
+#         value *= 8
+#         value=bToMb(value)
+#         return value
+#
+#     if key == "stream_syncSource" or key == 'Sync Source ID':
+#         value = str(value).rjust(10)
+#
+#     # Render dates concisely
+#     if type(value) == datetime.datetime:
+#         value = value.strftime("%d/%m %H:%M:%S")
+#         return value
+#
+#     if type(value) == datetime.timedelta:
+#         # Pass to (my) dtstrft() function to create a much shorter string
+#         return dtstrft(value)
+#
+#
+#     if key=="packet_data_received_total_bytes" or key=="Bytes transmitted":
+#         value = bToMb(value)+"B"
+#         return value
+#
+#     if key == key=='Tx Rate':
+#         value = bToMb(value)
+#         return value
+#
+#
+#     if key.find('percent') > 0:
+#         # Convert % value to an integer
+#         value = int(value)
+#         return value
+#
+#     if key.find('_uS') > 0:
+#         # If > 1000uS, express as a mS
+#         if int(value) > 1000 or int(value) < -1000:
+#             value = str(int(value/1000))+"mS"
+#         else:
+#             # Append _uS to the value
+#             value = str(int(value))+"uS"
+#         return value
+#
+#     if key == 'Time to live':
+#         # If this is am endless stream (created with a negative time to live)
+#         if value < 0:
+#             value="forever"
+#         else:
+#             value=datetime.timedelta(seconds=value)
+#         return value
+#
+#     if key == "stream_srcAddress" or key == "stream_rxAddress" or key == 'Dest IP':
+#         # Should pad ip addresses to the max no of characters aaa.bbb.ccc.ddd
+#         value =value.ljust(15)
+#         return value
+#
+#     else:
+#         return value
 
 # A class that will be responsible for rendering the display and catching keyboard output
 class UI(object):
