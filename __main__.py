@@ -3700,13 +3700,13 @@ def main(argv):
         # Now kill all Tx streams
         if len(rtpTxStreamsDict) > 0:
             # Temporary list to hold the streams currently in rtpTxStreamsDict
-            streamList = []
+            tempStreamList = []
             # take a copy of the rtpTxStreamsDict to iterate over
-            for streamID, stream in rtpTxStreamsDict.items():
-                # Take a copy of the key value (the stream ID)
-                streamList.append(streamID)
-            # Now iterate of the new streamList, calling .killStream() on all the objects within
             for stream in rtpTxStreamsDict:
+                # Take a copy of the key value (the stream ID)
+                tempStreamList.append(stream)
+            # Now iterate of the new streamList, calling .killStream() on all the objects within
+            for stream in tempStreamList:
                 print("Killing stream " + str(stream) + "\n")
                 stream.killStream()
         # Next:
