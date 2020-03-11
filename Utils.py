@@ -110,6 +110,16 @@ def bToMb(value):
     else:
         return str(value)
 
+# Utility function to convert a value in micros to millies (eg uS to mS)
+def uTom(value):
+    # It will append a 'u' or 'm' suffix and return a string
+    # If > 1000u, express as a m
+    if int(value) > 1000 or int(value) < -1000:
+        value = str(int(value / 1000)) + "m"
+    else:
+        # Append u to the value
+        value = str(int(value)) + "u"
+    return value
 # This function will delete the specified streamID from an rtpRxStreamsDict{}
 # It uses mutexes, so should be thread safe
 # def removeRtpStreamFromDict(streamID, rtpStreamsDict, rtpStreamsDictMutex):

@@ -397,30 +397,6 @@ class Term(object):
         # return (width-4), height, table.table.splitlines()
         return width, height, table.table.splitlines()
 
-# def bToMb(value):
-#     # Utility function convert a value in bytes to kB or MB with a suffix
-#     if value >= 1048576:
-#         # Convert bytes to Mb
-#         value = round(value / 1048576.0, 1)
-#         return str(value) + "M"
-#     elif value >= 1024:
-#         # Convert bytes to kb
-#         value = int(value / 1024)
-#         return str(value) + "k"
-#     else:
-#         return str(value)
-
-def uTom(value):
-    # Utility function to convert a value in micros to millies (eg uS to mS)
-    # It will append a 'u' or 'm' suffix and return a string
-    # If > 1000u, express as a m
-    if int(value) > 1000 or int(value) < -1000:
-        value = str(int(value / 1000)) + "m"
-    else:
-        # Append u to the value
-        value = str(int(value)) + "u"
-    return value
-
 
 def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMutex):
     # This is a utility function for __displayThread
