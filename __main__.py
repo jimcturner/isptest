@@ -3700,6 +3700,9 @@ def main(argv):
         # Now kill all Tx streams
         if len(rtpTxStreamsDict) > 0:
             # Temporary list to hold the streams currently in rtpTxStreamsDict
+            # Note: We can't iterate over the dict cal the the killStream methods directly. This is because
+            # killStream() acts on the rtpTxStreamsDict dictionary itself - and you can't iterate over a dictionary
+            # whilst simultaneously modifying it
             tempStreamList = []
             # take a copy of the rtpTxStreamsDict to iterate over
             for stream in rtpTxStreamsDict:
@@ -3708,7 +3711,8 @@ def main(argv):
             # Now iterate of the new streamList, calling .killStream() on all the objects within
             for stream in tempStreamList:
                 print("Killing stream " + str(stream) + "\n")
-                stream.killStream()
+                # Invoke the kill method of each stream
+                rtpTxStreamsDict[stream].killStream()
         # Next:
         # Stop DiskLogger
         # Kill all stream objects
