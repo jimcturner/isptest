@@ -3665,6 +3665,8 @@ def main(argv):
                     # Finally, check to see if the UI thread has signalled a shutdown request
                     if shutdownFlag.is_set():
                         print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
+                        # Close the recvfrom socket in main
+                        sock.close()
                         raise GracefulShutdown
 
                 # If program execution gets here, the udp socket must have been corrupted
@@ -3674,6 +3676,8 @@ def main(argv):
                 # Finally, check to see if the UI thread has signalled a shutdown request
                 if shutdownFlag.is_set():
                     print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
+                    # Close the recvfrom socket in main
+                    sock.close()
                     raise GracefulShutdown
 
                 time.sleep(1)
@@ -3693,6 +3697,12 @@ def main(argv):
         Term.clearScreen()
         Term.printAt("Main() GracefulShutdown in progress",1,1)
         ui.kill()
+        # Now kill all Tx streams
+        if len(rtpTxStreamsDict) > 0:
+            for streamID, stream  in rtpTxStreamsDict.items():
+                print("Killing TX stream " + str(streamID) + "\r")
+                stream.killStream()
+
         # Next:
         # Stop DiskLogger
         # Kill all stream objects

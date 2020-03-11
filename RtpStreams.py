@@ -1948,6 +1948,8 @@ class RtpGenerator(object):
 
             # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
             if self.timeToLive ==0:
+                # Close the Transmission socket
+                self.udpTxSocket.close()
                 break
 
 # An object that will act as a UDP receiver. It will receive server reports from ResultsTransmitter
