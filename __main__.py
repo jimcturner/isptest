@@ -3013,6 +3013,9 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
     lastWrittenEventNoDict = {} # Dictionary to hold the last written event no for each stream
     latestEvents = []
 
+    file_json = None # File handle
+    file_csv = None # File handle
+
     # Create a file and write a header
     try:
         # Write summary file
@@ -3119,6 +3122,8 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
             Message.addMessage("INFO: _diskLoggerThread: Deleting orphan stream " + str(stream) + " from lastWrittenEventNoDict")
             del lastWrittenEventNoDict[stream]
         time.sleep(1)
+
+    # If execution gets here, the thread is eding....
     print("_diskLoggerThread ending\r")
     try:
         Message.addMessage("__diskloggerThread: Closing files " + str(filename_json) + " and " + str(filename_csv))
