@@ -1081,10 +1081,12 @@ class UI(object):
 
     # 's' pressed
     def __onEnterFriendlyName(self):
+
         text = input_dialog(
             title='Enter friendly name',
             text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':')
-        self.selectedStream.setFriendlyName(text)
+        if text != '':
+            self.selectedStream.setFriendlyName(text)
 
     # 'a' pressed (only when in Tx or Loopback mode)
     def __onAddTxStream(self):
@@ -1406,10 +1408,16 @@ class UI(object):
         else:
             # 'Ctrl-C' - request shutdown
             if self.keyPressed == 3:
-                # Set uiShutdownFlag. This will be monitored by main()
-                self.shutdownFlag.set()
-                # Force an update of the while loop in __renderDisplayThread (to expedite shutdown - otherwise, we
-                # have to wait for the self.wakeUpUI timeout
+                result = yes_no_dialog(
+                        title='Quit',
+                        text='Do you want to quit?')
+                if result == True:
+                    # Set uiShutdownFlag. This will be monitored by main()
+                    self.shutdownFlag.set()
+                    # Force an update of the while loop in __renderDisplayThread (to expedite shutdown - otherwise, we
+                    # have to wait for the self.wakeUpUI timeout
+                else:
+                    pass
                 self.wakeUpUI.set()
             # Cursor Right
             elif self.keyPressed == 67 or self.keyPressed == 77:
