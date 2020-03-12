@@ -3121,7 +3121,7 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
         time.sleep(1)
     print("_diskLoggerThread ending\r")
     try:
-        Message.addMessage("__diskloggerThread: Closing files")
+        Message.addMessage("__diskloggerThread: Closing files " + str(filename_json) + " and " + str(filename_csv))
         file_csv.close()
         file_json.close()
     except Exception as e:
