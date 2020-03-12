@@ -3,6 +3,7 @@
 # Python packet sniffer
 #
 # 
+from __future__ import unicode_literals # Required for prompt_toolkit
 
 import socket
 import os
@@ -27,6 +28,10 @@ import pickle
 # Non standard external libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
+
+# from prompt_toolkit import prompt, shortcuts   # Note, had to be installed with  pip install --ignore-installed six prompt_toolkit --user
+from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
+from prompt_toolkit.styles import Style
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults
 from Utils import *
@@ -1076,7 +1081,10 @@ class UI(object):
 
     # 's' pressed
     def __onEnterFriendlyName(self):
-        pass
+        text = input_dialog(
+            title='Enter friendly name',
+            text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':')
+        self.selectedStream.setFriendlyName(text)
 
     # 'a' pressed (only when in Tx or Loopback mode)
     def __onAddTxStream(self):
@@ -3154,7 +3162,18 @@ def signalHandler(signum, frame):
 
 # Main prog starts here
 # #####################
+
 def main(argv):
+    # text = prompt('Give me some input: ')
+    # print('You said: %s' % text)
+    # message_dialog(
+    #     title='Example dialog window',
+    #     text='Do you want to continue?\nPress ENTER to quit.').run()
+    # result = yes_no_dialog(
+    #     title='Yes/No dialog example',
+    #     text='Do you want to confirm?')
+    # print (str(result) + "\r")
+    # exit()
 
     # Invoke colorama init() method to allow ansi escape sequences to work on Windows
     init(autoreset=True)
@@ -3718,7 +3737,7 @@ def main(argv):
                 Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
 
         ############ Stop DiskLogger (currently it stops iteself)
-        time.sleep((5))
+        time.sleep((1))
         Term.clearScreen()
         Term.printAt("Main() GracefulShutdown in progress", 1, 1)
 
