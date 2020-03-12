@@ -1787,26 +1787,22 @@ class RtpGenerator(object):
         self.generatePayload()
         # Attempt to create UDP socket
         try:
-            txSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
+            self.udpTxSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
             # Set a timeout of 1 second (required because we will use recvfrom() in the corresponding
             # ResultsReceiver object (which will use this same socket, but to receive)
-            txSock.settimeout(1)
-            # Message.addMessage(str(txSock.get))
+            self.udpTxSocket.settimeout(1)
+            # Message.addMessage(str(self.udpTxSocket.get))
             # If a UDP source port has been specified, use it
             if self.UDP_TX_SRC_PORT >1024:
                 # Bind to the socket, allows you to specify the source port
                 try:
-                    txSock.bind(('0.0.0.0',int(self.UDP_TX_SRC_PORT)))
-                    self.udpTxSocket = txSock
+                    self.udpTxSocket.bind(('0.0.0.0',int(self.UDP_TX_SRC_PORT)))
                 except Exception as e:
-                    Message.addMessage("ERR: RtpGenerator.__rtpGeneratorThread. txSock.bind (User supplied source port). "+ str(e))
+                    Message.addMessage("ERR: RtpGenerator.__rtpGeneratorThread. self.udpTxSocket.bind (User supplied source port). "+ str(e))
             else:
                 # Let the OS determine the source port
-                txSock.bind(('0.0.0.0', 0))
-
-                # Store the socket and OS generated source port in the instance var
-                self.udpTxSocket = txSock
-                self.UDP_TX_SRC_PORT = txSock.getsockname()[1]
+                self.udpTxSocket.bind(('0.0.0.0', 0))
+                self.UDP_TX_SRC_PORT = self.udpTxSocket.getsockname()[1]
         except Exception as e:
             Message.addMessage("ERR:\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Exiting\x1B[0m" + self.UDP_TX_IP + ":" + \
                                str(self.UDP_TX_PORT) + ", " + str(e))
@@ -1855,14 +1851,14 @@ class RtpGenerator(object):
             # If all tx flags are set then transmit the rtp packet
             if self.enablePacketGeneration == True and self.packetsToSkip < 1:
                 try:
-                    txSock.sendto(MESSAGE, (self.UDP_TX_IP, self.UDP_TX_PORT))
+                    self.udpTxSocket.sendto(MESSAGE, (self.UDP_TX_IP, self.UDP_TX_PORT))
                     # Update tx bytes counter (taking packet headers into account)
                     self.txCounter_bytes += self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES
                     # Update tx bps data counter (*8 converts bytes to bits)
                     self.txBps_1s += (self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES) * 8
 
                 except Exception as e:
-                    Message.addMessage("\x1B[31m__rtpGenerator() txSock.sendto(). Exiting. \x1B[0m " + str(e))
+                    Message.addMessage("\x1B[31m__rtpGenerator() self.udpTxSocket.sendto(). Exiting. \x1B[0m " + str(e))
                     time.sleep(1)  # Throttle rate of error messages from this thread
             else:
                 # Decrement self.packetsToSkip. Once this var reaches zero, packet generation will resume
