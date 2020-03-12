@@ -1564,9 +1564,9 @@ class RtpGenerator(object):
             except Exception as e:
                 Message.addMessage("INFO: RtpGenerator.__init(): Invalid UDP source port."+str(srcPort)+", "+str(e))
 
-        # Start the generator thread
+        # Start the traffic generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
-        self.rtpGeneratorThread.daemon = True # Thread will auto shutdown when the prog ends
+        self.rtpGeneratorThread.daemon = False
         self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
         self.rtpGeneratorThread.start()
 
@@ -1732,6 +1732,11 @@ class RtpGenerator(object):
     def killStream(self):
         # Kills the stream by setting the time to live to zero. This will cause the main thread to exit
         self.setTimeToLive(0)
+        # Wait for __rtpGeneratorThread to end
+        Message.addMessage("Waiting for RtpGenerator Thread to end")
+        self.rtpGeneratorThread.join()
+        Message.addMessage("RtpGenerator Thread has ended")
+
         # Now kill corresponding RtpResultsReceiver object
         self.rtpStreamResultsReceiver.kill()
         # Finally, remove this RtpGenerator object from rtpTxStreamsDict
@@ -1948,8 +1953,6 @@ class RtpGenerator(object):
 
             # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
             if self.timeToLive ==0:
-                # Close the Transmission socket
-                self.udpTxSocket.close()
                 break
 
 # An object that will act as a UDP receiver. It will receive server reports from ResultsTransmitter
