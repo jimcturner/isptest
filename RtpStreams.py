@@ -1733,9 +1733,9 @@ class RtpGenerator(object):
         # Kills the stream by setting the time to live to zero. This will cause the main thread to exit
         self.setTimeToLive(0)
         # Wait for __rtpGeneratorThread to end
-        Message.addMessage("Waiting for RtpGenerator Thread to end")
+        Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread to end")
         self.rtpGeneratorThread.join()
-        Message.addMessage("RtpGenerator Thread has ended")
+        Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread has ended")
 
         # Now kill corresponding RtpResultsReceiver object
         self.rtpStreamResultsReceiver.kill()
@@ -1788,6 +1788,9 @@ class RtpGenerator(object):
         # Attempt to create UDP socket
         try:
             txSock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
+            # Set a timeout of 1 second (required because we will use recvfrom() in the corresponding
+            # ResultsReceiver object (which will use this same socket, but to receive)
+            txSock.settimeout(1)
             # Message.addMessage(str(txSock.get))
             # If a UDP source port has been specified, use it
             if self.UDP_TX_SRC_PORT >1024:
@@ -1974,15 +1977,21 @@ class ResultsReceiver(object):
 
         # Start the listener thread
         self.resultsReceiverThread = threading.Thread(target=self.__resultsReceiverThread, args=())
-        self.resultsReceiverThread.daemon = True
+        self.resultsReceiverThread.daemon = False
         self.resultsReceiverThread.setName(str(self.relatedRtpGenerator.syncSourceIdentifier) + ":ResultsReceiver")
         self.resultsReceiverThread.start()
 
 
     def kill(self):
         # This method will kill the receiver thread by setting the self.receiverActiveFlag to false
+        # It is a blocking method - it will nly return once the resultsReceiverThread has ended
         self.receiverActiveFlag = False
         Message.addMessage("INFO: ResultsReceiver.kill()")
+        # Now wait for ResultsReceiverThread to end
+        Message.addMessage("ResultsReceiver.kill() Waiting for resultsReceiverThread to end")
+        self.resultsReceiverThread.join()
+        Message.addMessage("ResultsReceiver.kill() resultsReceiverThread has ended")
+
         # Finally, attempt to remove the RtpStreamResults object created by __resultsReceiverThread from
         # the rtpTxStreamResultsDict
 
@@ -2151,6 +2160,10 @@ class ResultsReceiver(object):
                     #             Message.addMessage("DBUG: Last known event: " + str(x[-1].type))
                     #     except Exception as e:
                     #         Message.addMessage("DBUG: wtf " + str(e))
+                # socket is set with a timeout, so need to catch timeouts but can ignore them
+                except socket.timeout:
+                    # Message.addMessage("DBUG: ResultsReceiver socket.recvfrom() timeout")
+                    pass
 
                 # Catch all other exceptions
                 except Exception as e:
