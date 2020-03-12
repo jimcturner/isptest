@@ -3663,12 +3663,12 @@ def main(argv):
                         raise GracefulShutdown
 
                 # If program execution gets here, the udp socket must have been corrupted
-                Message.addMessage(Term.WhiRed + "WARNING. Recreating UDP receive socket. Glitches might not be genuine")
+                Message.addMessage(Term.WhiRed + "WARNING. Recreating UDP receive socket. Glitches might not be genuine          ")
                 refreshRtpStreamSocketsFlag = True
 
                 # Finally, check to see if the UI thread has signalled a shutdown request
                 if shutdownFlag.is_set():
-                    print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
+                    print ("INFO: main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
                     raise GracefulShutdown
 
                 time.sleep(1)
@@ -3679,7 +3679,7 @@ def main(argv):
                 # Term.printAt(str(listCurrentThreads()),1,1)
                 # Periodically check to see if the UI thread has signalled a shutdown request
                 if shutdownFlag.is_set():
-                    print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
+                    print ("INFO: main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
                     raise GracefulShutdown
                 time.sleep(1)
 
@@ -3698,7 +3698,7 @@ def main(argv):
                     tempStreamList.append(stream)
                 # Now iterate of the new streamList, calling .killStream() on all the objects within
                 for stream in tempStreamList:
-                    Message.addMessage("Killing " + str(type(dict[stream])) + ": "+ str(stream))
+                    Message.addMessage("INFO: Killing " + str(type(dict[stream])) + ": "+ str(stream))
                     # print("Killing stream " + str(stream) + "\n")
                     # Invoke the kill method of each stream
                     dict[stream].killStream()
