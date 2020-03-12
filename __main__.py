@@ -3432,20 +3432,7 @@ def main(argv):
     # Create an associated mutex
     rtpTxStreamResultsDictMutex = threading.Lock()
 
-    # # Start keyboard monitoring thread
-    # catchKeyboardPresses = threading.Thread(target=__catchKeyboardPresses, args=(MODE, keyPressed,))
-    # catchKeyboardPresses.daemon = True  # Thread will auto shutdown when the prog ends
-    # catchKeyboardPresses.setName("__catchKeyboardPresses")
-    # catchKeyboardPresses.start()
-    #
-    # # Create a display thread
-    # displayThread = threading.Thread(target=__displayThread,
-    #                                  args=(MODE, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
-    #                                        rtpRxStreamsDict, rtpRxStreamsDictMutex,
-    #                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, UDP_RX_IP, UDP_RX_PORT,))
-    # displayThread.daemon = True  # Thread will auto shutdown when the prog ends
-    # displayThread.setName("__displayThread")
-    # displayThread.start()
+
 
     # Register signal handler for SIGINT and SIGTERM
     signal.signal(signal.SIGINT, signalHandler)
@@ -3486,6 +3473,8 @@ def main(argv):
         diskLoggerThread.start()
 
     # Main program execution loops
+    # Declare a var to be used as the socket.recvfrom UDP socket
+    sock = None
     try:
 
 
@@ -3665,8 +3654,6 @@ def main(argv):
                     # Finally, check to see if the UI thread has signalled a shutdown request
                     if shutdownFlag.is_set():
                         print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
-                        # Close the recvfrom socket in main
-                        sock.close()
                         raise GracefulShutdown
 
                 # If program execution gets here, the udp socket must have been corrupted
@@ -3676,8 +3663,6 @@ def main(argv):
                 # Finally, check to see if the UI thread has signalled a shutdown request
                 if shutdownFlag.is_set():
                     print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
-                    # Close the recvfrom socket in main
-                    sock.close()
                     raise GracefulShutdown
 
                 time.sleep(1)
@@ -3694,28 +3679,41 @@ def main(argv):
 
     # This code will execute if the GracefulShutdown Exception is raised
     except GracefulShutdown:
+        for dict in [rtpTxStreamsDict, rtpRxStreamsDict]:
+            if len(dict) > 0:
+                # Temporary list to hold the streams currently in rtpStreamsDict
+                # Note: We can't iterate over the dict cal the the killStream methods directly. This is because
+                # killStream() acts on the rtpTxStreamsDict or rtpRxStreamsDict dictionary itself -
+                # and you can't iterate over a dictionary whilst simultaneously modifying it
+                tempStreamList = []
+                # take a copy of the dict to iterate over
+                for stream in dict:
+                    # Take a copy of the key value (the stream ID)
+                    tempStreamList.append(stream)
+                # Now iterate of the new streamList, calling .killStream() on all the objects within
+                for stream in tempStreamList:
+                    Message.addMessage("Killing " + str(type(dict[stream])) + ": "+ str(stream))
+                    # print("Killing stream " + str(stream) + "\n")
+                    # Invoke the kill method of each stream
+                    dict[stream].killStream()
+
+        # If in RECEIVE mode, close the UDP receiver socket
+        if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
+            Message.addMessage("INFO: main() recvfrom() socket")
+            try:
+                # Close the recvfrom socket in main
+                sock.close()
+            except Exception as e:
+                Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
+
+        ############ Stop DiskLogger
+        time.sleep((5))
         Term.clearScreen()
-        Term.printAt("Main() GracefulShutdown in progress",1,1)
+        Term.printAt("Main() GracefulShutdown in progress", 1, 1)
+
+
+        # Now kill UI
         ui.kill()
-        # Now kill all Tx streams
-        if len(rtpTxStreamsDict) > 0:
-            # Temporary list to hold the streams currently in rtpTxStreamsDict
-            # Note: We can't iterate over the dict cal the the killStream methods directly. This is because
-            # killStream() acts on the rtpTxStreamsDict dictionary itself - and you can't iterate over a dictionary
-            # whilst simultaneously modifying it
-            tempStreamList = []
-            # take a copy of the rtpTxStreamsDict to iterate over
-            for stream in rtpTxStreamsDict:
-                # Take a copy of the key value (the stream ID)
-                tempStreamList.append(stream)
-            # Now iterate of the new streamList, calling .killStream() on all the objects within
-            for stream in tempStreamList:
-                print("Killing stream " + str(stream) + "\n")
-                # Invoke the kill method of each stream
-                rtpTxStreamsDict[stream].killStream()
-        # Next:
-        # Stop DiskLogger
-        # Kill all stream objects
 
 
 
