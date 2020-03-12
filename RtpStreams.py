@@ -1988,9 +1988,9 @@ class ResultsReceiver(object):
         self.receiverActiveFlag = False
         Message.addMessage("INFO: ResultsReceiver.kill()")
         # Now wait for ResultsReceiverThread to end
-        Message.addMessage("ResultsReceiver.kill() Waiting for resultsReceiverThread to end")
+        Message.addMessage("DBUG: ResultsReceiver.kill() Waiting for resultsReceiverThread to end")
         self.resultsReceiverThread.join()
-        Message.addMessage("ResultsReceiver.kill() resultsReceiverThread has ended")
+        Message.addMessage("DBUG: ResultsReceiver.kill() resultsReceiverThread has ended")
 
         # Finally, attempt to remove the RtpStreamResults object created by __resultsReceiverThread from
         # the rtpTxStreamResultsDict
@@ -1999,8 +1999,6 @@ class ResultsReceiver(object):
         if self.relatedRtpGenerator.syncSourceIdentifier in self.rtpTxStreamResultsDict:
             # If so, invoke its killStream method (to remove itself from rtpTxStreamResultsDict
             self.rtpTxStreamResultsDict[self.relatedRtpGenerator.syncSourceIdentifier].killStream()
-
-
 
 
     def __resultsReceiverThread(self):

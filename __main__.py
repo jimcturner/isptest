@@ -3706,7 +3706,7 @@ def main(argv):
             except Exception as e:
                 Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
 
-        ############ Stop DiskLogger
+        ############ Stop DiskLogger (currently it stops iteself)
         time.sleep((5))
         Term.clearScreen()
         Term.printAt("Main() GracefulShutdown in progress", 1, 1)
