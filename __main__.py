@@ -3120,6 +3120,12 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
             del lastWrittenEventNoDict[stream]
         time.sleep(1)
     print("_diskLoggerThread ending\r")
+    try:
+        Message.addMessage("__diskloggerThread: Closing files")
+        file_csv.close()
+        file_json.close()
+    except Exception as e:
+        Message.addMessage("ERR: __diskloggerThread. Error closing files " + str(e))
 
 
 ####################################################################################
