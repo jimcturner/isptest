@@ -1410,7 +1410,7 @@ class UI(object):
             if self.keyPressed == 3:
                 result = yes_no_dialog(
                         title='Quit',
-                        text='Do you want to quit?')
+                        text='Do you want to quit?').run()
                 if result == True:
                     # Set uiShutdownFlag. This will be monitored by main()
                     self.shutdownFlag.set()
