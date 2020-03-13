@@ -3177,11 +3177,11 @@ def main(argv):
     # message_dialog(
     #     title='Example dialog window',
     #     text='Do you want to continue?\nPress ENTER to quit.').run()
-    # result = yes_no_dialog(
-    #     title='Yes/No dialog example',
-    #     text='Do you want to confirm?')
-    # print (str(result) + "\r")
-    # exit()
+    result = yes_no_dialog(
+        title='Yes/No dialog example',
+        text='Do you want to confirm?')
+    print (str(result) + "\r")
+    exit()
 
     # Invoke colorama init() method to allow ansi escape sequences to work on Windows
     init(autoreset=True)
