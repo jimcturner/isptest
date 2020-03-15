@@ -1408,16 +1408,18 @@ class UI(object):
         else:
             # 'Ctrl-C' - request shutdown
             if self.keyPressed == 3:
-                result = yes_no_dialog(
-                        title='Quit',
-                        text='Do you want to quit?')
-                if result == True:
-                    # Set uiShutdownFlag. This will be monitored by main()
-                    self.shutdownFlag.set()
-                    # Force an update of the while loop in __renderDisplayThread (to expedite shutdown - otherwise, we
-                    # have to wait for the self.wakeUpUI timeout
-                else:
-                    pass
+                # result = yes_no_dialog(
+                #         title='Quit',
+                #         text='Do you want to quit?')
+                # if result == True:
+                #     # Set uiShutdownFlag. This will be monitored by main()
+                #     self.shutdownFlag.set()
+                #     # Force an update of the while loop in __renderDisplayThread (to expedite shutdown - otherwise, we
+                #     # have to wait for the self.wakeUpUI timeout
+                # else:
+                #     pass
+                # For Linux/OSX - Kill self (Windows will detect the SIGTERM in the signalHandler itself
+                os.kill(os.getpid(), signal.SIGINT)
                 self.wakeUpUI.set()
             # Cursor Right
             elif self.keyPressed == 67 or self.keyPressed == 77:
@@ -3165,6 +3167,7 @@ class GracefulShutdown(Exception):
 # Define a callback function to handle SIGINT and SIGTERM messages from the OS
 # Note: This won't trap keyboard Ctrl-C. These events are caught in the keysPressed Thread via getch()
 def signalHandler(signum, frame):
+    Message.addMessage("signalHandler called")
     print('Caught signal ' + str(signum) + "\r")
     raise GracefulShutdown
 
@@ -3177,11 +3180,11 @@ def main(argv):
     # message_dialog(
     #     title='Example dialog window',
     #     text='Do you want to continue?\nPress ENTER to quit.').run()
-    result = yes_no_dialog(
-        title='Yes/No dialog example',
-        text='Do you want to confirm?')
-    print (str(result) + "\r")
-    exit()
+    # result = yes_no_dialog(
+    #     title='Yes/No dialog example',
+    #     text='Do you want to confirm?')
+    # print (str(result) + "\r")
+    # exit()
 
     # Invoke colorama init() method to allow ansi escape sequences to work on Windows
     init(autoreset=True)
@@ -3472,9 +3475,10 @@ def main(argv):
 
 
 
-    # Register signal handler for SIGINT and SIGTERM
+    # Register signal handler for SIGINT, SIGTERM and SIGKILL
     signal.signal(signal.SIGINT, signalHandler)
     signal.signal(signal.SIGTERM, signalHandler)
+
 
     # Create a UI object (which will spawn a renderDisplay and catchKeyboardPresses thread)
     # Create flag that will be used by UI to signal back to main() that a shutdown has been requested
@@ -3655,6 +3659,14 @@ def main(argv):
                         # Message.addMessage("DBUG: main() recvfrom. timeout exception")
                         pass
 
+                    # This code will execute if the GracefulShutdown Exception is raised
+                    except GracefulShutdown:
+                        Message.addMessage("nailed it")
+                        Term.printAt("nailed it!!!",1,10, Term.BLACK, Term.RED)
+                        shutdownFlag.set() # Will kill diskLogger
+                        ui.kill()
+                        exit()
+
                     # Catch all other exceptions
                     except Exception as e:
                         Message.addMessage(Term.WhiRed + "ERR: __main()sock.recvfrom():" + UDP_RX_IP + ":" + \
@@ -3689,34 +3701,31 @@ def main(argv):
                             # Delete the stream (key) from the dictionary as not wanted
                             rtpRxStreamTempDict.pop(stream, None)
 
-                    # Finally, check to see if the UI thread has signalled a shutdown request
-                    if shutdownFlag.is_set():
-                        print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
-                        raise GracefulShutdown
+                    # # Finally, check to see if the UI thread has signalled a shutdown request
+                    # if shutdownFlag.is_set():
+                    #     print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
+                    #     raise GracefulShutdown
 
                 # If program execution gets here, the udp socket must have been corrupted
                 Message.addMessage(Term.WhiRed + "WARNING. Recreating UDP receive socket. Glitches might not be genuine          ")
                 refreshRtpStreamSocketsFlag = True
 
-                # Finally, check to see if the UI thread has signalled a shutdown request
-                if shutdownFlag.is_set():
-                    print ("INFO: main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
-                    raise GracefulShutdown
-
+                # # Finally, check to see if the UI thread has signalled a shutdown request
+                # if shutdownFlag.is_set():
+                #     print ("INFO: main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
+                #     raise GracefulShutdown
                 time.sleep(1)
 
         # Infinite loop to sit in (if in TRANSMIT mode)
         elif MODE == 'TRANSMIT':
             while True:
                 # Term.printAt(str(listCurrentThreads()),1,1)
-                # Periodically check to see if the UI thread has signalled a shutdown request
-                if shutdownFlag.is_set():
-                    print ("INFO: main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
-                    raise GracefulShutdown
+
                 time.sleep(1)
 
     # This code will execute if the GracefulShutdown Exception is raised
     except GracefulShutdown:
+        Message.addMessage("GracefulShutdown Exception raised")
         for dict in [rtpTxStreamsDict, rtpRxStreamsDict]:
             if len(dict) > 0:
                 # Temporary list to hold the streams currently in rtpStreamsDict
@@ -3731,7 +3740,7 @@ def main(argv):
                 # Now iterate of the new streamList, calling .killStream() on all the objects within
                 for stream in tempStreamList:
                     Message.addMessage("INFO: Killing " + str(type(dict[stream])) + ": "+ str(stream))
-                    # print("Killing stream " + str(stream) + "\n")
+                    print("Killing stream " + str(stream) + "\n")
                     # Invoke the kill method of each stream
                     dict[stream].killStream()
 
@@ -3745,6 +3754,7 @@ def main(argv):
                 Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
 
         ############ Stop DiskLogger (currently it stops iteself)
+        shutdownFlag.set()
         time.sleep((1))
         Term.clearScreen()
         Term.printAt("Main() GracefulShutdown in progress", 1, 1)
