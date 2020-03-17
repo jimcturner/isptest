@@ -489,7 +489,7 @@ class UI(object):
                     rtpTxStreamsDict, rtpTxStreamsDictMutex,
                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
                     rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
-                    UDP_RX_IP, UDP_RX_PORT, shutdownFlag, enableUIFlag):
+                    UDP_RX_IP, UDP_RX_PORT, enableUIFlag):
 
         self.operationMode = operationMode
         self.specialFeaturesModeFlag = specialFeaturesModeFlag
@@ -1410,6 +1410,7 @@ class UI(object):
         else:
             # 'Ctrl-C' - request shutdown
             if self.keyPressed == 3:
+                Message.addMessage("Ctrl-C Pressed")
                 # result = yes_no_dialog(
                 #         title='Quit',
                 #         text='Do you want to quit?')
@@ -1655,7 +1656,7 @@ class UI(object):
         while self.renderDisplayThreadActive == True:
             # Test the master UI enable/disable flag (blocking call)
             self.enableUIFlag.wait(timeout = 1)
-            # Determine whether the wait() timed out, or whether the UI is geniuinely enabled
+            # Determine whether the wait() timed out, or whether the UI is genuinely enabled
             if self.enableUIFlag.is_set():
                 # Blocking Wait for the wakeUpUi Event (or a 1 sec timeout, whichever first)
                 self.wakeUpUI.wait(timeout=1)
@@ -1750,23 +1751,27 @@ class UI(object):
     # Autonomous thread to monitor key presses
     def __keysPressedThread(self):
         while self.keysPressedThreadActive == True:
-            # Wait for getch to be enabled (with a timeout)
-            self.enableGetch.wait(timeout = 2)
-            # Confirm that enableGetch was actually set (or was it just a timeout)
-            if self.enableGetch.is_set():
-                # Capture keyboard presses via the getch method (with a 1 second timeout)
-                self.keyPressed = None  #clear the keyboard buffer
-                ch = self.__getch()
-                # Term.printAt("getch() : " + str(ch), 1, 7)
-                # Check to see if a genuine key has been pressed
+            # Test the master UI enable/disable flag (blocking call)
+            self.enableUIFlag.wait(timeout=1)
+            # Determine whether the wait() timed out, or whether the UI is genuinely enabled
+            if self.enableUIFlag.is_set():
+                # Wait for getch to be enabled (with a timeout)
+                self.enableGetch.wait(timeout = 1)
+                # Confirm that enableGetch was actually set (or was it just a timeout)
+                if self.enableGetch.is_set():
+                    # Capture keyboard presses via the getch method (with a 1 second timeout)
+                    self.keyPressed = None  #clear the keyboard buffer
+                    ch = self.__getch()
+                    # Term.printAt("getch() : " + str(ch), 1, 7)
+                    # Check to see if a genuine key has been pressed
 
-                if ch != None:
-                    # If a key has been pressed, store it
-                    self.keyPressed = ch
-                    # Signal that a key has been pressed
-                    self.wakeUpUI.set()
-                    # Now disarm key checking (until it is re-enabled elsewhere)
-                    self.enableGetch.clear()
+                    if ch != None:
+                        # If a key has been pressed, store it
+                        self.keyPressed = ch
+                        # Signal that a key has been pressed
+                        self.wakeUpUI.set()
+                        # Now disarm key checking (until it is re-enabled elsewhere)
+                        self.enableGetch.clear()
         print("UI.__keysPressedThread ended\r")
 
 # def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
@@ -3526,7 +3531,7 @@ def main(argv):
         rtpTxStreamsDict, rtpTxStreamsDictMutex,\
         rtpRxStreamsDict, rtpRxStreamsDictMutex,\
         rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,\
-        UDP_RX_IP, UDP_RX_PORT,shutdownFlag, enableUIFlag)
+        UDP_RX_IP, UDP_RX_PORT,enableUIFlag)
 
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
@@ -3554,9 +3559,49 @@ def main(argv):
     # Main program execution loops
     # Declare a var to be used as the socket.recvfrom UDP socket
     sock = None
+
+    # Define a local function that will perform a graceful shutdown of all threads and resources
+    def shutdownApplication():
+        Message.addMessage("main.shutdownApplication() called")
+        # Attempt to remove all rtp stream objects
+        for dict in [rtpTxStreamsDict, rtpRxStreamsDict]:
+            if len(dict) > 0:
+                # Temporary list to hold the streams currently in rtpStreamsDict
+                # Note: We can't iterate over the dict cal the the killStream methods directly. This is because
+                # killStream() acts on the rtpTxStreamsDict or rtpRxStreamsDict dictionary itself -
+                # and you can't iterate over a dictionary whilst simultaneously modifying it
+                tempStreamList = []
+                # take a copy of the dict to iterate over
+                for stream in dict:
+                    # Take a copy of the key value (the stream ID)
+                    tempStreamList.append(stream)
+                # Now iterate of the new streamList, calling .killStream() on all the objects within
+                for stream in tempStreamList:
+                    Message.addMessage("INFO: Killing " + str(type(dict[stream])) + ": " + str(stream))
+                    print("Killing stream " + str(stream) + "\n")
+                    # Invoke the kill method of each stream
+                    dict[stream].killStream()
+
+        # If in RECEIVE mode, close the UDP receiver socket
+        if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
+            Message.addMessage("INFO: main() recvfrom() socket")
+            try:
+                # Close the recvfrom socket in main
+                sock.close()
+            except Exception as e:
+                Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
+
+        ############ Stop DiskLogger (currently it stops iteself)
+        shutdownFlag.set()
+        time.sleep((1))
+        Term.clearScreen()
+        Term.printAt("main.shutdownApplication() in progress", 1, 1)
+
+        # Now kill UI
+        ui.kill()
+        exit()
+
     try:
-
-
         if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
             # Flag to signal whether RtpStream (Receive stream) socket vars have to be refreshed.
             # This will happen if the receive socket has to be recreated (due to an OS (Windows) error
@@ -3698,11 +3743,19 @@ def main(argv):
 
                     # This code will execute if the RequestShutdown Exception is raised
                     except RequestShutdown:
-                        Message.addMessage("nailed it")
-                        Term.printAt("nailed it!!!",1,10, Term.BLACK, Term.RED)
-                        shutdownFlag.set() # Will kill diskLogger
-                        ui.kill()
-                        exit()
+                        Message.addMessage("RequestShutdown Exception raised")
+                        # Temporarily pause the UI whilst we put up a 'do you want to quit?' dialogue
+                        enableUIFlag.clear()
+                        time.sleep(1)
+                        result = yes_no_dialog(
+                            title='Quit',
+                            text='Do you want to quit?')
+                        if result == True:
+                            shutdownApplication()
+
+                        else:
+                            # Shutdown request cancelled, so restart UI
+                            enableUIFlag.set()
 
                     # Catch all other exceptions
                     except Exception as e:
@@ -3763,44 +3816,17 @@ def main(argv):
     # This code will execute if the RequestShutdown Exception is raised
     except RequestShutdown:
         Message.addMessage("RequestShutdown Exception raised")
-        for dict in [rtpTxStreamsDict, rtpRxStreamsDict]:
-            if len(dict) > 0:
-                # Temporary list to hold the streams currently in rtpStreamsDict
-                # Note: We can't iterate over the dict cal the the killStream methods directly. This is because
-                # killStream() acts on the rtpTxStreamsDict or rtpRxStreamsDict dictionary itself -
-                # and you can't iterate over a dictionary whilst simultaneously modifying it
-                tempStreamList = []
-                # take a copy of the dict to iterate over
-                for stream in dict:
-                    # Take a copy of the key value (the stream ID)
-                    tempStreamList.append(stream)
-                # Now iterate of the new streamList, calling .killStream() on all the objects within
-                for stream in tempStreamList:
-                    Message.addMessage("INFO: Killing " + str(type(dict[stream])) + ": "+ str(stream))
-                    print("Killing stream " + str(stream) + "\n")
-                    # Invoke the kill method of each stream
-                    dict[stream].killStream()
-
-        # If in RECEIVE mode, close the UDP receiver socket
-        if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
-            Message.addMessage("INFO: main() recvfrom() socket")
-            try:
-                # Close the recvfrom socket in main
-                sock.close()
-            except Exception as e:
-                Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
-
-        ############ Stop DiskLogger (currently it stops iteself)
-        shutdownFlag.set()
-        time.sleep((1))
-        Term.clearScreen()
-        Term.printAt("Main() RequestShutdown in progress", 1, 1)
-
-
-        # Now kill UI
-        ui.kill()
-
-
+        # Temporarily pause the UI whilst we put up a 'do you want to quit?' dialogue
+        enableUIFlag.clear()
+        time.sleep(1)
+        result = yes_no_dialog(
+                title='Quit',
+                text='Do you want to quit?')
+        if result == True:
+            shutdownApplication()
+        else:
+            # Shutdown request cancelled, so restart UI
+            enableUIFlag.set()
 
 
 # Invoke main() method (entry point for Python script)
