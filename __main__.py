@@ -489,7 +489,7 @@ class UI(object):
                     rtpTxStreamsDict, rtpTxStreamsDictMutex,
                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
                     rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
-                    UDP_RX_IP, UDP_RX_PORT, shutdownFlag):
+                    UDP_RX_IP, UDP_RX_PORT, shutdownFlag, enableUIFlag):
 
         self.operationMode = operationMode
         self.specialFeaturesModeFlag = specialFeaturesModeFlag
@@ -501,8 +501,10 @@ class UI(object):
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
-        # Threading.Event object used to signal Ctrl-C shutdown request to main()
-        self.shutdownFlag = shutdownFlag
+        # Threading.Event object used to remotely enable/inhibit the main UI thread (__renderDisplayThread)
+        self.enableUIFlag = enableUIFlag
+        # self.shutdownFlag = shutdownFlag
+
 
         # Thread running flags
         self.keysPressedThreadActive = True
@@ -1651,75 +1653,79 @@ class UI(object):
 
         # Endless 'state-driven' loop to render the screen
         while self.renderDisplayThreadActive == True:
-            # Blocking Wait for the wakeUpUi Event (or a 1 sec timeout, whichever first)
-            self.wakeUpUI.wait(timeout=1)
-            # Now clear the 'wakeupUI event' flag (because we've processed this key press)
-            self.wakeUpUI.clear()
+            # Test the master UI enable/disable flag (blocking call)
+            self.enableUIFlag.wait(timeout = 1)
+            # Determine whether the wait() timed out, or whether the UI is geniuinely enabled
+            if self.enableUIFlag.is_set():
+                # Blocking Wait for the wakeUpUi Event (or a 1 sec timeout, whichever first)
+                self.wakeUpUI.wait(timeout=1)
+                # Now clear the 'wakeupUI event' flag (because we've processed this key press)
+                self.wakeUpUI.clear()
 
-            # Update available streams lists
-            if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
-                self.__updateAvailableStreamsList(self.availableRtpTxStreamList, self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex)
-                self.__updateAvailableStreamsList(self.availableRtpTxResultsList, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
-            elif self.operationMode == 'RECEIVE':
-                self.__updateAvailableStreamsList(self.availableRtpRxStreamList, self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
+                # Update available streams lists
+                if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
+                    self.__updateAvailableStreamsList(self.availableRtpTxStreamList, self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex)
+                    self.__updateAvailableStreamsList(self.availableRtpTxResultsList, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+                elif self.operationMode == 'RECEIVE':
+                    self.__updateAvailableStreamsList(self.availableRtpRxStreamList, self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
 
-            # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
-            if len(self.availableRtpTxStreamList) > 0:
-                latestTxStream = self.availableRtpTxStreamList[-1][1]
-                # Take a deep copy so that we're not dependent upon this stream existing
-                self.latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
+                # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
+                if len(self.availableRtpTxStreamList) > 0:
+                    latestTxStream = self.availableRtpTxStreamList[-1][1]
+                    # Take a deep copy so that we're not dependent upon this stream existing
+                    self.latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
 
-            # Get a handle on the currently highlighted stream and corresponding sync source ID
-            # Confirm that the streamList associated with this view actual has data in it
-            lengthOfDataSetToDisplay = len(self.views[self.selectedView][2])
-            if lengthOfDataSetToDisplay > 0:
-                # Now confirm that we're not off the end of the list of streams (possible if the last stream
-                # in the list was deleted)
-                if self.selectedTableRow > (lengthOfDataSetToDisplay - 1):
-                    # If so, point the selector to the last item on the list
-                    self.selectedTableRow = (lengthOfDataSetToDisplay - 1)
+                # Get a handle on the currently highlighted stream and corresponding sync source ID
+                # Confirm that the streamList associated with this view actual has data in it
+                lengthOfDataSetToDisplay = len(self.views[self.selectedView][2])
+                if lengthOfDataSetToDisplay > 0:
+                    # Now confirm that we're not off the end of the list of streams (possible if the last stream
+                    # in the list was deleted)
+                    if self.selectedTableRow > (lengthOfDataSetToDisplay - 1):
+                        # If so, point the selector to the last item on the list
+                        self.selectedTableRow = (lengthOfDataSetToDisplay - 1)
 
-                self.selectedStream = self.views[self.selectedView][2][self.selectedTableRow][1]
-                self.selectedStreamID = self.views[self.selectedView][2][self.selectedTableRow][0]
-            else:
-            # Otherwise, if there are no streams available, se the instance variables accordingly
-                self.selectedStream = None
-                self.selectedStreamID = 0
+                    self.selectedStream = self.views[self.selectedView][2][self.selectedTableRow][1]
+                    self.selectedStreamID = self.views[self.selectedView][2][self.selectedTableRow][0]
+                else:
+                # Otherwise, if there are no streams available, se the instance variables accordingly
+                    self.selectedStream = None
+                    self.selectedStreamID = 0
 
-            # Determine which key pressed, and call the appropriate method
-            self.__parseKeyPressed()
+                # Determine which key pressed, and call the appropriate method
+                self.__parseKeyPressed()
 
-            ########## Start rendering the screen
-            if self.redrawScreen:
-                Term.setBackgroundColour(Term.BLUE)
-                self.__renderTopToolbar()
-                self.__renderBottomToolbar()
-                self.__drawNavigationBar()
-            # Term.printAt(str(datetime.datetime.now()) + ", " + str(self.selectedView), 1, 10, Fore.BLACK)
+                ########## Start rendering the screen
+                if self.redrawScreen:
+                    Term.setBackgroundColour(Term.BLUE)
+                    self.__renderTopToolbar()
+                    self.__renderBottomToolbar()
+                    self.__drawNavigationBar()
+                # Term.printAt(str(datetime.datetime.now()) + ", " + str(self.selectedView), 1, 10, Fore.BLACK)
 
-            # Update the clock on the top toolbar
-            self.__updateClock()
-            # draw the stream table
-            self.__drawStreamsTable()
-            # draw the messages table
-            self.__drawMessageTable()
+                # Update the clock on the top toolbar
+                self.__updateClock()
+                # draw the stream table
+                self.__drawStreamsTable()
+                # draw the messages table
+                self.__drawMessageTable()
 
-            # if len(self.rtpRxStreamsDict) > 0:
-            #     for stream in self.rtpRxStreamsDict:
-            #         Term.printAt(str(self.rtpRxStreamsDict[stream].getRtpStreamStatsByKey("packet_data_received_total_bytes")),1,5)
-            #
-            # elif len(self.rtpTxStreamResultsDict) > 0:
-            #     for stream in self.rtpTxStreamResultsDict:
-            #         Term.printAt(str(self.rtpTxStreamResultsDict[stream].getRtpStreamStatsByKey("packet_data_received_total_bytes")),1,5)
-            #
-            # if len(self.rtpTxStreamsDict) > 0:
-            #     for stream in self.rtpTxStreamsDict:
-            #         Term.printAt(str(self.rtpTxStreamsDict[stream].getRtpStreamStatsByKey("Tx Rate (actual)")),1,6)
-            # Clear flag
-            self.redrawScreen = False
+                # if len(self.rtpRxStreamsDict) > 0:
+                #     for stream in self.rtpRxStreamsDict:
+                #         Term.printAt(str(self.rtpRxStreamsDict[stream].getRtpStreamStatsByKey("packet_data_received_total_bytes")),1,5)
+                #
+                # elif len(self.rtpTxStreamResultsDict) > 0:
+                #     for stream in self.rtpTxStreamResultsDict:
+                #         Term.printAt(str(self.rtpTxStreamResultsDict[stream].getRtpStreamStatsByKey("packet_data_received_total_bytes")),1,5)
+                #
+                # if len(self.rtpTxStreamsDict) > 0:
+                #     for stream in self.rtpTxStreamsDict:
+                #         Term.printAt(str(self.rtpTxStreamsDict[stream].getRtpStreamStatsByKey("Tx Rate (actual)")),1,6)
+                # Clear flag
+                self.redrawScreen = False
 
-            # Now re-arm the getch thread
-            self.enableGetch.set()
+                # Now re-arm the getch thread
+                self.enableGetch.set()
 
         print ("UI.__renderDisplayThread ended")
 
@@ -3153,23 +3159,49 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
 
 ####################################################################################
 
-class GracefulShutdown(Exception):
+class RequestShutdown(Exception):
     """
     Custom exception which is used to trigger the clean exit
     of all running threads and the main program.
+    This Exception will be used to trap Ctrl-C from the keyobard (SIGINT)
+    It will be used to trigger a 'do you want to quit? dialogue
 
     """
     # It might not look important, but it is!
-    # This empty class provides a means of forcing main() to jumpt out of whatever while() loop it's in under normal
+    # This empty class provides a means of forcing main() to jump out of whatever while() loop it's in under normal
     # running conditions to execute the shutdown sequence
     pass
 
+class ShutdownApplication(Exception):
+    """
+        Custom exception which is used to trigger the clean exit
+        of all running threads and the main program.
+        it will likely be triggered by a SIGTERM signal, or else from a user generated shutdown request
+        via the RequestShutdown Exception
+        """
+    # It might not look important, but it is!
+    # This empty class provides a means of forcing main() to jump out of whatever while() loop it's in under normal
+    # running conditions to execute the shutdown sequence
+    pass
+
+
 # Define a callback function to handle SIGINT and SIGTERM messages from the OS
-# Note: This won't trap keyboard Ctrl-C. These events are caught in the keysPressed Thread via getch()
-def signalHandler(signum, frame):
-    Message.addMessage("signalHandler called")
+
+# This function will be invoked by SIGTERM (i.e by the OS sending a kill signal)
+def requestShutdownSignalHandler(signum, frame):
+    Message.addMessage("requestShutdownSignalHandler called")
     print('Caught signal ' + str(signum) + "\r")
-    raise GracefulShutdown
+    raise RequestShutdown
+
+# This function will be invoked by SIGTERM (i.e by the OS sending a kill signal)
+def shutdownApplicationSignalHandler(signum, frame):
+    Message.addMessage("shutdownApplicationSignalHandler called")
+    print('Caught signal ' + str(signum) + "\r")
+    raise ShutdownApplication
+
+
+
+
 
 # Main prog starts here
 # #####################
@@ -3476,8 +3508,8 @@ def main(argv):
 
 
     # Register signal handler for SIGINT, SIGTERM and SIGKILL
-    signal.signal(signal.SIGINT, signalHandler)
-    signal.signal(signal.SIGTERM, signalHandler)
+    signal.signal(signal.SIGINT, requestShutdownSignalHandler) # Ctrl-C
+    signal.signal(signal.SIGTERM, shutdownApplicationSignalHandler)    # OS kill signal
 
 
     # Create a UI object (which will spawn a renderDisplay and catchKeyboardPresses thread)
@@ -3485,11 +3517,16 @@ def main(argv):
     shutdownFlag = threading.Event()
     # Make sure flag is initially cleared
     shutdownFlag.clear()
+    # Create flag that will be used to remotely enable/disable the main UI display rendering thread
+    enableUIFlag = threading.Event()
+    # Make sure flag is initially set
+    enableUIFlag.set()
+
     ui = UI(MODE, specialFeaturesModeFlag,\
         rtpTxStreamsDict, rtpTxStreamsDictMutex,\
         rtpRxStreamsDict, rtpRxStreamsDictMutex,\
         rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,\
-        UDP_RX_IP, UDP_RX_PORT,shutdownFlag)
+        UDP_RX_IP, UDP_RX_PORT,shutdownFlag, enableUIFlag)
 
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
@@ -3659,8 +3696,8 @@ def main(argv):
                         # Message.addMessage("DBUG: main() recvfrom. timeout exception")
                         pass
 
-                    # This code will execute if the GracefulShutdown Exception is raised
-                    except GracefulShutdown:
+                    # This code will execute if the RequestShutdown Exception is raised
+                    except RequestShutdown:
                         Message.addMessage("nailed it")
                         Term.printAt("nailed it!!!",1,10, Term.BLACK, Term.RED)
                         shutdownFlag.set() # Will kill diskLogger
@@ -3704,7 +3741,7 @@ def main(argv):
                     # # Finally, check to see if the UI thread has signalled a shutdown request
                     # if shutdownFlag.is_set():
                     #     print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
-                    #     raise GracefulShutdown
+                    #     raise RequestShutdown
 
                 # If program execution gets here, the udp socket must have been corrupted
                 Message.addMessage(Term.WhiRed + "WARNING. Recreating UDP receive socket. Glitches might not be genuine          ")
@@ -3713,7 +3750,7 @@ def main(argv):
                 # # Finally, check to see if the UI thread has signalled a shutdown request
                 # if shutdownFlag.is_set():
                 #     print ("INFO: main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
-                #     raise GracefulShutdown
+                #     raise RequestShutdown
                 time.sleep(1)
 
         # Infinite loop to sit in (if in TRANSMIT mode)
@@ -3723,9 +3760,9 @@ def main(argv):
 
                 time.sleep(1)
 
-    # This code will execute if the GracefulShutdown Exception is raised
-    except GracefulShutdown:
-        Message.addMessage("GracefulShutdown Exception raised")
+    # This code will execute if the RequestShutdown Exception is raised
+    except RequestShutdown:
+        Message.addMessage("RequestShutdown Exception raised")
         for dict in [rtpTxStreamsDict, rtpRxStreamsDict]:
             if len(dict) > 0:
                 # Temporary list to hold the streams currently in rtpStreamsDict
@@ -3757,7 +3794,7 @@ def main(argv):
         shutdownFlag.set()
         time.sleep((1))
         Term.clearScreen()
-        Term.printAt("Main() GracefulShutdown in progress", 1, 1)
+        Term.printAt("Main() RequestShutdown in progress", 1, 1)
 
 
         # Now kill UI
