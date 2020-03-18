@@ -3865,20 +3865,29 @@ def main(argv):
     while True:
         try:
             while True:
-                Term.printAt(str(listCurrentThreads()),1,2)
+                # Term.printAt(str(listCurrentThreads()),1,2)
                 time.sleep(1)
 
-        # This code will execute if the RequestShutdown Exception is raised
+        # This code will execute if the RequestShutdown Exception is raised (SIGINT, Ctrl-C)
         except RequestShutdown:
             Message.addMessage("RequestShutdown Exception raised")
             # Put up a Quit y/n dialogue
             userResponse = ui.showShutDownDialogue()
-            Message.addMessage(str(datetime.datetime.now()) + ", main() except RequestShutdown: " + str(userResponse))
-
+            # Message.addMessage(str(datetime.datetime.now()) + ", main() except RequestShutdown: " + str(userResponse))
+            # If yes, quit
             if userResponse:
                 shutdownApplication()
+            # Otherwise ignore
             else:
                 pass
+
+        # This code will execute if the ShutdownApplication Exception is raised (SIGTERM)
+        # It will cause the pgram to end, with no user prompt
+        except ShutdownApplication:
+            Message.addMessage("ShutdownApplication Exception raised (SIGTERM)")
+            time.sleep(2)
+            shutdownApplication()
+
 
 
 
