@@ -506,6 +506,13 @@ class UI(object):
         # self.shutdownFlag = shutdownFlag
 
 
+        # If true, this will cause renderDisplayThread to put up a quit y/n? prompt
+        self.displayQuitDialogueFlag = False
+        # threading.Event object used to intentionally block the showShutDownDialogue() method
+        self.quitDialogueNotActiveFlag = threading.Event()
+        # This will store the result of the user response
+        self.quitConfirmed = False
+
         # Thread running flags
         self.keysPressedThreadActive = True
         self.renderDisplayThreadActive = True
@@ -728,8 +735,24 @@ class UI(object):
             print("UI.kill() Waiting for detectTerminalSizeThread to end\r")
             self.detectTerminalSizeThread.join()
 
-        # else:
-        #     print("UI.kill() renderDisplayThread.is_alive() didn't return True\r")
+    # This method will pause the normal screen rendering/key catching and cause a
+    # 'do you want to quit? dialogue to be displayed
+    # It is designed to be a blocking method. It will return True/False depending upon whether
+    # the user confirms the shutdown request
+    def showShutDownDialogue(self):
+        # Cause the UI render thread to put up a Quit Y/N prompt
+        self.displayQuitDialogueFlag = True
+        # Clear the threading.Event signal for self.quitDialogueActiveFlag
+        self.quitDialogueNotActiveFlag.clear()
+        # Wake up the UI
+        self.wakeUpUI.set()
+        # Now wait for the UI thread to signal that the prompt has been answered (blocking call)
+        self.quitDialogueNotActiveFlag.wait()
+        # Return the response to the caller
+        return self.quitConfirmed
+        # return True
+
+
 
     # A cross-platform method to catch keypresses (and not echo them to the screen)
     def __getch(self):
@@ -1662,6 +1685,18 @@ class UI(object):
                 self.wakeUpUI.wait(timeout=1)
                 # Now clear the 'wakeupUI event' flag (because we've processed this key press)
                 self.wakeUpUI.clear()
+
+                # Check status of self.displayQuitDialogueFlag. If so, display the Quit Y/N prompt
+                if self.displayQuitDialogueFlag:
+                    # Clear the flag
+                    self.displayQuitDialogueFlag = False
+                    # disable _getch() key capture (it will interfere with the Prompt_Toolkit code
+                    self.enableGetch.clear()
+                    # Put up the user prompt (blocking call)
+                    self.quitConfirmed = yes_no_dialog(title='Quit Isptest', text='Do you want to quit?')
+                    # Now we have a response, update the Threading.Event flag (to unblock UI.showShutDownDialogue())
+                    self.quitDialogueNotActiveFlag.set()
+
 
                 # Update available streams lists
                 if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
@@ -3772,8 +3807,8 @@ def main(argv):
         diskLoggerThread.start()
 
     # Main program execution loops
-    # Declare a var to be used as the socket.recvfrom UDP socket
-    sock = None
+    # # Declare a var to be used as the socket.recvfrom UDP socket
+    # sock = None
 
     # Define a local function that will perform a graceful shutdown of all threads and resources
     def shutdownApplication():
@@ -3800,7 +3835,7 @@ def main(argv):
 
         ############ Stop DiskLogger and __receiveRTP threads (currently they stop themselves)
         shutdownFlag.set()
-        time.sleep((5))
+        time.sleep((1))
         Term.clearScreen()
         Term.printAt("main.shutdownApplication() in progress", 1, 1)
 
@@ -3808,61 +3843,43 @@ def main(argv):
         ui.kill()
         exit()
 
-    try:
-        if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
-            # Flag to signal whether RtpStream (Receive stream) socket vars have to be refreshed.
-            # This will happen if the receive socket has to be recreated (due to an OS (Windows) error
-            # and there are currently active receive streams
-            # (Nb. Windows has a habit of terminating a socket if it receives a bad packet. Since all the receive streams
-            # (and their corresponding ResultsTransmitters) are sharing a reference to this single socket, this is a problem.
-            refreshRtpStreamSocketsFlag = False
 
-            # Create a diskLogging Thread - pass rtpStream object to it
-            diskLoggerThread = threading.Thread(target=__diskLoggerThread,
-                                                args=(MODE, rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,))
-            diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
-            diskLoggerThread.setName("__diskLoggerThread")
-            diskLoggerThread.start()
-
-            # Create a thread to receive the RTP streams
-            receiveRtpThread = threading.Thread(target=__receiveRtpThread,
-                                                args=(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
-                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold,))
-            receiveRtpThread.setName("__receiveRtpThread")
-            receiveRtpThread.start()
+    if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
 
+        # Create a diskLogging Thread - pass rtpStream object to it
+        diskLoggerThread = threading.Thread(target=__diskLoggerThread,
+                                            args=(MODE, rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,))
+        diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
+        diskLoggerThread.setName("__diskLoggerThread")
+        diskLoggerThread.start()
+
+        # Create a thread to receive the RTP streams
+        receiveRtpThread = threading.Thread(target=__receiveRtpThread,
+                                            args=(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
+                   UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold,))
+        receiveRtpThread.setName("__receiveRtpThread")
+        receiveRtpThread.start()
+
+    # Endless loop
+    while True:
+        try:
             while True:
-                # Term.printAt(str(listCurrentThreads()),1,1)
-
+                Term.printAt(str(listCurrentThreads()),1,2)
                 time.sleep(1)
 
-        # Infinite loop to sit in (if in TRANSMIT mode)
-        elif MODE == 'TRANSMIT':
-            while True:
-                # Term.printAt(str(listCurrentThreads()),1,1)
+        # This code will execute if the RequestShutdown Exception is raised
+        except RequestShutdown:
+            Message.addMessage("RequestShutdown Exception raised")
+            # Put up a Quit y/n dialogue
+            userResponse = ui.showShutDownDialogue()
+            Message.addMessage(str(datetime.datetime.now()) + ", main() except RequestShutdown: " + str(userResponse))
 
-                time.sleep(1)
+            if userResponse:
+                shutdownApplication()
+            else:
+                pass
 
-    # This code will execute if the RequestShutdown Exception is raised
-    except RequestShutdown:
-        Message.addMessage("RequestShutdown Exception raised")
-        shutdownApplication()
-        #
-        # # Temporarily pause the UI whilst we put up a 'do you want to quit?' dialogue
-        # enableUIFlag.clear()
-        # # Forcibly wake up the UI thread so that it acknowledges the enableUIFlag.clear()
-        # wakeUpUI.set()
-        # # Short delay to allow time for the UI thread to respond
-        # time.sleep(0.5)
-        # result = yes_no_dialog(
-        #         title='Quit',
-        #         text='Do you want to quit?')
-        # if result == True:
-        #     shutdownApplication()
-        # else:
-        #     # Shutdown request cancelled, so restart UI
-        #     enableUIFlag.set()
 
 
 # Invoke main() method (entry point for Python script)
