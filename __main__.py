@@ -489,7 +489,7 @@ class UI(object):
                     rtpTxStreamsDict, rtpTxStreamsDictMutex,
                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
                     rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
-                    UDP_RX_IP, UDP_RX_PORT, enableUIFlag):
+                    UDP_RX_IP, UDP_RX_PORT, enableUIFlag, wakeUpUI):
 
         self.operationMode = operationMode
         self.specialFeaturesModeFlag = specialFeaturesModeFlag
@@ -516,7 +516,7 @@ class UI(object):
 
         # Enables keyboard key press detection via __getch()
         self.enableGetch = threading.Event()
-        self.wakeUpUI = threading.Event()
+        self.wakeUpUI = wakeUpUI
 
         # Flag to trigger redrawing of the screen
         self.redrawScreen = True
@@ -3027,7 +3027,7 @@ class UI(object):
 #         time.sleep(0.1)
 
 
-def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutdownFlag,):
+def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutdownFlag):
     # Autonomous thread to iterate over rtpStreamsDict and poll RtpStream eventLists for new events
     # and write them  to disk
     Message.addMessage("INFO: diskLoggerThread starting")
@@ -3160,6 +3160,217 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
         file_json.close()
     except Exception as e:
         Message.addMessage("ERR: __diskloggerThread. Error closing files " + str(e))
+
+# Autonomous thread to decode rtp streams and pass the data into the relevant RtpRXStream
+def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
+                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold):
+    # An RTP header is 12 bytes long
+    RTP_HEADER_SIZE = 12
+
+    # Create a dictionary to initially hold the sync source of a potential rx stream
+    rtpRxStreamTempDict = {}
+
+    # Flag to signal whether RtpStream (Receive stream) socket vars have to be refreshed.
+    # This will happen if the receive socket has to be recreated (due to an OS (Windows) error
+    # and there are currently active receive streams
+    # (Nb. Windows has a habit of terminating a socket if it receives a bad packet. Since all the receive streams
+    # (and their corresponding ResultsTransmitters) are sharing a reference to this single socket, this is a problem.
+    refreshRtpStreamSocketsFlag = False
+
+    # # Create a diskLogging Thread - pass rtpStream object to it
+    # diskLoggerThread = threading.Thread(target=__diskLoggerThread,
+    #                                     args=(operationMode, rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,))
+    # diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
+    # diskLoggerThread.setName("__diskLoggerThread")
+    # diskLoggerThread.start()
+
+    while True:
+        # Create receive UDP socket
+        try:
+            udpSocket = socket.socket(socket.AF_INET,  # Internet
+                                 socket.SOCK_DGRAM)  # UDP
+
+            # Set a timeout of 1 second. This should mean that socket.recvfrom() only blocks for a maximum
+            # of 1 second if there's no data incoming
+            udpSocket.settimeout(1)
+            udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+
+            # If this a 'regeneration' of the existing socket, we need to inform all the existing RtpStream objects of the change
+            if refreshRtpStreamSocketsFlag == True:
+                # Clear the flag
+                refreshRtpStreamSocketsFlag = False
+                try:
+                    # For Python3 (which has the id() function)
+                    Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(id(socket)))
+                except:
+                    # For Python2 which doesn't
+                    Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(socket))
+                # Update all streams in rtpRxStreamsDict
+                for stream in rtpRxStreamsDict:
+                    rtpRxStreamsDict[stream].setSocket(udpSocket)
+
+
+        except Exception as e:
+            Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on " + UDP_RX_IP + ":" + str(
+                UDP_RX_PORT) + ", " + str(e) + \
+                               ". Try another port. Exiting" + Term.FG(Term.RESET))
+            Message.addMessage("__main(): " + str(e))
+            time.sleep(2)
+            exit()
+
+        data = b""  # Will hold the data received - specify a bytes string
+
+        while True:
+            # Check status of shutdownFlag
+            if shutdownFlag.is_set():
+                # If down, break out of the endless while loop
+                break
+
+            # Endless UDP receive loop
+            # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
+            try:
+                # Wait for data (blocking function call)
+                data, addr = udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
+                # Confirm that we have some data (RTP header is 12 bytes long)
+                if len(data) == 0:
+                    Message.addMessage("socket is broken")
+                if len(data) >= RTP_HEADER_SIZE:
+                    # Get timestamp at the point the packet was received
+                    timeNow = datetime.datetime.now()
+                    try:
+                        srcAddress = addr[0]
+                        srcPort = addr[1]
+
+                        # Split rtp header into an array of values
+                        # RTP header is 12 bytes long. Unpack it as an array.
+                        # !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
+                        # This is the size of my own header prefix values (18 bytes)
+                        rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
+
+                        # Calculate the data payload size
+                        payloadSize = len(data) - RTP_HEADER_SIZE
+
+                        # Take copies of the data values that we need
+                        # 	sequence no=rtpHeader[2]
+                        #	timestamp=rtpHeader[3]
+                        # 	sync-source identifier =rtpHeader[4]
+
+                        rtpSequenceNo = rtpHeader[2]
+                        rtpSyncSourceIdentifier = rtpHeader[4]
+
+                        # Attempt to extract and make sense of the payload (has it been sent by isptest?)
+                        isptestHeaderData = b""
+                        if payloadSize >= ISPTEST_HEADER_SIZE:
+                            # Substring the isptest header part of the payload
+                            isptestHeaderData = data[RTP_HEADER_SIZE:(RTP_HEADER_SIZE + ISPTEST_HEADER_SIZE)]
+
+                        # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
+                        try:
+                            # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
+                            rtpRxStreamsDict[rtpSyncSourceIdentifier].addData(rtpSequenceNo, payloadSize, timeNow,
+                                                                              rtpSyncSourceIdentifier,
+                                                                              isptestHeaderData)
+
+                        except:
+
+                            # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
+
+                            if rtpSyncSourceIdentifier in rtpRxStreamTempDict:
+                                # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
+                                Message.addMessage(Fore.GREEN + "INFO: " + str(rtpSyncSourceIdentifier) +
+                                                   " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
+                                # Create and add the new stream to the rtpRxStreamsDict
+                                newRtpStream = RtpReceiveStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, \
+                                                                UDP_RX_PORT, glitchEventTriggerThreshold, udpSocket,
+                                                                rtpRxStreamsDict, rtpRxStreamsDictMutex)
+
+                                # Now delete the entry from the temporary dict
+                                rtpRxStreamTempDict.pop(rtpSyncSourceIdentifier, None)
+
+                            else:
+                                # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
+                                # create a entry in the temporary list (with a timestamp)
+                                Message.addMessage(
+                                    Fore.RED + "INFO: Stream doesn't exist yet, adding to temp list: " + str(
+                                        rtpSyncSourceIdentifier))
+                                rtpRxStreamTempDict[rtpSyncSourceIdentifier] = timer()
+
+                    except Exception as e:
+                        # Problem decoding RTP headers
+                        message = Fore.RED + "Cannot decode RTP headers. Is this an RTP packet? " + str(
+                            e) + " Length:" + str(len(data)) + \
+                                  " bytes received\r"
+                        print (message)
+                        Message.addMessage(message)
+                else:
+                    message = Fore.RED + "ERR: Invalid/no data received: " + str(addr) + ", " + str(data)
+                    print (message)
+                    Message.addMessage(message)
+
+                # Now delete contents of data[]
+                data = b""
+
+            # Catch timeout exception (and ignore it)
+            except socket.timeout:
+                # Message.addMessage("DBUG: main() recvfrom. timeout exception")
+                pass
+
+
+            # Catch all other exceptions
+            except Exception as e:
+                Message.addMessage(Term.WhiRed + "ERR: __main()udpSocket.recvfrom():" + UDP_RX_IP + ":" + \
+                                   str(UDP_RX_PORT) + ", " + str(id(udpSocket)))
+
+                Message.addMessage("__main() recvfrom: " + str(e))
+                try:
+                    # Close existing socket
+                    udpSocket.close()
+                except Exception as e:
+                    Message.addMessage("ERR: main() udpSocket.close() " + str(e))
+
+                # Now try to recreate the socket
+                # break out of this inner while loop to the outer while loop (where the socket is created)
+                break
+
+            # Iterate over tpRxStreamTempDict to purge it of old, non-existant streams that never made it into rtpRxStreamTempDict
+            # If an RTP packet with the matching sync source id doesn;t appear within nonExistentStreamTimout_seconds seconds,
+            # the stream will be deleted from tpRxStreamTempDict{}
+            nonExistentStreamTimout_seconds = 5
+            streamsToPurge = []
+            # Compile list of orphan streams
+            for stream in rtpRxStreamTempDict:
+                if (timer() - rtpRxStreamTempDict[stream]) > nonExistentStreamTimout_seconds:
+                    # Add to list
+                    streamsToPurge.append(stream)
+
+            # If there are some streams to purge, purge them
+            if len(streamsToPurge) > 0:
+                for stream in streamsToPurge:
+                    Message.addMessage("INFO: Deleting orphan stream: " + str(stream) + " from rtpRxStreamTempDict{}")
+                    # Delete the stream (key) from the dictionary as not wanted
+                    rtpRxStreamTempDict.pop(stream, None)
+
+        # Check status of shutdownFlag
+        if shutdownFlag.is_set():
+            # If down, break out of the endless while loop
+            break
+
+        # If program execution gets here, the udp socket must have been corrupted
+        Message.addMessage(
+            Term.WhiRed + "WARNING. Recreating UDP receive socket. Glitches might not be genuine          ")
+        refreshRtpStreamSocketsFlag = True
+
+
+        time.sleep(1)
+
+    try:
+        # Close the recvfrom socket in
+        udpSocket.close()
+    except Exception as e:
+        Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
+
+    Message.addMessage("__receiveRTPThread exiting")
+    print("__receiveRTPThread exiting\r")
 
 
 ####################################################################################
@@ -3499,8 +3710,9 @@ def main(argv):
 
     # Create a dictionary to hold the rx Streams
     rtpRxStreamsDict = {}
-    # Create a dictionary to initially hold the sync source of a potential rx stream
-    rtpRxStreamTempDict = {}
+
+    # # Create a dictionary to initially hold the sync source of a potential rx stream
+    # rtpRxStreamTempDict = {}
 
     # Create a mutex lock to be used when writing to the rtpRxStreamsDict (or deleting objects)
     rtpRxStreamsDictMutex = threading.Lock()
@@ -3527,11 +3739,14 @@ def main(argv):
     # Make sure flag is initially set
     enableUIFlag.set()
 
+    # Create a UI flag that will allow the UI thread to be woken up (to force a redraw)
+    wakeUpUI = threading.Event()
+
     ui = UI(MODE, specialFeaturesModeFlag,\
         rtpTxStreamsDict, rtpTxStreamsDictMutex,\
         rtpRxStreamsDict, rtpRxStreamsDictMutex,\
         rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,\
-        UDP_RX_IP, UDP_RX_PORT,enableUIFlag)
+        UDP_RX_IP, UDP_RX_PORT,enableUIFlag, wakeUpUI)
 
 
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
@@ -3582,18 +3797,18 @@ def main(argv):
                     # Invoke the kill method of each stream
                     dict[stream].killStream()
 
-        # If in RECEIVE mode, close the UDP receiver socket
-        if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
-            Message.addMessage("INFO: main() recvfrom() socket")
-            try:
-                # Close the recvfrom socket in main
-                sock.close()
-            except Exception as e:
-                Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
+        # # If in RECEIVE mode, close the UDP receiver socket
+        # if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
+        #     Message.addMessage("INFO: main() recvfrom() socket")
+        #     try:
+        #         # Close the recvfrom socket in main
+        #         sock.close()
+        #     except Exception as e:
+        #         Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
 
-        ############ Stop DiskLogger (currently it stops iteself)
+        ############ Stop DiskLogger and __receiveRTP threads (currently they stop themselves)
         shutdownFlag.set()
-        time.sleep((1))
+        time.sleep((5))
         Term.clearScreen()
         Term.printAt("main.shutdownApplication() in progress", 1, 1)
 
@@ -3617,193 +3832,17 @@ def main(argv):
             diskLoggerThread.setName("__diskLoggerThread")
             diskLoggerThread.start()
 
+            # Create a thread to receive the RTP streams
+            receiveRtpThread = threading.Thread(target=__receiveRtpThread,
+                                                args=(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
+                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold,))
+            receiveRtpThread.setName("__receiveRtpThread")
+            receiveRtpThread.start()
+
+
             while True:
-                # Create receive UDP socket
-                try:
-                    sock = socket.socket(socket.AF_INET,  # Internet
-                                         socket.SOCK_DGRAM)  # UDP
-                    # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                    # Set a timeout of 1 second. This should mean that socket.recvfrom() only blocks for a maximum
-                    # of 1 second if there's no data incoming
-                    sock.settimeout(1)
-                    sock.bind((UDP_RX_IP, UDP_RX_PORT))
+                # Term.printAt(str(listCurrentThreads()),1,1)
 
-                    # If this a 'regeneration' of the existing socket, we need to inform all the existing RtpStream objects of the change
-                    if refreshRtpStreamSocketsFlag == True:
-                        # Clear the flag
-                        refreshRtpStreamSocketsFlag = False
-                        try:
-                            # For Python3 (which has the id() function)
-                            Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(id(socket)))
-                        except:
-                            # For Python2 which doesn't
-                            Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(socket))
-                        # Update all streams in rtpRxStreamsDict
-                        for stream in rtpRxStreamsDict:
-                            rtpRxStreamsDict[stream].setSocket(sock)
-
-
-                except Exception as e:
-                    Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on "+UDP_RX_IP+":"+str(UDP_RX_PORT)+", "+str(e)+\
-                        ". Try another port. Exiting"+Term.FG(Term.RESET))
-                    Message.addMessage("__main(): " + str(e))
-                    time.sleep(2)
-                    exit()
-
-                data = b""       # Will hold the data received - specify a bytes string
-
-                while True:
-                    # Endless UDP receive loop - continues whilst displayThread and catchKeyboardPresses threads are valid
-                    # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
-                    try:
-                        # Wait for data (blocking function call)
-                        data, addr = sock.recvfrom(4096)  # buffer size is 4096 bytes
-                        # Confirm that we have some data (RTP header is 12 bytes long)
-                        if len(data) == 0:
-                            Message.addMessage("socket is broken")
-                        if len(data) >= RTP_HEADER_SIZE:
-                            # Get timestamp at the point the packet was received
-                            timeNow = datetime.datetime.now()
-                            try:
-                                srcAddress = addr[0]
-                                srcPort = addr[1]
-
-                                # Split rtp header into an array of values
-                                # RTP header is 12 bytes long. Unpack it as an array.
-                                # !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
-                                # This is the size of my own header prefix values (18 bytes)
-                                rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
-
-                                # Calculate the data payload size
-                                payloadSize = len(data) - RTP_HEADER_SIZE
-
-                                # Take copies of the data values that we need
-                                # 	sequence no=rtpHeader[2]
-                                #	timestamp=rtpHeader[3]
-                                # 	sync-source identifier =rtpHeader[4]
-
-                                rtpSequenceNo = rtpHeader[2]
-                                rtpSyncSourceIdentifier = rtpHeader[4]
-
-                                # Attempt to extract and make sense of the payload (has it been sent by isptest?)
-                                isptestHeaderData = b""
-                                if payloadSize >= ISPTEST_HEADER_SIZE:
-                                    # Substring the isptest header part of the payload
-                                    isptestHeaderData = data[RTP_HEADER_SIZE:(RTP_HEADER_SIZE + ISPTEST_HEADER_SIZE)]
-
-                                # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
-                                try:
-                                    # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
-                                    rtpRxStreamsDict[rtpSyncSourceIdentifier].addData(rtpSequenceNo, payloadSize, timeNow,
-                                                                                      rtpSyncSourceIdentifier, isptestHeaderData)
-
-                                except:
-
-                                    # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
-
-                                    if rtpSyncSourceIdentifier in rtpRxStreamTempDict:
-                                        # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
-                                        Message.addMessage(Fore.GREEN + "INFO: " + str(rtpSyncSourceIdentifier) +
-                                                           " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
-                                        # Create and add the new stream to the rtpRxStreamsDict
-                                        newRtpStream = RtpReceiveStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, \
-                                                                 UDP_RX_PORT, glitchEventTriggerThreshold, sock,
-                                                                 rtpRxStreamsDict, rtpRxStreamsDictMutex)
-
-                                        # Now delete the entry from the temporary dict
-                                        rtpRxStreamTempDict.pop(rtpSyncSourceIdentifier, None)
-
-                                    else:
-                                        # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
-                                        # create a entry in the temporary list (with a timestamp)
-                                        Message.addMessage(
-                                            Fore.RED + "INFO: Stream doesn't exist yet, adding to temp list: " + str(
-                                                rtpSyncSourceIdentifier))
-                                        rtpRxStreamTempDict[rtpSyncSourceIdentifier] = timer()
-
-                            except Exception as e:
-                                # Problem decoding RTP headers
-                                message = Fore.RED + "Cannot decode RTP headers. Is this an RTP packet? " + str(
-                                    e) + " Length:" + str(len(data)) + \
-                                          " bytes received\r"
-                                print (message)
-                                Message.addMessage(message)
-                        else:
-                            message = Fore.RED + "ERR: Invalid/no data received: " + str(addr) + ", " + str(data)
-                            print (message)
-                            Message.addMessage(message)
-
-                        # Now delete contents of data[]
-                        data = b""
-
-                    # Catch timeout exception (and ignore it)
-                    except socket.timeout:
-                        # Message.addMessage("DBUG: main() recvfrom. timeout exception")
-                        pass
-
-                    # This code will execute if the RequestShutdown Exception is raised
-                    except RequestShutdown:
-                        Message.addMessage("RequestShutdown Exception raised")
-                        # Temporarily pause the UI whilst we put up a 'do you want to quit?' dialogue
-                        enableUIFlag.clear()
-                        time.sleep(1)
-                        result = yes_no_dialog(
-                            title='Quit',
-                            text='Do you want to quit?')
-                        if result == True:
-                            shutdownApplication()
-
-                        else:
-                            # Shutdown request cancelled, so restart UI
-                            enableUIFlag.set()
-
-                    # Catch all other exceptions
-                    except Exception as e:
-                        Message.addMessage(Term.WhiRed + "ERR: __main()sock.recvfrom():" + UDP_RX_IP + ":" + \
-                            str(UDP_RX_PORT) + ", " + str(id(sock)))
-
-                        Message.addMessage("__main() recvfrom: " + str(e))
-                        try:
-                            # Close existing socket
-                            sock.close()
-                        except Exception as e:
-                            Message.addMessage("ERR: main() sock.close() " + str(e))
-
-                        # Now try to recreate the socket
-                        # break out of this inner while loop to the outer while loop (where the socket is created)
-                        break
-
-                    # Iterate over tpRxStreamTempDict to purge it of old, non-existant streams that never made it into rtpRxStreamTempDict
-                    # If an RTP packet with the matching sync source id doesn;t appear within nonExistentStreamTimout_seconds seconds,
-                    # the stream will be deleted from tpRxStreamTempDict{}
-                    nonExistentStreamTimout_seconds = 5
-                    streamsToPurge = []
-                    # Compile list of orphan streams
-                    for stream in rtpRxStreamTempDict:
-                        if (timer() - rtpRxStreamTempDict[stream]) > nonExistentStreamTimout_seconds:
-                            # Add to list
-                            streamsToPurge.append(stream)
-
-                    # If there are some streams to purge, purge them
-                    if len(streamsToPurge) >0:
-                        for stream in streamsToPurge:
-                            Message.addMessage("INFO: Deleting orphan stream: " + str(stream) + " from rtpRxStreamTempDict{}")
-                            # Delete the stream (key) from the dictionary as not wanted
-                            rtpRxStreamTempDict.pop(stream, None)
-
-                    # # Finally, check to see if the UI thread has signalled a shutdown request
-                    # if shutdownFlag.is_set():
-                    #     print ("main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
-                    #     raise RequestShutdown
-
-                # If program execution gets here, the udp socket must have been corrupted
-                Message.addMessage(Term.WhiRed + "WARNING. Recreating UDP receive socket. Glitches might not be genuine          ")
-                refreshRtpStreamSocketsFlag = True
-
-                # # Finally, check to see if the UI thread has signalled a shutdown request
-                # if shutdownFlag.is_set():
-                #     print ("INFO: main() shutdownFlag.is_set(). Raising ServiceExit Exception\r")
-                #     raise RequestShutdown
                 time.sleep(1)
 
         # Infinite loop to sit in (if in TRANSMIT mode)
@@ -3816,17 +3855,22 @@ def main(argv):
     # This code will execute if the RequestShutdown Exception is raised
     except RequestShutdown:
         Message.addMessage("RequestShutdown Exception raised")
-        # Temporarily pause the UI whilst we put up a 'do you want to quit?' dialogue
-        enableUIFlag.clear()
-        time.sleep(1)
-        result = yes_no_dialog(
-                title='Quit',
-                text='Do you want to quit?')
-        if result == True:
-            shutdownApplication()
-        else:
-            # Shutdown request cancelled, so restart UI
-            enableUIFlag.set()
+        shutdownApplication()
+        #
+        # # Temporarily pause the UI whilst we put up a 'do you want to quit?' dialogue
+        # enableUIFlag.clear()
+        # # Forcibly wake up the UI thread so that it acknowledges the enableUIFlag.clear()
+        # wakeUpUI.set()
+        # # Short delay to allow time for the UI thread to respond
+        # time.sleep(0.5)
+        # result = yes_no_dialog(
+        #         title='Quit',
+        #         text='Do you want to quit?')
+        # if result == True:
+        #     shutdownApplication()
+        # else:
+        #     # Shutdown request cancelled, so restart UI
+        #     enableUIFlag.set()
 
 
 # Invoke main() method (entry point for Python script)
