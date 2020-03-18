@@ -1104,9 +1104,15 @@ class UI(object):
     # 's' pressed
     def __onEnterFriendlyName(self):
 
+        styleDefinition = Style.from_dict({
+            'dialog': 'bg:ansiblue',        # Screen background
+            'dialog frame.label': 'bg:ansiwhite ansired ',
+            'dialog.body': 'bg:ansiwhite ansiblack',
+            'dialog shadow': 'bg:ansiblack'})
         text = input_dialog(
             title='Enter friendly name',
-            text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':')
+            text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':',
+            style=styleDefinition)
         if text != '':
             self.selectedStream.setFriendlyName(text)
 
@@ -1686,7 +1692,13 @@ class UI(object):
                 # disable _getch() key capture (it will interfere with the Prompt_Toolkit code
                 self.enableGetch.clear()
                 # Put up the user prompt (blocking call)
-                self.quitConfirmed = yes_no_dialog(title='Quit Isptest', text='Do you want to quit?')
+                styleDefinition = Style.from_dict({
+                    'dialog': 'bg:ansiblue',  # Screen background
+                    'dialog frame.label': 'bg:ansiwhite ansired ',
+                    'dialog.body': 'bg:ansiwhite ansiblack',
+                    'dialog shadow': 'bg:ansiblack'})
+                self.quitConfirmed = yes_no_dialog(title='Quit Isptest', text='Do you want to quit?',
+                                                   style=styleDefinition)
                 # Now we have a response, update the Threading.Event flag (to unblock UI.showShutDownDialogue())
                 self.quitDialogueNotActiveFlag.set()
 
