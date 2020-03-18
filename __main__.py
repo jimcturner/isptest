@@ -3797,14 +3797,6 @@ def main(argv):
                     # Invoke the kill method of each stream
                     dict[stream].killStream()
 
-        # # If in RECEIVE mode, close the UDP receiver socket
-        # if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
-        #     Message.addMessage("INFO: main() recvfrom() socket")
-        #     try:
-        #         # Close the recvfrom socket in main
-        #         sock.close()
-        #     except Exception as e:
-        #         Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
 
         ############ Stop DiskLogger and __receiveRTP threads (currently they stop themselves)
         shutdownFlag.set()
