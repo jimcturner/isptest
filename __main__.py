@@ -1103,18 +1103,21 @@ class UI(object):
 
     # 's' pressed
     def __onEnterFriendlyName(self):
-
-        styleDefinition = Style.from_dict({
-            'dialog': 'bg:ansiblue',        # Screen background
-            'dialog frame.label': 'bg:ansiwhite ansired ',
-            'dialog.body': 'bg:ansiwhite ansiblack',
-            'dialog shadow': 'bg:ansiblack'})
-        text = input_dialog(
-            title='Enter friendly name',
-            text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':',
-            style=styleDefinition)
-        if text != '':
-            self.selectedStream.setFriendlyName(text)
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpGenerator or type(self.selectedStream) == RtpReceiveStream:
+            styleDefinition = Style.from_dict({
+                'dialog': 'bg:ansiblue',        # Screen background
+                'dialog frame.label': 'bg:ansiwhite ansired ',
+                'dialog.body': 'bg:ansiwhite ansiblack',
+                'dialog shadow': 'bg:ansiblack'})
+            text = input_dialog(
+                title='Enter friendly name',
+                text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':',
+                style=styleDefinition)
+            if text != '':
+                self.selectedStream.setFriendlyName(text)
+        else:
+            Message.addMessage("Can't modify stream results. Change the name in the Transmit pane instead")
 
     # 'a' pressed (only when in Tx or Loopback mode)
     def __onAddTxStream(self):
