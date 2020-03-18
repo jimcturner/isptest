@@ -1436,17 +1436,8 @@ class UI(object):
         else:
             # 'Ctrl-C' - request shutdown
             if self.keyPressed == 3:
-                Message.addMessage("Ctrl-C Pressed")
-                # result = yes_no_dialog(
-                #         title='Quit',
-                #         text='Do you want to quit?')
-                # if result == True:
-                #     # Set uiShutdownFlag. This will be monitored by main()
-                #     self.shutdownFlag.set()
-                #     # Force an update of the while loop in __renderDisplayThread (to expedite shutdown - otherwise, we
-                #     # have to wait for the self.wakeUpUI timeout
-                # else:
-                #     pass
+                Message.addMessage("DBUG: Ctrl-C Pressed")
+
                 # For Linux/OSX - Kill self (Windows will detect the SIGTERM in the signalHandler itself
                 os.kill(os.getpid(), signal.SIGINT)
                 self.wakeUpUI.set()
@@ -3430,13 +3421,13 @@ class ShutdownApplication(Exception):
 
 # This function will be invoked by SIGTERM (i.e by the OS sending a kill signal)
 def requestShutdownSignalHandler(signum, frame):
-    Message.addMessage("requestShutdownSignalHandler called")
+    Message.addMessage("DBUG: requestShutdownSignalHandler called")
     print('Caught signal ' + str(signum) + "\r")
     raise RequestShutdown
 
 # This function will be invoked by SIGTERM (i.e by the OS sending a kill signal)
 def shutdownApplicationSignalHandler(signum, frame):
-    Message.addMessage("shutdownApplicationSignalHandler called")
+    Message.addMessage("DBUG: shutdownApplicationSignalHandler called")
     print('Caught signal ' + str(signum) + "\r")
     raise ShutdownApplication
 
@@ -3824,7 +3815,13 @@ def main(argv):
 
         ############ Stop DiskLogger and __receiveRTP threads (currently they stop themselves)
         shutdownFlag.set()
-        time.sleep((1))
+        # Wait for diskLogger Thread to end
+        diskLoggerThread.join()
+
+        # wait for __receiveRtpStream Thread to end (if it exists)
+        if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
+            receiveRtpThread.join()
+        time.sleep(0.2)
         Term.clearScreen()
         Term.printAt("main.shutdownApplication() in progress", 1, 1)
 
@@ -3859,7 +3856,7 @@ def main(argv):
 
         # This code will execute if the RequestShutdown Exception is raised (SIGINT, Ctrl-C)
         except RequestShutdown:
-            Message.addMessage("RequestShutdown Exception raised")
+            Message.addMessage("DBUG: RequestShutdown Exception raised")
             # Put up a Quit y/n dialogue
             userResponse = ui.showShutDownDialogue()
             # Message.addMessage(str(datetime.datetime.now()) + ", main() except RequestShutdown: " + str(userResponse))
@@ -3873,11 +3870,8 @@ def main(argv):
         # This code will execute if the ShutdownApplication Exception is raised (SIGTERM)
         # It will cause the pgram to end, with no user prompt
         except ShutdownApplication:
-            Message.addMessage("ShutdownApplication Exception raised (SIGTERM)")
-            time.sleep(2)
+            Message.addMessage("DBUG: ShutdownApplication Exception raised (SIGTERM)")
             shutdownApplication()
-
-
 
 
 # Invoke main() method (entry point for Python script)
