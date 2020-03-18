@@ -489,7 +489,7 @@ class UI(object):
                     rtpTxStreamsDict, rtpTxStreamsDictMutex,
                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
                     rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
-                    UDP_RX_IP, UDP_RX_PORT, enableUIFlag, wakeUpUI):
+                    UDP_RX_IP, UDP_RX_PORT):
 
         self.operationMode = operationMode
         self.specialFeaturesModeFlag = specialFeaturesModeFlag
@@ -501,10 +501,6 @@ class UI(object):
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
-        # Threading.Event object used to remotely enable/inhibit the main UI thread (__renderDisplayThread)
-        self.enableUIFlag = enableUIFlag
-        # self.shutdownFlag = shutdownFlag
-
 
         # If true, this will cause renderDisplayThread to put up a quit y/n? prompt
         self.displayQuitDialogueFlag = False
@@ -523,7 +519,7 @@ class UI(object):
 
         # Enables keyboard key press detection via __getch()
         self.enableGetch = threading.Event()
-        self.wakeUpUI = wakeUpUI
+        self.wakeUpUI = threading.Event()
 
         # Flag to trigger redrawing of the screen
         self.redrawScreen = True
@@ -746,7 +742,8 @@ class UI(object):
         self.quitDialogueNotActiveFlag.clear()
         # Wake up the UI
         self.wakeUpUI.set()
-        # Now wait for the UI thread to signal that the prompt has been answered (blocking call)
+        # Now wait for the __renderDisplayThread to signal that the prompt has been answered (blocking call)
+        # by 'setting' self.quitDialogueNotActiveFlag
         self.quitDialogueNotActiveFlag.wait()
         # Return the response to the caller
         return self.quitConfirmed
@@ -1677,91 +1674,76 @@ class UI(object):
 
         # Endless 'state-driven' loop to render the screen
         while self.renderDisplayThreadActive == True:
-            # Test the master UI enable/disable flag (blocking call)
-            self.enableUIFlag.wait(timeout = 1)
-            # Determine whether the wait() timed out, or whether the UI is genuinely enabled
-            if self.enableUIFlag.is_set():
-                # Blocking Wait for the wakeUpUi Event (or a 1 sec timeout, whichever first)
-                self.wakeUpUI.wait(timeout=1)
-                # Now clear the 'wakeupUI event' flag (because we've processed this key press)
-                self.wakeUpUI.clear()
+            # Blocking Wait for the wakeUpUi Event (or a 1 sec timeout, whichever first)
+            self.wakeUpUI.wait(timeout=1)
+            # Now clear the 'wakeupUI event' flag (because we've processed this key press)
+            self.wakeUpUI.clear()
 
-                # Check status of self.displayQuitDialogueFlag. If so, display the Quit Y/N prompt
-                if self.displayQuitDialogueFlag:
-                    # Clear the flag
-                    self.displayQuitDialogueFlag = False
-                    # disable _getch() key capture (it will interfere with the Prompt_Toolkit code
-                    self.enableGetch.clear()
-                    # Put up the user prompt (blocking call)
-                    self.quitConfirmed = yes_no_dialog(title='Quit Isptest', text='Do you want to quit?')
-                    # Now we have a response, update the Threading.Event flag (to unblock UI.showShutDownDialogue())
-                    self.quitDialogueNotActiveFlag.set()
+            # Check status of self.displayQuitDialogueFlag. If so, display the Quit Y/N prompt
+            if self.displayQuitDialogueFlag:
+                # Clear the flag
+                self.displayQuitDialogueFlag = False
+                # disable _getch() key capture (it will interfere with the Prompt_Toolkit code
+                self.enableGetch.clear()
+                # Put up the user prompt (blocking call)
+                self.quitConfirmed = yes_no_dialog(title='Quit Isptest', text='Do you want to quit?')
+                # Now we have a response, update the Threading.Event flag (to unblock UI.showShutDownDialogue())
+                self.quitDialogueNotActiveFlag.set()
 
 
-                # Update available streams lists
-                if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
-                    self.__updateAvailableStreamsList(self.availableRtpTxStreamList, self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex)
-                    self.__updateAvailableStreamsList(self.availableRtpTxResultsList, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
-                elif self.operationMode == 'RECEIVE':
-                    self.__updateAvailableStreamsList(self.availableRtpRxStreamList, self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
+            # Update available streams lists
+            if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
+                self.__updateAvailableStreamsList(self.availableRtpTxStreamList, self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex)
+                self.__updateAvailableStreamsList(self.availableRtpTxResultsList, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+            elif self.operationMode == 'RECEIVE':
+                self.__updateAvailableStreamsList(self.availableRtpRxStreamList, self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
 
-                # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
-                if len(self.availableRtpTxStreamList) > 0:
-                    latestTxStream = self.availableRtpTxStreamList[-1][1]
-                    # Take a deep copy so that we're not dependent upon this stream existing
-                    self.latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
+            # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
+            if len(self.availableRtpTxStreamList) > 0:
+                latestTxStream = self.availableRtpTxStreamList[-1][1]
+                # Take a deep copy so that we're not dependent upon this stream existing
+                self.latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
 
-                # Get a handle on the currently highlighted stream and corresponding sync source ID
-                # Confirm that the streamList associated with this view actual has data in it
-                lengthOfDataSetToDisplay = len(self.views[self.selectedView][2])
-                if lengthOfDataSetToDisplay > 0:
-                    # Now confirm that we're not off the end of the list of streams (possible if the last stream
-                    # in the list was deleted)
-                    if self.selectedTableRow > (lengthOfDataSetToDisplay - 1):
-                        # If so, point the selector to the last item on the list
-                        self.selectedTableRow = (lengthOfDataSetToDisplay - 1)
+            # Get a handle on the currently highlighted stream and corresponding sync source ID
+            # Confirm that the streamList associated with this view actual has data in it
+            lengthOfDataSetToDisplay = len(self.views[self.selectedView][2])
+            if lengthOfDataSetToDisplay > 0:
+                # Now confirm that we're not off the end of the list of streams (possible if the last stream
+                # in the list was deleted)
+                if self.selectedTableRow > (lengthOfDataSetToDisplay - 1):
+                    # If so, point the selector to the last item on the list
+                    self.selectedTableRow = (lengthOfDataSetToDisplay - 1)
 
-                    self.selectedStream = self.views[self.selectedView][2][self.selectedTableRow][1]
-                    self.selectedStreamID = self.views[self.selectedView][2][self.selectedTableRow][0]
-                else:
-                # Otherwise, if there are no streams available, se the instance variables accordingly
-                    self.selectedStream = None
-                    self.selectedStreamID = 0
+                self.selectedStream = self.views[self.selectedView][2][self.selectedTableRow][1]
+                self.selectedStreamID = self.views[self.selectedView][2][self.selectedTableRow][0]
+            else:
+            # Otherwise, if there are no streams available, se the instance variables accordingly
+                self.selectedStream = None
+                self.selectedStreamID = 0
 
-                # Determine which key pressed, and call the appropriate method
-                self.__parseKeyPressed()
+            # Determine which key pressed, and call the appropriate method
+            self.__parseKeyPressed()
 
-                ########## Start rendering the screen
-                if self.redrawScreen:
-                    Term.setBackgroundColour(Term.BLUE)
-                    self.__renderTopToolbar()
-                    self.__renderBottomToolbar()
-                    self.__drawNavigationBar()
-                # Term.printAt(str(datetime.datetime.now()) + ", " + str(self.selectedView), 1, 10, Fore.BLACK)
+            ########## Start rendering the screen
+            if self.redrawScreen:
+                Term.setBackgroundColour(Term.BLUE)
+                self.__renderTopToolbar()
+                self.__renderBottomToolbar()
+                self.__drawNavigationBar()
+            # Term.printAt(str(datetime.datetime.now()) + ", " + str(self.selectedView), 1, 10, Fore.BLACK)
 
-                # Update the clock on the top toolbar
-                self.__updateClock()
-                # draw the stream table
-                self.__drawStreamsTable()
-                # draw the messages table
-                self.__drawMessageTable()
+            # Update the clock on the top toolbar
+            self.__updateClock()
+            # draw the stream table
+            self.__drawStreamsTable()
+            # draw the messages table
+            self.__drawMessageTable()
 
-                # if len(self.rtpRxStreamsDict) > 0:
-                #     for stream in self.rtpRxStreamsDict:
-                #         Term.printAt(str(self.rtpRxStreamsDict[stream].getRtpStreamStatsByKey("packet_data_received_total_bytes")),1,5)
-                #
-                # elif len(self.rtpTxStreamResultsDict) > 0:
-                #     for stream in self.rtpTxStreamResultsDict:
-                #         Term.printAt(str(self.rtpTxStreamResultsDict[stream].getRtpStreamStatsByKey("packet_data_received_total_bytes")),1,5)
-                #
-                # if len(self.rtpTxStreamsDict) > 0:
-                #     for stream in self.rtpTxStreamsDict:
-                #         Term.printAt(str(self.rtpTxStreamsDict[stream].getRtpStreamStatsByKey("Tx Rate (actual)")),1,6)
-                # Clear flag
-                self.redrawScreen = False
+            # Clear flag
+            self.redrawScreen = False
 
-                # Now re-arm the getch thread
-                self.enableGetch.set()
+            # Now re-arm the getch thread
+            self.enableGetch.set()
 
         print ("UI.__renderDisplayThread ended")
 
@@ -1786,27 +1768,23 @@ class UI(object):
     # Autonomous thread to monitor key presses
     def __keysPressedThread(self):
         while self.keysPressedThreadActive == True:
-            # Test the master UI enable/disable flag (blocking call)
-            self.enableUIFlag.wait(timeout=1)
-            # Determine whether the wait() timed out, or whether the UI is genuinely enabled
-            if self.enableUIFlag.is_set():
-                # Wait for getch to be enabled (with a timeout)
-                self.enableGetch.wait(timeout = 1)
-                # Confirm that enableGetch was actually set (or was it just a timeout)
-                if self.enableGetch.is_set():
-                    # Capture keyboard presses via the getch method (with a 1 second timeout)
-                    self.keyPressed = None  #clear the keyboard buffer
-                    ch = self.__getch()
-                    # Term.printAt("getch() : " + str(ch), 1, 7)
-                    # Check to see if a genuine key has been pressed
+            # Wait for getch to be enabled (with a timeout)
+            self.enableGetch.wait(timeout = 1)
+            # Confirm that enableGetch was actually set (or was it just a timeout)
+            if self.enableGetch.is_set():
+                # Capture keyboard presses via the getch method (with a 1 second timeout)
+                self.keyPressed = None  #clear the keyboard buffer
+                ch = self.__getch()
+                # Term.printAt("getch() : " + str(ch), 1, 7)
+                # Check to see if a genuine key has been pressed
 
-                    if ch != None:
-                        # If a key has been pressed, store it
-                        self.keyPressed = ch
-                        # Signal that a key has been pressed
-                        self.wakeUpUI.set()
-                        # Now disarm key checking (until it is re-enabled elsewhere)
-                        self.enableGetch.clear()
+                if ch != None:
+                    # If a key has been pressed, store it
+                    self.keyPressed = ch
+                    # Signal that a key has been pressed
+                    self.wakeUpUI.set()
+                    # Now disarm key checking (until it is re-enabled elsewhere)
+                    self.enableGetch.clear()
         print("UI.__keysPressedThread ended\r")
 
 # def __displayThread(operationMode, specialFeaturesModeFlag, keyPressed, rtpTxStreamsDict, rtpTxStreamsDictMutex,
@@ -3769,23 +3747,22 @@ def main(argv):
     shutdownFlag = threading.Event()
     # Make sure flag is initially cleared
     shutdownFlag.clear()
-    # Create flag that will be used to remotely enable/disable the main UI display rendering thread
-    enableUIFlag = threading.Event()
-    # Make sure flag is initially set
-    enableUIFlag.set()
+    # Create flag that will be used to remotely enable/disable the disklogger and __receiveRtpStream threads
+    # enableUIFlag = threading.Event()
+    # # Make sure flag is initially set
+    # enableUIFlag.set()
 
-    # Create a UI flag that will allow the UI thread to be woken up (to force a redraw)
-    wakeUpUI = threading.Event()
+    # # Create a UI flag that will allow the UI thread to be woken up (to force a redraw)
+    # wakeUpUI = threading.Event()
 
     ui = UI(MODE, specialFeaturesModeFlag,\
         rtpTxStreamsDict, rtpTxStreamsDictMutex,\
         rtpRxStreamsDict, rtpRxStreamsDictMutex,\
         rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,\
-        UDP_RX_IP, UDP_RX_PORT,enableUIFlag, wakeUpUI)
+        UDP_RX_IP, UDP_RX_PORT)
 
-
+    # Start traffic generator thread
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
-        # Start traffic generator thread
         # If UDP source port specified
         if UDP_TX_SRC_PORT >0:
             rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
