@@ -3503,10 +3503,11 @@ def main(argv):
         # -x: loopback mode
         # -t: transmit mode usage: address:port
         # -l: duration of transmission (in seconds. Default 1hr (3600 sec)
-        # -r receive mode usage: address:port
         # -b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps
         # -d udp packet size
         # -s udp transmit source port (for transmit or loopback mode)
+        # -n friendly name for tx stream (10 chars max)
+        # -r receive mode usage: address:port
         # -i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4
         # -u sync source ID (for transmit or loopback mode)
         # -v:[int] verbosity
@@ -3521,7 +3522,7 @@ def main(argv):
             print ("No options supplied. Use -h for help")
             exit()
 
-        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:v:z")
+        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:v:zn:")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
@@ -3531,15 +3532,22 @@ def main(argv):
                 print ("-h: help (this message)\r")
                 print ("-x: loopback mode\r")
                 print ("-t: transmit mode usage: address:port\r")
-                print ("-s udp transmit source port (for transmit or loopback mode)")
-                print ("-u sync source ID (for transmit or loopback mode)")
-                print ("-l: duration of transmission (in seconds. Default 1hr (3600 sec). A value of -1 means 'forever'\r")
+                print("Additional transmit parameters:-\r")
+                print ("\t-s [val] udp transmit source port (for transmit or loopback mode)\r")
+                print ("\t-u [val] sync source ID (for transmit or loopback mode)")
+                print ("\t-l: [val] duration of transmission (in seconds. Default 1hr (3600 sec). A value of -1 means 'forever'\r")
+                print ("\t-b [val] tx bandwidth (append k for kbps, m for mbps eg -b 1m or -b 500k). Default 1Mbps\r")
+                print ("\t-d [val] rtp payload size (bytes). Default = 1300 bytes\r")
+                print ("\t-n: [name] friendly name for tx stream (10 chars max)\r")
+                print ("\r")
                 print ("-r receive mode usage: -r [port] or -r [address:port]\r")
-                print ("-b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps\r")
-                print ("-d rtp payload size (bytes). Default = 1300 bytes\r")
-                print ("-i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4\r")
-                print ("-v:[int] message verbosity level\r")
-                print ("-z Enable special features (like simulate packel loss, jitter etc)\r")
+                print("Additional receive parameters:-\r")
+                print ("\t-i [val] Glitch event packet loss ignore threshold (or 'sensitivity'). \r")
+                print("\t  Outages below this limit will not generate an event. Default = 4\r")
+                print ("\r")
+                print ("-v [val] message verbosity level 0-3\r")
+                print ("\r")
+                print ("-z Enable special features (like simulate packet loss, jitter etc)\r")
                 exit()
 
             elif opt == '-x':
@@ -3712,6 +3720,10 @@ def main(argv):
             elif opt in ("-z"):
                 # Enable 'special features' mode
                 specialFeaturesModeFlag = True
+
+            elif opt in ("-n"):
+                # Friendly name supplied for tx stream
+                RTP_TX_STREAM_FRIENDLY_NAME = arg
 
     except getopt.GetoptError:
         print ('invalid options supplied'+ str(argv))
