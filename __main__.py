@@ -1147,7 +1147,7 @@ class UI(object):
                 rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, \
                                             self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
                                             self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex,
-                                            str(syncSourceID), sourcePort)
+                                            friendlyName=str(syncSourceID), UDP_SRC_PORT=sourcePort)
 
                 Message.addMessage("[a] Added new " + str(bToMb(txRate)) + "bps stream with id " + str(syncSourceID))
                 # Force redraw
@@ -3770,18 +3770,12 @@ def main(argv):
     # Start traffic generator thread
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # If UDP source port specified
-        if UDP_TX_SRC_PORT >0:
-            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
-                                        payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
-                                        rtpTxStreamsDict, rtpTxStreamsDictMutex,
-                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
-                                        RTP_TX_STREAM_FRIENDLY_NAME, UDP_TX_SRC_PORT)
-        else:
-            # Otherwise create a new RtpGenerator without specifiying thr source port (the OS will decide)
-            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
-                                        rtpTxStreamsDict, rtpTxStreamsDictMutex,
-                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
-                                        RTP_TX_STREAM_FRIENDLY_NAME)
+        # if UDP_TX_SRC_PORT >0:
+        rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
+                                    payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
+                                    rtpTxStreamsDict, rtpTxStreamsDictMutex,
+                                    rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
+                                    UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME)
 
         # Create a diskLogging Thread - pass rtpStream object to it
         diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, shutdownFlag,))

@@ -1531,8 +1531,9 @@ class RtpGenerator(object):
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
                  rtpTxStreamsDict, rtpTxStreamsDictMutex,\
-                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, friendlyName, *srcPort):
-        # The last argument (*srcPort) is optional. it allows you to specify a source port on creation
+                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, **kwargs):
+        # The last arguments (**kwargs) are optional. it allows you to specify a source port or friendly name on creation
+        # kwargs are "friendlyName" and "UDP_SRC_PORT"
 
         # Assign instance variables
         self.UDP_TX_IP = UDP_TX_IP
@@ -1549,14 +1550,33 @@ class RtpGenerator(object):
         self.isptestHeader = ""
         self.payloadMutex = threading.Lock()    # Used to control access to self.rtpPayload and self.isptestHeader
         self.elapsedTime = datetime.timedelta()
+        self.friendlyName = ""
 
-        # self.friendlyName = " "*self.maxNameLength
-        # On init, if no name supplied, set friendly name to be the same as the ID
-        if friendlyName == "":
+        # Attempt to set the friendly name from the optional supplied kwargs
+        try:
+            # If name supplied
+            if kwargs["friendlyName"] != "":
+                # If the name is not empty
+                self.setFriendlyName(kwargs["friendlyName"])
+            else:
+                # If the name is empty set friendly name to be the same as the sync source ID
+                self.setFriendlyName(self.syncSourceIdentifier)
+        except Exception as e:
+            # Message.addMessage("RTP Gen: " + str(e))
+            # If not, set friendly name to be the same as the sync source ID
             self.setFriendlyName(self.syncSourceIdentifier)
-        else:
-            # if a friendly name is supplied, use it
-            self.setFriendlyName(friendlyName)
+
+        # Attempt to determine whether a UDP source port was specified in kwargs and whether it was valid
+        try:
+            if int(kwargs["UDP_SRC_PORT"]) > 1024:
+                self.UDP_TX_SRC_PORT = int(kwargs["UDP_SRC_PORT"])
+            else:
+                self.UDP_TX_SRC_PORT = 0
+                Message.addMessage("INFO: RtpGenerator.__init__() Invalid source port specified " + str(kwargs["UDP_SRC_PORT"]))
+        # Can't extract src port from kwargs
+        except Exception as e:
+            self.UDP_TX_SRC_PORT = 0
+
 
         self.timeToLive = int(timeToLive)
         self.enablePacketGeneration = True
@@ -1569,15 +1589,15 @@ class RtpGenerator(object):
         self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
 
-        # Test to see if a UDP source port was specified
-        if len(srcPort) > 0:
-            # Test to see if the supplied value is an int
-            try:
-                # check to see whether srcPort is a valid UDP port choice (has to be >1024)
-                if int(srcPort[0]) > 1024:
-                    self.UDP_TX_SRC_PORT = int(srcPort[0])
-            except Exception as e:
-                Message.addMessage("INFO: RtpGenerator.__init(): Invalid UDP source port."+str(srcPort)+", "+str(e))
+        # # Test to see if a UDP source port was specified
+        # if len(srcPort) > 0:
+        #     # Test to see if the supplied value is an int
+        #     try:
+        #         # check to see whether srcPort is a valid UDP port choice (has to be >1024)
+        #         if int(srcPort[0]) > 1024:
+        #             self.UDP_TX_SRC_PORT = int(srcPort[0])
+        #     except Exception as e:
+        #         Message.addMessage("INFO: RtpGenerator.__init(): Invalid UDP source port."+str(srcPort)+", "+str(e))
 
         # Start the traffic generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
