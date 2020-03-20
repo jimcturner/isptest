@@ -216,15 +216,12 @@ class Term(object):
         print ("\033["+str(int(yPos))+";0H"+"\033[2K")
 
     @classmethod
-    def initAlternateScreen(cls):
-        # Initialise Colorama module (which transcodes ascii escape sequences for Windows)
-        init(autoreset=True)
+    def enterAlternateScreen(cls):
         # Switch to an alternate screen buffer (may not work predictably in Windows)
-        print ("\033[?1049h\033[H")
-        # Reset terminal
-        print ("\033c")
-        # Clear scrollback buffer
-        print ("\033[3J")
+        if platform.system() != "Windows":
+            print ("\033[?1049h")
+
+
 
     @classmethod
     def clearTerminalScrollbackBuffer(cls):
@@ -232,11 +229,11 @@ class Term(object):
         print ("\033[3J")
 
     @classmethod
-    def exitScreen(cls):
-        # Clear screen
-        cls.clearScreen()
+    def exitAlternateScreen(cls):
+
         # Revert to original terminal screen
-        print ("\033[?1049l")
+        if platform.system() != "Windows":
+            print ("\033[?1049l")
 
     @classmethod
     def printAt(cls,text, xPos, yPos, *args):
@@ -1039,11 +1036,6 @@ class UI(object):
                 Term.printTable(tableData, 2, yPos, width, Term.BLACK, Term.WHITE)
         del messages[:]
 
-    def __initialiseScreen(self):
-        # Set up display window
-        Term.initAlternateScreen()
-        Term.clearTerminalScrollbackBuffer()
-
     def __renderTopToolbar(self):
         Term.printTitleBar("IBEOO ISP Analyser V1.1", 1, Term.BLACK, Term.WHITE)
         # Print operation mode (plus receive IP:Port if in Receive mode)
@@ -1666,7 +1658,12 @@ class UI(object):
 
     # Autonomous thread to render the screen and parse keyboard presses
     def __renderDisplayThread(self):
-        self.__initialiseScreen()
+        # Set up display window
+        # Initialise Colorama module (which transcodes ascii escape sequences for Windows)
+        init(autoreset=True)
+        Term.enterAlternateScreen()
+        Term.clearTerminalScrollbackBuffer()
+
         if self.operationMode == 'RECEIVE':
             Message.addMessage("Waiting for incoming RTP streams on " + str(self.UDP_RX_IP) + ":" + str(self.UDP_RX_PORT))
         elif self.operationMode == 'TRANSMIT':
@@ -1691,8 +1688,14 @@ class UI(object):
                     'dialog frame.label': 'bg:ansiwhite ansired ',
                     'dialog.body': 'bg:ansiwhite ansiblack',
                     'dialog shadow': 'bg:ansiblack'})
+                Term.clearScreen()
                 self.quitConfirmed = yes_no_dialog(title='Quit Isptest', text='Do you want to quit?',
                                                    style=styleDefinition)
+                # Re-enter alternate screen buffer
+                Term.enterAlternateScreen()
+                Term.clearTerminalScrollbackBuffer()
+                self.redrawScreen = True
+
                 # Now we have a response, update the Threading.Event flag (to unblock UI.showShutDownDialogue())
                 self.quitDialogueNotActiveFlag.set()
 
@@ -1751,6 +1754,9 @@ class UI(object):
             # Now re-arm the getch thread
             self.enableGetch.set()
 
+        # Exit alternate screen
+        Term.exitAlternateScreen()
+        Term.clearScreen()
         print ("UI.__renderDisplayThread ended")
 
     # Autonomous thread to monitor the size of the terminal window
@@ -3453,8 +3459,8 @@ def main(argv):
     # print (str(result) + "\r")
     # exit()
 
-    # Invoke colorama init() method to allow ansi escape sequences to work on Windows
-    init(autoreset=True)
+    # # Invoke colorama init() method to allow ansi escape sequences to work on Windows
+    # init(autoreset=True)
 
    # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
