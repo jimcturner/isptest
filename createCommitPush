@@ -2,7 +2,7 @@
 ./createSingleFileExecutable
 
 # git commit chamges with a default name (Windows test....")
-git commit -am "Windows test...."
+git commit -am "Commit changes to remote"
 
 # push to remote repo
 git push

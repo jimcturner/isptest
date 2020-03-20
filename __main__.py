@@ -1682,6 +1682,7 @@ class UI(object):
                 self.displayQuitDialogueFlag = False
                 # disable _getch() key capture (it will interfere with the Prompt_Toolkit code
                 self.enableGetch.clear()
+                time.sleep(0.2) # for safety, wait for timeout period of getch (to make sure it's disabled)
                 # Put up the user prompt (blocking call)
                 styleDefinition = Style.from_dict({
                     'dialog': 'bg:ansiblue',  # Screen background
@@ -1781,7 +1782,7 @@ class UI(object):
     def __keysPressedThread(self):
         while self.keysPressedThreadActive == True:
             # Wait for getch to be enabled (with a timeout)
-            self.enableGetch.wait(timeout = 1)
+            self.enableGetch.wait(timeout = 0.2)
             # Confirm that enableGetch was actually set (or was it just a timeout)
             if self.enableGetch.is_set():
                 # Capture keyboard presses via the getch method (with a 1 second timeout)
