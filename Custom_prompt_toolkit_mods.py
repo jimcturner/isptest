@@ -59,6 +59,8 @@ def multi_input_dialog(title='', text='', ok_text='OK', cancel_text='Cancel',
         body=HSplit([
             Label(text=text, dont_extend_height=True),
             textfield,
+            Label(text=text, dont_extend_height=True),
+            textfield2,
         ], padding=D(preferred=1, max=1)),
         buttons=[ok_button, cancel_button],
         with_background=True)
