@@ -1277,50 +1277,56 @@ class ResultsTransmitter(object):
             #     oldSocket = self.udpSocket
 
             # Check that the the socket is a valid socket.socket object
-            if type(self.udpSocket) == socket.socket and self.transmitActiveFlag == True:
-                # Message.addMessage("__resultsTransmitterThread. Current TX socket " + str(id(self.udpSocket)))
-                # Get the destination addr and src port from the supplied rtpStream object
-                self.syncSource, self.destAddr, self.destPort, self.friendlyName = \
-                    self.parentRtpRxStream.getRTPStreamID()
+            if type(self.udpSocket) == socket.socket:
+                # Confirm that transmission is active
+                if self.transmitActiveFlag == True:
+                    # Message.addMessage("__resultsTransmitterThread. Current TX socket " + str(id(self.udpSocket)))
+                    # Get the destination addr and src port from the supplied rtpStream object
+                    self.syncSource, self.destAddr, self.destPort, self.friendlyName = \
+                        self.parentRtpRxStream.getRTPStreamID()
 
-                try:
-                    # We have a valid socket binding we can use, so transmit the data
-                    # Use pickle to serialise the data we want to send
-                    stats = self.parentRtpRxStream.getRtpStreamStats()
-
-                    # Get the last 5 events for this stream
-                    NO_OF_PREV_EVENTS_TO_SEND = 5
-                    eventsList = self.parentRtpRxStream.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
-
-                    # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
-
-                    msg = {"stats": stats, "eventList": eventsList}
-                    pickledMessage = pickle.dumps(msg,protocol=2)
-
-                    # Set max safe UDP tx size to 576 (based on this:-
-                    # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
-                    MAX_UDP_TX_LENGTH = 512
-                    # Split the message up
-                    fragmentedMessage = fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
-
-                    # iterate over fragments
-                    for fragment in fragmentedMessage:
-                        # Pickle and send each fragment one at a time
-                        txMessage = pickle.dumps(fragment,protocol=2)
-                        # Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
-                        self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
-
-
-                except Exception as e:
                     try:
-                        # For Python3 (which has the id() function)
-                        Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(id(self.udpSocket)))
-                    except:
-                        # For Python2 which doesn't
-                        Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(self.udpSocket))
-                    finally:
-                        Message.addMessage("ERR: __resultsTransmitterThread. Killing object for stream: " + str(self.syncSource))
-                        self.kill()
+                        # We have a valid socket binding we can use, so transmit the data
+                        # Use pickle to serialise the data we want to send
+                        stats = self.parentRtpRxStream.getRtpStreamStats()
+
+                        # Get the last 5 events for this stream
+                        NO_OF_PREV_EVENTS_TO_SEND = 5
+                        eventsList = self.parentRtpRxStream.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
+
+                        # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
+
+                        msg = {"stats": stats, "eventList": eventsList}
+                        pickledMessage = pickle.dumps(msg,protocol=2)
+
+                        # Set max safe UDP tx size to 576 (based on this:-
+                        # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
+                        MAX_UDP_TX_LENGTH = 512
+                        # Split the message up
+                        fragmentedMessage = fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
+
+                        # iterate over fragments
+                        for fragment in fragmentedMessage:
+                            # Pickle and send each fragment one at a time
+                            txMessage = pickle.dumps(fragment,protocol=2)
+                            # Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
+                            self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
+
+
+                    except Exception as e:
+                        try:
+                            # For Python3 (which has the id() function)
+                            Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(id(self.udpSocket)))
+                        except:
+                            # For Python2 which doesn't
+                            Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(self.udpSocket))
+                        finally:
+                            Message.addMessage("ERR: __resultsTransmitterThread. Killing object for stream: " + str(self.syncSource))
+                            self.kill()
+
+                else:
+                    # Results transmission inhibited
+                    pass
 
             else:
                 Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
