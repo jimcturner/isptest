@@ -1075,7 +1075,8 @@ class RtpReceiveStream(object):
                                 # Otherwise, stream is not recognised, so disable transmission of results
                                 self.resultsTransmitter.transmitActiveFlag = False
                     except Exception as e:
-                        Message.addMessage("ERR: Decoded header: " + str(e) + str(self.rtpStream[0].isptestHeaderData))
+                        pass
+                        # Message.addMessage("DBUG: Decoded header: " + str(e) + str(self.rtpStream[0].isptestHeaderData))
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
