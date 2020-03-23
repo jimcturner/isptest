@@ -35,6 +35,7 @@ from prompt_toolkit.styles import Style
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults
 from Utils import *
+from Custom_prompt_toolkit_mods import *
 
 # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
 # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
@@ -3449,16 +3450,9 @@ def shutdownApplicationSignalHandler(signum, frame):
 # #####################
 
 def main(argv):
-    # text = prompt('Give me some input: ')
-    # print('You said: %s' % text)
-    # message_dialog(
-    #     title='Example dialog window',
-    #     text='Do you want to continue?\nPress ENTER to quit.').run()
-    # result = yes_no_dialog(
-    #     title='Yes/No dialog example',
-    #     text='Do you want to confirm?')
-    # print (str(result) + "\r")
-    # exit()
+    fields = {"ip address": "", "port":""}
+    print(str(multi_input_dialog(title='Enter friendly name')))
+    exit()
 
     # # Invoke colorama init() method to allow ansi escape sequences to work on Windows
     # init(autoreset=True)
