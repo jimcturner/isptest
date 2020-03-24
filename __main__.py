@@ -3450,9 +3450,9 @@ def shutdownApplicationSignalHandler(signum, frame):
 # #####################
 
 def main(argv):
-    textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
-    print(str(multi_input_dialog(textFieldsList, title='Enter friendly name')))
-    exit()
+    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
+    # print(str(multi_input_dialog(textFieldsList, title='Enter IP addr and port')))
+    # exit()
 
     # # Invoke colorama init() method to allow ansi escape sequences to work on Windows
     # init(autoreset=True)
