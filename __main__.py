@@ -28,6 +28,8 @@ import pickle
 # Non standard external libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
+from validator_collection import validators
+import six  # Required for strings being passed to prompt_toolkit dialogues (they won't accept Python2 strings)
 
 # from prompt_toolkit import prompt, shortcuts   # Note, had to be installed with  pip install --ignore-installed six prompt_toolkit --user
 from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
@@ -1136,6 +1138,22 @@ class UI(object):
                 timeToLive = 3600
                 # As a default, set tx rate to be 1 Mbps
                 txRate = 1048576
+                # txRate = "1M"
+
+                # Now generate a multi_input_dialog to allow modification of defaults
+                # Define the user fields and default values
+                dialogUserFieldsList = [["Destination address", six.text_type(destAddr)],
+                                        ["UDP destination port", six.text_type(destPort)],
+                                        ["UDP source port", six.text_type(sourcePort)],
+                                        ["Transmit bitrate (append K for Kbps or M for Mbps", six.text_type(txRate)],
+                                        ["Packet size (bytes)", six.text_type(packetLength)],
+                                        ["Sync Source identifier", six.text_type(syncSourceID)],
+                                        ["Time to live (seconds)", six.text_type(timeToLive)],
+                                        ["Friendly name (10 chars max)", six.text_type(syncSourceID)]]
+                # Create the dialogue
+                # dialogUserFieldsList = [["dest addr", six.text_type(destAddr)], ["port", six.text_type(destPort)]]
+                newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList, title='Enter parameters for new transmit stream')
+
                 # Create the new RtpGenerator object, using the syncSourceID as the friendly name
                 rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, \
                                             self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
@@ -3450,6 +3468,12 @@ def shutdownApplicationSignalHandler(signum, frame):
 # #####################
 
 def main(argv):
+    # try:
+    #     # x = validators.integer(41, allow_empty=False, minimum=25, maximum=40)
+    #     x= validators.ip_address("192.168.0.2", allow_empty=False)
+    # except Exception as e:
+    #     print (str(e) + "\r")
+    # exit()
     # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
     # print(str(multi_input_dialog(textFieldsList, title='Enter IP addr and port')))
     # exit()

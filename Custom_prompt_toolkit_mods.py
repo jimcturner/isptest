@@ -63,7 +63,7 @@ def multi_input_dialog(textFieldsList, title='', ok_text='OK', cancel_text='Canc
     cancel_button = Button(text=cancel_text, handler=_return_none)
 
 
-    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", 5000]]
+    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", str(5000)]]
 
     fieldLabels = []     # A list of text labels for each field
     textAreas = []  # A list of TextArea objects whose text will be returned to the caller
@@ -100,7 +100,7 @@ def multi_input_dialog(textFieldsList, title='', ok_text='OK', cancel_text='Canc
 
     dialog = Dialog(
         title=title,
-        body=HSplit(userFields, padding=D(preferred=1, max=1)),
+        body=HSplit(userFields, padding=D(preferred=0, max=0)),
         buttons=[ok_button, cancel_button],
         with_background=True)
 
