@@ -88,16 +88,6 @@ def multi_input_dialog(textFieldsList, title='', ok_text='OK', cancel_text='Canc
         userFields.append(textArea)
 
 
-
-    # # Create a list of tuples containing the textfield label and the text field
-    # textFields = []
-    # # Iterate over fieldTextDict
-    # if len(textFieldDict) > 0:
-    #     for key, value in textFieldDict.items():
-    #         # Create a new text area to be associated with that field
-    #         value = TextArea(multiline=False, password=password, completer=completer, accept_handler=accept)
-    #         textFields.append([Label(text=key, dont_extend_height=True), value])
-
     dialog = Dialog(
         title=title,
         body=HSplit(userFields, padding=D(preferred=0, max=0)),
