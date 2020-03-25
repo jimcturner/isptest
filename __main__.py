@@ -482,6 +482,8 @@ def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMute
         # Write the list index value to the third element of the stream tuple
         stream[2]=index
 
+class InvalidTxRateSpecifier(Exception):
+    pass
 
 # A class that will be responsible for rendering the display and catching keyboard output
 class UI(object):
@@ -1165,140 +1167,146 @@ class UI(object):
                 # dialogUserFieldsList = [["dest addr", six.text_type(destAddr)], ["port", six.text_type(destPort)]]
 
                 allFieldsValidatedFlag = False  # Flag to indicate that all user-entered tx stream parameters have been validated
-                newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList, title='Enter parameters for new transmit stream', style=styleDefinition)
+                # newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList, title='Enter parameters for new transmit stream', style=styleDefinition)
 
                 # Now validate the user responses
-                if newTxStreamParametersDict != None:
-                    # Keep displaying the dialogue until either ALL the input fields have been validated OR
-                    # 'Cancel' was selected
-                    while allFieldsValidatedFlag is False:
-                        try:
-                            # Validate dest address
-                            destAddr = validators.ip_address(newTxStreamParametersDict["Destination address"])
-                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
-                            dialogUserFieldsList[0][1] = six.text_type(destAddr)
-                        except (errors.EmptyValueError, errors.InvalidIPAddressError):
-                            # Redisplay the dialogue indicating the error
-                            newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
-                                    title='ERROR: INVALID DESTINATION ADDRESS',
-                                    style=styleDefinition)
-                            # Exit the dialogue if cancel selected
-                            if newTxStreamParametersDict is None:
-                                break
-                        # Validate destination port
-                        try:
-                            destPort = validators.integer(int(newTxStreamParametersDict["UDP destination port (1024-65535)"]),
-                                                          minimum=1024, maximum=65535)
-                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
-                            dialogUserFieldsList[1][1] = six.text_type(destPort)
-                        except Exception as e:
-                            # Redisplay the dialogue indicating the error
-                            newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
-                                                                           title='ERROR: INVALID DESTINATION UDP PORT',
-                                                                           style=styleDefinition)
-                            # Exit the dialogue if cancel selected
-                            if newTxStreamParametersDict is None:
-                                break
-                        # Validate UDP source port
-                        try:
-                            sourcePort = validators.integer(int(newTxStreamParametersDict["UDP source port (1024-65535)"]),
-                                                          minimum=1024, maximum=65535)
-                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
-                            dialogUserFieldsList[2][1] = six.text_type(sourcePort)
-                        except:
-                            # Redisplay the dialogue indicating the error
-                            newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
-                                                                           title='ERROR: INVALID SOURCE UDP PORT',
-                                                                           style=styleDefinition)
-                            # Exit the dialogue if cancel selected
-                            if newTxStreamParametersDict == None:
-                                break
-                        # Validate transmit bitrate
-                        try:
-                            # Use regex to split -b argument into numerical and string parts
-                            splitArg = re.split(r'(\d+)',
-                                                newTxStreamParametersDict["Transmit bitrate (append K for Kbps or M for Mbps (minimum: 100k)"])
-                            # Extract numerical part
-                            x = int(splitArg[1])
-                            # Extract string part
-                            multiplier = splitArg[2]
+                title = 'Enter parameters for new transmit stream'
 
-                            if multiplier == 'k' or multiplier == 'K':
-                                txRate = x * 1024
-                                # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
-                                dialogUserFieldsList[3][1] = six.text_type(txRate)
+                # Keep displaying the dialogue until either ALL the input fields have been validated OR
+                # 'Cancel' was selected
+                while allFieldsValidatedFlag is False and newTxStreamParametersDict is not None:
+                    newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
+                                                                   title=title,
+                                                                   style=styleDefinition)
+                    try:
+                        # Validate dest address
+                        destAddr = validators.ip_address(newTxStreamParametersDict["Destination address"])
+                        # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                        dialogUserFieldsList[0][1] = six.text_type(destAddr)
+                    except (errors.EmptyValueError, errors.InvalidIPAddressError):
+                        # Redisplay the dialogue indicating the error
 
-                            elif multiplier == 'm' or multiplier == 'M':
-                                txRate = x * 1024 * 1024
-                                # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
-                                dialogUserFieldsList[3][1] = six.text_type(txRate)
-                            else:
-                                # multiplier (k or m not recognised)
-                                # Redisplay the dialogue indicating the error
-                                newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
-                                                                               title='ERROR: TRANSMIT BITRATE SPECIFIER - Use "m" for mbps or "k" for kbps',
-                                                                               style=styleDefinition)
-                                # Exit the dialogue if cancel selected
-                                if newTxStreamParametersDict == None:
-                                    break
+                        newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
+                                title='ERROR: INVALID DESTINATION ADDRESS',
+                                style=styleDefinition)
+                        # Exit the dialogue if cancel selected
+                        if newTxStreamParametersDict is None:
+                            break
+                    # Validate destination port
+                    try:
+                        destPort = validators.integer(int(newTxStreamParametersDict["UDP destination port (1024-65535)"]),
+                                                      minimum=1024, maximum=65535)
+                        # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                        dialogUserFieldsList[1][1] = six.text_type(destPort)
+                    except Exception as e:
+                        # Redisplay the dialogue indicating the error
+                        newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
+                                                                       title='ERROR: INVALID DESTINATION UDP PORT',
+                                                                       style=styleDefinition)
+                        # Exit the dialogue if cancel selected
+                        if newTxStreamParametersDict is None:
+                            break
+                    # Validate UDP source port
+                    try:
+                        sourcePort = validators.integer(int(newTxStreamParametersDict["UDP source port (1024-65535)"]),
+                                                      minimum=1024, maximum=65535)
+                        # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                        dialogUserFieldsList[2][1] = six.text_type(sourcePort)
+                    except:
+                        # Redisplay the dialogue indicating the error
+                        newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
+                                                                       title='ERROR: INVALID SOURCE UDP PORT',
+                                                                       style=styleDefinition)
+                        # Exit the dialogue if cancel selected
+                        if newTxStreamParametersDict == None:
+                            break
 
-                        except:
-                            # Redisplay the dialogue indicating the error
-                            newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
-                                                                           title='ERROR: TRANSMIT BITRATE SPECIFIER - Use "m" for mbps or "k" for kbps',
-                                                                           style=styleDefinition)
-                            # Exit the dialogue if cancel selected
-                            if newTxStreamParametersDict == None:
-                                break
+                    # Validate transmit bitrate
+                    try:
+                        # Use regex to split txRate  argument into numerical and string parts
+                        splitArg = re.split(r'(\d+)',
+                                            newTxStreamParametersDict["Transmit bitrate (append K for Kbps or M for Mbps (minimum: 100k)"])
+                        # Extract numerical part
+                        x = int(splitArg[1])
+                        # Extract string part
+                        multiplier = splitArg[2]
 
-                        # Validate packet size
-                        try:
-                            packetLength = validators.integer(int(newTxStreamParametersDict[packetSizeLabelText]),
-                                                          minimum=RtpGenerator.getIsptestHeaderSize(), maximum=1488)
+                        if multiplier == 'k' or multiplier == 'K':
+                            txRate = x * 1024
+
                             # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
-                            dialogUserFieldsList[4][1] = six.text_type(packetLength)
-                        except:
-                            # Redisplay the dialogue indicating the error
-                            newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
-                                                                           title='ERROR: INVALID PACKET LENGTH',
-                                                                           style=styleDefinition)
-                            # Exit the dialogue if cancel selected
-                            if newTxStreamParametersDict == None:
-                                break
-                        # Validate the Sync Source ID
-                        try:
-                            syncSourceID = validators.integer(int(newTxStreamParametersDict["Sync Source identifier (1-4294967295"]),
-                                                          minimum=1, maximum=4294967295)
-                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
-                            dialogUserFieldsList[5][1] = six.text_type(syncSourceID)
-                        except:
-                            # Redisplay the dialogue indicating the error
-                            newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
-                                                                           title='ERROR: INVALID SYNC SOURCE IDENTIFIER',
-                                                                           style=styleDefinition)
-                            # Exit the dialogue if cancel selected
-                            if newTxStreamParametersDict == None:
-                                break
+                            dialogUserFieldsList[3][1] = six.text_type(txRate)
 
-                        # Validate the time to live
-                        try:
-                            timeToLive = validators.integer(int(newTxStreamParametersDict["Time to live (seconds)"]),
-                                                          minimum=1, maximum=4294967295)
+                        elif multiplier == 'm' or multiplier == 'M':
+                            txRate = x * 1024 * 1024
                             # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
-                            dialogUserFieldsList[6][1] = six.text_type(timeToLive)
-                        except:
-                            # Redisplay the dialogue indicating the error
-                            newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
-                                                                           title='ERROR: INVALID TIME TO LIVE',
-                                                                           style=styleDefinition)
-                            # Exit the dialogue if cancel selected
-                            if newTxStreamParametersDict == None:
-                                break
-                        # Finally capture the (new) friendly name. Note this is parsed by RtpGenerator.__init__()
-                        friendlyName = newTxStreamParametersDict["Friendly name (10 chars max)"]
+                            dialogUserFieldsList[3][1] = six.text_type(txRate)
+                        else:
+                            raise InvalidTxRateSpecifier
+
+                        # now Verify that txRate is most definitely an integer (otherwise RtpGenerator will complain)
+                        txRate = validators.integer(txRate)
+                        Term.printAt(str(txRate),1,1)
+                        time.sleep(1)
+                    except:
+                        # Redisplay the dialogue indicating the error
+                        newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
+                                                                       title='ERROR: TRANSMIT BITRATE SPECIFIER - Use "m" for mbps or "k" for kbps',
+                                                                       style=styleDefinition)
+                        # Exit the dialogue if cancel selected
+                        if newTxStreamParametersDict == None:
+                            break
+
+                    # Validate packet size
+                    try:
+                        packetLength = validators.integer(int(newTxStreamParametersDict[packetSizeLabelText]),
+                                                      minimum=RtpGenerator.getIsptestHeaderSize(), maximum=1488)
+                        # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                        dialogUserFieldsList[4][1] = six.text_type(packetLength)
+                    except:
+                        # Redisplay the dialogue indicating the error
+                        newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
+                                                                       title='ERROR: INVALID PACKET LENGTH',
+                                                                       style=styleDefinition)
+                        # Exit the dialogue if cancel selected
+                        if newTxStreamParametersDict == None:
+                            break
+                    # Validate the Sync Source ID
+                    try:
+                        syncSourceID = validators.integer(int(newTxStreamParametersDict["Sync Source identifier (1-4294967295"]),
+                                                      minimum=1, maximum=4294967295)
+                        # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                        dialogUserFieldsList[5][1] = six.text_type(syncSourceID)
+                    except:
+                        # Redisplay the dialogue indicating the error
+                        newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
+                                                                       title='ERROR: INVALID SYNC SOURCE IDENTIFIER',
+                                                                       style=styleDefinition)
+                        # Exit the dialogue if cancel selected
+                        if newTxStreamParametersDict == None:
+                            break
+
+                    # Validate the time to live
+                    try:
+                        timeToLive = validators.integer(int(newTxStreamParametersDict["Time to live (seconds)"]),
+                                                      minimum=1, maximum=4294967295)
+                        # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                        dialogUserFieldsList[6][1] = six.text_type(timeToLive)
+
                         # If execution gets this far, all parameters must have been validated
                         # Last field validated so we can set clear the flag
                         allFieldsValidatedFlag = True
+                    except:
+                        # Redisplay the dialogue indicating the error
+                        newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
+                                                                       title='ERROR: INVALID TIME TO LIVE',
+                                                                       style=styleDefinition)
+                        # Exit the dialogue if cancel selected
+                        if newTxStreamParametersDict == None:
+                            break
+                    # Finally capture the (new) friendly name. Note this is parsed by RtpGenerator.__init__()
+                    friendlyName = newTxStreamParametersDict["Friendly name (10 chars max)"]
+
 
 
                 if allFieldsValidatedFlag:
