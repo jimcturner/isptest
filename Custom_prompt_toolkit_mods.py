@@ -26,8 +26,8 @@ from prompt_toolkit.widgets import (
     ProgressBar,
     RadioList,
     TextArea,
+    HorizontalLine
 )
-
 from prompt_toolkit.shortcuts.dialogs import _return_none, _run_dialog
 
 
@@ -61,9 +61,6 @@ def multi_input_dialog(textFieldsList, title='', ok_text='OK', cancel_text='Canc
 
     ok_button = Button(text=ok_text, handler=ok_handler)
     cancel_button = Button(text=cancel_text, handler=_return_none)
-
-
-    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", str(5000)]]
 
     fieldLabels = []     # A list of text labels for each field
     textAreas = []  # A list of TextArea objects whose text will be returned to the caller
