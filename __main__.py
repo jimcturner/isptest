@@ -1313,6 +1313,8 @@ class UI(object):
                 # Force redraw
                 redrawScreen = True
             else:
+                # Note. This code should never be reachable because it shouldn't be possible to start in TRANSMIT mode
+                # without ever having specified an initial stream
                 Message.addMessage("ERR: No previous Tx stream stats to copy from. New stream not added")
 
     # 'd' -  Delete selected stream
