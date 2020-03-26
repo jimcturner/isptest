@@ -293,4 +293,73 @@ class Message(object):
 #         else:
 #             return
 
+# Utility finctions to validate user input
+# Check for integer (with optional min or max range)
+# Raises an exception if not an integer or integer out of range
+class NotAnInteger(Exception):
+    def __init__(self, val):
+        self.val = val
+    # Define an error message to be returned
+    def __str__(self):
+        return "NotAnInteger Exception. " + str(self.val) + " is not a valid integer"
+class InvalidRangeSpecifier(Exception):
+    def __init__(self, val):
+        self.val = val
+        print ("InvalidRangeSpecifier raised\r")
+    # Define an error message to be returned
+    def __str__(self):
+        return "InvalidRangeSpecifier Exception. " + str(self.val) + " is not a valid integer"
+class IntegerTooSmall(Exception):
+    def __init__(self, val, min):
+        self.val = val
+        self.min = min
+        print ("IntegerTooSmall raised\r")
+    # Define an error message to be returned
+    def __str__(self):
+        return "IntegerTooSmall Exception. " + str(self.val) + " is less than the minimum specified " + str(self.min)
+
+class IntegerTooLarge(Exception):
+    def __init__(self, val, max):
+        self.val = val
+        self.min = max
+        print ("IntegerTooLarge raised\r")
+    # Define an error message to be returned
+    def __str__(self):
+        return "IntegerTooLarge Exception. " + str(self.val) + " is greater than the maximum specified " + str(self.max)
+
+def isInteger(val, min = None, max = None):
+    try:
+        # Test val to see if it is an integer, if not, raise a NotAnInteger Exception
+        val = int(val) + 1 -1
+        # Has a minimum value been specified?
+        if min != None:
+            print ("min: " + str(min) + "\r")
+            try:
+                # Test to see if the 'min' value is an int
+                min = int(min) + 1 - 1
+                # if it is, test val against it
+                if int(val) < int(min):
+                    # If val to small, raise an exception
+                    raise IntegerTooSmall(min)
+            except:
+                # If min is not an integer, raise an InvalidRangeSpecifier Exception
+                raise InvalidRangeSpecifier(min)
+        # Has a max value been specified?
+        if max != None:
+            # Test to see if the 'max' value is an integer
+            print ("max: " + str(max) + "\r")
+            try:
+                max = int(max) + 1 - 1
+                # if 'max' is a valid integer, check val against it
+                if val > max:
+                    # If val is larger than allowed by 'max', raise an exception
+                    raise IntegerTooLarge(max)
+            except:
+                raise InvalidRangeSpecifier(max)
+
+    except:
+        # Raise an Exception (and pass val to it, so we can report an error message)
+        raise NotAnInteger(val)
+
+
 

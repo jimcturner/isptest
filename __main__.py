@@ -28,6 +28,8 @@ import pickle
 # Non standard external libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
+from validator_collection import validators, errors
+import six  # Required for strings being passed to prompt_toolkit dialogues (they won't accept Python2 strings)
 
 # from prompt_toolkit import prompt, shortcuts   # Note, had to be installed with  pip install --ignore-installed six prompt_toolkit --user
 from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
@@ -35,6 +37,7 @@ from prompt_toolkit.styles import Style
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults
 from Utils import *
+from Custom_prompt_toolkit_mods import *
 
 # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
 # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
@@ -479,6 +482,8 @@ def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMute
         # Write the list index value to the third element of the stream tuple
         stream[2]=index
 
+class InvalidTxRateSpecifier(Exception):
+    pass
 
 # A class that will be responsible for rendering the display and catching keyboard output
 class UI(object):
@@ -1130,21 +1135,193 @@ class UI(object):
                 destPort = self.latestTxStreamStats['Dest Port']
                 destAddr = self.latestTxStreamStats['Dest IP']
                 packetLength = self.latestTxStreamStats['Packet size']
+                friendlyName = str(syncSourceID)
 
                 # As a default, set time to live to be 1hr
                 timeToLive = 3600
                 # As a default, set tx rate to be 1 Mbps
-                txRate = 1048576
-                # Create the new RtpGenerator object, using the syncSourceID as the friendly name
-                rtpGenerator = RtpGenerator(destAddr, destPort, txRate, packetLength, syncSourceID, timeToLive, \
-                                            self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
-                                            self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex,
-                                            friendlyName=str(syncSourceID), UDP_SRC_PORT=sourcePort)
+                # txRate = 1048576
+                txRate = "1M"
 
-                Message.addMessage("[a] Added new " + str(bToMb(txRate)) + "bps stream with id " + str(syncSourceID))
+                # Now generate a multi_input_dialog to allow modification of defaults
+                # Define the user fields and default values
+                # Query RtpGenerator to find out the max length of the friendly name field
+                maxFriendlyNameLength = RtpGenerator.getMaxFriendlyNameLength()
+                # Dynamically create the user field text label
+                friendlyNameLabelText = "Friendly name (" + str(maxFriendlyNameLength) + " chars max)"
+                # 'Packet Size' minimum is dependant upon the size the isptest header (determined in RtpGenerator)
+                packetSizeLabelText = "Packet size (bytes, min:" + str(RtpGenerator.getIsptestHeaderSize()) +", max:1488)"
+
+                dialogUserFieldsList = [["Destination address", six.text_type(destAddr)],
+                                        ["UDP destination port (1024-65535)", six.text_type(destPort)],
+                                        ["UDP source port (1024-65535)", six.text_type(sourcePort)],
+                                        ["Transmit bitrate (append K for Kbps or M for Mbps (minimum: 100k)", six.text_type(txRate)],
+                                        [packetSizeLabelText, six.text_type(packetLength)],
+                                        ["Sync Source identifier (1-4294967295", six.text_type(syncSourceID)],
+                                        ["Time to live (seconds)", six.text_type(timeToLive)],
+                                        [friendlyNameLabelText, six.text_type(friendlyName)]]
+
+                # Define the dialogue colours
+                styleDefinition = Style.from_dict({
+                    'dialog': 'bg:ansiblue',  # Screen background
+                    'dialog frame.label': 'bg:ansiwhite ansired ',
+                    'dialog.body': 'bg:ansiwhite ansiblack',
+                    'dialog shadow': 'bg:ansiblack'})
+
+                # Create the dialogue
+                # dialogUserFieldsList = [["dest addr", six.text_type(destAddr)], ["port", six.text_type(destPort)]]
+
+                allFieldsValidatedFlag = False  # Flag to indicate that all user-entered tx stream parameters have been validated
+                # Nested Exception to indicate a bad user-entered parameter
+                class InvalidUserresponse(Exception):
+                    pass
+
+                # Simple fucntion to parse a number-letter suffix (k or m) and return the actuak value
+                def parseSuffix(input):
+                    try:
+                        # Use regex to split -b argument into numerical and string parts
+                        splitArg = re.split(r'(\d+)', input)
+                        # Extract numerical part
+                        x = int(splitArg[1])
+                        # Extract string part
+                        multiplier = splitArg[2]
+
+                        if multiplier == 'k' or multiplier == 'K':
+                            return x * 1024
+                        elif multiplier == 'm' or multiplier == 'M':
+                            return x * 1024 * 1024
+                        else:
+                            # Uknown suffix
+                            return None
+                    except:
+                        return None
+
+                # newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList, title='Enter parameters for new transmit stream', style=styleDefinition)
+
+                # Defsult title for the user dialogue
+                title = 'Enter parameters for new transmit stream'
+
+                # Keep displaying the dialogue until either ALL the input fields have been validated OR
+                # 'Cancel' was selected
+                while allFieldsValidatedFlag is False:
+                    try:
+                        # Display the user dialogue
+                        newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
+                                                                   title=title,
+                                                                   style=styleDefinition)
+                        # Break out of endless while loop if 'Cancel' selected
+                        if newTxStreamParametersDict is None:
+                            break
+                        # Now validate all user responses. If validation fails, an InvalidUserresponse
+                        # Exception will be raised and the loop will re-run causing the
+                        # dialogue to be redisplayed (until either all values are validated, or 'Cancel'
+                        # selected
+
+                        # Capture the (new) friendly name and truncate if necessary
+                        friendlyName = str(newTxStreamParametersDict[friendlyNameLabelText])
+                        if len(friendlyName) > maxFriendlyNameLength:
+                            friendlyName = friendlyName[:maxFriendlyNameLength] # Slice the bottom n chars
+
+                        # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                        dialogUserFieldsList[7][1] = six.text_type(friendlyName)
+
+                        try:
+                            # Validate dest address
+                            destAddr = validators.ip_address(newTxStreamParametersDict["Destination address"])
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[0][1] = six.text_type(destAddr)
+                        except (errors.EmptyValueError, errors.InvalidIPAddressError):
+                            title = 'ERROR: INVALID DESTINATION ADDRESS'
+                            raise InvalidUserresponse
+
+
+                        # Validate destination port
+                        try:
+                            destPort = validators.integer(int(newTxStreamParametersDict["UDP destination port (1024-65535)"]),
+                                                          minimum=1024, maximum=65535)
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[1][1] = six.text_type(destPort)
+                        except Exception as e:
+                            title = 'ERROR: INVALID DESTINATION PORT'
+                            raise InvalidUserresponse
+
+                        # Validate UDP source port
+                        try:
+                            sourcePort = validators.integer(int(newTxStreamParametersDict["UDP source port (1024-65535)"]),
+                                                          minimum=1024, maximum=65535)
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[2][1] = six.text_type(sourcePort)
+                        except:
+                            title = 'ERROR: INVALID SOURCE PORT'
+                            raise InvalidUserresponse
+
+                        # Validate transmit bitrate
+                        try:
+                            # Specify 100kbps as the minimum
+                            txRate_bps = validators.integer(parseSuffix(
+                                newTxStreamParametersDict["Transmit bitrate (append K for Kbps or M for Mbps (minimum: 100k)"]),
+                            minimum=parseSuffix("100k"))
+
+                        except:
+                            title = 'ERROR: TRANSMIT BITRATE SPECIFIER - Use "m" for mbps or "k" for kbps'
+                            raise InvalidUserresponse
+
+                        # Validate packet size
+                        try:
+                            packetLength = validators.integer(int(newTxStreamParametersDict[packetSizeLabelText]),
+                                                          minimum=RtpGenerator.getIsptestHeaderSize(), maximum=1488)
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[4][1] = six.text_type(packetLength)
+                        except:
+                            # Redisplay the dialogue indicating the error
+                            title = 'ERROR: INVALID PACKET LENGTH'
+                            raise InvalidUserresponse
+
+                        # Validate the Sync Source ID
+                        try:
+                            syncSourceID = validators.integer(int(newTxStreamParametersDict["Sync Source identifier (1-4294967295"]),
+                                                          minimum=1, maximum=4294967295)
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[5][1] = six.text_type(syncSourceID)
+                        except:
+                            # Redisplay the dialogue indicating the error
+                            title = 'ERROR: INVALID SYNC SOURCE IDENTIFIER'
+                            raise InvalidUserresponse
+
+                        # Validate the time to live
+                        try:
+                            timeToLive = validators.integer(int(newTxStreamParametersDict["Time to live (seconds)"]),
+                                                          minimum=1, maximum=4294967295)
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[6][1] = six.text_type(timeToLive)
+
+                            # If execution gets this far, all parameters must have been validated
+                            # Last field validated so we can set clear the flag
+                            allFieldsValidatedFlag = True
+                        except:
+                            # Redisplay the dialogue indicating the error
+                            title = 'ERROR: INVALID TIME TO LIVE'
+                            raise InvalidUserresponse
+
+                    # Catch any invalid user responses
+                    except InvalidUserresponse:
+                        pass
+
+
+                if allFieldsValidatedFlag:
+
+                    # All tx stream parameters validated so create the new RtpGenerator object
+                    rtpGenerator = RtpGenerator(destAddr, destPort, txRate_bps, packetLength, syncSourceID, timeToLive, \
+                                                self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
+                                                self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex,
+                                                friendlyName=friendlyName, UDP_SRC_PORT=sourcePort)
+
+                    Message.addMessage("[a] Added new " + str(bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
                 # Force redraw
                 redrawScreen = True
             else:
+                # Note. This code should never be reachable because it shouldn't be possible to start in TRANSMIT mode
+                # without ever having specified an initial stream
                 Message.addMessage("ERR: No previous Tx stream stats to copy from. New stream not added")
 
     # 'd' -  Delete selected stream
@@ -3449,15 +3626,14 @@ def shutdownApplicationSignalHandler(signum, frame):
 # #####################
 
 def main(argv):
-    # text = prompt('Give me some input: ')
-    # print('You said: %s' % text)
-    # message_dialog(
-    #     title='Example dialog window',
-    #     text='Do you want to continue?\nPress ENTER to quit.').run()
-    # result = yes_no_dialog(
-    #     title='Yes/No dialog example',
-    #     text='Do you want to confirm?')
-    # print (str(result) + "\r")
+    # try:
+    #     # x = validators.integer(41, allow_empty=False, minimum=25, maximum=40)
+    #     x= validators.ip_address("192.168.0.2", allow_empty=False)
+    # except Exception as e:
+    #     print (str(e) + "\r")
+    # exit()
+    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
+    # print(str(multi_input_dialog(textFieldsList, title='Enter IP addr and port')))
     # exit()
 
     # # Invoke colorama init() method to allow ansi escape sequences to work on Windows
@@ -3636,7 +3812,7 @@ def main(argv):
             elif opt in ("-d"):
                 # Maximum Ethernet frame size is 1500 bytes (minus 12 bytes for the RTP header)
                 MAX_PAYLOAD_SIZE_bytes = 1500 - 12
-                MIN_PAYLOAD_SIZE_bytes = 20
+                MIN_PAYLOAD_SIZE_bytes = RtpGenerator.getIsptestHeaderSize()
                 try:
                     if int(arg) > MAX_PAYLOAD_SIZE_bytes:
                         print ("requested payload size ("+ str(arg)+ \

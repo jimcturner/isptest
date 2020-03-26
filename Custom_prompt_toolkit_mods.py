@@ -26,13 +26,21 @@ from prompt_toolkit.widgets import (
     ProgressBar,
     RadioList,
     TextArea,
+    HorizontalLine
 )
-
 from prompt_toolkit.shortcuts.dialogs import _return_none, _run_dialog
 
 
 # This is a modified version of the Prompt_Toolkit input_dialog function in prompt_toolkit.shortcuts.dialogs.py
-def multi_input_dialog(title='', text='', ok_text='OK', cancel_text='Cancel',
+
+# textFieldsList is a list of tuples of the form [[label 1, default value 1], [label 2, default value 2], ....]
+# It will return a dictionary whose keys will be the lables specifed in the input list, and the values will be
+# the text entered (or the default value, if no value entered)
+# Example usage:
+#     textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
+#     print(str(multi_input_dialog(textFieldsList, title='Enter IP addr and port')))
+
+def multi_input_dialog(textFieldsList, title='', ok_text='OK', cancel_text='Cancel',
                  completer=None, password=False, style=None, async_=False):
     """
     Display a text input box.
@@ -43,23 +51,43 @@ def multi_input_dialog(title='', text='', ok_text='OK', cancel_text='Cancel',
         return True  # Keep text.
 
     def ok_handler():
-        get_app().exit(result=textfield.text)
+        # Create dictionary containing entered text
+        valuesEnteredDict = {}
+        for x in range(len(textAreas)):
+            # Build a dictionary using the labels as keys and the TextArea.text values as the values
+            valuesEnteredDict[fieldLabels[x]] = textAreas[x].text
+
+        get_app().exit(result=valuesEnteredDict)
 
     ok_button = Button(text=ok_text, handler=ok_handler)
     cancel_button = Button(text=cancel_text, handler=_return_none)
 
-    textfield = TextArea(
-        multiline=False,
-        password=password,
-        completer=completer,
-        accept_handler=accept)
+    fieldLabels = []     # A list of text labels for each field
+    textAreas = []  # A list of TextArea objects whose text will be returned to the caller
+    userFields = [] # An interleaved list of Labels and TextArea objects that will be passed to the dialog layout
+                    # manager (HSplit?)
+
+    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
+
+    for textField in textFieldsList:
+        # # Create list of Label objects. This will be used to create the return dictionary
+        fieldLabels.append(textField[0])
+        # # Create a list of TextArea objects prepopulated with a default value . This will serve as the
+        # list of objects whose text will be returned by the dialogue
+        textArea = TextArea(multiline=False,
+                    password=password,
+                    completer=completer,
+                    accept_handler=accept, focus_on_click=True, text=textField[1])
+        textAreas.append(textArea)
+        # Append label object to the userFields[] list
+        userFields.append(Label(text=textField[0], dont_extend_height=True))
+        # Append the text area object to the userFields list
+        userFields.append(textArea)
+
 
     dialog = Dialog(
         title=title,
-        body=HSplit([
-            Label(text=text, dont_extend_height=True),
-            textfield,
-        ], padding=D(preferred=1, max=1)),
+        body=HSplit(userFields, padding=D(preferred=0, max=0)),
         buttons=[ok_button, cancel_button],
         with_background=True)
 
