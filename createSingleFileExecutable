@@ -1,5 +1,5 @@
 # Declare dependencies as a array
-dependencies=(colorama terminaltables prompt_toolkit validator_collection six regex)
+dependencies=(colorama terminaltables prompt_toolkit regex validator_collection six)
 
 # Temporary folder where pip will collect the dependencies. The name of this folder will determine the name of the file executable archive
 targetSubFolder=isptest
