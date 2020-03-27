@@ -19,6 +19,7 @@ import string
 import platform
 import getopt  # Used to parse command line arguments
 import re  # Regex 'regular expression' module
+import regex
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 import json
@@ -30,6 +31,7 @@ from terminaltables import SingleTable  # Used for pretty tables in displayThrea
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
 from validator_collection import validators, errors
 import six  # Required for strings being passed to prompt_toolkit dialogues (they won't accept Python2 strings)
+
 
 # from prompt_toolkit import prompt, shortcuts   # Note, had to be installed with  pip install --ignore-installed six prompt_toolkit --user
 from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
