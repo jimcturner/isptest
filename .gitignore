@@ -2,3 +2,4 @@
 get-pip.py
 *.csv
 *.json
+__pycache__/
