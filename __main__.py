@@ -38,7 +38,7 @@ from prompt_toolkit.styles import Style
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults
 from Utils import *
-from Custom_prompt_toolkit_mods import multi_input_dialog3
+from Custom_prompt_toolkit_mods import multi_input_dialog
 
 # # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
 # # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
@@ -1111,7 +1111,7 @@ class UI(object):
             text = input_dialog(
                 title='Enter friendly name',
                 text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':',
-                style=styleDefinition)
+                style=styleDefinition).run()
             if text != '':
                 self.selectedStream.setFriendlyName(text)
         else:
@@ -1209,7 +1209,7 @@ class UI(object):
                         # Display the user dialogue
                         newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
                                                                    title=title,
-                                                                   style=styleDefinition)
+                                                                   style=styleDefinition).run()
                         # Break out of endless while loop if 'Cancel' selected
                         if newTxStreamParametersDict is None:
                             break
@@ -1869,7 +1869,7 @@ class UI(object):
                     'dialog shadow': 'bg:ansiblack'})
                 Term.clearScreen()
                 self.quitConfirmed = yes_no_dialog(title='Quit Isptest', text='Do you want to quit?',
-                                                   style=styleDefinition)
+                                                   style=styleDefinition).run()
                 # Re-enter alternate screen buffer
                 Term.enterAlternateScreen()
                 Term.clearTerminalScrollbackBuffer()
@@ -3629,10 +3629,10 @@ def shutdownApplicationSignalHandler(signum, frame):
 def main(argv):
     # # x = multi_input_dialog3(title="will it work?", text="default text").run()
     # x = input_dialog(title="will it work?", text="default text").run()
-    textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
-    print(str(multi_input_dialog3(textFieldsList, title='Enter IP addr and port').run()))
-
-    exit()
+    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
+    # print(str(multi_input_dialog3(textFieldsList, title='Enter IP addr and port').run()))
+    #
+    # exit()
     # try:
     #     # x = validators.integer(41, allow_empty=False, minimum=25, maximum=40)
     #     x= validators.ip_address("192.168.0.2", allow_empty=False)
