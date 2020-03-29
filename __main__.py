@@ -18,8 +18,8 @@ import random
 import string
 import platform
 import getopt  # Used to parse command line arguments
-# import re  # Regex 'regular expression' module
-import regex
+import re  # Regex 'regular expression' module
+# import regex
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 import json
@@ -1181,7 +1181,7 @@ class UI(object):
                 def parseSuffix(input):
                     try:
                         # Use regex to split -b argument into numerical and string parts
-                        splitArg = regex.split(r'(\d+)', input)
+                        splitArg = re.split(r'(\d+)', input)
                         # Extract numerical part
                         x = int(splitArg[1])
                         # Extract string part
@@ -3797,7 +3797,7 @@ def main(argv):
             elif opt in ("-b"):
                 try:
                     # Use regex to split -b argument into numerical and string parts
-                    splitArg = regex.split(r'(\d+)', arg)
+                    splitArg = re.split(r'(\d+)', arg)
                     # Extract numerical part
                     x = int(splitArg[1])
                     # Extract string part
