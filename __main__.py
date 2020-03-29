@@ -18,7 +18,8 @@ import random
 import string
 import platform
 import getopt  # Used to parse command line arguments
-import re  # Regex 'regular expression' module
+# import re  # Regex 'regular expression' module
+import regex
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 import json
@@ -37,14 +38,14 @@ from prompt_toolkit.styles import Style
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults
 from Utils import *
-from Custom_prompt_toolkit_mods import *
+from Custom_prompt_toolkit_mods import multi_input_dialog3
 
-# Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
-# From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
-try:
-    input = raw_input
-except NameError:
-    pass
+# # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
+# # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
+# try:
+#     input = raw_input
+# except NameError:
+#     pass
 
 ####################################################################################
 # Utility Classes
@@ -1180,7 +1181,7 @@ class UI(object):
                 def parseSuffix(input):
                     try:
                         # Use regex to split -b argument into numerical and string parts
-                        splitArg = re.split(r'(\d+)', input)
+                        splitArg = regex.split(r'(\d+)', input)
                         # Extract numerical part
                         x = int(splitArg[1])
                         # Extract string part
@@ -3626,6 +3627,12 @@ def shutdownApplicationSignalHandler(signum, frame):
 # #####################
 
 def main(argv):
+    # # x = multi_input_dialog3(title="will it work?", text="default text").run()
+    # x = input_dialog(title="will it work?", text="default text").run()
+    textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
+    print(str(multi_input_dialog3(textFieldsList, title='Enter IP addr and port').run()))
+
+    exit()
     # try:
     #     # x = validators.integer(41, allow_empty=False, minimum=25, maximum=40)
     #     x= validators.ip_address("192.168.0.2", allow_empty=False)

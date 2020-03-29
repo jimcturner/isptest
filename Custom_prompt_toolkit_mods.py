@@ -1,74 +1,77 @@
-
-from __future__ import unicode_literals
-
 import functools
+from asyncio import get_event_loop
+from typing import Any, Callable, List, Optional, Tuple, TypeVar
 
 from prompt_toolkit.application import Application
 from prompt_toolkit.application.current import get_app
-from prompt_toolkit.eventloop import run_in_executor
-from prompt_toolkit.key_binding.bindings.focus import (
-    focus_next,
-    focus_previous,
-)
+from prompt_toolkit.buffer import Buffer
+from prompt_toolkit.completion import Completer
+from prompt_toolkit.eventloop import run_in_executor_with_context
+from prompt_toolkit.filters import FilterOrBool
+from prompt_toolkit.formatted_text import AnyFormattedText
+from prompt_toolkit.key_binding.bindings.focus import focus_next, focus_previous
 from prompt_toolkit.key_binding.defaults import load_key_bindings
-from prompt_toolkit.key_binding.key_bindings import (
-    KeyBindings,
-    merge_key_bindings,
-)
+from prompt_toolkit.key_binding.key_bindings import KeyBindings, merge_key_bindings
 from prompt_toolkit.layout import Layout
-from prompt_toolkit.layout.containers import HSplit
+from prompt_toolkit.layout.containers import AnyContainer, HSplit
 from prompt_toolkit.layout.dimension import Dimension as D
+from prompt_toolkit.styles import BaseStyle
 from prompt_toolkit.widgets import (
     Box,
     Button,
+    CheckboxList,
     Dialog,
     Label,
     ProgressBar,
     RadioList,
     TextArea,
-    HorizontalLine
 )
-from prompt_toolkit.shortcuts.dialogs import _return_none, _run_dialog
 
 
-# This is a modified version of the Prompt_Toolkit input_dialog function in prompt_toolkit.shortcuts.dialogs.py
+from prompt_toolkit.shortcuts.dialogs import _create_app
 
-# textFieldsList is a list of tuples of the form [[label 1, default value 1], [label 2, default value 2], ....]
-# It will return a dictionary whose keys will be the lables specifed in the input list, and the values will be
-# the text entered (or the default value, if no value entered)
-# Example usage:
-#     textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
-#     print(str(multi_input_dialog(textFieldsList, title='Enter IP addr and port')))
+from prompt_toolkit.shortcuts.dialogs import _return_none
 
-def multi_input_dialog(textFieldsList, title='', ok_text='OK', cancel_text='Cancel',
-                 completer=None, password=False, style=None, async_=False):
+
+def multi_input_dialog(
+    textFieldsList,
+    title: AnyFormattedText = "",
+    # text: AnyFormattedText = "",
+    ok_text: str = "OK",
+    cancel_text: str = "Cancel",
+    completer: Optional[Completer] = None,
+    password: FilterOrBool = False,
+    style: Optional[BaseStyle] = None,
+) -> Application[str]:
     """
     Display a text input box.
     Return the given text, or None when cancelled.
     """
-    def accept(buf):
+
+    def accept(buf: Buffer) -> bool:
         get_app().layout.focus(ok_button)
         return True  # Keep text.
 
-    def ok_handler():
+    def ok_handler() -> None:
         # Create dictionary containing entered text
         valuesEnteredDict = {}
         for x in range(len(textAreas)):
             # Build a dictionary using the labels as keys and the TextArea.text values as the values
             valuesEnteredDict[fieldLabels[x]] = textAreas[x].text
-
         get_app().exit(result=valuesEnteredDict)
 
     ok_button = Button(text=ok_text, handler=ok_handler)
     cancel_button = Button(text=cancel_text, handler=_return_none)
 
-    fieldLabels = []     # A list of text labels for each field
+    fieldLabels = []  # A list of text labels for each field
     textAreas = []  # A list of TextArea objects whose text will be returned to the caller
-    userFields = [] # An interleaved list of Labels and TextArea objects that will be passed to the dialog layout
+    userFields = []  # An interleaved list of Labels and TextArea objects that will be passed to the dialog layout
                     # manager (HSplit?)
 
-    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
-
+    # textfield = TextArea(
+    #     multiline=False, password=password, completer=completer, accept_handler=accept
+    # )
+    # Iterate over supplied dict to create a series of Labels and TextAreas
     for textField in textFieldsList:
         # # Create list of Label objects. This will be used to create the return dictionary
         fieldLabels.append(textField[0])
@@ -84,11 +87,14 @@ def multi_input_dialog(textFieldsList, title='', ok_text='OK', cancel_text='Canc
         # Append the text area object to the userFields list
         userFields.append(textArea)
 
-
     dialog = Dialog(
         title=title,
-        body=HSplit(userFields, padding=D(preferred=0, max=0)),
+        body=HSplit(
+            userFields,
+            padding=D(preferred=0, max=0),
+        ),
         buttons=[ok_button, cancel_button],
-        with_background=True)
+        with_background=True,
+    )
 
-    return _run_dialog(dialog, style, async_=async_)
+    return _create_app(dialog, style)
