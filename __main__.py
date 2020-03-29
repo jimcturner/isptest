@@ -3797,7 +3797,7 @@ def main(argv):
             elif opt in ("-b"):
                 try:
                     # Use regex to split -b argument into numerical and string parts
-                    splitArg = re.split(r'(\d+)', arg)
+                    splitArg = regex.split(r'(\d+)', arg)
                     # Extract numerical part
                     x = int(splitArg[1])
                     # Extract string part
