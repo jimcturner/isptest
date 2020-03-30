@@ -8,7 +8,9 @@ echo "Creating isptest executable archive file"
 # echo ${dependencies[@]}
 
 echo "downloading dependancies into new subfolder $targetSubFolder"
-python -m pip --proxy www-cache.reith.bbc.co.uk:80 install  ${dependencies[@]} --target $targetSubFolder
+python3 -m pip --proxy www-cache.reith.bbc.co.uk:80 install  ${dependencies[@]} --target $targetSubFolder
+# python3 -m pip install  ${dependencies[@]} --target $targetSubFolder
+
 
 echo 'Copying __main__.py (main program code) and *.py files into target subfolder $targetSubFolder for parcelling up with dependencies'
 cp *.py $targetSubFolder
@@ -24,5 +26,5 @@ python3 -m zipapp -p "/usr/bin/env python" $targetSubFolder
 #    exit
 #fi
 
-echo "Deleting $targetSubFolder subfolder (as no longer required)"
-rm -rf $targetSubFolder
+ echo "Deleting $targetSubFolder subfolder (as no longer required)"
+ rm -rf $targetSubFolder

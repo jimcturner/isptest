@@ -19,7 +19,11 @@ import string
 import platform
 import getopt  # Used to parse command line arguments
 import re  # Regex 'regular expression' module
+<<<<<<< HEAD
 import regex
+=======
+# import regex
+>>>>>>> restartExpired
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 import json
@@ -39,14 +43,14 @@ from prompt_toolkit.styles import Style
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults
 from Utils import *
-from Custom_prompt_toolkit_mods import *
+from Custom_prompt_toolkit_mods import multi_input_dialog
 
-# Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
-# From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
-try:
-    input = raw_input
-except NameError:
-    pass
+# # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
+# # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
+# try:
+#     input = raw_input
+# except NameError:
+#     pass
 
 ####################################################################################
 # Utility Classes
@@ -1044,7 +1048,7 @@ class UI(object):
         del messages[:]
 
     def __renderTopToolbar(self):
-        Term.printTitleBar("IBEOO ISP Analyser V1.1", 1, Term.BLACK, Term.WHITE)
+        Term.printTitleBar("IBEOO ISP Analyser V1.2", 1, Term.BLACK, Term.WHITE)
         # Print operation mode (plus receive IP:Port if in Receive mode)
         if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
             Term.printAt(self.operationMode + " MODE", 1, 1, Term.BLACK, Term.WHITE)
@@ -1112,11 +1116,54 @@ class UI(object):
             text = input_dialog(
                 title='Enter friendly name',
                 text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':',
-                style=styleDefinition)
+                style=styleDefinition).run()
             if text != '':
                 self.selectedStream.setFriendlyName(text)
         else:
             Message.addMessage("Can't modify stream results. Change the name in the Transmit pane instead")
+
+    # This method is called if a previously expired stream (that is still listed in
+    # self.rtpTxStreamsDict{} is requested to be restarted
+    def __recreateExpiredStream(self, RtpGeneratorToBeResurrected):
+        # Attempt to get the parameters of the dead stream
+        try:
+            # Attempt to get the parameters of the dead stream
+            stats = RtpGeneratorToBeResurrected.getRtpStreamStats()
+            # Remove the expired stream from self.rtpTxStreamsDict
+            Message.addMessage("UI.__recreateExpiredStream() Removing stream " + str(stats['Sync Source ID']))
+            RtpGeneratorToBeResurrected.killStream()
+            # Create new RtpStream based on the parameters of the old stream
+            # Confirm that the stream has been succesfully deleted by checking whether there already exists
+            # a key stats['Sync Source ID'] in self.rtpTxStreamsDict
+            # x = "Tx streams: "
+            # for k,v in self.rtpTxStreamsDict.items():
+            #     x += (str(k) + ":" + str(type(k)) + ", ")
+            # Message.addMessage(x)
+            # Message.addMessage("'Sync Source ID' " + str(stats['Sync Source ID']))
+            # # Message.addMessage(str(self.rtpTxStreamsDict[stats['Sync Source ID']]))
+            # # txStream = self.rtpTxStreamsDict.get(stats['Sync Source ID'])
+            # # Message.addMessage(str(txStream))
+            try:
+                # If the RtpGenerator object still exists in the rtpTxStreamsDict, the killStream() must have failed
+                Message.addMessage("gets here 1")
+                if stats['Sync Source ID'] in self.rtpTxStreamsDict:
+                    Message.addMessage("ERR: UI.__recreateExpiredStream() Expired stream" +
+                                       str(stats['Sync Source ID']) + " still exists, can't replace")
+                else:
+                    # It has been removed, so add the new stream (a copy of the old, expired stream)
+                    RtpGenerator(stats['Dest IP'], stats['Dest Port'], stats['Tx Rate'], stats['Packet size'],
+                                 stats['Sync Source ID'], 3600, \
+                                 self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
+                                 self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex,
+                                 friendlyName=stats['Friendly Name'], UDP_SRC_PORT=stats['Tx Source Port'])
+            except Exception as e:
+                Message.addMessage("ERR: UI.__recreateExpiredStream() inner " + str(e))
+        except Exception as e:
+            Message.addMessage("ERR: UI.__recreateExpiredStream() outer " + str(e))
+
+
+
+
 
     # 'a' pressed (only when in Tx or Loopback mode)
     def __onAddTxStream(self):
@@ -1210,7 +1257,7 @@ class UI(object):
                         # Display the user dialogue
                         newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
                                                                    title=title,
-                                                                   style=styleDefinition)
+                                                                   style=styleDefinition).run()
                         # Break out of endless while loop if 'Cancel' selected
                         if newTxStreamParametersDict is None:
                             break
@@ -1417,19 +1464,24 @@ class UI(object):
         if type(self.selectedStream) == RtpGenerator:
             # Get TTL of currently selected stream
             currentTTL = int(self.selectedStream.getRtpStreamStatsByKey('Time to live'))
-            # Calculate new TTL (either adding/removing time, or setting 'forever')
-            # Add/subtract 1hr (3600 secs)
-            newTTL = currentTTL + (3600 * direction)
-            # If the new calculated value is -ve, interpret as 'forever'
-            if newTTL < 0:
-                # Set stream TTL to 'forever'
-                self.selectedStream.setTimeToLive(-1)
-                Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to 'forever'")
+            # Has the selected stream TTL already expired?
+            if currentTTL == 0:
+                # If so, recreate the stream with identical parameters
+                self.__recreateExpiredStream(self.selectedStream)
             else:
-                # Otherwise update the stream with the new calculated TTL
-                self.selectedStream.setTimeToLive(newTTL)
-                Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + dtstrft(
-                    datetime.timedelta(seconds=newTTL)))
+                # Calculate new TTL (either adding/removing time, or setting 'forever')
+                # Add/subtract 1hr (3600 secs)
+                newTTL = currentTTL + (3600 * direction)
+                # If the new calculated value is -ve, interpret as 'forever'
+                if newTTL < 0:
+                    # Set stream TTL to 'forever'
+                    self.selectedStream.setTimeToLive(-1)
+                    Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to 'forever'")
+                else:
+                    # Otherwise update the stream with the new calculated TTL
+                    self.selectedStream.setTimeToLive(newTTL)
+                    Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + dtstrft(
+                        datetime.timedelta(seconds=newTTL)))
 
 
     # 'l'
@@ -1823,6 +1875,8 @@ class UI(object):
             # If this is am endless stream (created with a negative time to live)
             if value < 0:
                 value = "forever"
+            elif value == 0:
+                value = "Expired"
             else:
                 value = datetime.timedelta(seconds=value)
             return value
@@ -1870,7 +1924,7 @@ class UI(object):
                     'dialog shadow': 'bg:ansiblack'})
                 Term.clearScreen()
                 self.quitConfirmed = yes_no_dialog(title='Quit Isptest', text='Do you want to quit?',
-                                                   style=styleDefinition)
+                                                   style=styleDefinition).run()
                 # Re-enter alternate screen buffer
                 Term.enterAlternateScreen()
                 Term.clearTerminalScrollbackBuffer()
@@ -3628,6 +3682,12 @@ def shutdownApplicationSignalHandler(signum, frame):
 # #####################
 
 def main(argv):
+    # # x = multi_input_dialog3(title="will it work?", text="default text").run()
+    # x = input_dialog(title="will it work?", text="default text").run()
+    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
+    # print(str(multi_input_dialog3(textFieldsList, title='Enter IP addr and port').run()))
+    #
+    # exit()
     # try:
     #     # x = validators.integer(41, allow_empty=False, minimum=25, maximum=40)
     #     x= validators.ip_address("192.168.0.2", allow_empty=False)
