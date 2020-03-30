@@ -1822,6 +1822,8 @@ class UI(object):
             # If this is am endless stream (created with a negative time to live)
             if value < 0:
                 value = "forever"
+            elif value == 0:
+                value = "Expired"
             else:
                 value = datetime.timedelta(seconds=value)
             return value
