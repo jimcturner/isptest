@@ -1117,6 +1117,49 @@ class UI(object):
         else:
             Message.addMessage("Can't modify stream results. Change the name in the Transmit pane instead")
 
+    # This method is called if a previously expired stream (that is still listed in
+    # self.rtpTxStreamsDict{} is requested to be restarted
+    def __recreateExpiredStream(self, RtpGeneratorToBeResurrected):
+        # Attempt to get the parameters of the dead stream
+        try:
+            # Attempt to get the parameters of the dead stream
+            stats = RtpGeneratorToBeResurrected.getRtpStreamStats()
+            # Remove the expired stream from self.rtpTxStreamsDict
+            Message.addMessage("UI.__recreateExpiredStream() Removing stream " + str(stats['Sync Source ID']))
+            RtpGeneratorToBeResurrected.killStream()
+            # Create new RtpStream based on the parameters of the old stream
+            # Confirm that the stream has been succesfully deleted by checking whether there already exists
+            # a key stats['Sync Source ID'] in self.rtpTxStreamsDict
+            # x = "Tx streams: "
+            # for k,v in self.rtpTxStreamsDict.items():
+            #     x += (str(k) + ":" + str(type(k)) + ", ")
+            # Message.addMessage(x)
+            # Message.addMessage("'Sync Source ID' " + str(stats['Sync Source ID']))
+            # # Message.addMessage(str(self.rtpTxStreamsDict[stats['Sync Source ID']]))
+            # # txStream = self.rtpTxStreamsDict.get(stats['Sync Source ID'])
+            # # Message.addMessage(str(txStream))
+            try:
+                # If the RtpGenerator object still exists in the rtpTxStreamsDict, the killStream() must have failed
+                Message.addMessage("gets here 1")
+                if stats['Sync Source ID'] in self.rtpTxStreamsDict:
+                    Message.addMessage("ERR: UI.__recreateExpiredStream() Expired stream" +
+                                       str(stats['Sync Source ID']) + " still exists, can't replace")
+                else:
+                    # It has been removed, so add the new stream (a copy of the old, expired stream)
+                    RtpGenerator(stats['Dest IP'], stats['Dest Port'], stats['Tx Rate'], stats['Packet size'],
+                                 stats['Sync Source ID'], 3600, \
+                                 self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
+                                 self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex,
+                                 friendlyName=stats['Friendly Name'], UDP_SRC_PORT=stats['Tx Source Port'])
+            except Exception as e:
+                Message.addMessage("ERR: UI.__recreateExpiredStream() inner " + str(e))
+        except Exception as e:
+            Message.addMessage("ERR: UI.__recreateExpiredStream() outer " + str(e))
+
+
+
+
+
     # 'a' pressed (only when in Tx or Loopback mode)
     def __onAddTxStream(self):
         # Attempt to add a new tx stream (if we're in loopback or transmit mode)
@@ -1416,19 +1459,24 @@ class UI(object):
         if type(self.selectedStream) == RtpGenerator:
             # Get TTL of currently selected stream
             currentTTL = int(self.selectedStream.getRtpStreamStatsByKey('Time to live'))
-            # Calculate new TTL (either adding/removing time, or setting 'forever')
-            # Add/subtract 1hr (3600 secs)
-            newTTL = currentTTL + (3600 * direction)
-            # If the new calculated value is -ve, interpret as 'forever'
-            if newTTL < 0:
-                # Set stream TTL to 'forever'
-                self.selectedStream.setTimeToLive(-1)
-                Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to 'forever'")
+            # Has the selected stream TTL already expired?
+            if currentTTL == 0:
+                # If so, recreate the stream with identical parameters
+                self.__recreateExpiredStream(self.selectedStream)
             else:
-                # Otherwise update the stream with the new calculated TTL
-                self.selectedStream.setTimeToLive(newTTL)
-                Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + dtstrft(
-                    datetime.timedelta(seconds=newTTL)))
+                # Calculate new TTL (either adding/removing time, or setting 'forever')
+                # Add/subtract 1hr (3600 secs)
+                newTTL = currentTTL + (3600 * direction)
+                # If the new calculated value is -ve, interpret as 'forever'
+                if newTTL < 0:
+                    # Set stream TTL to 'forever'
+                    self.selectedStream.setTimeToLive(-1)
+                    Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to 'forever'")
+                else:
+                    # Otherwise update the stream with the new calculated TTL
+                    self.selectedStream.setTimeToLive(newTTL)
+                    Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + dtstrft(
+                        datetime.timedelta(seconds=newTTL)))
 
 
     # 'l'
