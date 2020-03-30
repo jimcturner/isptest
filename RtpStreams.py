@@ -1779,13 +1779,16 @@ class RtpGenerator(object):
         self.rtpGeneratorThread.join()
         Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread has ended")
 
-        # Now kill corresponding RtpResultsReceiver object
+        # Now kill corresponding RtpResultsReceiver object (should be a blocking call)
         self.rtpStreamResultsReceiver.kill()
         # Finally, remove this RtpGenerator object from rtpTxStreamsDict
         self.rtpTxStreamsDictMutex.acquire()
-        Message.addMessage("INFO: Deleting RtpGenerator for stream: " + str(self.syncSourceIdentifier))
+        Message.addMessage("INFO: Deleting RtpGenerator entry in rtpTxStreamsDict for stream: " + str(self.syncSourceIdentifier))
         del self.rtpTxStreamsDict[self.syncSourceIdentifier]
         self.rtpTxStreamsDictMutex.release()
+
+        # Now kill UDP socket
+        self.udpTxSocket.close()
 
     def disableStream(self):
         # Disables transmission of packets to simulate packet loss by clearing flag

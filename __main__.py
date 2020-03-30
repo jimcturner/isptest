@@ -1123,6 +1123,7 @@ class UI(object):
             # Remove the expired stream from self.rtpTxStreamsDict
             Message.addMessage("UI.__recreateExpiredStream() Removing stream " + str(stats['Sync Source ID']))
             RtpGeneratorToBeResurrected.killStream()
+            time.sleep(1)
             # Create new RtpStream based on the parameters of the old stream
             # Confirm that the stream has been succesfully deleted by checking whether there already exists
             # a key stats['Sync Source ID'] in self.rtpTxStreamsDict
@@ -1962,6 +1963,8 @@ class UI(object):
             self.__updateClock()
             # draw the stream table
             self.__drawStreamsTable()
+
+            # Message.addMessage(str(listCurrentThreads()))
             # draw the messages table
             self.__drawMessageTable()
 
