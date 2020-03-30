@@ -1612,7 +1612,7 @@ class UI(object):
         tableContents = "BBC IBEOO Team ISP Analyser V1.1 (beta)".center(maxWidth, " ") + \
                         "\n\n" + "(c) James Turner 2020".center(maxWidth, " ") + \
                         "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
-                        "\n" + " measurement tool supporting multiple tx/tx streams".center(maxWidth, " ") + \
+                        "\n" + " measurement tool supporting multiple tx/rx streams".center(maxWidth, " ") + \
                         "\n" + "  and event logging".center(maxWidth, " ") + \
                         "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth, " ") + \
                         "\n\n\n\n" + \
