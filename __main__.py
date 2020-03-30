@@ -1129,7 +1129,6 @@ class UI(object):
 
             try:
                 # If the RtpGenerator object still exists in the rtpTxStreamsDict, the killStream() must have failed
-                Message.addMessage("gets here 1")
                 if stats['Sync Source ID'] in self.rtpTxStreamsDict:
                     Message.addMessage("ERR: UI.__recreateExpiredStream() Expired stream" +
                                        str(stats['Sync Source ID']) + " still exists, can't replace")
