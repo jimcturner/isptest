@@ -19,11 +19,7 @@ import string
 import platform
 import getopt  # Used to parse command line arguments
 import re  # Regex 'regular expression' module
-<<<<<<< HEAD
-import regex
-=======
-# import regex
->>>>>>> restartExpired
+
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 import json
@@ -45,12 +41,7 @@ from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults
 from Utils import *
 from Custom_prompt_toolkit_mods import multi_input_dialog
 
-# # Fudge to bind Python2 command raw_input() to  input() to make code Python2/3 compatible
-# # From here: https://stackoverflow.com/questions/21731043/use-of-input-raw-input-in-python-2-and-3
-# try:
-#     input = raw_input
-# except NameError:
-#     pass
+
 
 ####################################################################################
 # Utility Classes
@@ -1135,14 +1126,7 @@ class UI(object):
             # Create new RtpStream based on the parameters of the old stream
             # Confirm that the stream has been succesfully deleted by checking whether there already exists
             # a key stats['Sync Source ID'] in self.rtpTxStreamsDict
-            # x = "Tx streams: "
-            # for k,v in self.rtpTxStreamsDict.items():
-            #     x += (str(k) + ":" + str(type(k)) + ", ")
-            # Message.addMessage(x)
-            # Message.addMessage("'Sync Source ID' " + str(stats['Sync Source ID']))
-            # # Message.addMessage(str(self.rtpTxStreamsDict[stats['Sync Source ID']]))
-            # # txStream = self.rtpTxStreamsDict.get(stats['Sync Source ID'])
-            # # Message.addMessage(str(txStream))
+
             try:
                 # If the RtpGenerator object still exists in the rtpTxStreamsDict, the killStream() must have failed
                 Message.addMessage("gets here 1")
