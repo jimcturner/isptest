@@ -4,11 +4,39 @@
 #
 # 
 from __future__ import unicode_literals # Required for prompt_toolkit
+import sys
+# Tests the current Python interpreter version
+def testPythonVersion(majorVersionNo, minorVersionNumber):
+    # If the major and minor version number is not satisfied
+    # i.e the installed version is < than majorVersionNo.minorVersionNumber (eg 3.6) it will
+    # call exit() with an error message
+    import sys
+    # Get current Python version
+    version = sys.version_info
+    def printErrorMessage():
+        print("You're not running a latest enough version of Python " +
+              str(version[0]) + "." + str(version[1]) + ". isptest requires >3.6:\r")
+        print("\t------\r")
+        print("\tHint: Python3 *might* be installed. Try re-running using 'python3 [args]'\r")
+        print("\tor else, try python [tab] which (on OSX and Linux) should list the possible python\r")
+        print("\tversions installed on this system\r")
+
+    if int(version[0]) < majorVersionNo:  # Check major release version):
+        if int(version[1]) < minorVersionNumber:  # Check minor version
+            printErrorMessage()
+            exit()
+        printErrorMessage()
+        exit()
+    else:
+        # Else Installed Python version satisfies minimum requirements
+        pass
+# Check for minimum python version (currently 3.6)
+testPythonVersion(3,6)
+
 
 import socket
 import os
 # import binascii
-import sys
 import signal # used for trappoing ctrl-c (SIGINT)
 import struct
 import time
@@ -399,10 +427,14 @@ class Term(object):
         # return (width-4), height, table.table.splitlines()
         return width, height, table.table.splitlines()
 
+######### Utility functions
 
+
+
+# Creates and maintains an updated list from the contents of a changing dictionary
 def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMutex):
     # This is a utility function for __displayThread
-    # It's job is to compare the current working list inn use by __displayThread (currentStreamList[])
+    # It's job is to compare the current working list in use by __displayThread (currentStreamList[])
     # with the rtpStreamDict{} dictionary of active rtpRxStreams or rtpTxStreams (maintained by main())
     # If will replicate any additions/deletions to objects in rtpStreamDict{} to currentStreamList[]
     # Crucially, the order of currentStreamList[] will be maintained so that it will represent a
