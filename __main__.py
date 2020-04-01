@@ -540,6 +540,9 @@ class UI(object):
         # This will store the result of the user response
         self.quitConfirmed = False
 
+        # Use to control the display of the Events List dialogue
+        self.displayEventsDialogue = False
+
         # Thread running flags
         self.keysPressedThreadActive = True
         self.renderDisplayThreadActive = True
@@ -582,7 +585,7 @@ class UI(object):
         self.selectedStream = None  # Tracks the stream currently highlighted in the streams table
         self.selectedStreamID = 0 # Tracks the sync source ID of the stream currebtly highlighted
         # Screen label showing the available key commands (depending upon mode)
-        self.keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abou[t]"
+        self.keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abo[u]t"
 
         self.txStreamModifierCommandsString = "TX  modifier: [o/p] src ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
         # Extra command strip for 'special features' mode
@@ -1096,6 +1099,24 @@ class UI(object):
             if self.specialFeaturesModeFlag == True:
                 Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 3), Term.WHITE)
                 Term.printAt(self.extraKeyCommandsString, 1, (self.currentTermHeight - 3), Term.BLACK, Term.WHITE)
+
+    # Overlays a list of recent events relating to this stream
+    def __renderEventsListDialogue(self):
+        # maxWidth = 55
+        tableContents = "A list of events\n\n\n\n\n\n\n\n\n\n\nLast Line" + " " * 40
+        # Create a single-celled table
+        aboutDialogue = SingleTable([[tableContents]])
+        aboutDialogue.title = "Events List"
+        width = aboutDialogue.table_width
+        height = tableContents.count('\n') + 2
+
+        # Get Terminal size so we can centre the table
+        termW, termH = Term.getTerminalSize()
+        xPos = 14
+        yPos = int((termH - height) / 2)
+
+        Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
+
 
     # Cursor right
     def __onNavigateRight(self):
@@ -1641,12 +1662,13 @@ class UI(object):
         # NOTE: This is a blocking method
 
         maxWidth = 55
-        tableContents = "BBC IBEOO Team ISP Analyser V1.1 (beta)".center(maxWidth, " ") + \
+        tableContents = "BBC IBEOO Team ISP Analyser V1.2 (beta)".center(maxWidth, " ") + \
                         "\n\n" + "(c) James Turner 2020".center(maxWidth, " ") + \
                         "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
                         "\n" + " measurement tool supporting multiple tx/rx streams".center(maxWidth, " ") + \
                         "\n" + "  and event logging".center(maxWidth, " ") + \
                         "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth, " ") + \
+                        "\n See https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
                         "\n\n\n\n" + \
                         "Press the [any] key to continue".center(maxWidth, " ")
 
@@ -1668,6 +1690,13 @@ class UI(object):
         while ch == None or self.renderDisplayThreadActive == False:
             # Blocking call to self.__getch() with timeout
             ch = self.__getch()
+
+    def __onDisplayEvents(self):
+        # Toggle display of Events list dialogue
+        if self.displayEventsDialogue == False:
+            self.displayEventsDialogue = True
+        else:
+            self.displayEventsDialogue = False
 
     # Tests the key pressed, and calls the appropriate method
     def __parseKeyPressed(self):
@@ -1704,8 +1733,8 @@ class UI(object):
             # 'd' Delete stream
             elif self.keyPressed == ord('d'):
                 self.__onDeleteStream()
-            # 't' About dialogue
-            elif self.keyPressed == ord('t'):
+            # 'u' About dialogue
+            elif self.keyPressed == ord('u'):
                 self.__onAboutDialogue()
             # 'm' Increase tx rate of selected stream
             elif self.keyPressed == ord('m'):
@@ -1734,6 +1763,9 @@ class UI(object):
             # 'e' Toggle error messages on/off
             elif self.keyPressed == ord('e'):
                 self.__onToggleErrorMessages()
+            # 't' Display events list for selected stream
+            elif self.keyPressed == ord('t'):
+                self.__onDisplayEvents()
 
             # Special features
             # 'z' Toggle packet generation on/off for selected stream
@@ -1998,7 +2030,11 @@ class UI(object):
 
             # Message.addMessage(str(listCurrentThreads()))
             # draw the messages table
-            self.__drawMessageTable()
+            self.__drawMessageTable() # Should only take effect if there are any new messages/or self.redrawScreen is True
+
+            # Check to see if Events List is to be overlaid?
+            if self.displayEventsDialogue:
+                self.__renderEventsListDialogue()
 
             # Clear flag
             self.redrawScreen = False
