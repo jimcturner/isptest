@@ -1103,19 +1103,39 @@ class UI(object):
     # Overlays a list of recent events relating to this stream
     def __renderEventsListDialogue(self):
         # maxWidth = 55
-        tableContents = "A list of events\n\n\n\n\n\n\n\n\n\n\nLast Line" + " " * 40
-        # Create a single-celled table
-        aboutDialogue = SingleTable([[tableContents]])
-        aboutDialogue.title = "Events List"
-        width = aboutDialogue.table_width
-        height = tableContents.count('\n') + 2
-
         # Get Terminal size so we can centre the table
         termW, termH = Term.getTerminalSize()
-        xPos = 14
+        maxLines = termH - 10
+
+        tableContents = "Last 3 events..." + " " * 48
+        # Get the last three events from the list (either the rtpRxStreamsDict or rtpTxStreamResultsDict
+        # depending upon whether we're in RECEIVE or TRANSMIT mode
+        try:
+            eventsList = self.rtpRxStreamsDict[self.selectedStreamID].getRTPStreamEventList(3)
+        except:
+            eventsList = self.rtpTxStreamResultsDict[self.selectedStreamID].getRTPStreamEventList(3)
+        finally:
+            pass
+
+        # Append event summaries to the tableContents string
+        if len(eventsList) > 0 :
+            for event in eventsList:
+                eventSummaryDict = event.getSummary()
+                tableContents += "\n" + str(eventSummaryDict['timeCreated'].strftime("%d/%m %H:%M:%S")) + \
+                                 ", " + str(eventSummaryDict['summary'])
+
+
+        # Create a single-celled table
+        eventsDialogue = SingleTable([[tableContents]])
+        eventsDialogue.title = "Events List"
+        width = eventsDialogue.table_width
+        height = tableContents.count('\n') + 2
+
+
+        xPos = 7
         yPos = int((termH - height) / 2)
 
-        Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
+        Term.printTable(eventsDialogue.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
 
 
     # Cursor right
