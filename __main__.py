@@ -587,7 +587,7 @@ class UI(object):
         self.selectedStream = None  # Tracks the stream currently highlighted in the streams table
         self.selectedStreamID = 0 # Tracks the sync source ID of the stream currebtly highlighted
         # Screen label showing the available key commands (depending upon mode)
-        self.keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abo[u]t"
+        self.keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abo[u]t even[t]s"
 
         self.txStreamModifierCommandsString = "TX  modifier: [o/p] src ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
         # Extra command strip for 'special features' mode
@@ -2103,7 +2103,7 @@ class UI(object):
                 self.selectedStream = self.views[self.selectedView][2][self.selectedTableRow][1]
                 self.selectedStreamID = self.views[self.selectedView][2][self.selectedTableRow][0]
             else:
-            # Otherwise, if there are no streams available, se the instance variables accordingly
+            # Otherwise, if there are no streams available, set the instance variables accordingly
                 self.selectedStream = None
                 self.selectedStreamID = 0
 
