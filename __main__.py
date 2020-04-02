@@ -541,7 +541,9 @@ class UI(object):
         self.quitConfirmed = False
 
         # Use to control the display of the Events List dialogue
-        self.displayEventsDialogue = False
+        self.displayEventsTable = False
+        # Used by the EventsTable (and Traceroute table). Keeps track of the current display page
+        self.tablePageNo = 0
 
         # Thread running flags
         self.keysPressedThreadActive = True
@@ -1101,41 +1103,62 @@ class UI(object):
                 Term.printAt(self.extraKeyCommandsString, 1, (self.currentTermHeight - 3), Term.BLACK, Term.WHITE)
 
     # Overlays a list of recent events relating to this stream
-    def __renderEventsListDialogue(self):
-        # maxWidth = 55
+    def __renderEventsListTable(self):
+
         # Get Terminal size so we can centre the table
         termW, termH = Term.getTerminalSize()
-        maxLines = termH - 10
+        maxLines = termH - 15
 
-        tableContents = "Last 3 events..." + " " * 48
-        # Get the last three events from the list (either the rtpRxStreamsDict or rtpTxStreamResultsDict
+
+        # Get the last n events from the list (either the rtpRxStreamsDict or rtpTxStreamResultsDict
         # depending upon whether we're in RECEIVE or TRANSMIT mode
-        try:
-            eventsList = self.rtpRxStreamsDict[self.selectedStreamID].getRTPStreamEventList(3)
-        except:
-            eventsList = self.rtpTxStreamResultsDict[self.selectedStreamID].getRTPStreamEventList(3)
-        finally:
-            pass
+        # The amount of events diaplayed will adjust to the terminal height
+        eventsList = []
+        if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+            try:
+                eventsList = self.rtpRxStreamsDict[self.selectedStreamID].getRTPStreamEventList(maxLines)
+            except:
+                pass
+        elif self.operationMode == 'TRANSMIT':
+            try:
+                eventsList = self.rtpTxStreamResultsDict[self.selectedStreamID].getRTPStreamEventList(maxLines)
+            except:
+                pass
 
-        # Append event summaries to the tableContents string
+        # Create the table contents
+        tableContents =[]
+        titleRow = ["Timestamp", "Event"]
+        tableContents.append(titleRow)
+        tableRow =[]
+        # Create a list of tuples containing the table data
         if len(eventsList) > 0 :
             for event in eventsList:
-                eventSummaryDict = event.getSummary()
-                tableContents += "\n" + str(eventSummaryDict['timeCreated'].strftime("%d/%m %H:%M:%S")) + \
-                                 ", " + str(eventSummaryDict['summary'])
+                # Get event details (in the formm of a dictionary)
+                eventDetails = event.getSummary()
+                # Create a complete row of the table
+                tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
+                tableRow.append(str(eventDetails['summary']).ljust(50))
+                #Append the complate table row to tableContents[]
+                tableContents.append(tableRow)
+                # Clear the tableRow list ready for next time arund the loop
+                tableRow = []
 
 
-        # Create a single-celled table
-        eventsDialogue = SingleTable([[tableContents]])
-        eventsDialogue.title = "Events List"
-        width = eventsDialogue.table_width
-        height = tableContents.count('\n') + 2
+        # Create a SingleTable to tabulate the data
+        eventsTable = SingleTable(tableContents)
+        # Set the title
+        eventsTable.title = "Events List, stream ID: " + str(self.selectedStreamID)
+        eventsTable.padding_left = 0
+        eventsTable.padding_right = 0
+        width = eventsTable.table_width
+        height = len(tableContents) + 2
 
-
+        # Offset from the left edge of the screen
         xPos = 7
+        # Centre the table vertically
         yPos = int((termH - height) / 2)
 
-        Term.printTable(eventsDialogue.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
+        Term.printTable(eventsTable.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
 
 
     # Cursor right
@@ -1145,12 +1168,21 @@ class UI(object):
         if self.selectedView > (len(self.views) - 1):
             self.selectedView = len(self.views) - 1
 
+        # Used to increment to the display page of the Events table
+        # Note, this has to be bounds-checked in the table display code
+        self.tablePageNo += 1
+
     # Cursor left
     def __onNavigateLeft(self):
         self.selectedView -= 1
         # Prevent an 'out of range' view being selected
         if self.selectedView < 0:
             self.selectedView = 0
+
+        # Used to decrement to the display page of the Events table
+        self.tablePageNo -= 1
+        if self.tablePageNo < 0:
+            self.tablePageNo = 0
 
     # Cursor up
     def __onNavigateUp(self):
@@ -1713,10 +1745,12 @@ class UI(object):
 
     def __onDisplayEvents(self):
         # Toggle display of Events list dialogue
-        if self.displayEventsDialogue == False:
-            self.displayEventsDialogue = True
+        if self.displayEventsTable == False:
+            self.displayEventsTable = True
+            # Reset display page to 0 when initially displaying the table
+            self.tablePageNo = 0
         else:
-            self.displayEventsDialogue = False
+            self.displayEventsTable = False
 
     # Tests the key pressed, and calls the appropriate method
     def __parseKeyPressed(self):
@@ -2053,8 +2087,8 @@ class UI(object):
             self.__drawMessageTable() # Should only take effect if there are any new messages/or self.redrawScreen is True
 
             # Check to see if Events List is to be overlaid?
-            if self.displayEventsDialogue:
-                self.__renderEventsListDialogue()
+            if self.displayEventsTable:
+                self.__renderEventsListTable()
 
             # Clear flag
             self.redrawScreen = False
