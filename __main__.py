@@ -1113,57 +1113,77 @@ class UI(object):
         # Get the last n events from the list (either the rtpRxStreamsDict or rtpTxStreamResultsDict
         # depending upon whether we're in RECEIVE or TRANSMIT mode
         # The amount of events diaplayed will adjust to the terminal height
-        eventsList = []
+        # Get a handle on the selected RxRtpStream or TxResults
+        # Note, if we are in TRANSMIT mode, the selected stream could be an RtpGenerator. This is no good,
+        # hence we have to manually retrieve the appropriate stream object by using the self.selectedStreamID
+        # and looking in the appropriate streams dictionary
+        selectedRxOrResultsStream = None
+
         if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
             try:
-                eventsList = self.rtpRxStreamsDict[self.selectedStreamID].getRTPStreamEventList()
+                selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
             except:
                 pass
         elif self.operationMode == 'TRANSMIT':
             try:
-                eventsList = self.rtpTxStreamResultsDict[self.selectedStreamID].getRTPStreamEventList()
+                selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
             except:
                 pass
+
+        eventsList = []
+        friendlyName = ""
+        if selectedRxOrResultsStream is not None:
+            try:
+                # Get eventlist of the selected Rx or TxResults stream
+                eventsList = selectedRxOrResultsStream.getRTPStreamEventList()
+                # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
+                friendlyName = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
+            except Exception as e:
+                Message.addMessage("ERR. UI.__renderEventsListTable. getRTPStreamEventList()")
 
         # Calculate the no of pages required to show all the events (given the table size)
         noOfPages = int(math.ceil(len(eventsList) / maxLines))
         # Check that we're not trying to display a non-existent page
-        if self.tablePageNo > noOfPages:
-            self.tablePageNo = noOfPages
+        if self.tablePageNo > (noOfPages -1) :
+            self.tablePageNo = (noOfPages -1)
 
         # Calculate first event to list (given current page no)
         indexOfFirstEvent = self.tablePageNo * maxLines
         # Calculate last event to list (given current page no and maximum no of lines allowed in the table)
-        indexOfLastEvent = indexOfFirstEvent + maxLines
+        indexOfLastEvent = indexOfFirstEvent + maxLines - 1
         # Confirm that we haven't run off the end of the eventsList
         if indexOfLastEvent > len (eventsList):
             indexOfLastEvent = len (eventsList) - 1
 
         # Create the table contents
         tableContents =[]
-        titleRow = ["Timestamp", "Event"]
+        titleRow = ["Timestamp", "Event".ljust(50)]
         tableContents.append(titleRow)
         tableRow =[]
         # Create a list of tuples containing the selected table data
         if len(eventsList) > 0 :
             # The list will be created in reverse order - newest entry first
-            for event in range(int(indexOfLastEvent), int(indexOfFirstEvent), -1):
+            for event in range(int(indexOfLastEvent), int(indexOfFirstEvent) -1, -1):
                 # Get event details (in the form of a dictionary)
-                eventDetails = eventsList[event].getSummary()
-                # Create a complete row of the table
-                tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
-                tableRow.append(str(eventDetails['summary']).ljust(50))
+                try:
+                    eventDetails = eventsList[event].getSummary()
+                    # Create a complete row of the table
+                    tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
+                    tableRow.append(str(eventDetails['summary']).ljust(50))
+                except Exception as e:
+                    Message.addMessage("UI.__renderEventsListTable: " + str(e))
                 #Append the complate table row to tableContents[]
                 tableContents.append(tableRow)
-                # Clear the tableRow list ready for next time arund the loop
+                # Clear the tableRow list ready for next time around the loop
                 tableRow = []
 
 
         # Create a SingleTable to tabulate the data
         eventsTable = SingleTable(tableContents)
         # Set the title
-        eventsTable.title = "Events List, stream ID: " + str(self.selectedStreamID) + \
-            ". Page " + str(self.tablePageNo) + "/" + str(noOfPages)
+        eventsTable.title = "Events for stream: " + str(self.selectedStreamID) + "(" + friendlyName + ")" +\
+                ". Page " + str(self.tablePageNo + 1) + "/" + str(noOfPages) + " [<][>]back/fwd"
+
 
         eventsTable.padding_left = 0
         eventsTable.padding_right = 0
@@ -1180,10 +1200,12 @@ class UI(object):
 
     # Cursor right
     def __onNavigateRight(self):
-        self.selectedView += 1
-        # Prevent an 'out of range' view being selected
-        if self.selectedView > (len(self.views) - 1):
-            self.selectedView = len(self.views) - 1
+        if self.displayEventsTable is False:
+            # Inhibit, if Events Table is currently being displayed
+            self.selectedView += 1
+            # Prevent an 'out of range' view being selected
+            if self.selectedView > (len(self.views) - 1):
+                self.selectedView = len(self.views) - 1
 
         # Used to increment to the display page of the Events table
         # Note, this has to be bounds-checked in the table display code
@@ -1191,10 +1213,12 @@ class UI(object):
 
     # Cursor left
     def __onNavigateLeft(self):
-        self.selectedView -= 1
-        # Prevent an 'out of range' view being selected
-        if self.selectedView < 0:
-            self.selectedView = 0
+        # Inhibit, if Events Table is currently being displayed
+        if self.displayEventsTable is False:
+            self.selectedView -= 1
+            # Prevent an 'out of range' view being selected
+            if self.selectedView < 0:
+                self.selectedView = 0
 
         # Used to decrement to the display page of the Events table
         self.tablePageNo -= 1
