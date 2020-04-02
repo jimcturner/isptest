@@ -1107,8 +1107,8 @@ class UI(object):
 
         # Get Terminal size so we can centre the table
         termW, termH = Term.getTerminalSize()
+        # Calculate the maximum no. of lines that will fit within the table, given the terminal height
         maxLines = termH - 15
-
 
         # Get the last n events from the list (either the rtpRxStreamsDict or rtpTxStreamResultsDict
         # depending upon whether we're in RECEIVE or TRANSMIT mode
@@ -1116,25 +1116,40 @@ class UI(object):
         eventsList = []
         if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
             try:
-                eventsList = self.rtpRxStreamsDict[self.selectedStreamID].getRTPStreamEventList(maxLines)
+                eventsList = self.rtpRxStreamsDict[self.selectedStreamID].getRTPStreamEventList()
             except:
                 pass
         elif self.operationMode == 'TRANSMIT':
             try:
-                eventsList = self.rtpTxStreamResultsDict[self.selectedStreamID].getRTPStreamEventList(maxLines)
+                eventsList = self.rtpTxStreamResultsDict[self.selectedStreamID].getRTPStreamEventList()
             except:
                 pass
+
+        # Calculate the no of pages required to show all the events (given the table size)
+        noOfPages = int(math.ceil(len(eventsList) / maxLines))
+        # Check that we're not trying to display a non-existent page
+        if self.tablePageNo > noOfPages:
+            self.tablePageNo = noOfPages
+
+        # Calculate first event to list (given current page no)
+        indexOfFirstEvent = self.tablePageNo * maxLines
+        # Calculate last event to list (given current page no and maximum no of lines allowed in the table)
+        indexOfLastEvent = indexOfFirstEvent + maxLines
+        # Confirm that we haven't run off the end of the eventsList
+        if indexOfLastEvent > len (eventsList):
+            indexOfLastEvent = len (eventsList) - 1
 
         # Create the table contents
         tableContents =[]
         titleRow = ["Timestamp", "Event"]
         tableContents.append(titleRow)
         tableRow =[]
-        # Create a list of tuples containing the table data
+        # Create a list of tuples containing the selected table data
         if len(eventsList) > 0 :
-            for event in eventsList:
-                # Get event details (in the formm of a dictionary)
-                eventDetails = event.getSummary()
+            # The list will be created in reverse order - newest entry first
+            for event in range(int(indexOfLastEvent), int(indexOfFirstEvent), -1):
+                # Get event details (in the form of a dictionary)
+                eventDetails = eventsList[event].getSummary()
                 # Create a complete row of the table
                 tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
                 tableRow.append(str(eventDetails['summary']).ljust(50))
@@ -1147,7 +1162,9 @@ class UI(object):
         # Create a SingleTable to tabulate the data
         eventsTable = SingleTable(tableContents)
         # Set the title
-        eventsTable.title = "Events List, stream ID: " + str(self.selectedStreamID)
+        eventsTable.title = "Events List, stream ID: " + str(self.selectedStreamID) + \
+            ". Page " + str(self.tablePageNo) + "/" + str(noOfPages)
+
         eventsTable.padding_left = 0
         eventsTable.padding_right = 0
         width = eventsTable.table_width
