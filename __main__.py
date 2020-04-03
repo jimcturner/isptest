@@ -197,6 +197,8 @@ class Term(object):
     BlaWh = "\033[22m"+"\033[30m"+"\033[47m"
     # Black on Cyan, dim brightness
     BlaCy = "\033[2m"+"\033[30m"+"\033[46m"
+    # Cyan on black
+    CyBla = "\033[36m"+"\033[40m"
     # White on blue
     WhiBlu = "\033[37m"+"\033[44m"
     # White on black
@@ -1108,7 +1110,7 @@ class UI(object):
         # Get Terminal size so we can centre the table
         termW, termH = Term.getTerminalSize()
         # Calculate the maximum no. of lines that will fit within the table, given the terminal height
-        maxLines = termH - 15
+        maxLines = termH - 20
 
         # Get the last n events from the list (either the rtpRxStreamsDict or rtpTxStreamResultsDict
         # depending upon whether we're in RECEIVE or TRANSMIT mode
@@ -1176,17 +1178,20 @@ class UI(object):
                 tableContents.append(tableRow)
                 # Clear the tableRow list ready for next time around the loop
                 tableRow = []
-
+            # Finally, add a single column to the bottom of the table
+        tableContents.append([Term.CyBla + "Page " + str(self.tablePageNo + 1) + "/" + str(noOfPages), \
+                              Term.CyBla + "[<][>]back/fwd, [t]exit, [z]copy to clipboard"])
 
         # Create a SingleTable to tabulate the data
         eventsTable = SingleTable(tableContents)
         # Set the title
-        eventsTable.title = "Events for stream: " + str(self.selectedStreamID) + "(" + friendlyName + ")" +\
-                ". Page " + str(self.tablePageNo + 1) + "/" + str(noOfPages) + " [<][>]back/fwd"
+        eventsTable.title = "Events for stream: " + str(self.selectedStreamID) + "(" + friendlyName + ")"
+
 
 
         eventsTable.padding_left = 0
         eventsTable.padding_right = 0
+        eventsTable.inner_footing_row_border = True
         width = eventsTable.table_width
         height = len(tableContents) + 2
 
@@ -2084,6 +2089,7 @@ class UI(object):
             elif self.operationMode == 'RECEIVE':
                 self.__updateAvailableStreamsList(self.availableRtpRxStreamList, self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
 
+
             # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
             if len(self.availableRtpTxStreamList) > 0:
                 latestTxStream = self.availableRtpTxStreamList[-1][1]
@@ -2093,19 +2099,26 @@ class UI(object):
             # Get a handle on the currently highlighted stream and corresponding sync source ID
             # Confirm that the streamList associated with this view actual has data in it
             lengthOfDataSetToDisplay = len(self.views[self.selectedView][2])
-            if lengthOfDataSetToDisplay > 0:
-                # Now confirm that we're not off the end of the list of streams (possible if the last stream
-                # in the list was deleted)
-                if self.selectedTableRow > (lengthOfDataSetToDisplay - 1):
-                    # If so, point the selector to the last item on the list
-                    self.selectedTableRow = (lengthOfDataSetToDisplay - 1)
+            # Local function to confirm that the 'selected stream' pointed to by the streams table actually exists
+            # (it might not still, if the user deleted the stream via the UI
+            # If the stream has been deleted, the selction moves to the last stream added, or None
+            # if there are no streams at all
+            # This will make sure that self.self.selectedStream and self.selectedStreamID are up to date
+            def validateSelectedStream():
+                if lengthOfDataSetToDisplay > 0:
+                    # Now confirm that we're not off the end of the list of streams (possible if the last stream
+                    # in the list was deleted)
+                    if self.selectedTableRow > (lengthOfDataSetToDisplay - 1):
+                        # If so, point the selector to the last item on the list
+                        self.selectedTableRow = (lengthOfDataSetToDisplay - 1)
 
-                self.selectedStream = self.views[self.selectedView][2][self.selectedTableRow][1]
-                self.selectedStreamID = self.views[self.selectedView][2][self.selectedTableRow][0]
-            else:
-            # Otherwise, if there are no streams available, set the instance variables accordingly
-                self.selectedStream = None
-                self.selectedStreamID = 0
+                    self.selectedStream = self.views[self.selectedView][2][self.selectedTableRow][1]
+                    self.selectedStreamID = self.views[self.selectedView][2][self.selectedTableRow][0]
+                else:
+                # Otherwise, if there are no streams available, set the instance variables accordingly
+                    self.selectedStream = None
+                    self.selectedStreamID = 0
+            validateSelectedStream()
 
             # Determine which key pressed, and call the appropriate method
             self.__parseKeyPressed()
@@ -2129,6 +2142,9 @@ class UI(object):
 
             # Check to see if Events List is to be overlaid?
             if self.displayEventsTable:
+                # Confirm that self.selectedStream and self.selectedStreamID are up to date, before drawing the table
+                # Without this update, the Events Table update lags behind the selected stream
+                validateSelectedStream()
                 self.__renderEventsListTable()
 
             # Clear flag
