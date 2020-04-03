@@ -1150,12 +1150,16 @@ class UI(object):
             self.tablePageNo = (noOfPages -1)
 
         # Calculate first event to list (given current page no)
-        indexOfFirstEvent = self.tablePageNo * maxLines
+        # Note eventsList orders the events in chronological order (event #1 is the first in the list)
+        # We want to display the events in reverse order so that the most recent appears first
+        # indexOfFirstEvent = self.tablePageNo * maxLines
+        indexOfFirstEvent = len(eventsList) - 1 - (self.tablePageNo * maxLines)
         # Calculate last event to list (given current page no and maximum no of lines allowed in the table)
-        indexOfLastEvent = indexOfFirstEvent + maxLines - 1
+        indexOfLastEvent = indexOfFirstEvent - maxLines
         # Confirm that we haven't run off the end of the eventsList
-        if indexOfLastEvent > len (eventsList):
-            indexOfLastEvent = len (eventsList) - 1
+        # if indexOfLastEvent > len (eventsList):
+        #     indexOfLastEvent = len (eventsList) - 1
+
 
         # Create the table contents
         tableContents =[]
@@ -1164,8 +1168,15 @@ class UI(object):
         tableRow =[]
         # Create a list of tuples containing the selected table data
         if len(eventsList) > 0 :
+            # Confirm that we haven't run off the end of the eventsList
+            if indexOfFirstEvent >= len(eventsList):
+                indexOfFirstEvent = len(eventsList) -1
+            if indexOfFirstEvent < 0:
+                indexOfFirstEvent = 0
+            if indexOfLastEvent < 0:
+                indexOfLastEvent = 0
             # The list will be created in reverse order - newest entry first
-            for event in range(int(indexOfLastEvent), int(indexOfFirstEvent) -1, -1):
+            for event in range(int(indexOfFirstEvent), int(indexOfLastEvent) -1, -1):
                 # Get event details (in the form of a dictionary)
                 try:
                     eventDetails = eventsList[event].getSummary()
