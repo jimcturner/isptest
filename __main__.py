@@ -1266,81 +1266,13 @@ class UI(object):
                 tableContents.append(tableRow)
                 # Clear the tableRow list ready for next time around the loop
                 tableRow = []
+        else:
+            tableContents.append(["","No events to display"])
 
-        self.__renderPagedList(self.tablePageNo, "All events", ["Timestamp", "Event".ljust(50)], tableContents,
+
+        self.__renderPagedList(self.tablePageNo, "All events", ["Timestamp".ljust(15), "Event".ljust(50)], tableContents,
                                footerRow=["","[<][>]back/fwd, [t]exit, [z]copy to clipboard"],
-                               pageNoDisplayInFooterRow= True, reverseList= False, marginOffset= 7)
-
-        # # Calculate the no of pages required to show all the events (given the table size)
-        # noOfPages = int(math.ceil(len(eventsList) / maxLines))
-        # # Check that we're not trying to display a non-existent page
-        # if self.tablePageNo > (noOfPages -1) :
-        #     self.tablePageNo = (noOfPages -1)
-        #
-        # # Calculate first event to list (given current page no)
-        # # Note eventsList orders the events in chronological order (event #1 is the first in the list)
-        # # We want to display the events in reverse order so that the most recent appears first
-        # # indexOfFirstEvent = self.tablePageNo * maxLines
-        # indexOfFirstEvent = len(eventsList) - 1 - (self.tablePageNo * maxLines)
-        # # Calculate last event to list (given current page no and maximum no of lines allowed in the table)
-        # indexOfLastEvent = indexOfFirstEvent - maxLines
-        # # Confirm that we haven't run off the end of the eventsList
-        # # if indexOfLastEvent > len (eventsList):
-        # #     indexOfLastEvent = len (eventsList) - 1
-        #
-        #
-        # # Create the table contents
-        # tableContents =[]
-        # titleRow = ["Timestamp", "Event".ljust(50)]
-        # tableContents.append(titleRow)
-        # tableRow =[]
-        # # Create a list of tuples containing the selected table data
-        # if len(eventsList) > 0 :
-        #     # Confirm that we haven't run off the end of the eventsList
-        #     if indexOfFirstEvent >= len(eventsList):
-        #         indexOfFirstEvent = len(eventsList) -1
-        #     if indexOfFirstEvent < 0:
-        #         indexOfFirstEvent = 0
-        #     if indexOfLastEvent < 0:
-        #         indexOfLastEvent = 0
-        #     # The list will be created in reverse order - newest entry first
-        #     for event in range(int(indexOfFirstEvent), int(indexOfLastEvent) -1, -1):
-        #         # Get event details (in the form of a dictionary)
-        #         try:
-        #             eventDetails = eventsList[event].getSummary()
-        #             # Create a complete row of the table
-        #             tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
-        #             tableRow.append(", " + str(eventDetails['summary']).ljust(50))
-        #         except Exception as e:
-        #             Message.addMessage("UI.__renderEventsListTable: " + str(e))
-        #         #Append the complate table row to tableContents[]
-        #         tableContents.append(tableRow)
-        #         # Clear the tableRow list ready for next time around the loop
-        #         tableRow = []
-        #     # Finally, add a single column to the bottom of the table
-        # tableContents.append([Term.CyBla + "Page " + str(self.tablePageNo + 1) + "/" + str(noOfPages), \
-        #                       Term.CyBla + "[<][>]back/fwd, [t]exit, [z]copy to clipboard"])
-        #
-        # # Create a SingleTable to tabulate the data
-        # eventsTable = SingleTable(tableContents)
-        # # Set the title
-        # eventsTable.title = "Events for stream: " + str(self.selectedStreamID) + "(" + friendlyName + ")"
-        #
-        #
-        #
-        # eventsTable.padding_left = 0
-        # eventsTable.padding_right = 0
-        # eventsTable.inner_footing_row_border = True
-        # eventsTable.inner_column_border = False
-        # width = eventsTable.table_width
-        # height = len(tableContents) + 2
-        #
-        # # Offset from the left edge of the screen
-        # xPos = 7
-        # # Centre the table vertically
-        # yPos = int((termH - height) / 2)
-        #
-        # Term.printTable(eventsTable.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
+                               pageNoDisplayInFooterRow= True, reverseList= True, marginOffset= 7)
 
 
     # Cursor right
