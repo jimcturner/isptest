@@ -1256,7 +1256,7 @@ class UI(object):
             for event in eventsList:
                 # Get event details (in the form of a dictionary)
                 try:
-                    eventDetails = event.getSummary()
+                    eventDetails = event.getSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
                     # Create a complete row of the table
                     tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
                     tableRow.append(", " + str(eventDetails['summary']).ljust(50))
