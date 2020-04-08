@@ -546,6 +546,8 @@ class UI(object):
         self.displayEventsTable = False
         # Used by the EventsTable (and Traceroute table). Keeps track of the current display page
         self.tablePageNo = 0
+        # Used by the EventsTable. Currently, if set, the events table will only show Glitch events (a sort of display filter)
+        self.filterDisplayedEvents = False
 
         # Thread running flags
         self.keysPressedThreadActive = True
@@ -1209,8 +1211,15 @@ class UI(object):
         Term.printTable(pagedTable.table.splitlines(), marginOffset, yPos, width, Term.BLACK, Term.CYAN)
 
 
+    # Toggles the filtering of displayed Events on the events table created by UI.__renderEventsListTable()
+    def __onfilterEventsTable(self):
+        if self.filterDisplayedEvents is False:
+            self.filterDisplayedEvents = True
+        else:
+            self.filterDisplayedEvents = False
 
-            # Overlays a list of recent events relating to this stream
+
+    # Overlays on the screen a paged list of recent events relating to this stream
     def __renderEventsListTable(self):
 
         # Get Terminal size so we can centre the table
@@ -1240,12 +1249,15 @@ class UI(object):
 
         eventsList = []
         friendlyName = ""
+        syncSourceID = 0
         if selectedRxOrResultsStream is not None:
             try:
                 # Get eventlist of the selected Rx or TxResults stream
                 eventsList = selectedRxOrResultsStream.getRTPStreamEventList()
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
                 friendlyName = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
+                syncSourceID = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_syncSource"))
+
             except Exception as e:
                 Message.addMessage("ERR. UI.__renderEventsListTable. getRTPStreamEventList()")
 
@@ -1256,10 +1268,11 @@ class UI(object):
             for event in eventsList:
                 # Get event details (in the form of a dictionary)
                 try:
+                    # Retrieve each Event summary, ommiting the syncSourceID and the friendlyName (for display purposes)
                     eventDetails = event.getSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
                     # Create a complete row of the table
                     tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
-                    tableRow.append(", " + str(eventDetails['summary']).ljust(50))
+                    tableRow.append(" " + str(eventDetails['summary']).ljust(50))
                 except Exception as e:
                     Message.addMessage("UI.__renderEventsListTable: " + str(e))
                 #Append the complate table row to tableContents[]
@@ -1269,9 +1282,15 @@ class UI(object):
         else:
             tableContents.append(["","No events to display"])
 
-
-        self.__renderPagedList(self.tablePageNo, "All events", ["Timestamp".ljust(15), "Event".ljust(50)], tableContents,
-                               footerRow=["","[<][>]back/fwd, [t]exit, [z]copy to clipboard"],
+            # Set the table for the Eventslist table
+            title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+            # Additional check to see if the event filtering has been enabled
+        if self.filterDisplayedEvents:
+                title = "Glitches for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+        else:
+            title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+        self.__renderPagedList(self.tablePageNo, title, ["Timestamp".ljust(15), "Event".ljust(50)], tableContents,
+                               footerRow=["","[<][>]back/fwd, [t]exit, [z]copy to clipboard\n[y]show glitches only"],
                                pageNoDisplayInFooterRow= True, reverseList= True, marginOffset= 7)
 
 
@@ -1938,6 +1957,9 @@ class UI(object):
             # 't' Display events list for selected stream
             elif self.keyPressed == ord('t'):
                 self.__onDisplayEvents()
+            # 'y' Show only glitches on events list table
+            elif self.keyPressed == ord('y'):
+                self.__onfilterEventsTable()
 
             # Special features
             # 'z' Toggle packet generation on/off for selected stream
