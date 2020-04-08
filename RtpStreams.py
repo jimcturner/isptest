@@ -47,11 +47,24 @@ class Event():
         self.type = self.__class__.__name__
         # Add additional instance variables as required
 
+    # Returns a string summary of the event, with optional fields
     @abstractmethod
-    def getSummary(self):
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields =""
-        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
-                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
+        summary = ""
+        if includeStreamSyncSourceID:
+            summary += "[" + str(self.stats["stream_syncSource"]) + "]"
+        # Note "stream_friendly_name" won't necessarily be up to date. Name changes won't currently be reflected in historic event objects
+        if includeFriendlyName:
+            summary += "[" + str(self.stats["stream_friendly_name"]).rstrip() + "]"
+        if includeFriendlyName:
+            summary += "[" + str(self.eventNo) + "] "
+        if includeType:
+            summary += str(self.type)
+        summary += optionalFields
+
+        # summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
+        #           "[" + str(self.eventNo) + "] " + self.type + optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
@@ -90,11 +103,19 @@ class StreamStarted(Event):
         # Additional instance variables
         self.firstPacketReceived = firstPacketReceived
 
-    def getSummary(self):
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         # Returns a dictionary containing a timestamp and a concise description of the event as a string
         optionalFields = ", first rtp sequence no:"+str(self.firstPacketReceived.rtpSequenceNo)
-        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
-                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
+        summary = ""
+        if includeStreamSyncSourceID:
+            summary += "[" + str(self.stats["stream_syncSource"]) + "]"
+        if includeFriendlyName:
+            summary += "[" + str(self.stats["stream_friendly_name"]).rstrip() + "]"
+        if includeFriendlyName:
+            summary += "[" + str(self.eventNo) + "] "
+        if includeType:
+            summary += str(self.type)
+        summary += optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
