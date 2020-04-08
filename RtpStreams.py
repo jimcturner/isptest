@@ -47,24 +47,42 @@ class Event():
         self.type = self.__class__.__name__
         # Add additional instance variables as required
 
+    # Utility method that returns  a string containing the Event parameters common to all stream events
+    # These are:- SyncSourceID, FriendlyName, EventNo, Type etc
+    # The contents (or detail) of the return string is dependant upon the bool flags
+    # The method takes an Event subclass as an argument (eg Glitch, StreamStarted, etc)
+    # Because all of the subclasses will make use of this method, it makes sense to incorporate it here
+    @classmethod
+    def createCommonSummaryText(cls, event, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
+        summary = ""
+        try:
+            if includeStreamSyncSourceID:
+                summary += "[" + str(event.stats["stream_syncSource"]) + "]"
+            if includeFriendlyName:
+                summary += "[" + str(event.stats["stream_friendly_name"]).rstrip() + "]"
+            if includeEventNo:
+                summary += "[" + str(event.eventNo) + "] "
+            if includeType:
+                summary += str(event.type)
+        except Exception as e:
+            summary += "Event.createCommonSummaryText: " + str(e)
+        return summary
+
     # Returns a string summary of the event, with optional fields
     @abstractmethod
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
-        optionalFields =""
-        summary = ""
-        if includeStreamSyncSourceID:
-            summary += "[" + str(self.stats["stream_syncSource"]) + "]"
-        # Note "stream_friendly_name" won't necessarily be up to date. Name changes won't currently be reflected in historic event objects
-        if includeFriendlyName:
-            summary += "[" + str(self.stats["stream_friendly_name"]).rstrip() + "]"
-        if includeFriendlyName:
-            summary += "[" + str(self.eventNo) + "] "
-        if includeType:
-            summary += str(self.type)
+        # Returns a dictionary containing a timestamp and a concise description of the event as a string
+        # It invokes the method from the parent class (Event) Event.createCommonSummaryText() to allow
+        # some control over the construction of the string (i.e how mich detail it contains) via the optional args
+        # By default, all the optional args are set to True, so the Summary will actually be quite detailed!
+        optionalFields = ""
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo=includeEventNo,
+                                                includeType=includeType,
+                                                includeFriendlyName=includeFriendlyName)
         summary += optionalFields
 
-        # summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
-        #           "[" + str(self.eventNo) + "] " + self.type + optionalFields
+
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
@@ -105,16 +123,15 @@ class StreamStarted(Event):
 
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         # Returns a dictionary containing a timestamp and a concise description of the event as a string
+        # It invokes the method from the parent class (Event) Event.createCommonSummaryText() to allow
+        # some control over the construction of the string (i.e how mich detail it contains) via the optional args
+        # By default, all the optional args are set to True, so the Summary will actually be quite detailed!
         optionalFields = ", first rtp sequence no:"+str(self.firstPacketReceived.rtpSequenceNo)
-        summary = ""
-        if includeStreamSyncSourceID:
-            summary += "[" + str(self.stats["stream_syncSource"]) + "]"
-        if includeFriendlyName:
-            summary += "[" + str(self.stats["stream_friendly_name"]).rstrip() + "]"
-        if includeFriendlyName:
-            summary += "[" + str(self.eventNo) + "] "
-        if includeType:
-            summary += str(self.type)
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo = includeEventNo,
+                                                includeType = includeType,
+                                                includeFriendlyName = includeFriendlyName)
+
         summary += optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
@@ -150,10 +167,14 @@ class StreamLost(Event):
         # Add additional instance variables as required
         self.lastPacketReceived = lastPacketReceived
 
-    def getSummary(self):
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields = ", Most recent rtp sequence no: "+str(self.lastPacketReceived.rtpSequenceNo)
-        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
-                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo=includeEventNo,
+                                                includeType=includeType,
+                                                includeFriendlyName=includeFriendlyName)
+
+        summary += optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
@@ -188,10 +209,13 @@ class ExcessiveJitter(Event):
         self.type = self.__class__.__name__
         # Add additional instance variables as required
         self.lastPacketReceived = lastPacketReceived
-    def getSummary(self):
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields = " "+str(int(self.stats["jitter_mean_1S_uS"])) + "/" + str(int(self.stats["jitter_long_term_uS"])) + "uS"
-        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
-                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo=includeEventNo,
+                                                includeType=includeType,
+                                                includeFriendlyName=includeFriendlyName)
+        summary += optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
@@ -227,10 +251,15 @@ class ProcessorOverload(Event):
         # Add additional instance variables as required
         self.lastPacketReceived = lastPacketReceived
 
-    def getSummary(self):
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields =  " "+str(int(self.stats["stream_processor_utilisation_percent"])) + "%"
-        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
-                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
+        optionalFields = ", first rtp sequence no:" + str(self.firstPacketReceived.rtpSequenceNo)
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo=includeEventNo,
+                                                includeType=includeType,
+                                                includeFriendlyName=includeFriendlyName)
+
+        summary += optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
@@ -281,11 +310,15 @@ class Glitch(Event):
         self.expectedSequenceNo = self.startOfGap.rtpSequenceNo + 1
         self.actualReceivedSequenceNo = self.endOfGap.rtpSequenceNo
 
-    def getSummary(self):
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields = " " + dtstrft(self.glitchLength) + ", " + str(self.packetsLost) + " lost. "+\
                 "Exptd." +str(self.expectedSequenceNo)+", Got."+ str(self.actualReceivedSequenceNo)
-        summary = "[" + str(self.stats["stream_syncSource"]) + "]" + \
-                  "[" + str(self.eventNo) + "] " + self.type + optionalFields
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo=includeEventNo,
+                                                includeType=includeType,
+                                                includeFriendlyName=includeFriendlyName)
+
+        summary += optionalFields
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
