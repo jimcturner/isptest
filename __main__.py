@@ -1253,7 +1253,7 @@ class UI(object):
         if selectedRxOrResultsStream is not None:
             try:
                 # Get eventlist of the selected Rx or TxResults stream
-                eventsList = selectedRxOrResultsStream.getRTPStreamEventList()
+                eventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterEvents = "glitch")
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
                 friendlyName = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
                 syncSourceID = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_syncSource"))

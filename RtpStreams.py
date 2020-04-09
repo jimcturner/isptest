@@ -1228,7 +1228,7 @@ class RtpReceiveStream(object):
     # No args: Returns the entire list
     # 1 arg: Returns the last n events
     # 2 args: returns the range specified (inclusive)
-    def getRTPStreamEventList(self, *args):
+    def getRTPStreamEventList(self, *args, filterEvents = None):
         self.__accessRtpStreamEventListMutex.acquire()
         # Create copy of events list
         eventList = list(self.__eventList)
@@ -1509,11 +1509,14 @@ class RtpStreamResults(object):
     # No args: Returns the entire list
     # 1 arg: Returns the last n events
     # 2 args: returns the range specified (inclusive)
-    def getRTPStreamEventList(self, *args):
+    def getRTPStreamEventList(self, *args, filterEvents = None):
         self.__accessRtpStreamEventListMutex.acquire()
         # Create copy of events list
         eventList = list(self.__eventList)
         self.__accessRtpStreamEventListMutex.release()
+        # Now apply a filter
+        filteredEventList = list(filter(lambda event: (type(event) == Glitch), eventList))
+        Message.addMessage(str(filteredEventList))
 
         if len(args) == 2:
             # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
