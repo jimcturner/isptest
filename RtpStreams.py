@@ -1228,17 +1228,33 @@ class RtpReceiveStream(object):
     # No args: Returns the entire list
     # 1 arg: Returns the last n events
     # 2 args: returns the range specified (inclusive)
-    def getRTPStreamEventList(self, *args, filterEvents = None):
+    # filterList is an optional arg containing a list of Event object types to test against within EventsList
+    # eg filterList = [Glitch] will return only a list of glitches, [Glitch, StreamStarted] would give you a list
+    # containing all Glitch and StreamStarted events
+    def getRTPStreamEventList(self, *args, filterList=None):
         self.__accessRtpStreamEventListMutex.acquire()
         # Create copy of events list
-        eventList = list(self.__eventList)
+        unfilteredEventList = list(self.__eventList)
         self.__accessRtpStreamEventListMutex.release()
+        # Now apply a filter (if specified)
+        filteredEventList = []
+        if filterList is not None:
+            # Iterate over unfilteredEventList creating a sublist containing objects (Events) that match the entries
+            # specified in filterList[]
+            # Note:
+            # filter() is a built in method that can iterate over an iterable object (unfilteredEventList)
+            # We supply it with a lambda function which takes the current event and checks to see if that type of event is
+            # present in filterList[]. If it is, that Event gets added to the filteredEventsList
+            filteredEventList = list(filter(lambda event: (type(event) in filterList), unfilteredEventList))
+        else:
+            # If no filter spcified, all take all the events
+            filteredEventList = unfilteredEventList
 
         if len(args) == 2:
             # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
             try:
                 # Slice the list
-                return eventList[args[0]:args[1] + 1]
+                return filteredEventList[args[0]:args[1] + 1]
             except Exception as e:
                 Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
                                    str(args[1]) + ") requested start and end indexes out of range: " + str(e))
@@ -1246,11 +1262,11 @@ class RtpReceiveStream(object):
             # If one arg supplied, return the last n events.
             # IF event list not as long as n, return what does exist
             try:
-                return eventList[(args[0] * -1):]
+                return filteredEventList[(args[0] * -1):]
             except:
-                return eventList
+                return filteredEventList
         else:
-            return eventList
+            return filteredEventList
 
     # Method to strip off the oldest events from the eventList once the threshold is reached
     # Note **this does not** set mutex locks itself, so should only be called from another method that
@@ -1527,7 +1543,6 @@ class RtpStreamResults(object):
             # We supply it with a lambda function which takes the current event and checks to see if that type of event is
             # present in filterList[]. If it is, that Event gets added to the filteredEventsList
             filteredEventList = list(filter(lambda event: (type(event) in filterList), unfilteredEventList))
-            Message.addMessage(str(filteredEventList))
         else:
             # If no filter spcified, all take all the events
             filteredEventList = unfilteredEventList
