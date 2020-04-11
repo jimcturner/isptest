@@ -1287,15 +1287,21 @@ class UI(object):
         else:
             tableContents.append(["","No events to display"])
 
-            # Set the table for the Eventslist table
-            title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
-            # Additional check to see if the event filtering has been enabled
+        # # Set the title/footer for the Eventslist table
+        # title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+
+
+        # Additional check to see if the event filtering has been enabled and modify the title/footer labels accordingly
         if self.filterDisplayedEvents:
                 title = "Glitches for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+                footer = ["","[<][>]back/fwd, [t]exit, [z]copy to clipboard\n[y]show All events"]
         else:
             title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+            footer = ["", "[<][>]back/fwd, [t]exit, [z]copy to clipboard\n[y]show glitches only"]
+
+        # Now actually display the paged table list
         self.__renderPagedList(self.tablePageNo, title, ["Timestamp".ljust(15), "Event".ljust(50)], tableContents,
-                               footerRow=["","[<][>]back/fwd, [t]exit, [z]copy to clipboard\n[y]show glitches only"],
+                               footerRow=footer,
                                pageNoDisplayInFooterRow= True, reverseList= True, marginOffset= 7)
 
 
