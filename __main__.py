@@ -1080,7 +1080,7 @@ class UI(object):
         del messages[:]
 
     def __renderTopToolbar(self):
-        Term.printTitleBar("IBEOO ISP Analyser V1.2", 1, Term.BLACK, Term.WHITE)
+        Term.printTitleBar("IBEOO ISP Analyser V1.3", 1, Term.BLACK, Term.WHITE)
         # Print operation mode (plus receive IP:Port if in Receive mode)
         if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
             Term.printAt(self.operationMode + " MODE", 1, 1, Term.BLACK, Term.WHITE)
