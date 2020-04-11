@@ -1252,8 +1252,13 @@ class UI(object):
         syncSourceID = 0
         if selectedRxOrResultsStream is not None:
             try:
+                # Initially specify that all Events are going to be displayed
+                eventsToDisplay = None
+                # But if self.filterDisplayedEvents is set, recreate the eventsToDisplay filter list
+                if self.filterDisplayedEvents == True:
+                    eventsToDisplay = [Glitch]
                 # Get eventlist of the selected Rx or TxResults stream
-                eventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList = [Glitch])
+                eventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList = eventsToDisplay)
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
                 friendlyName = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
                 syncSourceID = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_syncSource"))
@@ -1886,6 +1891,8 @@ class UI(object):
             self.displayEventsTable = True
             # Reset display page to 0 when initially displaying the table
             self.tablePageNo = 0
+            # Turn off filtering of displayed events when initially displaying the table
+            self.filterDisplayedEvents = False
         else:
             self.displayEventsTable = False
 
