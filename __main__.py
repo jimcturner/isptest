@@ -65,7 +65,7 @@ import six  # Required for strings being passed to prompt_toolkit dialogues (the
 from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
 from prompt_toolkit.styles import Style
 # Additonal libraries required (of my own making)
-from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults
+from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch
 from Utils import *
 from Custom_prompt_toolkit_mods import multi_input_dialog
 
@@ -1253,7 +1253,7 @@ class UI(object):
         if selectedRxOrResultsStream is not None:
             try:
                 # Get eventlist of the selected Rx or TxResults stream
-                eventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterEvents = "glitch")
+                eventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList = [Glitch])
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
                 friendlyName = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
                 syncSourceID = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_syncSource"))
