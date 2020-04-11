@@ -75,7 +75,7 @@ class Event():
         # some control over the construction of the string (i.e how mich detail it contains) via the optional args
         # By default, all the optional args are set to True, so the Summary will actually be quite detailed!
         optionalFields = ""
-        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
                                                 includeFriendlyName=includeFriendlyName)
@@ -126,7 +126,7 @@ class StreamStarted(Event):
         # some control over the construction of the string (i.e how mich detail it contains) via the optional args
         # By default, all the optional args are set to True, so the Summary will actually be quite detailed!
         optionalFields = ", first rtp sequence no:"+str(self.firstPacketReceived.rtpSequenceNo)
-        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo = includeEventNo,
                                                 includeType = includeType,
                                                 includeFriendlyName = includeFriendlyName)
@@ -168,7 +168,7 @@ class StreamLost(Event):
 
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields = ", Most recent rtp sequence no: "+str(self.lastPacketReceived.rtpSequenceNo)
-        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
                                                 includeFriendlyName=includeFriendlyName)
@@ -210,7 +210,7 @@ class ExcessiveJitter(Event):
         self.lastPacketReceived = lastPacketReceived
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields = " "+str(int(self.stats["jitter_mean_1S_uS"])) + "/" + str(int(self.stats["jitter_long_term_uS"])) + "uS"
-        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
                                                 includeFriendlyName=includeFriendlyName)
@@ -253,7 +253,7 @@ class ProcessorOverload(Event):
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields =  " "+str(int(self.stats["stream_processor_utilisation_percent"])) + "%"
         optionalFields = ", first rtp sequence no:" + str(self.firstPacketReceived.rtpSequenceNo)
-        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
                                                 includeFriendlyName=includeFriendlyName)
@@ -312,7 +312,7 @@ class Glitch(Event):
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields = " " + dtstrft(self.glitchLength) + ", " + str(self.packetsLost) + " lost. "+\
                 "Exptd." +str(self.expectedSequenceNo)+", Got."+ str(self.actualReceivedSequenceNo)
-        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
                                                 includeFriendlyName=includeFriendlyName)
