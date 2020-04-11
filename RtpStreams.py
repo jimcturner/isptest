@@ -50,20 +50,19 @@ class Event():
     # Utility method that returns  a string containing the Event parameters common to all stream events
     # These are:- SyncSourceID, FriendlyName, EventNo, Type etc
     # The contents (or detail) of the return string is dependant upon the bool flags
-    # The method takes an Event subclass as an argument (eg Glitch, StreamStarted, etc)
+    # The method is called from an Event subclass as an argument (eg Glitch, StreamStarted, etc)
     # Because all of the subclasses will make use of this method, it makes sense to incorporate it here
-    @classmethod
-    def createCommonSummaryText(cls, event, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
+    def createCommonSummaryText(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         summary = ""
         try:
             if includeStreamSyncSourceID:
-                summary += "[" + str(event.stats["stream_syncSource"]) + "]"
+                summary += "[" + str(self.stats["stream_syncSource"]) + "]"
             if includeFriendlyName:
-                summary += "[" + str(event.stats["stream_friendly_name"]).rstrip() + "]"
+                summary += "[" + str(self.stats["stream_friendly_name"]).rstrip() + "]"
             if includeEventNo:
-                summary += "[" + str(event.eventNo) + "] "
+                summary += "[" + str(self.eventNo) + "] "
             if includeType:
-                summary += str(event.type)
+                summary += str(self.type)
         except Exception as e:
             summary += "Event.createCommonSummaryText: " + str(e)
         return summary
@@ -76,7 +75,7 @@ class Event():
         # some control over the construction of the string (i.e how mich detail it contains) via the optional args
         # By default, all the optional args are set to True, so the Summary will actually be quite detailed!
         optionalFields = ""
-        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
                                                 includeFriendlyName=includeFriendlyName)
@@ -127,7 +126,7 @@ class StreamStarted(Event):
         # some control over the construction of the string (i.e how mich detail it contains) via the optional args
         # By default, all the optional args are set to True, so the Summary will actually be quite detailed!
         optionalFields = ", first rtp sequence no:"+str(self.firstPacketReceived.rtpSequenceNo)
-        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo = includeEventNo,
                                                 includeType = includeType,
                                                 includeFriendlyName = includeFriendlyName)
@@ -169,7 +168,7 @@ class StreamLost(Event):
 
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields = ", Most recent rtp sequence no: "+str(self.lastPacketReceived.rtpSequenceNo)
-        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
                                                 includeFriendlyName=includeFriendlyName)
@@ -211,7 +210,7 @@ class ExcessiveJitter(Event):
         self.lastPacketReceived = lastPacketReceived
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields = " "+str(int(self.stats["jitter_mean_1S_uS"])) + "/" + str(int(self.stats["jitter_long_term_uS"])) + "uS"
-        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
                                                 includeFriendlyName=includeFriendlyName)
@@ -254,7 +253,7 @@ class ProcessorOverload(Event):
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields =  " "+str(int(self.stats["stream_processor_utilisation_percent"])) + "%"
         optionalFields = ", first rtp sequence no:" + str(self.firstPacketReceived.rtpSequenceNo)
-        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
                                                 includeFriendlyName=includeFriendlyName)
@@ -313,7 +312,7 @@ class Glitch(Event):
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         optionalFields = " " + dtstrft(self.glitchLength) + ", " + str(self.packetsLost) + " lost. "+\
                 "Exptd." +str(self.expectedSequenceNo)+", Got."+ str(self.actualReceivedSequenceNo)
-        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+        summary = Event.createCommonSummaryText(includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
                                                 includeFriendlyName=includeFriendlyName)
