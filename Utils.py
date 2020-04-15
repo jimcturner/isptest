@@ -362,4 +362,32 @@ def isInteger(val, min = None, max = None):
         raise NotAnInteger(val)
 
 
+# Simple function, lifted from here: https://pastebin.com/m4kZey1v
+# Pastes text to PastBin.com (using either the default, or supplied Dev key)
+# Returns a URL of the page showing the text
+# Note: Pastes are instructed to delete after 10 minutes
+def pasteBin(textToPaste, title='', api_dev_key='78c625162b816673e6b3ecc2750ee741'):
+    import urllib.parse
+    import urllib.request
+
+    url = "http://pastebin.com/api/api_post.php"
+    values = {'api_option': 'paste',
+              'api_dev_key': api_dev_key,
+              'api_paste_code': textToPaste,
+              'api_paste_private': '0',
+              'api_paste_name': title,
+              'api_paste_expire_date': '10M',
+              'api_paste_format': 'text',
+              'api_user_key': '',
+              'api_paste_name': title,
+              'api_paste_code': textToPaste}
+
+    data = urllib.parse.urlencode(values)
+    data = data.encode('utf-8')  # data should be bytes
+    req = urllib.request.Request(url, data)
+    with urllib.request.urlopen(req) as response:
+        the_page = response.read()
+    # print(the_page)
+    # Return the URL of the Pastebin page
+    return the_page
 

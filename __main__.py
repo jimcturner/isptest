@@ -1307,6 +1307,36 @@ class UI(object):
                                footerRow=footer,
                                pageNoDisplayInFooterRow= True, reverseList= True, marginOffset= 7)
 
+    # Displays a pop-up message box
+    def __renderMessageBox(self, messageText, title, textColour=Term.BLACK, bgColour=Term.CYAN):
+        # Create a single-celled table
+        aboutDialogue = SingleTable([[messageText]])
+        aboutDialogue.title = title
+        width = aboutDialogue.table_width
+        height = messageText.count('\n') + 2
+
+        # Get Terminal size so we can centre the table
+        termW, termH = Term.getTerminalSize()
+        xPos = int((termW - width) / 2)
+        yPos = int((termH - height) / 2)
+
+        Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, textColour, bgColour)
+        # Wait for a key press
+        ch = None
+        # Endless loop until either a key is pressed or the self.renderDisplayThreadActive flag is cleared
+        while ch == None or self.renderDisplayThreadActive == False:
+            # Blocking call to self.__getch() with timeout
+            ch = self.__getch()
+
+
+    # If the Event Lists Table is currently displayed, this method will copy the events to the local clipboard
+    # If that is not possible (if for instance, you are connected to a remote instance of isptext via SSH)
+    # it will attempt to export the data to pastebin.com (a website that allows you to share text via a webpage)
+    def __onCopyEventsToClipboard(self):
+        if self.displayEventsTable == True:
+            self.__renderMessageBox("Here is my message", "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.RED)
+
+
 
     # Cursor right
     def __onNavigateRight(self):
@@ -1976,6 +2006,9 @@ class UI(object):
             # 'y' Show only glitches on events list table
             elif self.keyPressed == ord('y'):
                 self.__onfilterEventsTable()
+            # 'z' Copy events to clipboard
+            elif self.keyPressed == ord('z'):
+                self.__onCopyEventsToClipboard()
 
             # Special features
             # 'z' Toggle packet generation on/off for selected stream
@@ -3959,48 +3992,14 @@ def copyPaste():
 
     print(pyperclip.paste())
 
-def pasteBin():
-    api_dev_key = '78c625162b816673e6b3ecc2750ee741'
-    api_paste_code = 'My\n\tfirst\n\t\tpaste'
-    api_paste_name = 'my name'
-
-    # # PastebinAPI.paste(api_dev_key, api_paste_code, api_user_key=None, paste_name=None, paste_format = None, paste_private = None, paste_expire_date = None)
-    # pastebin = PastebinAPI()
-    # url = pastebin.paste(api_dev_key, api_paste_code)
-    # print(str(url))
-    import urllib.parse
-    import urllib.request
-
-
-    url = "http://pastebin.com/api/api_post.php"
-    values = {'api_option': 'paste',
-              'api_dev_key': api_dev_key,
-              'api_paste_code': api_paste_code,
-              'api_paste_private': '0',
-              'api_paste_name': api_paste_name,
-              'api_paste_expire_date': '10M',
-              'api_paste_format': 'text',
-              'api_user_key': '',
-              'api_paste_name': api_paste_name,
-              'api_paste_code': api_paste_code}
-
-    data = urllib.parse.urlencode(values)
-    data = data.encode('utf-8')  # data should be bytes
-    req = urllib.request.Request(url, data)
-    with urllib.request.urlopen(req) as response:
-        the_page = response.read()
-    print(the_page)
-
-
-
 # Main prog starts here
 # #####################
 
 def main(argv):
     # copyPaste()
-    pasteBin()
-
-    exit()
+    # print(str(pasteBin("Some\n\tnew\n\ttext", title="test paste", api_dev_key="uyddjhg")))
+    #
+    # exit()
     # # x = multi_input_dialog3(title="will it work?", text="default text").run()
     # x = input_dialog(title="will it work?", text="default text").run()
     # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
