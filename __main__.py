@@ -1334,7 +1334,20 @@ class UI(object):
     # it will attempt to export the data to pastebin.com (a website that allows you to share text via a webpage)
     def __onCopyEventsToClipboard(self):
         if self.displayEventsTable == True:
-            self.__renderMessageBox("Here is my message", "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.RED)
+            selectedRxOrResultsStream = None
+            # Get a handle on the selected stream
+            if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+                try:
+                    selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
+                except:
+                    pass
+            elif self.operationMode == 'TRANSMIT':
+                try:
+                    selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
+                except:
+                    pass
+            streamReport = selectedRxOrResultsStream.generateReport()
+            self.__renderMessageBox(streamReport, "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.RED)
 
 
 
@@ -1907,24 +1920,6 @@ class UI(object):
 
         # Render the message in a pop-up box
         self.__renderMessageBox(tableContents, "About")
-        # # Create a single-celled table
-        # aboutDialogue = SingleTable([[tableContents]])
-        # aboutDialogue.title = "About"
-        # width = aboutDialogue.table_width
-        # height = tableContents.count('\n') + 2
-        #
-        # # Get Terminal size so we can centre the table
-        # termW, termH = Term.getTerminalSize()
-        # xPos = int((termW - width) / 2)
-        # yPos = int((termH - height) / 2)
-        #
-        # Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
-        # # Wait for a key press
-        # ch = None
-        # # Endless loop until either a key is pressed or the self.renderDisplayThreadActive flag is cleared
-        # while ch == None or self.renderDisplayThreadActive == False:
-        #     # Blocking call to self.__getch() with timeout
-        #     ch = self.__getch()
 
     def __onDisplayEvents(self):
         # Toggle display of Events list dialogue

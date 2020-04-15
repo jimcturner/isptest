@@ -1281,6 +1281,37 @@ class RtpReceiveStream(object):
             # Message.addMessage("DBUG: __houseKeepEventList() "+str(noOfMessagesToPurge)+
             #                    " events removed"+str(oldSize)+">>"+str(newSize))
 
+    # This method will generate a formatted report containing the performance of the Rtp Stream
+    def generateReport(self):
+        # It will include:-
+        # Source Ip, Dest IP, Port, Sync Source ID, Friendly Name
+        # Duration of test, % Loss, Glitch period, bitrate, packet size
+        # % Loss
+        # Get a dump of the current stats
+        stats = self.getRtpStreamStats()
+        # Get a dump of the current events
+        eventsList = self.getRTPStreamEventList()
+        separator = ("-" * 63) + "\r"
+        title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(stats["stream_friendly_name"]).rstrip() + ")" + "\r"
+        streamIPDetails  = \
+            str(stats["stream_srcAddress"]) + ":" + str(stats["stream_srcPort"])+" ---> " + \
+                str(stats["stream_rxAddress"]) + ":" + str(stats["stream_rxPort"]) + \
+                ". Packet size: " + str(stats["packet_payload_size_mean_1S_bytes"]) + " bytes" + "\r"
+
+        streamPerformance = \
+            "Duration of test:\t" + str(dtstrft(stats["stream_time_elapsed_total"])) + "\r" + \
+            "Packet loss:       " + str(math.ceil(stats["glitch_packets_lost_total_percent"])) + "%" + "\r" \
+            "Total packets lost:" + str(int(stats["glitch_packets_lost_total_count"])) + "\r"
+
+
+
+        outputString = title + separator + streamIPDetails + separator + streamPerformance
+        # Return a string containing the output
+        return outputString
+
+
+
+
     # Define setter methods
     def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData):
         # Create a new rtp data object to hold the rtp packet data
