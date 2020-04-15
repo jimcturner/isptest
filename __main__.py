@@ -1905,24 +1905,26 @@ class UI(object):
                         "\n\n\n\n" + \
                         "Press the [any] key to continue".center(maxWidth, " ")
 
-        # Create a single-celled table
-        aboutDialogue = SingleTable([[tableContents]])
-        aboutDialogue.title = "About"
-        width = aboutDialogue.table_width
-        height = tableContents.count('\n') + 2
-
-        # Get Terminal size so we can centre the table
-        termW, termH = Term.getTerminalSize()
-        xPos = int((termW - width) / 2)
-        yPos = int((termH - height) / 2)
-
-        Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
-        # Wait for a key press
-        ch = None
-        # Endless loop until either a key is pressed or the self.renderDisplayThreadActive flag is cleared
-        while ch == None or self.renderDisplayThreadActive == False:
-            # Blocking call to self.__getch() with timeout
-            ch = self.__getch()
+        # Render the message in a pop-up box
+        self.__renderMessageBox(tableContents, "About")
+        # # Create a single-celled table
+        # aboutDialogue = SingleTable([[tableContents]])
+        # aboutDialogue.title = "About"
+        # width = aboutDialogue.table_width
+        # height = tableContents.count('\n') + 2
+        #
+        # # Get Terminal size so we can centre the table
+        # termW, termH = Term.getTerminalSize()
+        # xPos = int((termW - width) / 2)
+        # yPos = int((termH - height) / 2)
+        #
+        # Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, Term.BLACK, Term.CYAN)
+        # # Wait for a key press
+        # ch = None
+        # # Endless loop until either a key is pressed or the self.renderDisplayThreadActive flag is cleared
+        # while ch == None or self.renderDisplayThreadActive == False:
+        #     # Blocking call to self.__getch() with timeout
+        #     ch = self.__getch()
 
     def __onDisplayEvents(self):
         # Toggle display of Events list dialogue
