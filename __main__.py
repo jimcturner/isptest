@@ -64,6 +64,9 @@ import six  # Required for strings being passed to prompt_toolkit dialogues (the
 # from prompt_toolkit import prompt, shortcuts   # Note, had to be installed with  pip install --ignore-installed six prompt_toolkit --user
 from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
 from prompt_toolkit.styles import Style
+
+# Additional experimental libraries
+import pyperclip
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch
 from Utils import *
@@ -3950,11 +3953,54 @@ def shutdownApplicationSignalHandler(signum, frame):
 
 
 
+#### Experimental functions
+def copyPaste():
+    pyperclip.copy("new_clip\n\tNew line")
+
+    print(pyperclip.paste())
+
+def pasteBin():
+    api_dev_key = '78c625162b816673e6b3ecc2750ee741'
+    api_paste_code = 'My\n\tfirst\n\t\tpaste'
+    api_paste_name = 'my name'
+
+    # # PastebinAPI.paste(api_dev_key, api_paste_code, api_user_key=None, paste_name=None, paste_format = None, paste_private = None, paste_expire_date = None)
+    # pastebin = PastebinAPI()
+    # url = pastebin.paste(api_dev_key, api_paste_code)
+    # print(str(url))
+    import urllib.parse
+    import urllib.request
+
+
+    url = "http://pastebin.com/api/api_post.php"
+    values = {'api_option': 'paste',
+              'api_dev_key': api_dev_key,
+              'api_paste_code': api_paste_code,
+              'api_paste_private': '0',
+              'api_paste_name': api_paste_name,
+              'api_paste_expire_date': '10M',
+              'api_paste_format': 'text',
+              'api_user_key': '',
+              'api_paste_name': api_paste_name,
+              'api_paste_code': api_paste_code}
+
+    data = urllib.parse.urlencode(values)
+    data = data.encode('utf-8')  # data should be bytes
+    req = urllib.request.Request(url, data)
+    with urllib.request.urlopen(req) as response:
+        the_page = response.read()
+    print(the_page)
+
+
+
 # Main prog starts here
 # #####################
 
 def main(argv):
+    # copyPaste()
+    pasteBin()
 
+    exit()
     # # x = multi_input_dialog3(title="will it work?", text="default text").run()
     # x = input_dialog(title="will it work?", text="default text").run()
     # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
