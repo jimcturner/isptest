@@ -452,8 +452,9 @@ class RtpReceiveCommon(object):
         stats = self.getRtpStreamStats()
         # Get a dump of the current events (taking into account whether display filtering has been applied)
         # Retrieve the desired event types from the RTP Stream object
+        # The '\r\n' escape sequence is required for Windows
         eventsList = self.getRTPStreamEventList(filterList=eventFilterList)
-        separator = ("-" * 63) + "\r"
+        separator = ("-" * 63) + "\r\n"
         title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(
             stats["stream_friendly_name"]).rstrip() + ")" + "\r\n"
         streamIPDetails = \
