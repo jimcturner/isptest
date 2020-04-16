@@ -64,9 +64,9 @@ import six  # Required for strings being passed to prompt_toolkit dialogues (the
 # from prompt_toolkit import prompt, shortcuts   # Note, had to be installed with  pip install --ignore-installed six prompt_toolkit --user
 from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
 from prompt_toolkit.styles import Style
-
-# Additional experimental libraries
 import pyperclip
+# Additional experimental libraries
+
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch
 from Utils import *
