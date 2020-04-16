@@ -1349,13 +1349,27 @@ class UI(object):
             # Attempt to copy the report to the local clipboard
             try:
                 pyperclip.copy(streamReport)
-                self.__renderMessageBox("Success!\n\n<Press a key to continue>",\
+                self.__renderMessageBox("Success!".center(30) + "\n\n" +\
+                        "<Press a key to continue>".center(30),\
                         "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
+
             except:
-                # Copy to clipboard failed.
-                self.__renderMessageBox("Unable to copy to the local clipboard.\n" +\
-                        " This is mostly likely because you are connected to a text-only device using SSH.\n" +\
-                        " Sending the report to pastebin.com instead. Please follow this URL:-", \
+                # Copy to clipboard failed. Paste to pastebin.com instead
+                url = ""
+                try:
+                    url = pasteBin(streamReport, "isptest stream report for stream " +\
+                                str(self.selectedStreamID)).decode('utf-8')
+                except Exception as e:
+                    url = "Error pasting to pastebin:- \n" + str(e)
+
+
+                # Display a message box with a URL or an error message
+                self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" +\
+                        "\nThis is mostly likely because you are connected to a text-only\n" +\
+                        "terminal (e.g via an SSH session?)\n" +\
+                        "\nSending the report to pastebin.com instead. Please follow this URL:-\n" +\
+                        "\n " + str(url).center(70) + "\n\n" +\
+                        "<Press a key to continue>".center(70), \
                         "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
 
 
@@ -2750,7 +2764,7 @@ def copyPaste():
 
 def main(argv):
     # copyPaste()
-    # print(str(pasteBin("Some\n\tnew\n\ttext", title="test paste", api_dev_key="uyddjhg")))
+    # print(str(pasteBin("Some\n\tnew\n\ttext", title="test paste")))
     #
     # exit()
     # # x = multi_input_dialog3(title="will it work?", text="default text").run()
