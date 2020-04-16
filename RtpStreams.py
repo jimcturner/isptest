@@ -72,7 +72,7 @@ class Event():
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
         # Returns a dictionary containing a timestamp and a concise description of the event as a string
         # It invokes the method from the parent class (Event) Event.createCommonSummaryText() to allow
-        # some control over the construction of the string (i.e how mich detail it contains) via the optional args
+        # some control over the construction of the string (i.e how much detail it contains) via the optional args
         # By default, all the optional args are set to True, so the Summary will actually be quite detailed!
         optionalFields = ""
         summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
@@ -427,13 +427,78 @@ class RtpData(object):
         # jitter will store the diff between the timeDelta of this and the prev packet
         self.jitter = 0
 
+# Define a Super Class for RTP Receive streams. This will contain methods that are common to both
+# RtpReceiveStream and RtpStreamResults
+class RtpReceiveCommon(object):
+
+    def __init__(self):
+        pass
+
+    @abstractmethod
+    def getRtpStreamStats(self):
+        pass
+
+    @abstractmethod
+    def getRTPStreamEventList(self, filterList=None):
+        pass
+
+    # This method will generate a formatted report containing the performance of the Rtp Stream
+    def generateReport(self, eventFilterList=None):
+        # It will include:-
+        # Source Ip, Dest IP, Port, Sync Source ID, Friendly Name
+        # Duration of test, % Loss, Glitch period, bitrate, packet size
+        # % Loss
+        # Get a dump of the current stats
+        stats = self.getRtpStreamStats()
+        # Get a dump of the current events (taking into account whether display filtering has been applied)
+        # Retrieve the desired event types from the RTP Stream object
+        eventsList = self.getRTPStreamEventList(filterList=eventFilterList)
+        separator = ("-" * 63) + "\r"
+        title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(
+            stats["stream_friendly_name"]).rstrip() + ")" + "\r"
+        streamIPDetails = \
+            str(stats["stream_srcAddress"]) + ":" + str(stats["stream_srcPort"]) + " ---> " + \
+            str(stats["stream_rxAddress"]) + ":" + str(stats["stream_rxPort"]) + "\r" + \
+            "Packet size: " + str(stats["packet_payload_size_mean_1S_bytes"]) + " bytes" + \
+            ", Bitrate: " + str(bToMb(8 * stats["packet_data_received_1S_bytes"])) + "bps" + "\r"
+
+        labelWidth = 33
+        streamPerformance = \
+            "Duration of test: ".rjust(labelWidth) + str(dtstrft(stats["stream_time_elapsed_total"])) + "\r" + \
+            "Packet loss: ".rjust(labelWidth) + str(
+                math.ceil(stats["glitch_packets_lost_total_percent"])) + "%" + "\r" + \
+            "Total packets lost: ".rjust(labelWidth) + str(int(stats["glitch_packets_lost_total_count"])) + "\r" + \
+            "Maximum glitch dur: ".rjust(labelWidth) + str(dtstrft(stats["glitch_max_glitch_duration"])) + "\r" + \
+            "Mean glitch dur: ".rjust(labelWidth) + str(dtstrft(stats["glitch_mean_glitch_duration"])) + "\r" + \
+            "Mean interval between glitches: ".rjust(labelWidth) + str(
+                dtstrft(stats["glitch_mean_time_between_glitches"])) + "\r"
+
+        # Create list of glitches (as a string)
+        eventsListAsAString = "Events:\r"
+        # Display the events list in reverse order (most recent first)
+        for event in range(len(eventsList) - 1, -1, -1):
+            # Retrieve each Event summary, ommiting the syncSourceID and the friendlyName (for display purposes)
+            eventDetails = eventsList[event].getSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
+            # Creata a formatted string for the event
+            eventsListAsAString += (str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")) + \
+                                    ", " + str(eventDetails['summary']) + "\r")
+
+        outputString = title + separator + streamIPDetails + separator + streamPerformance + separator + \
+                       eventsListAsAString
+
+        # Return a string containing the output
+        return outputString
+
+
 # Define a class to represent a flow of received rtp packets (and associated stats)
-class RtpReceiveStream(object):
+class RtpReceiveStream(RtpReceiveCommon):
     # Constructor method.
     # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
-    def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold, rxSocket, rtpRxStreamsDict, rtpRxStreamsDictMutex):
+    def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold, rxSocket,
+                 rtpRxStreamsDict, rtpRxStreamsDictMutex):
 
+        super().__init__()
         self.rtpRxStreamsDict = rtpRxStreamsDict
         self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
         # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
@@ -1281,50 +1346,50 @@ class RtpReceiveStream(object):
             # Message.addMessage("DBUG: __houseKeepEventList() "+str(noOfMessagesToPurge)+
             #                    " events removed"+str(oldSize)+">>"+str(newSize))
 
-    # This method will generate a formatted report containing the performance of the Rtp Stream
-    def generateReport(self, eventFilterList = None):
-        # It will include:-
-        # Source Ip, Dest IP, Port, Sync Source ID, Friendly Name
-        # Duration of test, % Loss, Glitch period, bitrate, packet size
-        # % Loss
-        # Get a dump of the current stats
-        stats = self.getRtpStreamStats()
-        # Get a dump of the current events (taking into account whether display filtering has been applied)
-        # Retrieve the desired event types from the RTP Stream object
-        eventsList = self.getRTPStreamEventList(filterList = eventFilterList)
-        separator = ("-" * 63) + "\r"
-        title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(stats["stream_friendly_name"]).rstrip() + ")" + "\r"
-        streamIPDetails  = \
-            str(stats["stream_srcAddress"]) + ":" + str(stats["stream_srcPort"])+" ---> " + \
-                str(stats["stream_rxAddress"]) + ":" + str(stats["stream_rxPort"]) + "\r" +\
-                "Packet size: " + str(stats["packet_payload_size_mean_1S_bytes"]) + " bytes" +\
-                ", Bitrate: " + str(bToMb(8 * stats["packet_data_received_1S_bytes"])) + "bps" + "\r"
-
-        labelWidth = 33
-        streamPerformance = \
-            "Duration of test: ".rjust(labelWidth) + str(dtstrft(stats["stream_time_elapsed_total"])) + "\r" +\
-            "Packet loss: ".rjust(labelWidth) + str(math.ceil(stats["glitch_packets_lost_total_percent"])) + "%" + "\r" +\
-            "Total packets lost: ".rjust(labelWidth) + str(int(stats["glitch_packets_lost_total_count"])) + "\r" +\
-            "Maximum glitch dur: ".rjust(labelWidth) + str(dtstrft(stats["glitch_max_glitch_duration"])) + "\r" +\
-            "Mean glitch dur: ".rjust(labelWidth) + str(dtstrft(stats["glitch_mean_glitch_duration"])) + "\r" +\
-            "Mean interval between glitches: ".rjust(labelWidth) + str(dtstrft(stats["glitch_mean_time_between_glitches"])) + "\r"
-
-        # Create list of glitches (as a string)
-        eventsListAsAString = "Events:\r"
-        # Display the events list in reverse order (most recent first)
-        for event in range(len(eventsList)-1, -1, -1):
-
-            # Retrieve each Event summary, ommiting the syncSourceID and the friendlyName (for display purposes)
-            eventDetails = eventsList[event].getSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
-            # Creata a formatted string for the event
-            eventsListAsAString += (str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")) +\
-                                    ", " + str(eventDetails['summary']) + "\r")
-
-        outputString = title + separator + streamIPDetails + separator + streamPerformance + separator +\
-            eventsListAsAString
-
-        # Return a string containing the output
-        return outputString
+    # # This method will generate a formatted report containing the performance of the Rtp Stream
+    # def generateReport(self, eventFilterList = None):
+    #     # It will include:-
+    #     # Source Ip, Dest IP, Port, Sync Source ID, Friendly Name
+    #     # Duration of test, % Loss, Glitch period, bitrate, packet size
+    #     # % Loss
+    #     # Get a dump of the current stats
+    #     stats = self.getRtpStreamStats()
+    #     # Get a dump of the current events (taking into account whether display filtering has been applied)
+    #     # Retrieve the desired event types from the RTP Stream object
+    #     eventsList = self.getRTPStreamEventList(filterList = eventFilterList)
+    #     separator = ("-" * 63) + "\r"
+    #     title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(stats["stream_friendly_name"]).rstrip() + ")" + "\r"
+    #     streamIPDetails  = \
+    #         str(stats["stream_srcAddress"]) + ":" + str(stats["stream_srcPort"])+" ---> " + \
+    #             str(stats["stream_rxAddress"]) + ":" + str(stats["stream_rxPort"]) + "\r" +\
+    #             "Packet size: " + str(stats["packet_payload_size_mean_1S_bytes"]) + " bytes" +\
+    #             ", Bitrate: " + str(bToMb(8 * stats["packet_data_received_1S_bytes"])) + "bps" + "\r"
+    #
+    #     labelWidth = 33
+    #     streamPerformance = \
+    #         "Duration of test: ".rjust(labelWidth) + str(dtstrft(stats["stream_time_elapsed_total"])) + "\r" +\
+    #         "Packet loss: ".rjust(labelWidth) + str(math.ceil(stats["glitch_packets_lost_total_percent"])) + "%" + "\r" +\
+    #         "Total packets lost: ".rjust(labelWidth) + str(int(stats["glitch_packets_lost_total_count"])) + "\r" +\
+    #         "Maximum glitch dur: ".rjust(labelWidth) + str(dtstrft(stats["glitch_max_glitch_duration"])) + "\r" +\
+    #         "Mean glitch dur: ".rjust(labelWidth) + str(dtstrft(stats["glitch_mean_glitch_duration"])) + "\r" +\
+    #         "Mean interval between glitches: ".rjust(labelWidth) + str(dtstrft(stats["glitch_mean_time_between_glitches"])) + "\r"
+    #
+    #     # Create list of glitches (as a string)
+    #     eventsListAsAString = "Events:\r"
+    #     # Display the events list in reverse order (most recent first)
+    #     for event in range(len(eventsList)-1, -1, -1):
+    #
+    #         # Retrieve each Event summary, ommiting the syncSourceID and the friendlyName (for display purposes)
+    #         eventDetails = eventsList[event].getSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
+    #         # Creata a formatted string for the event
+    #         eventsListAsAString += (str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")) +\
+    #                                 ", " + str(eventDetails['summary']) + "\r")
+    #
+    #     outputString = title + separator + streamIPDetails + separator + streamPerformance + separator +\
+    #         eventsListAsAString
+    #
+    #     # Return a string containing the output
+    #     return outputString
 
 
 
@@ -1445,7 +1510,6 @@ class ResultsTransmitter(object):
                 else:
                     # Results transmission inhibited
                     pass
-
             else:
                 Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
             time.sleep(0.5)
@@ -1454,9 +1518,10 @@ class ResultsTransmitter(object):
 # ResultsTransmitter and ResultsReceiver objects)
 # It does't perform any calculations itself (unlike RtpReceiveStream) but it does have similar getter methods for results,
 # which should allow displayThread to treat this like an RtpStream object without any additional code alteration
-class RtpStreamResults(object):
+class RtpStreamResults(RtpReceiveCommon):
     def __init__(self, syncSourceID, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex):
 
+        super().__init__()
         self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
         self.syncSourceID = syncSourceID
@@ -1467,7 +1532,7 @@ class RtpStreamResults(object):
         self.__eventList = []
 
         # No of historic events to keep in memory (before housekeeping)
-        self.historicEventsLimit  = 50
+        self.historicEventsLimit = 50
 
         # Create mutex locks for data access
         self.__accessRtpStreamStatsMutex = threading.Lock()         # for the stats dictionary
@@ -1480,6 +1545,7 @@ class RtpStreamResults(object):
         self.rtpTxStreamResultsDictMutex.acquire()
         self.rtpTxStreamResultsDict[self.syncSourceID] = self
         self.rtpTxStreamResultsDictMutex.release()
+
 
     def updateStats(self, statsDict):
         # Will copy statsDict into self.__stats
