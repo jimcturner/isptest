@@ -1282,30 +1282,47 @@ class RtpReceiveStream(object):
             #                    " events removed"+str(oldSize)+">>"+str(newSize))
 
     # This method will generate a formatted report containing the performance of the Rtp Stream
-    def generateReport(self):
+    def generateReport(self, eventFilterList = None):
         # It will include:-
         # Source Ip, Dest IP, Port, Sync Source ID, Friendly Name
         # Duration of test, % Loss, Glitch period, bitrate, packet size
         # % Loss
         # Get a dump of the current stats
         stats = self.getRtpStreamStats()
-        # Get a dump of the current events
-        eventsList = self.getRTPStreamEventList()
+        # Get a dump of the current events (taking into account whether display filtering has been applied)
+        # Retrieve the desired event types from the RTP Stream object
+        eventsList = self.getRTPStreamEventList(filterList = eventFilterList)
         separator = ("-" * 63) + "\r"
         title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(stats["stream_friendly_name"]).rstrip() + ")" + "\r"
         streamIPDetails  = \
             str(stats["stream_srcAddress"]) + ":" + str(stats["stream_srcPort"])+" ---> " + \
-                str(stats["stream_rxAddress"]) + ":" + str(stats["stream_rxPort"]) + \
-                ". Packet size: " + str(stats["packet_payload_size_mean_1S_bytes"]) + " bytes" + "\r"
+                str(stats["stream_rxAddress"]) + ":" + str(stats["stream_rxPort"]) + "\r" +\
+                "Packet size: " + str(stats["packet_payload_size_mean_1S_bytes"]) + " bytes" +\
+                ", Bitrate: " + str(bToMb(8 * stats["packet_data_received_1S_bytes"])) + "bps" + "\r"
 
+        labelWidth = 33
         streamPerformance = \
-            "Duration of test:\t" + str(dtstrft(stats["stream_time_elapsed_total"])) + "\r" + \
-            "Packet loss:       " + str(math.ceil(stats["glitch_packets_lost_total_percent"])) + "%" + "\r" \
-            "Total packets lost:" + str(int(stats["glitch_packets_lost_total_count"])) + "\r"
+            "Duration of test: ".rjust(labelWidth) + str(dtstrft(stats["stream_time_elapsed_total"])) + "\r" +\
+            "Packet loss: ".rjust(labelWidth) + str(math.ceil(stats["glitch_packets_lost_total_percent"])) + "%" + "\r" +\
+            "Total packets lost: ".rjust(labelWidth) + str(int(stats["glitch_packets_lost_total_count"])) + "\r" +\
+            "Maximum glitch dur: ".rjust(labelWidth) + str(dtstrft(stats["glitch_max_glitch_duration"])) + "\r" +\
+            "Mean glitch dur: ".rjust(labelWidth) + str(dtstrft(stats["glitch_mean_glitch_duration"])) + "\r" +\
+            "Mean interval between glitches: ".rjust(labelWidth) + str(dtstrft(stats["glitch_mean_time_between_glitches"])) + "\r"
 
+        # Create list of glitches (as a string)
+        eventsListAsAString = "Events:\r"
+        # Display the events list in reverse order (most recent first)
+        for event in range(len(eventsList)-1, -1, -1):
 
+            # Retrieve each Event summary, ommiting the syncSourceID and the friendlyName (for display purposes)
+            eventDetails = eventsList[event].getSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
+            # Creata a formatted string for the event
+            eventsListAsAString += (str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")) +\
+                                    ", " + str(eventDetails['summary']) + "\r")
 
-        outputString = title + separator + streamIPDetails + separator + streamPerformance
+        outputString = title + separator + streamIPDetails + separator + streamPerformance + separator +\
+            eventsListAsAString
+
         # Return a string containing the output
         return outputString
 
