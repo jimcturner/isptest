@@ -1344,8 +1344,19 @@ class UI(object):
                     selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
                 except:
                     pass
+            # Get a textual, formatted report for this stream
             streamReport = selectedRxOrResultsStream.generateReport(eventFilterList = self.filterListForDisplayedEvents)
-            self.__renderMessageBox(streamReport, "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.RED)
+            # Attempt to copy the report to the local clipboard
+            try:
+                pyperclip.copy(streamReport)
+                self.__renderMessageBox("Success!\n\n<Press a key to continue>",\
+                        "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
+            except:
+                # Copy to clipboard failed.
+                self.__renderMessageBox("Unable to copy to the local clipboard.\n" +\
+                        " This is mostly likely because you are connected to a text-only device using SSH.\n" +\
+                        " Sending the report to pastebin.com instead. Please follow this URL:-", \
+                        "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
 
 
 
