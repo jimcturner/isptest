@@ -1931,7 +1931,7 @@ class UI(object):
         # NOTE: This is a blocking method
 
         maxWidth = 55
-        tableContents = "BBC IBEOO Team ISP Analyser V1.2 (beta)".center(maxWidth, " ") + \
+        tableContents = "BBC IBEOO Team ISP Analyser V1.3)".center(maxWidth, " ") + \
                         "\n\n" + "(c) James Turner 2020".center(maxWidth, " ") + \
                         "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
                         "\n" + " measurement tool supporting multiple tx/rx streams".center(maxWidth, " ") + \
