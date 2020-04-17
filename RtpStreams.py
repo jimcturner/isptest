@@ -508,12 +508,25 @@ class RtpReceiveCommon(object):
 
 
     # This method will call self.generateReport() and write the output to disk
-    # If no filename is supplied, it will use the filename supplied in
-    def writeReportToDisk(self, fileName = None):
-        # If filename hasn't been overridden, use the default
+    # If no filename is supplied, it will use an auto-generated filename based on the stream parameters
+    # It will take an optional eventFilterList and pass it directly to generateReport()
+    def writeReportToDisk(self, fileName = None, eventFilterList=None):
+
+        #  Generate the report to be written to disk
+        report = self.generateReport(eventFilterList=eventFilterList)
+
+        # If filename hasn't been overridden, auto-generate one. Note filename validation should have happened prior
         if fileName is None:
             fileName = self.createFilenameForReportExport()
-        Message.addMessage("writeReportToDisk: " + str(fileName))
+
+        try:
+            # Open the file for writing
+            fh = open(fileName, "w+")
+            fh.write(report)
+            fh.close()
+            Message.addMessage("Saved: " + str(fileName))
+        except Exception as e:
+            Message.addMessage("ERR: RtpReceiveCommon.writeReportToDisk() " + str(e))
 
 # Define a class to represent a stream of received rtp packets (and associated stats)
 class RtpReceiveStream(RtpReceiveCommon):
