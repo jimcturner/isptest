@@ -75,6 +75,13 @@ from Custom_prompt_toolkit_mods import multi_input_dialog
 
 
 ####################################################################################
+# Define a class to hold constants to be used by the rest of the application
+# This will be used as the source of default values
+class Registry(object):
+    streamReportFilename = "Stream_report_"
+    version = "V1.3"
+
+####################################################################################
 # Utility Classes
 
 
@@ -1931,7 +1938,7 @@ class UI(object):
         # NOTE: This is a blocking method
 
         maxWidth = 55
-        tableContents = "BBC IBEOO Team ISP Analyser V1.3)".center(maxWidth, " ") + \
+        tableContents = ("BBC IBEOO Team ISP Analyser " + Registry.version).center(maxWidth, " ") + \
                         "\n\n" + "(c) James Turner 2020".center(maxWidth, " ") + \
                         "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
                         "\n" + " measurement tool supporting multiple tx/rx streams".center(maxWidth, " ") + \

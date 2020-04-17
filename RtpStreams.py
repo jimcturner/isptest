@@ -490,6 +490,10 @@ class RtpReceiveCommon(object):
         # Return a string containing the output
         return outputString
 
+    # This method will call self.generateReport() and write the output to disk
+    # If no filename is supplied, it will use the filename supplied in
+    def writeReportToDisk(self, fileName = None):
+        pass
 
 # Define a class to represent a flow of received rtp packets (and associated stats)
 class RtpReceiveStream(RtpReceiveCommon):
