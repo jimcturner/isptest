@@ -57,7 +57,7 @@ import pickle
 # Non standard external libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
-from validator_collection import validators, errors
+from validator_collection import validators, checkers, errors
 import six  # Required for strings being passed to prompt_toolkit dialogues (they won't accept Python2 strings)
 
 
@@ -66,15 +66,13 @@ from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
 from prompt_toolkit.styles import Style
 import pyperclip
 # Additional experimental libraries
+from pathvalidate import ValidationError, validate_filename
 
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch
 from Utils import *
 from Custom_prompt_toolkit_mods import multi_input_dialog
 from Registry import Registry
-
-
-
 
 
 ####################################################################################
@@ -1399,8 +1397,52 @@ class UI(object):
 
             # Confirm that the stream has been found
             if selectedRxOrResultsStream is not None:
-                # Invoke that stream's writeReportToDisk method
-                selectedRxOrResultsStream.writeReportToDisk()
+                # Get a default filename
+                defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport()
+
+                # Now create an input box prefilling with the initial filename created by createFilenameForReportExport()
+                styleDefinition = Style.from_dict({
+                    'dialog': 'bg:ansiblue',  # Screen background
+                    'dialog frame.label': 'bg:ansiwhite ansired ',
+                    'dialog.body': 'bg:ansiwhite ansiblack',
+                    'dialog shadow': 'bg:ansiblack'})
+
+
+                # Create a multi_input_dialog (i.e my modified version of prompt_toolkit.input_dialog()
+                # This is because my version allows you to specify the default text in the user field
+                # Keep displaying the dialog until the filename is validated/cancel
+                filename = None
+                filenameValidated = False
+                dialogueTitle = 'Export stream report to file (stream ' + str(self.selectedStreamID) + ')'
+                while filenameValidated is False:
+                    try:
+                        enteredText = multi_input_dialog(
+                        [['Please enter a filename', defaultFilename]],\
+                                title=dialogueTitle,\
+                                style=styleDefinition).run()
+                        if enteredText is None:
+                            # If 'cancel' selected
+                            break
+                        else:
+                            # Attempt to validate the filename. If it fails, an Exception will be raised
+                            validate_filename(enteredText['Please enter a filename'])
+
+                            # filename has been validated
+                            filenameValidated = True
+                            # Extract the filename from the dictionary
+                            filename = enteredText['Please enter a filename']
+
+                            # Invoke that stream's writeReportToDisk method
+                            selectedRxOrResultsStream.writeReportToDisk(filename)
+
+
+                    except ValidationError as e:
+                        # Modify the dialogue table to show the erroneous chars
+                        dialogueTitle = str(e)
+
+
+
+
 
     # Cursor right
     def __onNavigateRight(self):
@@ -1458,7 +1500,7 @@ class UI(object):
                 title='Enter friendly name',
                 text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':',
                 style=styleDefinition).run()
-            if text != '':
+            if text is not None:
                 self.selectedStream.setFriendlyName(text)
         else:
             Message.addMessage("Can't modify stream results. Change the name in the Transmit pane instead")

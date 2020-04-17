@@ -32,6 +32,21 @@ from prompt_toolkit.shortcuts.dialogs import _create_app
 
 from prompt_toolkit.shortcuts.dialogs import _return_none
 
+# Creates a multifield text input form.
+# The arg textFieldsList[] is a list of tuples containing ["text label for the field", "default value"]
+# It returns a dictionary. The keys are the labels supplied in textFieldsList[n][0]
+# Sample usage:
+# Define the dialogue colours
+#                 styleDefinition = Style.from_dict({
+#                     'dialog': 'bg:ansiblue',  # Screen background
+#                     'dialog frame.label': 'bg:ansiwhite ansired ',
+#                     'dialog.body': 'bg:ansiwhite ansiblack',
+#                     'dialog shadow': 'bg:ansiblack'})
+#     dialogUserFieldsList = [["Destination address", six.text_type(destAddr)],
+#                             ["UDP destination port (1024-65535)", six.text_type(destPort)]]
+#       newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
+#                                                                    title=title,
+#                                                                    style=styleDefinition).run()
 
 def multi_input_dialog(
     textFieldsList,

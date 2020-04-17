@@ -495,18 +495,24 @@ class RtpReceiveCommon(object):
         # Return a string containing the output
         return outputString
 
+    # This utility method witll generate a filename based on the stream parameters.
+    def createFilenameForReportExport(self):
+        # Get info about the stream (to be used in the title)
+        syncSourceID, srcAddr, srcPort, friendlyName = self.getRTPStreamID()
+        fileName = Registry.streamReportFilename + \
+                   str(syncSourceID) + "_" + \
+                   str(friendlyName).rstrip() + "_" + \
+                   str(srcAddr) + "_" + \
+                   str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M"))
+        return fileName
+
+
     # This method will call self.generateReport() and write the output to disk
     # If no filename is supplied, it will use the filename supplied in
     def writeReportToDisk(self, fileName = None):
-        # If filename hasn't been overriden, use the default
+        # If filename hasn't been overridden, use the default
         if fileName is None:
-            # Get info about the stream (to be used in the title)
-            syncSourceID, srcAddr, srcPort, friendlyName = self.getRTPStreamID()
-            fileName = Registry.streamReportFilename +\
-                str(syncSourceID) + "_" + \
-                str(friendlyName).rstrip() + "_" + \
-                str(srcAddr) + "_" + \
-                str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M"))
+            fileName = self.createFilenameForReportExport()
         Message.addMessage("writeReportToDisk: " + str(fileName))
 
 # Define a class to represent a stream of received rtp packets (and associated stats)
