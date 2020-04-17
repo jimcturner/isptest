@@ -21,6 +21,7 @@ import pickle
 
 # Additonal libraries required (of my own making)
 from Utils import *
+from Registry import Registry
 
 
 class Foo(object):
@@ -442,6 +443,10 @@ class RtpReceiveCommon(object):
     def getRTPStreamEventList(self, filterList=None):
         pass
 
+    @abstractmethod
+    def getRTPStreamID(self):
+        pass
+
     # This method will generate a formatted report containing the performance of the Rtp Stream
     def generateReport(self, eventFilterList=None):
         # It will include:-
@@ -493,9 +498,18 @@ class RtpReceiveCommon(object):
     # This method will call self.generateReport() and write the output to disk
     # If no filename is supplied, it will use the filename supplied in
     def writeReportToDisk(self, fileName = None):
-        pass
+        # If filename hasn't been overriden, use the default
+        if fileName is None:
+            # Get info about the stream (to be used in the title)
+            syncSourceID, srcAddr, srcPort, friendlyName = self.getRTPStreamID()
+            fileName = Registry.streamReportFilename +\
+                str(syncSourceID) + "_" + \
+                str(friendlyName).rstrip() + "_" + \
+                str(srcAddr) + "_" + \
+                str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M"))
+        Message.addMessage("writeReportToDisk: " + str(fileName))
 
-# Define a class to represent a flow of received rtp packets (and associated stats)
+# Define a class to represent a stream of received rtp packets (and associated stats)
 class RtpReceiveStream(RtpReceiveCommon):
     # Constructor method.
     # The RtpReceiveStream object should be created with a unique id no

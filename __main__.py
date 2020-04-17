@@ -71,15 +71,11 @@ import pyperclip
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch
 from Utils import *
 from Custom_prompt_toolkit_mods import multi_input_dialog
+from Registry import Registry
 
 
 
-####################################################################################
-# Define a class to hold constants to be used by the rest of the application
-# This will be used as the source of default values
-class Registry(object):
-    streamReportFilename = "Stream_report_"
-    version = "V1.3"
+
 
 ####################################################################################
 # Utility Classes
@@ -1302,10 +1298,10 @@ class UI(object):
         # Additional check to see if the event filtering has been enabled and modify the title/footer labels accordingly
         if self.filterListForDisplayedEvents is not None:
                 title = "Glitches for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
-                footer = ["","[<][>]back/fwd, [t]exit, [r]copy to clipboard\n[y]show All events"]
+                footer = ["","[<][>]back/fwd, [t]exit, [r]copy to clipboard\n[y]show All events, [w]export as file"]
         else:
             title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
-            footer = ["", "[<][>]back/fwd, [t]exit, [r]copy to clipboard\n[y]show glitches only"]
+            footer = ["", "[<][>]back/fwd, [t]exit, [r]copy to clipboard\n[y]show glitches only, [w]export as file"]
 
         # Now actually display the paged table list
         self.__renderPagedList(self.tablePageNo, title, ["Timestamp".ljust(15), "Event".ljust(50)], tableContents,
@@ -1337,7 +1333,7 @@ class UI(object):
     # If the Event Lists Table is currently displayed, this method will copy the events to the local clipboard
     # If that is not possible (if for instance, you are connected to a remote instance of isptext via SSH)
     # it will attempt to export the data to pastebin.com (a website that allows you to share text via a webpage)
-    def __onCopyEventsToClipboard(self):
+    def __onCopyReportToClipboard(self):
         if self.displayEventsTable == True:
             selectedRxOrResultsStream = None
             # Get a handle on the selected stream
@@ -1351,35 +1347,60 @@ class UI(object):
                     selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
                 except:
                     pass
-            # Get a textual, formatted report for this stream
-            streamReport = selectedRxOrResultsStream.generateReport(eventFilterList = self.filterListForDisplayedEvents)
-            # Attempt to copy the report to the local clipboard
-            try:
-                pyperclip.copy(streamReport)
-                self.__renderMessageBox("Success!".center(30) + "\n\n" +\
-                        "<Press a key to continue>".center(30),\
-                        "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
 
-            except:
-                # Copy to clipboard failed. Paste to pastebin.com instead
-                url = ""
+            # Confirm that a valid stream exists
+            if selectedRxOrResultsStream is not None:
+                # Get a textual, formatted report for this stream
+                streamReport = selectedRxOrResultsStream.generateReport(eventFilterList = self.filterListForDisplayedEvents)
+                # Attempt to copy the report to the local clipboard
                 try:
-                    url = pasteBin(streamReport, "isptest stream report for stream " +\
-                                str(self.selectedStreamID)).decode('utf-8')
-                except Exception as e:
-                    url = "Error pasting to pastebin:- \n" + str(e)
+                    pyperclip.copy(streamReport)
+                    self.__renderMessageBox("Success!".center(30) + "\n\n" +\
+                            "<Press a key to continue>".center(30),\
+                            "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
+
+                except:
+                    # Copy to clipboard failed. Paste to pastebin.com instead
+                    url = ""
+                    try:
+                        url = pasteBin(streamReport, "isptest stream report for stream " +\
+                                    str(self.selectedStreamID)).decode('utf-8')
+                    except Exception as e:
+                        url = "Error pasting to pastebin:- \n" + str(e)
 
 
-                # Display a message box with a URL or an error message
-                self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" +\
-                        "\nThis is mostly likely because you are connected to a text-only\n" +\
-                        "terminal (e.g via an SSH session?)\n" +\
-                        "\nSending the report to pastebin.com instead. Please follow this URL:-\n" +\
-                        "\n " + str(url).center(70) + "\n\n" +\
-                        "<Press a key to continue>".center(70), \
-                        "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
+                    # Display a message box with a URL or an error message
+                    self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" +\
+                            "\nThis is mostly likely because you are connected to a text-only\n" +\
+                            "terminal (e.g via an SSH session?)\n" +\
+                            "\nSending the report to pastebin.com instead. Please follow this URL:-\n" +\
+                            "\n " + str(url).center(70) + "\n\n" +\
+                            "<Press a key to continue>".center(70), \
+                            "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
 
+    # This method will call the currently selected Receive (or TxResults writeReportToDisk() method
+    # causing a report of the current stream to be saved to disk
+    # Note, this option is obly available if the Events Table is currently being displayed
+    def __onSaveReportToDisk(self):
+        if self.displayEventsTable == True:
+            selectedRxOrResultsStream = None
+            # Get a handle on the selected stream
+            # Depending upon the mode, we'll have to retrieve it from the correct dictionary
+            if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+                try:
+                    selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
+                except:
+                    pass
+            elif self.operationMode == 'TRANSMIT':
+                try:
+                    selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
+                except:
+                    pass
 
+            # Confirm that the stream has been found
+            if selectedRxOrResultsStream is not None:
+                # Invoke that stream's writeReportToDisk method
+                selectedRxOrResultsStream.writeReportToDisk()
 
     # Cursor right
     def __onNavigateRight(self):
@@ -2033,9 +2054,12 @@ class UI(object):
             # 'y' Show only glitches on events list table
             elif self.keyPressed == ord('y'):
                 self.__onfilterEventsTable()
-            # 'r' Copy events to clipboard
+            # 'r' Copy report to clipboard
             elif self.keyPressed == ord('r'):
-                self.__onCopyEventsToClipboard()
+                self.__onCopyReportToClipboard()
+            # 'w' Save stream report to disk
+            elif self.keyPressed == ord('w'):
+                self.__onSaveReportToDisk()
 
             # Special features
             # 'z' Toggle packet generation on/off for selected stream
