@@ -506,8 +506,8 @@ class RtpReceiveCommon(object):
                    str(srcAddr) + "_" + \
                    str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S"))
         # Return a sanitised filename including the full path (as specified in Registry.resultsPath
-        # Note the use of sanitize_filepath will automaticall orientate the 'slash' for Windows or Mac/Linux
-        return sanitize_filepath(Registry.resultsSubfolder + "/" + fileName)
+        # Note the use of sanitize_filepath will automatically orientate the 'slash' for Windows or Mac/Linux
+        return sanitize_filepath(Registry.resultsSubfolder + "/" + fileName + ".txt")
 
 
     # This method will call self.generateReport() and write the output to disk
