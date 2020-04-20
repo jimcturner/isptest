@@ -18,6 +18,7 @@ import json
 from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import pickle
+from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 # Additonal libraries required (of my own making)
 from Utils import *
@@ -504,8 +505,8 @@ class RtpReceiveCommon(object):
                    str(friendlyName).rstrip() + "_" + \
                    str(srcAddr) + "_" + \
                    str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S"))
-        # Return filename including the full path (as specified in Registry.resultsPath
-        return Registry.resultsPath + fileName
+        # Return a sanitised filename including the full path (as specified in Registry.resultsPath
+        return sanitize_filepath(Registry.resultsSubfolder + "/" + fileName)
 
 
     # This method will call self.generateReport() and write the output to disk

@@ -66,7 +66,7 @@ from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
 from prompt_toolkit.styles import Style
 import pyperclip
 # Additional experimental libraries
-from pathvalidate import ValidationError, validate_filename
+from pathvalidate import ValidationError, validate_filename, validate_filepath
 
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch
