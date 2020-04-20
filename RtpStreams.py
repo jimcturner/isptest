@@ -509,11 +509,13 @@ class RtpReceiveCommon(object):
 
     # This method will call self.generateReport() and write the output to disk
     # If no filename is supplied, it will use an auto-generated filename based on the stream parameters
-    # It will take an optional eventFilterList and pass it directly to generateReport()
-    def writeReportToDisk(self, fileName = None, eventFilterList=None):
+    # It will take an optional exportFilterList[] and pass it directly to generateReport()
+    # See self.generateReport() for info on how this list can be used to filter the Event types that appear
+    # in the exported report
+    def writeReportToDisk(self, fileName = None, exportFilterList=None):
 
         #  Generate the report to be written to disk
-        report = self.generateReport(eventFilterList=eventFilterList)
+        report = self.generateReport(eventFilterList=exportFilterList)
 
         # If filename hasn't been overridden, auto-generate one. Note filename validation should have happened prior
         if fileName is None:

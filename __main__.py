@@ -1433,7 +1433,8 @@ class UI(object):
                             filename = enteredText['Please enter a filename']
 
                             # Invoke that stream's writeReportToDisk method
-                            selectedRxOrResultsStream.writeReportToDisk(filename)
+                            # USe the current display filter for events to determine which events are exported to the file
+                            selectedRxOrResultsStream.writeReportToDisk(filename, exportFilterList=self.filterListForDisplayedEvents)
 
 
                     except ValidationError as e:
