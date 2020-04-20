@@ -2236,6 +2236,24 @@ class RtpGenerator(object):
 
             # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
             if self.timeToLive ==0:
+
+                # Now check to see if there is a corresponding RtpStreamResults object for this Tx stream
+                self.rtpTxStreamResultsDictMutex.acquire()
+                if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
+                    try:
+                        # Get a handle on the RtpStreamResults object
+                        rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                        # invoke the writeReportToDisk() method to dump a report to disk automatically
+                        # Retrieve the auto-generated filename
+                        _filename = rtpTxStreamResults.createFilenameForReportExport()
+                        Message.addMessage("Stream " + str(self.syncSourceIdentifier) + " expiring")
+                        # Write a report to disk
+                        rtpTxStreamResults.writeReportToDisk(fileName=_filename)
+                    except Exception as e:
+                        Message.addMessage("ERR: RtpGenerator.killStream() rtpTxStreamResults.generateReport(): " + str(e))
+                self.rtpTxStreamResultsDictMutex.release()
+
+                # Now break out of the while loop to end the thread finally kill the object.
                 break
 
 # An object that will act as a UDP receiver. It will receive server reports from ResultsTransmitter
