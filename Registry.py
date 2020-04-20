@@ -5,3 +5,4 @@
 class Registry(object):
     streamReportFilename = "Stream_report_"
     version = "V1.3"
+    resultsPath = "results/"

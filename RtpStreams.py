@@ -503,8 +503,9 @@ class RtpReceiveCommon(object):
                    str(syncSourceID) + "_" + \
                    str(friendlyName).rstrip() + "_" + \
                    str(srcAddr) + "_" + \
-                   str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M"))
-        return fileName
+                   str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S"))
+        # Return filename including the full path (as specified in Registry.resultsPath
+        return Registry.resultsPath + fileName
 
 
     # This method will call self.generateReport() and write the output to disk
