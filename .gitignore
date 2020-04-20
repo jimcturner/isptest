@@ -3,3 +3,4 @@ get-pip.py
 *.csv
 *.json
 __pycache__/
+results/
