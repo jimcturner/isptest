@@ -65,8 +65,9 @@ import six  # Required for strings being passed to prompt_toolkit dialogues (the
 from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
 from prompt_toolkit.styles import Style
 import pyperclip
+from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 # Additional experimental libraries
-from pathvalidate import ValidationError, validate_filename, validate_filepath
+
 
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch
@@ -2860,7 +2861,21 @@ def main(argv):
     # # Invoke colorama init() method to allow ansi escape sequences to work on Windows
     # init(autoreset=True)
 
-   # String to specify which operation mode we're in (loopback, tx, rx)
+
+    # Check to see if resultsSubfolder already exists (if not, create it)
+    try:
+        directory = os.path.dirname(Registry.resultsSubfolder)
+        if not os.path.exists(directory):
+            txt = "subfolder for results doesn't exist. Creating " + Registry.resultsSubfolder
+            print( txt +"\r")
+            Message.addMessage(txt)
+            os.makedirs(Registry.resultsSubfolder)
+    except OSError:
+        print("Could not create sub folder " + Registry.resultsSubfolder +\
+              ". Check you have write privileges for this folder\r")
+        exit()
+
+    # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
 
 
