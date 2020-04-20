@@ -2446,8 +2446,8 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
     else:
         prefix = ""
 
-    filename_csv = prefix + "eventLog_" + datetime.datetime.now().strftime("%H-%M-%S") + ".csv"
-    filename_json = prefix + "eventLog_" + datetime.datetime.now().strftime("%H-%M-%S") + ".json"
+    filename_csv = Registry.resultsSubfolder + prefix + "eventLog_" + datetime.datetime.now().strftime("%H-%M-%S") + ".csv"
+    filename_json = Registry.resultsSubfolder + prefix + "eventLog_" + datetime.datetime.now().strftime("%H-%M-%S") + ".json"
     lastWrittenEventNoDict = {} # Dictionary to hold the last written event no for each stream
     latestEvents = []
 
