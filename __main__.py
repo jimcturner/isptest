@@ -5,6 +5,8 @@
 # 
 from __future__ import unicode_literals # Required for prompt_toolkit
 import sys
+from Registry import Registry # This class contains constants/defaults used throughout the program
+
 # Tests the current Python interpreter version
 def testPythonVersion(majorVersionNo, minorVersionNumber):
     # If the major and minor version number is not satisfied
@@ -14,6 +16,7 @@ def testPythonVersion(majorVersionNo, minorVersionNumber):
     # Get current Python version
     version = sys.version_info
     def printErrorMessage():
+
         print("You're not running a latest enough version of Python " +
               str(version[0]) + "." + str(version[1]) + ". isptest requires >3.6:\r")
         print("\t------\r")
@@ -21,17 +24,23 @@ def testPythonVersion(majorVersionNo, minorVersionNumber):
         print("\tor else, try python [tab] which (on OSX and Linux) should list the possible python\r")
         print("\tversions installed on this system\r")
 
+
+    print("you're running Python version " + str(int(version[0])) + "." + str(int(version[1])))
+    exit()
     if int(version[0]) < majorVersionNo:  # Check major release version):
         if int(version[1]) < minorVersionNumber:  # Check minor version
             printErrorMessage()
-            exit()
+            return False
         printErrorMessage()
-        exit()
+        return False
     else:
         # Else Installed Python version satisfies minimum requirements
-        pass
+        return True
 # Check for minimum python version (currently 3.6)
-testPythonVersion(3,6)
+if (testPythonVersion(Registry.pythonMinimumVersionRequired_Major,Registry.pythonMinimumVersionRequired_Minor)):
+    pass
+else:
+    exit()
 
 
 import socket
@@ -73,7 +82,7 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch
 from Utils import *
 from Custom_prompt_toolkit_mods import multi_input_dialog
-from Registry import Registry
+
 
 
 ####################################################################################
