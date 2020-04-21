@@ -34,7 +34,7 @@ def testPythonVersion(majorVersionNo, minorVersionNumber):
         printErrorMessage()
         return False
     else:
-        # Check minor version
+        # Major version is okay, now check minor version
         if int(version[1]) < minorVersionNumber:
             # Minor version doesn't meet requirements
             printErrorMessage()
