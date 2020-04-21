@@ -2861,6 +2861,15 @@ def main(argv):
     # # Invoke colorama init() method to allow ansi escape sequences to work on Windows
     # init(autoreset=True)
 
+    # # Create empty file
+    # from pathlib import Path
+    # Path('empty_file').touch()
+
+    # os.rename("test", "renamed_test") # rename file
+    # os.path.isfile("changelog.txt") #Check if file exists
+    # b = os.path.getsize("notepad2.py") # get file size
+    #  os.remove("renamed_test") # delete file
+    exit()
 
     # Check to see if resultsSubfolder already exists (if not, create it)
     try:

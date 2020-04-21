@@ -6,3 +6,4 @@ class Registry(object):
     streamReportFilename = "Stream_report_"
     version = "V1.4"
     resultsSubfolder = "results/"        # Specifies the subfolder where exported files will be saved
+    receiverLogFilenamePrefix = "receiver_"
