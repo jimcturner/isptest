@@ -2869,7 +2869,7 @@ def main(argv):
     # os.path.isfile("changelog.txt") #Check if file exists
     # b = os.path.getsize("notepad2.py") # get file size
     #  os.remove("renamed_test") # delete file
-    exit()
+
 
     # Check to see if resultsSubfolder already exists (if not, create it)
     try:
