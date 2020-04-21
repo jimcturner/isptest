@@ -2886,19 +2886,6 @@ def main(argv):
     #  os.remove("renamed_test") # delete file
 
 
-    # Check to see if resultsSubfolder already exists (if not, create it)
-    try:
-        directory = os.path.dirname(Registry.resultsSubfolder)
-        if not os.path.exists(directory):
-            txt = "subfolder for results doesn't exist. Creating " + Registry.resultsSubfolder
-            print( txt +"\r")
-            Message.addMessage(txt)
-            os.makedirs(Registry.resultsSubfolder)
-    except OSError:
-        print("Could not create sub folder " + Registry.resultsSubfolder +\
-              ". Check you have write privileges for this folder\r")
-        exit()
-
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
 
@@ -3177,6 +3164,19 @@ def main(argv):
         print ("No mode option specified. Do you want Transmit or Receive mode?. Use -h for help")
         exit()
 
+    # Check to see if resultsSubfolder already exists (if not, create it)
+    try:
+        directory = os.path.dirname(Registry.resultsSubfolder)
+        if not os.path.exists(directory):
+            txt = "subfolder for results doesn't exist. Creating " + Registry.resultsSubfolder
+            print(txt + "\r")
+            Message.addMessage(txt)
+            os.makedirs(Registry.resultsSubfolder)
+    except OSError:
+        print("Could not create sub folder " + Registry.resultsSubfolder + \
+              ". Check you have write privileges for this folder\r")
+        exit()
+    exit()
     # Create a dictionaries for all streams
     rtpTxStreamsDict ={}
     # Create a mutex lock for the tx streams dictionary (for deleting objects)
