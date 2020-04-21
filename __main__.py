@@ -38,6 +38,7 @@ def testPythonVersion(majorVersionNo, minorVersionNumber):
         return True
 # Check for minimum python version (currently 3.6)
 if (testPythonVersion(Registry.pythonMinimumVersionRequired_Major,Registry.pythonMinimumVersionRequired_Minor)):
+    print("Version satisfied\r")
     pass
 else:
     exit()
