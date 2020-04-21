@@ -27,7 +27,7 @@ def testPythonVersion(majorVersionNo, minorVersionNumber):
         print("versions installed on this system\r")
 
 
-    print("you're running Python version " + str(int(version[0])) + "." + str(int(version[1])) + "\r")
+    # print("you're running Python version " + str(int(version[0])) + "." + str(int(version[1])) + "\r")
     # Check major release version):
     if int(version[0]) < majorVersionNo:
         # Major version doesn't meet requirements
