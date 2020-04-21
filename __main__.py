@@ -3176,7 +3176,7 @@ def main(argv):
         print("Could not create sub folder " + Registry.resultsSubfolder + \
               ". Check you have write privileges for this folder\r")
         exit()
-    exit()
+
     # Create a dictionaries for all streams
     rtpTxStreamsDict ={}
     # Create a mutex lock for the tx streams dictionary (for deleting objects)
