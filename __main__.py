@@ -18,15 +18,15 @@ def testPythonVersion(majorVersionNo, minorVersionNumber):
     def printErrorMessage():
 
         print("You're not running a latest enough version of Python " +
-              str(version[0]) + "." + str(version[1]) + ". isptest requires >3.6:\r")
+              str(version[0]) + "." + str(version[1]) + ". isptest requires >" +\
+              str(majorVersionNo) + "." + str(minorVersionNumber) + "\r")
         print("\t------\r")
         print("\tHint: Python3 *might* be installed. Try re-running using 'python3 [args]'\r")
         print("\tor else, try python [tab] which (on OSX and Linux) should list the possible python\r")
         print("\tversions installed on this system\r")
 
 
-    print("you're running Python version " + str(int(version[0])) + "." + str(int(version[1])))
-    exit()
+    print("you're running Python version " + str(int(version[0])) + "." + str(int(version[1])) + "\r")
     if int(version[0]) < majorVersionNo:  # Check major release version):
         if int(version[1]) < minorVersionNumber:  # Check minor version
             printErrorMessage()
@@ -42,7 +42,7 @@ if (testPythonVersion(Registry.pythonMinimumVersionRequired_Major,Registry.pytho
 else:
     exit()
 
-
+exit()
 import socket
 import os
 # import binascii
