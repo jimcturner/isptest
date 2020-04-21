@@ -23,8 +23,8 @@ def testPythonVersion(majorVersionNo, minorVersionNumber):
               str(majorVersionNo) + "." + str(minorVersionNumber) + "\r")
         print("\r")
         print("Hint: Python3 *might* be installed. Try re-running using 'python3 [args]'\r")
-        print("or else, try python [tab] which (on OSX and Linux) should list the possible python\r")
-        print("versions installed on this system\r")
+        print("or else, try python [tab] which (on OSX and Linux) should list the possible\r")
+        print("versions of the Python interpreter installed on this system\r")
 
 
     # print("you're running Python version " + str(int(version[0])) + "." + str(int(version[1])) + "\r")
