@@ -24,7 +24,7 @@ def testPythonVersion(majorVersionNo, minorVersionNumber):
         print("\r")
         print("Hint: Python3 *might* be installed. Try re-running using 'python3 [args]'\r")
         print("or else, try python [tab] which (on OSX and Linux) should list the possible\r")
-        print("versions of the Python interpreter installed on this system\r")
+        print("versions of the Python interpreter installed on this system.\r")
 
 
     # print("you're running Python version " + str(int(version[0])) + "." + str(int(version[1])) + "\r")
@@ -43,12 +43,12 @@ def testPythonVersion(majorVersionNo, minorVersionNumber):
         return True
 # Check for minimum python version (currently 3.6)
 if (testPythonVersion(Registry.pythonMinimumVersionRequired_Major,Registry.pythonMinimumVersionRequired_Minor)):
-    print("Version satisfied\r")
     pass
 else:
+    # Python version not satisfied so exit
     exit()
 
-exit()
+
 import socket
 import os
 # import binascii
