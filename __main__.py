@@ -27,14 +27,17 @@ def testPythonVersion(majorVersionNo, minorVersionNumber):
 
 
     print("you're running Python version " + str(int(version[0])) + "." + str(int(version[1])) + "\r")
-    if int(version[0]) < majorVersionNo:  # Check major release version):
-        if int(version[1]) < minorVersionNumber:  # Check minor version
-            print("gets here")
-            printErrorMessage()
-            return False
+    # Check major release version):
+    if int(version[0]) < majorVersionNo:
+        # Major version doesn't meet requirements
         printErrorMessage()
         return False
     else:
+        # Check minor version
+        if int(version[1]) < minorVersionNumber:
+            # Minor version doesn't meet requirements
+            printErrorMessage()
+            return False
         # Else Installed Python version satisfies minimum requirements
         return True
 # Check for minimum python version (currently 3.6)
