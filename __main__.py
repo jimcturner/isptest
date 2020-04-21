@@ -2455,41 +2455,69 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
     # Autonomous thread to iterate over rtpStreamsDict and poll RtpStream eventLists for new events
     # and write them  to disk
     Message.addMessage("INFO: diskLoggerThread starting")
-    # Prefix the filenames created when in RECEIVE mode
+    filename = ""
+    # Create the full filename including path depending upon opersation mode (excluding file extension eg. csv/.json)
     if operationMode == 'RECEIVE':
-        prefix = "receiver_report_"
+        # prefix = "receiver_report_"
+        filename = sanitize_filepath(Registry.resultsSubfolder + Registry.receiverLogFilename)
     else:
-        prefix = ""
+        filename = sanitize_filepath(Registry.resultsSubfolder + Registry.transmitterLogFilename)
 
-    filename_csv = Registry.resultsSubfolder + prefix + "eventLog_" + datetime.datetime.now().strftime("%H-%M-%S") + ".csv"
-    filename_json = Registry.resultsSubfolder + prefix + "eventLog_" + datetime.datetime.now().strftime("%H-%M-%S") + ".json"
-    lastWrittenEventNoDict = {} # Dictionary to hold the last written event no for each stream
+    lastWrittenEventNoDict = {}  # Dictionary to hold the last written event no for each stream
     latestEvents = []
+    # Create versions of filename with the desired extensions
+    filename_csv = filename + ".csv"
+    filename_json = filename + ".json"
 
-    file_json = None # File handle
-    file_csv = None # File handle
+    # Function to monitor the existing log file size to if they've reached the threshold. If so, rename them
+    # to a new file with a date added to the filename. The file extension will be preserved
+    def archiveLogs(file, maxSize):
+        # Determine size of existing log file
+        # check to see if the file exists at all
+        if os.path.isfile(file):
+            # File does exist, so check the size
+            try:
+                if os.path.getsize(file) > maxSize:
+                    # separate the filename and the extension
+                    nameNoExtension, fileExtension = os.path.splitext(file)
+                    # File is larger than the max threshold so rename it
+                    archivedFilenameSuffix = "_ending_at_" + datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S")
+                    os.rename(file, nameNoExtension+archivedFilenameSuffix+fileExtension)
+                    Message.addMessage("Auto archived " + file)
+            except Exception as e:
+                Message.addMessage("ERR: __diskloggerThread.archiveLogs() " + str(e))
 
-    # Create a file and write a header
-    try:
-        # Write summary file
-        file_csv = open(filename_csv, "w+")
-        file_csv.write("Event Log summary created by isptest. Created at: " + str(datetime.datetime.now()) +
-                       "\r\n-------------------------------------------------------------------------\n")
-        file_csv.close()
 
-        # Write detailed json file
-        file_json = open(filename_json, "w+")
-        file_json.write("Event Log json created by isptest. Created at: " + str(datetime.datetime.now()) +
-                        "\r\n-------------------------------------------------------------------------\n")
-        file_json.close()
-    except Exception as e:
-        Message.addMessage("DBUG:__diskLoggerThread " + str(e))
+    # This function checks tp see if fileToCreate already exists. if it doesn't, it will create the file
+    # along with a header at the top containing the program version and the current time
+    def createLogFile(fileToCreate, headerTextPrefix):
+        if not os.path.isfile(fileToCreate):
+            # File doesn't exist yet, so create it
+            try:
+                # Open the file for writing
+                fh = open(fileToCreate, "w+")
+                fh.write(headerTextPrefix + " created by isptest v" + str(Registry.version) + \
+                               ". Created at: " + datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S") + \
+                               "\r\n-------------------------------------------------------------------------\n")
+                fh.close()
+            except Exception as e:
+                Message.addMessage("ERR: __diskloggerThread.createLogFile() " + fileToCreate + ", " + str(e))
 
+    # Sit in an infinite loop looking for new events (on all streams) and appending them to the log file(s)
     while True:
         # Check status of shutdownFlag
         if shutdownFlag.is_set():
             # If down, break out of the endless while loop
             break
+        # Check to see if the existing log files (if they exist) are below the max size threshold
+        archiveLogs(filename_csv, Registry.maximumLogFileSize_bytes)
+        archiveLogs(filename_json, Registry.maximumLogFileSize_bytes)
+        # Create a file and write a header (if necessary)
+        # For the CSV file
+        createLogFile(filename_csv, "Event summary")
+        # For the Json file
+        createLogFile(filename_json, "Event Log json file")
+
         # Get dictionary of available rtpRxStreams as a list
         # This will return a list of tuples [0]= sync Source id, [1]=the actual RtpStream object
         availableRtpRxStreamList = []
