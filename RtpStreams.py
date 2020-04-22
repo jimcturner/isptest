@@ -434,7 +434,18 @@ class RtpData(object):
 class RtpReceiveCommon(object):
 
     def __init__(self):
-        pass
+        # Create a 'leaderboard' for the worst 10 glitches
+        # In futire this will be a list of Glitch events
+        # Currently this list only ever includes 1 item (the current worst glitch)
+        self.worstGlitchesList = [None]
+        self.worstGlitchesMutex = threading.Lock()
+
+    # Thread-safe method to return a list of the worst glitches
+    def getWorstGlitches(self):
+        self.worstGlitchesMutex.acquire()
+        worstGlitchesList = deepcopy(self.worstGlitchesList)
+        self.worstGlitchesMutex.release()
+        return worstGlitchesList
 
     @abstractmethod
     def getRtpStreamStats(self):
@@ -460,6 +471,8 @@ class RtpReceiveCommon(object):
         # Retrieve the desired event types from the RTP Stream object
         # The '\r\n' escape sequence is required for Windows
         eventsList = self.getRTPStreamEventList(filterList=eventFilterList)
+        worstGlitchesList = self.getWorstGlitches()
+
         separator = ("-" * 63) + "\r\n"
         title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(
             stats["stream_friendly_name"]).rstrip() + ")" + "\r\n"
@@ -479,8 +492,21 @@ class RtpReceiveCommon(object):
             "Mean glitch dur: ".rjust(labelWidth) + str(dtstrft(stats["glitch_mean_glitch_duration"])) + "\r\n" + \
             "Mean interval between glitches: ".rjust(labelWidth) + str(
                 dtstrft(stats["glitch_mean_time_between_glitches"])) + "\r\n"
+        worstGlitchesListAsString = "Worst Glitch:\r\n"
+        if len(worstGlitchesList) > 0:
+            try:
+                # Generate list of the worst glitches
+                for glitch in worstGlitchesList:
+                    worstGlitchesListAsString += \
+                        str(worstGlitchesList[0].getSummary(includeStreamSyncSourceID=False,
+                                                            includeEventNo=False,
+                                                            includeType=False,
+                                                            includeFriendlyName=False)) + "\r\n"
+            except Exception as e:
+                Message.addMessage("ERR: RtpReceiveCommon.generateReport() compile worst glitches list: " + str(e))
 
-        # Create list of glitches (as a string)
+
+        # Create list of events (as a string)
         eventsListAsAString = "Events:\r\n"
         # Display the events list in reverse order (most recent first)
         for event in range(len(eventsList) - 1, -1, -1):
@@ -490,8 +516,8 @@ class RtpReceiveCommon(object):
             eventsListAsAString += (str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")) + \
                                     ", " + str(eventDetails['summary']) + "\r\n")
 
-        outputString = title + separator + streamIPDetails + separator + streamPerformance + separator + \
-                       eventsListAsAString
+        outputString = title + separator + streamIPDetails + separator + streamPerformance + separator +\
+                    worstGlitchesListAsString + separator + eventsListAsAString
 
         # Return a string containing the output
         return outputString
@@ -900,6 +926,8 @@ class RtpReceiveStream(RtpReceiveCommon):
 
             if latestGlitch.glitchLength > self.__stats["glitch_max_glitch_duration"]:
                 self.__stats["glitch_max_glitch_duration"] = latestGlitch.glitchLength
+                # add the new 'worst glitch' to the worstGlitches[] list
+                self.worstGlitchesList[0] = latestGlitch
 
         # Inhibit immediate jitter-event triggering by setting self.__stats["jitter_time_of_last_excess_jitter_event"]
         # to the current time
