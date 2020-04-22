@@ -25,6 +25,7 @@ from prompt_toolkit.widgets import (
     ProgressBar,
     RadioList,
     TextArea,
+    HorizontalLine
 )
 
 
@@ -57,6 +58,7 @@ def multi_input_dialog(
     completer: Optional[Completer] = None,
     password: FilterOrBool = False,
     style: Optional[BaseStyle] = None,
+    optionalFooterText = None
 ) -> Application[str]:
     """
     Display a text input box.
@@ -101,6 +103,11 @@ def multi_input_dialog(
         userFields.append(Label(text=textField[0], dont_extend_height=True))
         # Append the text area object to the userFields list
         userFields.append(textArea)
+
+    # Append optional footer (if supplied)
+    if optionalFooterText is not None:
+        userFields.append(HorizontalLine())
+        userFields.append(Label(text=str(optionalFooterText), dont_extend_height=True))
 
     dialog = Dialog(
         title=title,

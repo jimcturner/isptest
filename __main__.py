@@ -68,6 +68,7 @@ import math
 import json
 from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
+import textwrap
 import pickle
 # Non standard external libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
@@ -1413,8 +1414,8 @@ class UI(object):
 
             # Confirm that the stream has been found
             if selectedRxOrResultsStream is not None:
-                # Get a default filename
-                defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport()
+                # Get a default filename (excluding the path)
+                defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport(includePath=False)
 
                 # Now create an input box prefilling with the initial filename created by createFilenameForReportExport()
                 styleDefinition = Style.from_dict({
@@ -1427,15 +1428,18 @@ class UI(object):
                 # Create a multi_input_dialog (i.e my modified version of prompt_toolkit.input_dialog()
                 # This is because my version allows you to specify the default text in the user field
                 # Keep displaying the dialog until the filename is validated/cancel
-                filename = None
+
                 filenameValidated = False
                 dialogueTitle = 'Export stream report to file (stream ' + str(self.selectedStreamID) + ')'
+                # Create a footer label containing the full os path of the save location
+                footerText = "Current save folder:\n" + str(os.path.abspath(Registry.resultsSubfolder))
                 while filenameValidated is False:
                     try:
                         enteredText = multi_input_dialog(
                         [['Please enter a filename', defaultFilename]],\
                                 title=dialogueTitle,\
-                                style=styleDefinition).run()
+                                style=styleDefinition,
+                                optionalFooterText=footerText).run()
                         if enteredText is None:
                             # If 'cancel' selected
                             break
@@ -1448,10 +1452,29 @@ class UI(object):
                             # Extract the filename from the dictionary
                             filename = enteredText['Please enter a filename']
 
+                            # Create the path for the saved file
+                            fullSavePath = Registry.resultsSubfolder + filename
                             # Invoke that stream's writeReportToDisk method
-                            # USe the current display filter for events to determine which events are exported to the file
-                            selectedRxOrResultsStream.writeReportToDisk(filename, exportFilterList=self.filterListForDisplayedEvents)
-
+                            # Use the current display filter for events to determine which events are exported to the file
+                            fileSavedStatus = selectedRxOrResultsStream.writeReportToDisk(fullSavePath,\
+                                                                        exportFilterList=self.filterListForDisplayedEvents)
+                            if fileSavedStatus == True:
+                                # Display a message box showing the successful save path + filname
+                                # Query the OS for the the absolute file path (this will be displayed)
+                                maxWidth = 70
+                                absoluteSavePath = textwrap.fill(str(os.path.abspath(fullSavePath)), width=maxWidth)
+                                self.__renderMessageBox("File saved to:-".center(maxWidth + 3) + "\n" +\
+                                                        str(absoluteSavePath).center(maxWidth + 3)+ "\n\n" + \
+                                                        "<Press a key to continue>".center(maxWidth + 3), \
+                                                        "File save Successful", textColour=Term.WHITE, bgColour=Term.GREEN)
+                            else:
+                                # Save failed, so show an error
+                                errorMessage = textwrap(fileSavedStatus, width=maxWidth)
+                                self.__renderMessageBox("Error: Unable to save file:-".center(errorMessage + 3) + "\n" + \
+                                                        str(fileSavedStatus).center(errorMessage + 3) + "\n\n" + \
+                                                        "<Press a key to continue>".center(errorMessage + 3), \
+                                                        "File save error", textColour=Term.WHITE,
+                                                        bgColour=Term.RED)
 
                     except ValidationError as e:
                         # Modify the dialogue table to show the erroneous chars

@@ -497,7 +497,8 @@ class RtpReceiveCommon(object):
         return outputString
 
     # This utility method witll generate a filename based on the stream parameters.
-    def createFilenameForReportExport(self):
+    # The optional includePath will create a filename with a complete path
+    def createFilenameForReportExport(self, includePath=True):
         # Get info about the stream (to be used in the title)
         syncSourceID, srcAddr, srcPort, friendlyName = self.getRTPStreamID()
         fileName = Registry.streamReportFilename + \
@@ -507,7 +508,12 @@ class RtpReceiveCommon(object):
                    str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S"))
         # Return a sanitised filename including the full path (as specified in Registry.resultsPath
         # Note the use of sanitize_filepath will automatically orientate the 'slash' for Windows or Mac/Linux
-        return sanitize_filepath(Registry.resultsSubfolder + fileName + ".txt")
+        if includePath:
+            # This will return a filname incuding the path retrieved from Registry.resultsSubfolder
+            return sanitize_filepath(Registry.resultsSubfolder + fileName + ".txt")
+        else:
+            # This will just return a filename
+            return sanitize_filepath(fileName + ".txt")
 
 
     # This method will call self.generateReport() and write the output to disk
@@ -515,6 +521,7 @@ class RtpReceiveCommon(object):
     # It will take an optional exportFilterList[] and pass it directly to generateReport()
     # See self.generateReport() for info on how this list can be used to filter the Event types that appear
     # in the exported report
+    # Returns True for a successful save, otherwise an error message
     def writeReportToDisk(self, fileName = None, exportFilterList=None):
 
         #  Generate the report to be written to disk
@@ -530,8 +537,10 @@ class RtpReceiveCommon(object):
             fh.write(report)
             fh.close()
             Message.addMessage("Saved: " + str(fileName))
+            return True
         except Exception as e:
             Message.addMessage("ERR: RtpReceiveCommon.writeReportToDisk() " + str(e))
+            return str(e)
 
 # Define a class to represent a stream of received rtp packets (and associated stats)
 class RtpReceiveStream(RtpReceiveCommon):
