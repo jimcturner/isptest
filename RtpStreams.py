@@ -497,11 +497,13 @@ class RtpReceiveCommon(object):
             try:
                 # Generate list of the worst glitches
                 for glitch in worstGlitchesList:
-                    worstGlitchesListAsString += \
-                        str(worstGlitchesList[0].getSummary(includeStreamSyncSourceID=False,
+                    glitchDetails = glitch.getSummary(includeStreamSyncSourceID=False,
                                                             includeEventNo=False,
                                                             includeType=False,
-                                                            includeFriendlyName=False)) + "\r\n"
+                                                            includeFriendlyName=False)
+                    worstGlitchesListAsString += \
+                        str(glitchDetails['timeCreated'].strftime("%d/%m %H:%M:%S")) + \
+                        ", " + str(glitchDetails['summary']) + "\r\n"
             except Exception as e:
                 Message.addMessage("ERR: RtpReceiveCommon.generateReport() compile worst glitches list: " + str(e))
 
