@@ -4,3 +4,4 @@ get-pip.py
 *.json
 __pycache__/
 results/
+Custom_prompt_toolkit_mods.pyc Registry.pyc RtpStreams.pyc Utils.pyc
