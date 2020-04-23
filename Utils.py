@@ -158,6 +158,7 @@ class Message(object):
 
     @classmethod
     def setVerbosity(cls, verbosity):
+        print("gets here\r")
         cls.verbosityLevel = verbosity
 
     # Class method to add a new message to the list

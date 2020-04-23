@@ -89,7 +89,7 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch
 from Utils import *
 from Custom_prompt_toolkit_mods import multi_input_dialog
-
+from Traceroute import *
 
 
 ####################################################################################
@@ -2933,45 +2933,7 @@ def copyPaste():
 # #####################
 
 def main(argv):
-    # copyPaste()
-    # print(str(pasteBin("Some\n\tnew\n\ttext", title="test paste")))
-    #
-    # exit()
-    # # x = multi_input_dialog3(title="will it work?", text="default text").run()
-    # x = input_dialog(title="will it work?", text="default text").run()
-    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
-    # print(str(multi_input_dialog3(textFieldsList, title='Enter IP addr and port').run()))
-    #
-    # exit()
-    # try:
-    #     # x = validators.integer(41, allow_empty=False, minimum=25, maximum=40)
-    #     x= validators.ip_address("192.168.0.2", allow_empty=False)
-    # except Exception as e:
-    #     print (str(e) + "\r")
-    # exit()
-    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
-    # print(str(multi_input_dialog(textFieldsList, title='Enter IP addr and port')))
-    # exit()
-
-    # # Invoke colorama init() method to allow ansi escape sequences to work on Windows
-    # init(autoreset=True)
-
-    # # Create empty file
-    # from pathlib import Path
-    # Path('empty_file').touch()
-
-    # os.rename("test", "renamed_test") # rename file
-    # os.path.isfile("changelog.txt") #Check if file exists
-    # b = os.path.getsize("notepad2.py") # get file size
-    #  os.remove("renamed_test") # delete file
-
-    # while True:
-    #     x = getch()
-    #     if x == ord('x'):
-    #         break
-    #     if x is not None:
-    #         print("you pressed: " + str(x) + "\r")
-    # exit()
+    # traceroute()
 
 
     # String to specify which operation mode we're in (loopback, tx, rx)
@@ -3013,7 +2975,9 @@ def main(argv):
     defaultVerbosityLevel = 0
     # Set default value
     Message.setVerbosity(defaultVerbosityLevel)
+    # Message.addMessage("hello")
 
+    # exit()
     # print ('Argument List: '+ str(argv))
     try:
         # options are:
