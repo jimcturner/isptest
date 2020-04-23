@@ -2039,9 +2039,7 @@ class UI(object):
 
     # 't' - display the About dialogue
     def __onAboutDialogue(self):
-        # Create a dialogue box (using a table with a single cell and no headings)
         # NOTE: This is a blocking method
-
         maxWidth = 55
         tableContents = ("BBC IBEOO Team ISP Analyser " + Registry.version).center(maxWidth, " ") + \
                         "\n\n" + "(c) James Turner 2020".center(maxWidth, " ") + \
@@ -2055,6 +2053,29 @@ class UI(object):
 
         # Render the message in a pop-up box
         self.__renderMessageBox(tableContents, "About")
+
+    # Show a help page
+    def __onShowHelpDialogue(self):
+        maxWidth = 55
+        tableContents = ("This will show help... ") + \
+                        "\n\n...but in the mean time.." +\
+                        "\n see https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
+                        "\n\n\n\n" + \
+                        "Press the [any] key to continue".center(maxWidth, " ")
+
+        # Render the message in a pop-up box
+        self.__renderMessageBox(tableContents, "Help")
+
+    def __onShowTraceroutepDialogue(self):
+        maxWidth = 55
+        tableContents = ("This will show a traceroute for the selected stream... ") + \
+                        "\n\n...but I've not written it yet.." + \
+                        "\n\n\n\n" + \
+                        "Press the [any] key to continue".center(maxWidth, " ")
+
+        # Render the message in a pop-up box
+        self.__renderMessageBox(tableContents, "Traceroute")
+
 
     def __onDisplayEvents(self):
         # Toggle display of Events list dialogue
@@ -2144,6 +2165,12 @@ class UI(object):
             # 's' Save stream report to disk
             elif self.keyPressed == ord('s'):
                 self.__onSaveReportToDisk()
+            # 'h' Show help page
+            elif self.keyPressed == ord('h'):
+                self.__onShowHelpDialogue()
+            # 't' Show traceroute
+            elif self.keyPressed == ord('t'):
+                self.__onShowTraceroutepDialogue()
 
             # Special features
             # 'z' Toggle packet generation on/off for selected stream
