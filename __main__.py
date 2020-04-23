@@ -613,11 +613,11 @@ class UI(object):
         self.selectedStream = None  # Tracks the stream currently highlighted in the streams table
         self.selectedStreamID = 0 # Tracks the sync source ID of the stream currebtly highlighted
         # Screen label showing the available key commands (depending upon mode)
-        self.keyCommandsString = "[<][>][^][v] navigate, [d]elete, [s]et name, [e]rrors, abo[u]t even[t]s"
+        self.keyCommandsString = "[<][>][^][v]navigate, [d]elete, [l]abel, [a]bout, [r]eport, [h]elp, [t]raceroute"
 
-        self.txStreamModifierCommandsString = "TX  modifier: [o/p] src ID, [k/l] length, [n/m] tx bps, [h/j] lifetime, [a]dd"
+        self.txStreamModifierCommandsString = "TX  modifiers: [1/2] packet size, [3/4] tx rate, [5/6] lifetime, [n]ew stream"
         # Extra command strip for 'special features' mode
-        self.extraKeyCommandsString = "[z] enable/disable stream, [x] jitter on/off, [c] minor loss, [v] major  loss"
+        self.extraKeyCommandsString = "[7] enable/disable stream, [8] jitter on/off, [9] minor loss, [0] major  loss"
 
         # define views, tables headings and keys
         # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
@@ -1313,10 +1313,12 @@ class UI(object):
         # Additional check to see if the event filtering has been enabled and modify the title/footer labels accordingly
         if self.filterListForDisplayedEvents is not None:
                 title = "Glitches for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
-                footer = ["","[<][>]back/fwd, [t]exit, [r]copy to clipboard\n[y]show All events, [w]export as file"]
+                footer = ["","[<][>]page, [^][v]select stream, [r]exit\n"+\
+                          "[c]opy to clipboard, [f]ilter off, [s]ave file"]
         else:
             title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
-            footer = ["", "[<][>]back/fwd, [t]exit, [r]copy to clipboard\n[y]show glitches only, [w]export as file"]
+            footer = ["", "[<][>]page, [^][v] select stream, [r]exit \n" + \
+                      "[c]opy to clipboard, [f]ilter on, [s]ave file"]
 
         # Now actually display the paged table list
         self.__renderPagedList(self.tablePageNo, title, ["Timestamp".ljust(15), "Event".ljust(50)], tableContents,
@@ -2091,70 +2093,70 @@ class UI(object):
             # Cursor down
             elif self.keyPressed == 66 or self.keyPressed == 80:
                 self.__onNavigateDown()
-            # 's' Set friendly name
-            elif self.keyPressed == ord('s'):
+            # 'l' Set friendly name (label)
+            elif self.keyPressed == ord('l'):
                 self.__onEnterFriendlyName()
-            # 'a' Add TX stream
-            elif self.keyPressed == ord('a'):
+            # 'n' Add TX stream
+            elif self.keyPressed == ord('n'):
                 self.__onAddTxStream()
             # 'd' Delete stream
             elif self.keyPressed == ord('d'):
                 self.__onDeleteStream()
-            # 'u' About dialogue
-            elif self.keyPressed == ord('u'):
+            # 'a' About dialogue
+            elif self.keyPressed == ord('a'):
                 self.__onAboutDialogue()
-            # 'm' Increase tx rate of selected stream
-            elif self.keyPressed == ord('m'):
+            # '4' Increase tx rate of selected stream
+            elif self.keyPressed == ord('4'):
                 self.__onIncreaseTxRate()
-            # 'n' Decrease tx rate of selected stream
-            elif self.keyPressed == ord('n'):
+            # '3' Decrease tx rate of selected stream
+            elif self.keyPressed == ord('3'):
                 self.__onDecreaseTxRate()
-            # 'j' Increase Tx Stream Time to Live
-            elif self.keyPressed == ord('j'):
+            # '6' Increase Tx Stream Time to Live
+            elif self.keyPressed == ord('6'):
                 self.__onIncreaseTimeToLive()
-            # 'h' Decrease Tx Stream Time to Live
-            elif self.keyPressed == ord('h'):
+            # '5' Decrease Tx Stream Time to Live
+            elif self.keyPressed == ord('5'):
                 self.__onDecreaseTimeToLive()
-            # 'l' Increase payload size
-            elif self.keyPressed == ord('l'):
+            # '2' Increase payload size
+            elif self.keyPressed == ord('2'):
                 self.__onIncreasePayloadSize()
-            # 'k' Decrease payload size
-            elif self.keyPressed == ord('k'):
+            # '1' Decrease payload size
+            elif self.keyPressed == ord('1'):
                 self.__onDecreasePayloadSize()
-            # 'p' Increment sync source ID of stream
-            elif self.keyPressed == ord('p'):
-                self.__onIncrementSyncSourceID()
-            # 'o' Decrement sync source ID of stream
-            elif self.keyPressed == ord('o'):
-                self.__onDecrementSyncSourceID()
+            # # 'p' Increment sync source ID of stream
+            # elif self.keyPressed == ord('p'):
+            #     self.__onIncrementSyncSourceID()
+            # # 'o' Decrement sync source ID of stream
+            # elif self.keyPressed == ord('o'):
+            #     self.__onDecrementSyncSourceID()
             # 'e' Toggle error messages on/off
             elif self.keyPressed == ord('e'):
                 self.__onToggleErrorMessages()
-            # 't' Display events list for selected stream
-            elif self.keyPressed == ord('t'):
-                self.__onDisplayEvents()
-            # 'y' Show only glitches on events list table
-            elif self.keyPressed == ord('y'):
-                self.__onfilterEventsTable()
-            # 'r' Copy report to clipboard
+            # 'r' Display events list for selected stream (report)
             elif self.keyPressed == ord('r'):
+                self.__onDisplayEvents()
+            # 'f' Show only glitches on events list table (filter on/off)
+            elif self.keyPressed == ord('f'):
+                self.__onfilterEventsTable()
+            # 'c' Copy report to clipboard
+            elif self.keyPressed == ord('c'):
                 self.__onCopyReportToClipboard()
-            # 'w' Save stream report to disk
-            elif self.keyPressed == ord('w'):
+            # 's' Save stream report to disk
+            elif self.keyPressed == ord('s'):
                 self.__onSaveReportToDisk()
 
             # Special features
             # 'z' Toggle packet generation on/off for selected stream
-            elif self.keyPressed == ord('z'):
+            elif self.keyPressed == ord('7'):
                 self.__onTogglePacketGenerationOnOff()
             # 'x' Toggle jitter simulation for selected stream
-            elif self.keyPressed == ord('x'):
+            elif self.keyPressed == ord('8'):
                 self.__onToggleJitterSimulationOnOff()
             # 'c' Insert minor packet loss for selected stream
-            elif self.keyPressed == ord('c'):
+            elif self.keyPressed == ord('9'):
                 self.__onInsertMinorPacketLoss()
             # 'v' Insert major packet loss for selected stream
-            elif self.keyPressed == ord('v'):
+            elif self.keyPressed == ord('0'):
                 self.__onInsertMajorPacketloss()
             else:
                 # print ("UI: key pressed not known: " + str(self.keyPressed))
@@ -2935,6 +2937,14 @@ def main(argv):
     # os.path.isfile("changelog.txt") #Check if file exists
     # b = os.path.getsize("notepad2.py") # get file size
     #  os.remove("renamed_test") # delete file
+
+    # while True:
+    #     x = getch()
+    #     if x == ord('x'):
+    #         break
+    #     if x is not None:
+    #         print("you pressed: " + str(x) + "\r")
+    # exit()
 
 
     # String to specify which operation mode we're in (loopback, tx, rx)

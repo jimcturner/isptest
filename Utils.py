@@ -5,6 +5,7 @@ import time
 import datetime
 import socket
 import threading
+import platform
 
 # Formats a datetime.timedelta object as a simple string hh:mm:ss
 def dtstrft(timeDelta):
@@ -296,70 +297,70 @@ class Message(object):
 # Utility finctions to validate user input
 # Check for integer (with optional min or max range)
 # Raises an exception if not an integer or integer out of range
-class NotAnInteger(Exception):
-    def __init__(self, val):
-        self.val = val
-    # Define an error message to be returned
-    def __str__(self):
-        return "NotAnInteger Exception. " + str(self.val) + " is not a valid integer"
-class InvalidRangeSpecifier(Exception):
-    def __init__(self, val):
-        self.val = val
-        print ("InvalidRangeSpecifier raised\r")
-    # Define an error message to be returned
-    def __str__(self):
-        return "InvalidRangeSpecifier Exception. " + str(self.val) + " is not a valid integer"
-class IntegerTooSmall(Exception):
-    def __init__(self, val, min):
-        self.val = val
-        self.min = min
-        print ("IntegerTooSmall raised\r")
-    # Define an error message to be returned
-    def __str__(self):
-        return "IntegerTooSmall Exception. " + str(self.val) + " is less than the minimum specified " + str(self.min)
-
-class IntegerTooLarge(Exception):
-    def __init__(self, val, max):
-        self.val = val
-        self.min = max
-        print ("IntegerTooLarge raised\r")
-    # Define an error message to be returned
-    def __str__(self):
-        return "IntegerTooLarge Exception. " + str(self.val) + " is greater than the maximum specified " + str(self.max)
-
-def isInteger(val, min = None, max = None):
-    try:
-        # Test val to see if it is an integer, if not, raise a NotAnInteger Exception
-        val = int(val) + 1 -1
-        # Has a minimum value been specified?
-        if min != None:
-            print ("min: " + str(min) + "\r")
-            try:
-                # Test to see if the 'min' value is an int
-                min = int(min) + 1 - 1
-                # if it is, test val against it
-                if int(val) < int(min):
-                    # If val to small, raise an exception
-                    raise IntegerTooSmall(min)
-            except:
-                # If min is not an integer, raise an InvalidRangeSpecifier Exception
-                raise InvalidRangeSpecifier(min)
-        # Has a max value been specified?
-        if max != None:
-            # Test to see if the 'max' value is an integer
-            print ("max: " + str(max) + "\r")
-            try:
-                max = int(max) + 1 - 1
-                # if 'max' is a valid integer, check val against it
-                if val > max:
-                    # If val is larger than allowed by 'max', raise an exception
-                    raise IntegerTooLarge(max)
-            except:
-                raise InvalidRangeSpecifier(max)
-
-    except:
-        # Raise an Exception (and pass val to it, so we can report an error message)
-        raise NotAnInteger(val)
+# class NotAnInteger(Exception):
+#     def __init__(self, val):
+#         self.val = val
+#     # Define an error message to be returned
+#     def __str__(self):
+#         return "NotAnInteger Exception. " + str(self.val) + " is not a valid integer"
+# class InvalidRangeSpecifier(Exception):
+#     def __init__(self, val):
+#         self.val = val
+#         print ("InvalidRangeSpecifier raised\r")
+#     # Define an error message to be returned
+#     def __str__(self):
+#         return "InvalidRangeSpecifier Exception. " + str(self.val) + " is not a valid integer"
+# class IntegerTooSmall(Exception):
+#     def __init__(self, val, min):
+#         self.val = val
+#         self.min = min
+#         print ("IntegerTooSmall raised\r")
+#     # Define an error message to be returned
+#     def __str__(self):
+#         return "IntegerTooSmall Exception. " + str(self.val) + " is less than the minimum specified " + str(self.min)
+#
+# class IntegerTooLarge(Exception):
+#     def __init__(self, val, max):
+#         self.val = val
+#         self.min = max
+#         print ("IntegerTooLarge raised\r")
+#     # Define an error message to be returned
+#     def __str__(self):
+#         return "IntegerTooLarge Exception. " + str(self.val) + " is greater than the maximum specified " + str(self.max)
+#
+# def isInteger(val, min = None, max = None):
+#     try:
+#         # Test val to see if it is an integer, if not, raise a NotAnInteger Exception
+#         val = int(val) + 1 -1
+#         # Has a minimum value been specified?
+#         if min != None:
+#             print ("min: " + str(min) + "\r")
+#             try:
+#                 # Test to see if the 'min' value is an int
+#                 min = int(min) + 1 - 1
+#                 # if it is, test val against it
+#                 if int(val) < int(min):
+#                     # If val to small, raise an exception
+#                     raise IntegerTooSmall(min)
+#             except:
+#                 # If min is not an integer, raise an InvalidRangeSpecifier Exception
+#                 raise InvalidRangeSpecifier(min)
+#         # Has a max value been specified?
+#         if max != None:
+#             # Test to see if the 'max' value is an integer
+#             print ("max: " + str(max) + "\r")
+#             try:
+#                 max = int(max) + 1 - 1
+#                 # if 'max' is a valid integer, check val against it
+#                 if val > max:
+#                     # If val is larger than allowed by 'max', raise an exception
+#                     raise IntegerTooLarge(max)
+#             except:
+#                 raise InvalidRangeSpecifier(max)
+#
+#     except:
+#         # Raise an Exception (and pass val to it, so we can report an error message)
+#         raise NotAnInteger(val)
 
 
 # Simple function, lifted from here: https://pastebin.com/m4kZey1v
@@ -391,3 +392,50 @@ def pasteBin(textToPaste, title='', api_dev_key='78c625162b816673e6b3ecc2750ee74
     # Return the URL of the Pastebin page
     return the_page
 
+# A cross-platform method to catch keypresses (and not echo them to the screen)
+def getch():
+    # Define a getch() function to catch keystrokes (for control of the RTP Generator thread)
+    # This code has been lifted from https://gist.github.com/jfktrey/8928865
+    # It implements a 1sec timeout (on Linux) or 0.2secs (Windows). If no key was detected in the mean time,
+    # it will return None
+    if platform.system() == "Windows":
+        import msvcrt
+        time.sleep(0.2)  # 0.2sec timeout
+        if msvcrt.kbhit():
+                # return ord(msvcrt.getch())
+            ch = msvcrt.getch()
+                # Trap Escape sequences prefix codes (only interested in the final digit - Windows esc seq start with 224,x)
+            while ord(ch) == 224:
+                ch = msvcrt.getch()
+            return ord(ch)
+        else:
+            # print("Getch timeout\r")
+            return None
+
+    else:
+        import tty, termios, sys
+        from select import select  # For timeout functionality
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            # Add additional lines for a 1 sec timeout
+            [i, o, e] = select([sys.stdin.fileno()], [], [], 1)
+            # ch = sys.stdin.read(1)
+            if i:
+                ch = sys.stdin.read(1)
+                # Trap Escape sequences prefix codes (only interested in the final digit - Linux esc seq start with 27,91,x)
+                while ord(ch) == 27 or ord(ch) == 91:
+                    ch = sys.stdin.read(1)
+
+            else:
+                ch = ""
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        # Return the ascii value of the key pressed
+        try:
+            # print ("getch() " + str (ord(ch)) + "\r")
+            return ord(ch)
+        except:
+            # print("Getch timeout\r")
+            return None
