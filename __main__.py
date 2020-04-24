@@ -1102,7 +1102,7 @@ class UI(object):
         del messages[:]
 
     def __renderTopToolbar(self):
-        Term.printTitleBar("IBEOO ISP Analyser V1.3", 1, Term.BLACK, Term.WHITE)
+        Term.printTitleBar("IBEOO ISP Analyser v" + Registry.version, 1, Term.BLACK, Term.WHITE)
         # Print operation mode (plus receive IP:Port if in Receive mode)
         if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
             Term.printAt(self.operationMode + " MODE", 1, 1, Term.BLACK, Term.WHITE)
@@ -2036,12 +2036,11 @@ class UI(object):
             Message.addMessage("[v] Stream " + str(self.selectedStreamID) + " simulate major packet loss (" + str(packetsToLose) +\
                                " packets)")
 
-
     # 't' - display the About dialogue
     def __onAboutDialogue(self):
         # NOTE: This is a blocking method
         maxWidth = 55
-        tableContents = ("BBC IBEOO Team ISP Analyser " + Registry.version).center(maxWidth, " ") + \
+        tableContents = ("BBC IBEOO Team ISP Analyser v" + Registry.version).center(maxWidth, " ") + \
                         "\n\n" + "(c) James Turner 2020".center(maxWidth, " ") + \
                         "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
                         "\n" + " measurement tool supporting multiple tx/rx streams".center(maxWidth, " ") + \
@@ -2933,8 +2932,8 @@ def copyPaste():
 # #####################
 
 def main(argv):
-    # traceroute()
-
+    traceroute()
+    exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
