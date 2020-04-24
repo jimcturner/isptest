@@ -21,7 +21,7 @@ def traceroute():
                 resolvedName = str(socket.gethostbyaddr(str(reply.src)))
             except:
                 resolvedName =""
-            print ("Done! "+ str(reply.src)+ ",  " + resolvedName)
+            print (str(i) + " "+ "Done! "+ str(reply.src)+ ",  " + resolvedName)
             break
         else:
             # We're in the middle somewhere
