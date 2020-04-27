@@ -1898,7 +1898,7 @@ class UI(object):
                 else:
                     # Otherwise update the stream with the new calculated TTL
                     self.selectedStream.setTimeToLive(newTTL)
-                    Utils.Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + dtstrft(
+                    Utils.Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + Utils.dtstrft(
                         datetime.timedelta(seconds=newTTL)))
 
 
@@ -3073,7 +3073,7 @@ def main(argv):
                     # If only a single parameter supplied, use the 'OS supplied' address
                     # and the supplied value as a UDP receive port
                     # Get the ip address of the host machine
-                    UDP_RX_IP = get_ip()
+                    UDP_RX_IP = Utils.get_ip()
                     try:
                         arg = int(arg) + 1 - 1
                         if arg < 1024:
