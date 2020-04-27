@@ -19,6 +19,9 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import pickle
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
+# from scapy.all import *
+from scapy.layers.inet import IP, UDP
+from scapy.sendrecv import sr1
 
 # Additonal libraries required (of my own making)
 import Utils
@@ -1917,6 +1920,12 @@ class RtpGenerator(object):
         self.rtpGeneratorThread.daemon = False
         self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
         self.rtpGeneratorThread.start()
+
+        # Start the traceroute thread
+        self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
+        self.tracerouteThread.daemon = False
+        self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":traceroute")
+        self.tracerouteThread.start()
 
         # create a stream results receiver object for this tx stream
         self.rtpStreamResultsReceiver = ResultsReceiver(self)
