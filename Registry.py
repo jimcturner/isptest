@@ -12,4 +12,4 @@ class Registry(object):
     receiverLogFilename = "isptest_Receiver_Events_Log"
     transmitterLogFilename= "isptest_Transmitter_Events_Log"
     maximumLogFileSize_bytes = 1024 * 1024 # 1Mb maximum size
-
+    tracerouteMaxHops = 28 # The maximum no of hops traceroute will consider before resetting

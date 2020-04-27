@@ -1863,6 +1863,7 @@ class RtpGenerator(object):
         self.payloadMutex = threading.Lock()    # Used to control access to self.rtpPayload and self.isptestHeader
         self.elapsedTime = datetime.timedelta()
         self.friendlyName = ""
+        self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ipopctet4]
 
         # Attempt to set the friendly name from the optional supplied kwargs
         try:
@@ -2321,6 +2322,62 @@ class RtpGenerator(object):
 
                 # Now break out of the while loop to end the thread finally kill the object.
                 break
+
+# Define a seperate thread to run a traceroute
+    def __tracerouteThread(self):
+        # Specify initial hopNo
+        hopNo = 1
+        # Run indefinitely unless timeToLive falls to zero
+        while self.timeToLive != 0:
+            # Create a UDP packet with an ever changing TTL
+            pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo) / UDP(dport=self.UDP_TX_PORT)
+            # Send the packet and get a reply (with a timeout of 1 second)
+            reply = sr1(pkt, verbose=0, timeout=1)
+            # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
+            if self.timeToLive == 0:
+                break
+            # Now test reply and append update the traceroute list
+            if reply is None:
+                # No reply from upstream router or sr1() timed out
+                hopAddr = [0,0,0,0]
+                try:
+                    # Attempt to update this list location
+                    self.tracerouteHopsList[hopNo] = hopAddr
+                except:
+                    # If it fails, it's because the list location doesn't exist yet
+                    self.tracerouteHopsList.append(hopAddr)
+            else:
+                # Split the reply source ip address into a list of octets
+                replyFromAddr = str(reply.src).split('.')
+                # Create the IP address as a list of Octets
+                hopAddr = [replyFromAddr[0],replyFromAddr[1],replyFromAddr[2],replyFromAddr[3]]
+
+                # Now determine where we are, within the traceroute
+                if reply.type == 3:
+                    # We've reached our destination. So append the final address to the traceroute hops list
+                    try:
+                        # Attempt to update this list location
+                        self.tracerouteHopsList[hopNo] = hopAddr
+                        # Now trim off any old hops beyond this point of the list
+                        if len(self.tracerouteHopsList) > hopNo:
+                            self.tracerouteHopsList = self.tracerouteHopsList[:hopNo]
+                    except:
+                        # If it fails, it's because the list location doesn't exist yet, so add it
+                        self.tracerouteHopsList.append(hopAddr)
+                else:
+                    # We're in the middle somewhere
+                    try:
+                        # Attempt to update this list location
+                        self.tracerouteHopsList[hopNo] = hopAddr
+                    except:
+                        # If it fails, it's because the list location doesn't exist yet, so add it
+                        self.tracerouteHopsList.append(hopAddr)
+            # Increment the TTL of the packet by incrementing hopNo
+            hopNo += 1
+            if hopNo > Registry.tracerouteMaxHops:
+                # Reset the hopNo to 1 for the next time around the loop
+                hopNo = 1
+            Utils.Message.addMessage(str(self.tracerouteHopsList))
 
 # An object that will act as a UDP receiver. It will receive server reports from ResultsTransmitter
 class ResultsReceiver(object):
