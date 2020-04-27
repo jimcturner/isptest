@@ -21,7 +21,7 @@ import pickle
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 # Additonal libraries required (of my own making)
-from Utils import *
+import Utils
 from Registry import Registry
 
 
