@@ -2339,7 +2339,8 @@ class RtpGenerator(object):
         # Run indefinitely unless timeToLive falls to zero
         while self.timeToLive != 0:
             # Create a UDP packet with an ever changing TTL
-            pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=self.UDP_TX_PORT)
+            # dst=self.UDP_TX_IP
+            pkt = IP(dst="8.8.8.8", ttl=hopNo + 1) / UDP(dport=self.UDP_TX_PORT)
             # Send the packet and get a reply (with a timeout of 1 second)
             reply = sr1(pkt, verbose=0, timeout=1)
             # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
@@ -2349,12 +2350,15 @@ class RtpGenerator(object):
             if reply is None:
                 # No reply from upstream router or sr1() timed out
                 hopAddr = [0,0,0,0]
+                Utils.Message.addMessage("No response or timeout:" + str(hopNo))
                 try:
                     # Attempt to update this list location
                     self.tracerouteHopsList[hopNo] = hopAddr
                 except:
                     # If it fails, it's because the list location doesn't exist yet
                     self.tracerouteHopsList.append(hopAddr)
+                # increment hopNo
+                hopNo += 1
             else:
                 # Split the reply source ip address into a list of octets
                 replyFromAddr = str(reply.src).split('.')
@@ -2369,15 +2373,15 @@ class RtpGenerator(object):
                         # Attempt to update this list location
                         self.tracerouteHopsList[hopNo] = hopAddr
                         # Now trim off any old hops beyond this point of the list
-                        if len(self.tracerouteHopsList) >= hopNo:
-                            Utils.Message.addMessage("trimming")
+                        if len(self.tracerouteHopsList) > (hopNo + 1):
+                            # Utils.Message.addMessage("trimming")
                             self.tracerouteHopsList = self.tracerouteHopsList[:hopNo]
                     except:
                         # If it fails, it's because the list location doesn't exist yet, so add it
-                        Utils.Message.addMessage("appending")
+                        # Utils.Message.addMessage("appending")
                         self.tracerouteHopsList.append(hopAddr)
                     # Reset hopNo to restart the traceroute
-                    Utils.Message.addMessage("Resetting hopNo")
+                    # Utils.Message.addMessage("Resetting hopNo")
                     hopNo = 0
                 else:
                     Utils.Message.addMessage("In the middle hopNo:" + str(hopNo))
@@ -2391,8 +2395,8 @@ class RtpGenerator(object):
                     # Increment the TTL of the packet by incrementing hopNo
                     hopNo += 1
             if hopNo > Registry.tracerouteMaxHops:
-                # Reset the hopNo to 1 for the next time around the loop
-                hopNo = 1
+                # Reset the hopNo to 0 for the next time around the loop
+                hopNo = 0
             Utils.Message.addMessage("Hops:" + str(len(self.tracerouteHopsList)) + ", " + str(self.tracerouteHopsList))
             time.sleep(1)
 
