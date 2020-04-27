@@ -1553,7 +1553,6 @@ class ResultsTransmitter(object):
         self.threadActiveFlag = False
 
 
-
     def __resultsTransmitterThread(self):
         Message.addMessage("INFO: __resultsTransmitterThread started: "+str(self.udpSocket))
 
@@ -2196,7 +2195,7 @@ class RtpGenerator(object):
             self.generateIsptestHeader()
             # Now create the actual message to be send across the wire
             self.payloadMutex.acquire()
-            MESSAGE = txRtpHeader + self.isptestHeader + self.rtpPayload.encode('ascii')
+            MESSAGE = txRtpHeader + self.isptestHeader.encode('ascii') + self.rtpPayload.encode('ascii')
             self.payloadMutex.release()
 
             # If all tx flags are set then transmit the rtp packet

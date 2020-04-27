@@ -2932,8 +2932,8 @@ def copyPaste():
 # #####################
 
 def main(argv):
-    traceroute()
-    exit()
+    # traceroute()
+    # exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
