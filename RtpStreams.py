@@ -1286,7 +1286,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                                 # Utils.Message.addMessage(isptestHeaderDataFriendlyName)
                                 # Now decode the messages contained within the isptest header
                                 # Attempt to extract the traceroute data
-
+                                if isptestHeaderData[1] == 0:
+                                    # This is a traceroute message
+                                    hopNo = isptestHeaderData[2]
+                                    hopAddr = str(isptestHeaderData[3]) + "." + \
+                                              str(isptestHeaderData[4]) + "." + \
+                                              str(isptestHeaderData[5]) + "." + \
+                                              str(isptestHeaderData[6])
+                                    Utils.Message.addMessage("Rx'd tracetroute " + str(hopNo) + ":" + hopAddr)
                             else:
                                 # Otherwise, stream is not recognised, so disable transmission of results
                                 self.resultsTransmitter.transmitActiveFlag = False
@@ -2024,13 +2031,9 @@ class RtpGenerator(object):
                     # Now increment the carousel index so that the next hop value will be transmitted the next time this
                     # method is called
                     self.tracerouteCarouselIndexNo += 1
-                    # Bounds check tracerouteCarouselIndexNo
-                    if self.tracerouteCarouselIndexNo > (len(self.tracerouteHopsList) - 1):
-                        # Reset the carousel value
-                        self.tracerouteCarouselIndexNo = 0
+
                 except Exception as e:
-                    Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader(): Access tracerouteHopsList[] ",\
-                                             + str(e))
+                    Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader():tracerouteHopsList[] " + str(e))
             else:
                 # Create a dummy traceroute message
                 messageData = [0 & 0xFF,  # Message type 0: traceroute
@@ -2040,8 +2043,21 @@ class RtpGenerator(object):
                                0 & 0xFF,  # IP address octet 3
                                0 & 0xFF]  # IP address octet 4
 
+            # Bounds check tracerouteCarouselIndexNo
+            if self.tracerouteCarouselIndexNo > (len(self.tracerouteHopsList) - 1):
+                # Reset the carousel value
+                self.tracerouteCarouselIndexNo = 0
+            # Now assemble the header
+            # # Create a dummy traceroute message
+            # messageData = [0 & 0xFF,  # Message type 0: traceroute
+            #                1 & 0xFF,  # Traceroute Hop no
+            #                10 & 0xFF,  # IP address octet 1
+            #                20 & 0xFF,  # IP address octet 2
+            #                30 & 0xFF,  # IP address octet 3
+            #                40 & 0xFF]  # IP address octet 4
+
             header = struct.pack("!HBBBBBB", uniqueValue, messageData[0], messageData[1], messageData[2], \
-                                 messageData[3], messageData[4], messageData[5], )
+                                 messageData[3], messageData[4], messageData[5])
 
             # Append friendly name to header digits
             header += str(self.friendlyName).encode('ascii')
@@ -2368,7 +2384,7 @@ class RtpGenerator(object):
             # self.UDP_TX_PORT
             # dport=33434   # This seems to be the standard port for traceroute according to man traceroute
             # dst="8.8.8.8"
-            pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=self.UDP_TX_PORT)
+            pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=33434)
             # Send the packet and get a reply (with a timeout of 1 second)
             try:
                 reply = sr1(pkt, verbose=0, timeout=1)
@@ -2392,7 +2408,7 @@ class RtpGenerator(object):
                     # Split the reply source ip address into a list of octets
                     replyFromAddr = str(reply.src).split('.')
                     # Create the IP address as a list of Octets
-                    hopAddr = [replyFromAddr[0],replyFromAddr[1],replyFromAddr[2],replyFromAddr[3]]
+                    hopAddr = [int(replyFromAddr[0]),int(replyFromAddr[1]),int(replyFromAddr[2]),int(replyFromAddr[3])]
 
                     # Now determine where we are, within the traceroute
                     if reply.type == 3:

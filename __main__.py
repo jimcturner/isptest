@@ -2736,7 +2736,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 data, addr = udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
                 # Confirm that we have some data (RTP header is 12 bytes long)
                 if len(data) == 0:
-                    Utils.Message.addMessage("socket is broken")
+                    Utils.Message.addMessage("ERR:__main.__receiveRtpThread() 0 bytes received")
                 if len(data) >= RTP_HEADER_SIZE:
                     # Get timestamp at the point the packet was received
                     timeNow = datetime.datetime.now()
@@ -2806,7 +2806,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         print (message)
                         Utils.Message.addMessage(message)
                 else:
-                    message = Fore.RED + "ERR: Invalid/no data received: " + str(addr) + ", " + str(data)
+                    message = Fore.RED + "ERR: Invalid data received: " + str(addr) + ", " + str(data)
                     print (message)
                     Utils.Message.addMessage(message)
 
