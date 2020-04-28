@@ -2429,7 +2429,7 @@ class RtpGenerator(object):
                 Utils.Message.addMessage("Hops:" + str(len(self.tracerouteHopsList)) + ", " + str(self.tracerouteHopsList))
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sr1() " + str(e))
-                Utils.Message.addMessage("Hint: Run as sudo to enable traceroute functionality")
+                Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
                 # Now break out of while loop
                 break
             time.sleep(1)
