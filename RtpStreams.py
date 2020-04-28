@@ -2340,7 +2340,10 @@ class RtpGenerator(object):
         while self.timeToLive != 0:
             # Create a UDP packet with an ever changing TTL
             # dst=self.UDP_TX_IP
-            pkt = IP(dst="8.8.8.8", ttl=hopNo + 1) / UDP(dport=self.UDP_TX_PORT)
+            # self.UDP_TX_PORT
+            # dport=33434   # This seems to be the standard port for traceroute according to man traceroute
+            # dst="8.8.8.8"
+            pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=self.UDP_TX_PORT)
             # Send the packet and get a reply (with a timeout of 1 second)
             reply = sr1(pkt, verbose=0, timeout=1)
             # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
@@ -2399,6 +2402,7 @@ class RtpGenerator(object):
                 hopNo = 0
             Utils.Message.addMessage("Hops:" + str(len(self.tracerouteHopsList)) + ", " + str(self.tracerouteHopsList))
             time.sleep(1)
+        Utils.Message.addMessage("DBUG:__tracerouteThread ending for stream " + str(self.syncSourceIdentifier))
 
 # An object that will act as a UDP receiver. It will receive server reports from ResultsTransmitter
 class ResultsReceiver(object):
