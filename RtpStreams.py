@@ -1300,14 +1300,28 @@ class RtpReceiveStream(RtpReceiveCommon):
                                     hopAddr = [isptestHeaderData[4], isptestHeaderData[5],
                                                isptestHeaderData[6], isptestHeaderData[7]]
                                     # update the self.__tracerouteHopsList[]
-                                    # try:
-                                    #     self.tracerouteHopsList[hopNo] = hopAddr
-                                    # except:
-                                    #     pass
+                                    try:
+                                        # This will fail if the list element doesn't already exist
+                                        self.tracerouteHopsList[hopNo] = hopAddr
+                                    except:
+                                        # It doesn't exist, so append to the end of the list
+                                        self.tracerouteHopsList.append(hopAddr)
+                                    # Now check to see whether len(self.tracerouteHopsList) appears to be larger than
+                                    # the value indicated indicated in the header (noOfHops)
+                                    # If so, remove the extraneous hoplist entries
+                                    if len(self.tracerouteHopsList) > noOfHops:
+                                        # We must have some old/outdated entries at the end of the list
+                                        # so trim them
+                                        self.tracerouteHopsList = self.tracerouteHopsList[:noOfHops]
 
 
                                     Utils.Message.addMessage("Rx'd tracetroute " + str(hopNo) + " of " + str(noOfHops) +\
                                                                                                 ":" + hopAddrAsString)
+                                    hopList =""
+                                    for x in self.tracerouteHopsList:
+                                        hopList += str(x) + ", "
+                                    Utils.Message.addMessage(hopList)
+
                             else:
                                 # Otherwise, stream is not recognised, so disable transmission of results
                                 self.resultsTransmitter.transmitActiveFlag = False
