@@ -2426,6 +2426,17 @@ class RtpGenerator(object):
                 # Now test reply and append update the traceroute list
                 if reply is None:
                     # No reply from upstream router or sr1() timed out
+                    # This could be becuse the upstream is set to not return icmp reports. or else, it might
+                    # be prohibiting ICMP messages sent to a non-standard port
+                    # Try another UDP ping using the same TTL, but on the standard traceroute port
+                    Utils.Message.addMessage("No response to port " + str(self.UDP_TX_PORT) +\
+                                             ". Trying port " + str(Registry.tracerouteFallbackUDPDestPort))
+                    pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=Registry.tracerouteFallbackUDPDestPort)
+                    reply = sr1(pkt, verbose=0, timeout=1)
+
+                if reply is None:
+                    # No reply from upstream router or sr1() timed out on second attempt, using standard port
+                    # This could be because the upstream router is set to not return icmp reports
                     hopAddr = [0,0,0,0]
                     Utils.Message.addMessage("No response or timeout:" + str(hopNo))
                     try:
