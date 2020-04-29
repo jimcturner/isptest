@@ -2440,6 +2440,7 @@ class RtpGenerator(object):
             # Get local working copy of self.tracerouteHopsList
             tracerouteHopsList = self.getTraceRouteHopsList()
             pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=self.UDP_TX_PORT)
+            # pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=33434)
             pkt_fallback = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=33434)
             # Send the packet and get a reply (with a timeout of 1 second)
             try:
@@ -2480,13 +2481,13 @@ class RtpGenerator(object):
                     # Note: The Scapy 'type' code maps to the ICMP 'code'
                     # if reply.src == self.UDP_TX_IP:
                         # We've reached our destination. So append the final address to the traceroute hops list
-                        # Utils.Message.addMessage("dest reached. hopNo:" + str(hopNo))
+                        Utils.Message.addMessage("dest reached. hopNo:" + str(hopNo))
                         try:
                             # Attempt to update this list location
                             tracerouteHopsList[hopNo] = hopAddr
                             # Now trim off any old hops beyond this point of the list
                             if len(tracerouteHopsList) > (hopNo + 1):
-                                tracerouteHopsList = tracerouteHopsList[:hopNo]
+                                tracerouteHopsList = tracerouteHopsList[:hopNo+1]
                         except:
                             # If it fails, it's because the list location doesn't exist yet, so add it
                             # Utils.Message.addMessage("appending")
@@ -2509,7 +2510,7 @@ class RtpGenerator(object):
                 # Append reply to replies[]
                 replies.append(reply)
                 # Check last five results of replies[]. If last 5 in a row are None, assume a dead end
-                if all(response is None for response in replies[-10:]):
+                if all(response is None for response in replies[-5:]):
                     Utils.Message.addMessage("5 None replies in a row, assuming dead traceroute")
                     # Trim any remaining hop entries beyond the current hopNo
                     tracerouteHopsList = tracerouteHopsList[:hopNo]
