@@ -2876,11 +2876,11 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         message = Fore.RED + "Cannot decode RTP headers. Is this an RTP packet? " + str(
                             e) + " Length:" + str(len(data)) + \
                                   " bytes received\r"
-                        print (message)
+                        # print (message)
                         Utils.Message.addMessage(message)
                 else:
                     message = Fore.RED + "ERR: Invalid data received: " + str(addr) + ", " + str(data)
-                    print (message)
+                    # print (message)
                     Utils.Message.addMessage(message)
 
                 # Now delete contents of data[]

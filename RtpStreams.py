@@ -2429,6 +2429,8 @@ class RtpGenerator(object):
         replies = [] # Used to keep track of replies that are 'None'
         while self.timeToLive != 0:
             # Create a UDP packet with an ever incrementing TTL
+            # In the first instance, a packet will be sent to the dest port specified by the stream
+            # However, should this elicit no reply, a second attempt will be made using the standard traceroute port 33434
             # dst=self.UDP_TX_IP
             # self.UDP_TX_PORT
             # dport=33434   # This seems to be the standard port for traceroute according to man traceroute
@@ -2436,6 +2438,7 @@ class RtpGenerator(object):
             # Get local working copy of self.tracerouteHopsList
             tracerouteHopsList = self.getTraceRouteHopsList()
             pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=self.UDP_TX_PORT)
+            pkt_fallback = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=33434)
             # Send the packet and get a reply (with a timeout of 1 second)
             try:
                 reply = sr1(pkt, verbose=0, timeout=1)
@@ -2446,6 +2449,11 @@ class RtpGenerator(object):
                 if reply is None:
                     # No reply from upstream router or sr1() timed out on second attempt, using standard port
                     # This could be because the upstream router is set to not return icmp reports
+                    # Retry the same test, but using the standard traceroute port
+
+                    reply = sr1(pkt_fallback, verbose=0, timeout=1)
+                # If reply is still None
+                if reply is None:
                     hopAddr = [0,0,0,0]
                     # Utils.Message.addMessage("No response or timeout:" + str(hopNo))
 
@@ -2462,7 +2470,7 @@ class RtpGenerator(object):
                     replyFromAddr = str(reply.src).split('.')
                     # Create the IP address as a list of Octets
                     hopAddr = [int(replyFromAddr[0]),int(replyFromAddr[1]),int(replyFromAddr[2]),int(replyFromAddr[3])]
-
+                    Utils.Message.addMessage(str(hopNo) + ":" + str(hopAddr) + ", " + str(reply.type))
                     # Now determine where we are, within the traceroute
 
                     if reply.type == 3: #(equates to port unreachable. Only the destination host knows about the port.
@@ -2499,7 +2507,7 @@ class RtpGenerator(object):
                 # Append reply to replies[]
                 replies.append(reply)
                 # Check last five results of replies[]. If last 5 in a row are None, assume a dead end
-                if all(response is None for response in replies[-5:]):
+                if all(response is None for response in replies[-10:]):
                     Utils.Message.addMessage("5 None replies in a row, assuming dead traceroute")
                     # Trim any remaining hop entries beyond the current hopNo
                     tracerouteHopsList = tracerouteHopsList[:hopNo]
