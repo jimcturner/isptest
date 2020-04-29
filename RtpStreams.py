@@ -1315,8 +1315,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                                         self.tracerouteHopsList = self.tracerouteHopsList[:noOfHops]
                                     self.tracerouteHopsListMutex.release()
 
-                                    Utils.Message.addMessage("Rx'd tracetroute " + str(hopNo) + " of " + str(noOfHops) +\
-                                                                                                ":" + hopAddrAsString)
+                                    # Utils.Message.addMessage("Rx'd tracetroute " + str(hopNo) + " of " + str(noOfHops) +\
+                                    #                                                             ":" + hopAddrAsString)
                                     hopList =""
 
                                     for x in self.getTraceRouteHopsList():
@@ -2461,10 +2461,10 @@ class RtpGenerator(object):
 
                     # Now determine where we are, within the traceroute
 
-                    # if reply.type == 3: (equates to port unreachable. Only the destination host knows about the port.
+                    if reply.type == 3: #(equates to port unreachable. Only the destination host knows about the port.
                     # Ergo, the destination IP address must have been reached
                     # Note: The Scapy 'type' code maps to the ICMP 'code'
-                    if reply.src == self.UDP_TX_IP:
+                    # if reply.src == self.UDP_TX_IP:
                         # We've reached our destination. So append the final address to the traceroute hops list
                         Utils.Message.addMessage("dest reached. hopNo:" + str(hopNo))
                         try:
@@ -2482,7 +2482,7 @@ class RtpGenerator(object):
                         # Utils.Message.addMessage("Resetting hopNo")
                         hopNo = 0
                     else:
-                        Utils.Message.addMessage("In the middle hopNo:" + str(hopNo))
+                        # Utils.Message.addMessage("In the middle hopNo:" + str(hopNo))
                         # We're in the middle somewhere
                         try:
                             # Attempt to update this list location
@@ -2495,7 +2495,7 @@ class RtpGenerator(object):
                 if hopNo > Registry.tracerouteMaxHops:
                     # Reset the hopNo to 0 for the next time around the loop
                     hopNo = 0
-                Utils.Message.addMessage("Hops:" + str(len(tracerouteHopsList)) + ", " + str(tracerouteHopsList))
+                # Utils.Message.addMessage("Hops:" + str(len(tracerouteHopsList)) + ", " + str(tracerouteHopsList))
 
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sr1() " + str(e))
