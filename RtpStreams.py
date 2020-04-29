@@ -2048,7 +2048,9 @@ class RtpGenerator(object):
         # [friendlyName] 10 bytes
 
         header = b""  # Specify byte string
-        headerLength = 0  # Set initial value
+        # Initialise messageData to zero
+        messageData = [0,0,0,0,0,0,0]
+
         try:
             # Note: a short is 16 bits - max value 65535
             uniqueValue = RtpGenerator.UNIQUE_ID_FOR_ISPTEST_STREAMS & 0xFFFF
@@ -2069,7 +2071,7 @@ class RtpGenerator(object):
                     self.tracerouteCarouselIndexNo += 1
 
                 except Exception as e:
-                    Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader():tracerouteHopsList[] " + str(e))
+                    Utils.Message.addMessage("DBUG: RtpGenerator.generateIsptestHeader():tracerouteHopsList[] " + str(e))
             else:
                 # Create a dummy traceroute message
                 messageData = [0 & 0xFF,  # Message type 0: traceroute
@@ -2095,7 +2097,7 @@ class RtpGenerator(object):
             #                40 & 0xFF]  # IP address octet 4
 
             header = struct.pack("!HBBBBBBB", uniqueValue, messageData[0], messageData[1], messageData[2], \
-                                 messageData[3], messageData[4], messageData[5], messageData[6] )
+                                 messageData[3], messageData[4], messageData[5], messageData[6])
 
             # Append friendly name to header digits
             header += str(self.friendlyName).encode('ascii')
