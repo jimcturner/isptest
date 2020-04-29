@@ -442,7 +442,9 @@ class RtpReceiveCommon(object):
         # Currently this list only ever includes 1 item (the current worst glitch)
         self.worstGlitchesList = [None]
         self.worstGlitchesMutex = threading.Lock()
+
         self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
+        self.tracerouteHopsListMutex = threading.Lock()
 
     # Thread-safe method to return a list of the worst glitches
     def getWorstGlitches(self):
@@ -450,6 +452,13 @@ class RtpReceiveCommon(object):
         worstGlitchesList = deepcopy(self.worstGlitchesList)
         self.worstGlitchesMutex.release()
         return worstGlitchesList
+
+    # Thread-safe method to return a list of the traceroute hops
+    def getTraceRouteHopsList(self):
+        self.tracerouteHopsListMutex.acquire()
+        tracerouteHopsList = deepcopy(self.tracerouteHopsList)
+        self.tracerouteHopsListMutex.release()
+        return tracerouteHopsList
 
     @abstractmethod
     def getRtpStreamStats(self):
@@ -1247,17 +1256,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                             datetime.timedelta(seconds = self.streamIsDeadThreshold_s):
                         # Set the 'to be deleted' flag
                         self.believedDeadFlag = True
-                        # Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
-                        #                    "(" + str(self.__stats["stream_friendly_name"]).rstrip() + \
-                        #                    ") believed dead, removing from list")
-                        #
-                        # # Generate and save a report
-                        # # Retrieve the auto-generated filename
-                        # _filename = self.createFilenameForReportExport()
-                        # # Write a report to disk
-                        # self.writeReportToDisk(fileName=_filename)
-                        # # Kill itself
-                        # self.killStream()
+
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR: RtpStream.__calc..Thread. Testing for dead receive stream: " + str(e))
@@ -1300,6 +1299,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                     hopAddr = [isptestHeaderData[4], isptestHeaderData[5],
                                                isptestHeaderData[6], isptestHeaderData[7]]
                                     # update the self.__tracerouteHopsList[]
+                                    self.tracerouteHopsListMutex.acquire()
                                     try:
                                         # This will fail if the list element doesn't already exist
                                         self.tracerouteHopsList[hopNo] = hopAddr
@@ -1313,12 +1313,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                                         # We must have some old/outdated entries at the end of the list
                                         # so trim them
                                         self.tracerouteHopsList = self.tracerouteHopsList[:noOfHops]
-
+                                    self.tracerouteHopsListMutex.release()
 
                                     Utils.Message.addMessage("Rx'd tracetroute " + str(hopNo) + " of " + str(noOfHops) +\
                                                                                                 ":" + hopAddrAsString)
                                     hopList =""
-                                    for x in self.tracerouteHopsList:
+
+                                    for x in self.getTraceRouteHopsList():
                                         hopList += str(x) + ", "
                                     Utils.Message.addMessage(hopList)
 
@@ -1905,6 +1906,7 @@ class RtpGenerator(object):
         self.elapsedTime = datetime.timedelta()
         self.friendlyName = ""
         self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ipopctet4]
+        self.tracerouteHopsListMutex = threading.Lock()
         self.tracerouteCarouselIndexNo = 0  # Keeps track of which traceroute hop value is currently being transmitted
                                             # in the isptest header (in RtpGenerator.generateIsptestHeader()
 
@@ -2048,16 +2050,18 @@ class RtpGenerator(object):
         try:
             # Note: a short is 16 bits - max value 65535
             uniqueValue = RtpGenerator.UNIQUE_ID_FOR_ISPTEST_STREAMS & 0xFFFF
+            # Get copy of tracerouteHopsList[]
+            tracerouteHopsList = self.getTraceRouteHopsList()
             # Transmit each element of the self.tracerouteHopsList sequentially (as a carousel)
-            if len(self.tracerouteHopsList) > 0:
+            if len(tracerouteHopsList) > 0:
                 try:
                     messageData = [0 & 0xFF,  # Message type 0: traceroute
                                    self.tracerouteCarouselIndexNo & 0xFF,  # Traceroute Hop no
-                                   len(self.tracerouteHopsList) & 0xFF,  # # Traceroute total no of hops
-                                  self.tracerouteHopsList[self.tracerouteCarouselIndexNo][0] & 0xFF,  # IP address octet 1
-                                  self.tracerouteHopsList[self.tracerouteCarouselIndexNo][1] & 0xFF,  # IP address octet 2
-                                  self.tracerouteHopsList[self.tracerouteCarouselIndexNo][2] & 0xFF,  # IP address octet 3
-                                  self.tracerouteHopsList[self.tracerouteCarouselIndexNo][3] & 0xFF]  # IP address octet 4
+                                   len(tracerouteHopsList) & 0xFF,  # # Traceroute total no of hops
+                                  tracerouteHopsList[self.tracerouteCarouselIndexNo][0] & 0xFF,  # IP address octet 1
+                                  tracerouteHopsList[self.tracerouteCarouselIndexNo][1] & 0xFF,  # IP address octet 2
+                                  tracerouteHopsList[self.tracerouteCarouselIndexNo][2] & 0xFF,  # IP address octet 3
+                                  tracerouteHopsList[self.tracerouteCarouselIndexNo][3] & 0xFF]  # IP address octet 4
                     # Now increment the carousel index so that the next hop value will be transmitted the next time this
                     # method is called
                     self.tracerouteCarouselIndexNo += 1
@@ -2075,7 +2079,7 @@ class RtpGenerator(object):
                                0 & 0xFF]  # IP address octet 4
 
             # Bounds check tracerouteCarouselIndexNo
-            if self.tracerouteCarouselIndexNo > (len(self.tracerouteHopsList) - 1):
+            if self.tracerouteCarouselIndexNo > (len(tracerouteHopsList) - 1):
                 # Reset the carousel value
                 self.tracerouteCarouselIndexNo = 0
             # Now assemble the header
@@ -2405,17 +2409,26 @@ class RtpGenerator(object):
                 # Now break out of the while loop to end the thread finally kill the object.
                 break
 
-# Define a seperate thread to run a traceroute
+    # Thread-safe method to return a list of the traceroute hops
+    def getTraceRouteHopsList(self):
+        self.tracerouteHopsListMutex.acquire()
+        tracerouteHopsList = deepcopy(self.tracerouteHopsList)
+        self.tracerouteHopsListMutex.release()
+        return tracerouteHopsList
+
+    # Define a seperate thread to run a traceroute
     def __tracerouteThread(self):
         # Specify initial hopNo
         hopNo = 0
         # Run indefinitely unless timeToLive falls to zero
         while self.timeToLive != 0:
-            # Create a UDP packet with an ever changing TTL
+            # Create a UDP packet with an ever incrementing TTL
             # dst=self.UDP_TX_IP
             # self.UDP_TX_PORT
             # dport=33434   # This seems to be the standard port for traceroute according to man traceroute
             # dst="8.8.8.8"
+            # Get local working copy of self.tracerouteHopsList
+            tracerouteHopsList = self.getTraceRouteHopsList()
             pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=self.UDP_TX_PORT)
             # Send the packet and get a reply (with a timeout of 1 second)
             try:
@@ -2423,28 +2436,19 @@ class RtpGenerator(object):
                 # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
                 if self.timeToLive == 0:
                     break
-                # Now test reply and append update the traceroute list
-                if reply is None:
-                    # No reply from upstream router or sr1() timed out
-                    # This could be becuse the upstream is set to not return icmp reports. or else, it might
-                    # be prohibiting ICMP messages sent to a non-standard port
-                    # Try another UDP ping using the same TTL, but on the standard traceroute port
-                    Utils.Message.addMessage("No response to port " + str(self.UDP_TX_PORT) +\
-                                             ". Trying port " + str(Registry.tracerouteFallbackUDPDestPort))
-                    pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=Registry.tracerouteFallbackUDPDestPort)
-                    reply = sr1(pkt, verbose=0, timeout=1)
-
                 if reply is None:
                     # No reply from upstream router or sr1() timed out on second attempt, using standard port
                     # This could be because the upstream router is set to not return icmp reports
                     hopAddr = [0,0,0,0]
                     Utils.Message.addMessage("No response or timeout:" + str(hopNo))
+
                     try:
                         # Attempt to update this list location
-                        self.tracerouteHopsList[hopNo] = hopAddr
+                        tracerouteHopsList[hopNo] = hopAddr
                     except:
                         # If it fails, it's because the list location doesn't exist yet
-                        self.tracerouteHopsList.append(hopAddr)
+                        tracerouteHopsList.append(hopAddr)
+
                     # increment hopNo
                     hopNo += 1
                 else:
@@ -2454,20 +2458,24 @@ class RtpGenerator(object):
                     hopAddr = [int(replyFromAddr[0]),int(replyFromAddr[1]),int(replyFromAddr[2]),int(replyFromAddr[3])]
 
                     # Now determine where we are, within the traceroute
-                    if reply.type == 3:
+
+                    # if reply.type == 3: (equates to port unreachable. Only the destination host knows about the port.
+                    # Ergo, the destination IP address must have been reached
+                    # Note: The Scapy 'type' code maps to the ICMP 'code'
+                    if reply.src == self.UDP_TX_IP:
                         # We've reached our destination. So append the final address to the traceroute hops list
                         Utils.Message.addMessage("dest reached. hopNo:" + str(hopNo))
                         try:
                             # Attempt to update this list location
-                            self.tracerouteHopsList[hopNo] = hopAddr
+                            tracerouteHopsList[hopNo] = hopAddr
                             # Now trim off any old hops beyond this point of the list
-                            if len(self.tracerouteHopsList) > (hopNo + 1):
+                            if len(tracerouteHopsList) > (hopNo + 1):
                                 # Utils.Message.addMessage("trimming")
-                                self.tracerouteHopsList = self.tracerouteHopsList[:hopNo]
+                                tracerouteHopsList = tracerouteHopsList[:hopNo]
                         except:
                             # If it fails, it's because the list location doesn't exist yet, so add it
                             # Utils.Message.addMessage("appending")
-                            self.tracerouteHopsList.append(hopAddr)
+                            tracerouteHopsList.append(hopAddr)
                         # Reset hopNo to restart the traceroute
                         # Utils.Message.addMessage("Resetting hopNo")
                         hopNo = 0
@@ -2476,21 +2484,27 @@ class RtpGenerator(object):
                         # We're in the middle somewhere
                         try:
                             # Attempt to update this list location
-                            self.tracerouteHopsList[hopNo] = hopAddr
+                            tracerouteHopsList[hopNo] = hopAddr
                         except:
                             # If it fails, it's because the list location doesn't exist yet, so add it
-                            self.tracerouteHopsList.append(hopAddr)
+                            tracerouteHopsList.append(hopAddr)
                         # Increment the TTL of the packet by incrementing hopNo
                         hopNo += 1
                 if hopNo > Registry.tracerouteMaxHops:
                     # Reset the hopNo to 0 for the next time around the loop
                     hopNo = 0
-                Utils.Message.addMessage("Hops:" + str(len(self.tracerouteHopsList)) + ", " + str(self.tracerouteHopsList))
+                Utils.Message.addMessage("Hops:" + str(len(tracerouteHopsList)) + ", " + str(tracerouteHopsList))
+
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sr1() " + str(e))
                 Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
                 # Now break out of while loop
                 break
+            finally:
+                # copy the working tracerouteHopsList back into the instance variable version
+                self.tracerouteHopsListMutex.acquire()
+                self.tracerouteHopsList = tracerouteHopsList
+                self.tracerouteHopsListMutex.release()
             time.sleep(1)
         Utils.Message.addMessage("__tracerouteThread ending for stream " + str(self.syncSourceIdentifier))
 
