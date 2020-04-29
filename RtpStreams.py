@@ -1986,8 +1986,10 @@ class RtpGenerator(object):
                 'Packet size': self.payloadLength,
                 'Bytes transmitted': self.txCounter_bytes,
                 'Sync Source ID': self.syncSourceIdentifier,
+                'stream_syncSource': self.syncSourceIdentifier, # Duplicate entry to harmonise with RtpReceiveStream and RtpStreamResults
                 'Elapsed Time': self.elapsedTime,
                 'Friendly Name': self.friendlyName,
+                'stream_friendly_name': self.friendlyName, # Duplicate entry to harmonise with RtpReceiveStream and RtpStreamResults
                 'Tx Source Port': self.UDP_TX_SRC_PORT,
                 'Time to live': self.timeToLive
                 }

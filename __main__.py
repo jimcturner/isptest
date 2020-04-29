@@ -565,6 +565,8 @@ class UI(object):
 
         # Use to control the display of the Events List dialogue
         self.displayEventsTable = False
+        # Use to control the display of the Traceroute dialogue
+        self.displayTraceRouteTable = False
         # Used by the EventsTable (and Traceroute table). Keeps track of the current display page
         self.tablePageNo = 0
         # Used by the EventsTable and CopyToClipboard/PasteBin.
@@ -1488,8 +1490,8 @@ class UI(object):
 
     # Cursor right
     def __onNavigateRight(self):
-        if self.displayEventsTable is False:
-            # Inhibit, if Events Table is currently being displayed
+        if self.displayEventsTable is False and self.displayTraceRouteTable is False:
+            # Inhibit, if Events Table or Traceroute table is currently being displayed
             self.selectedView += 1
             # Prevent an 'out of range' view being selected
             if self.selectedView > (len(self.views) - 1):
@@ -1501,8 +1503,8 @@ class UI(object):
 
     # Cursor left
     def __onNavigateLeft(self):
-        # Inhibit, if Events Table is currently being displayed
-        if self.displayEventsTable is False:
+        # Inhibit, if Events Table or Traceroute table is currently being displayed
+        if self.displayEventsTable is False and self.displayTraceRouteTable is False:
             self.selectedView -= 1
             # Prevent an 'out of range' view being selected
             if self.selectedView < 0:
@@ -2065,16 +2067,79 @@ class UI(object):
         # Render the message in a pop-up box
         self.__renderMessageBox(tableContents, "Help")
 
-    def __onShowTraceroutepDialogue(self):
-        maxWidth = 55
-        tableContents = ("This will show a traceroute for the selected stream... ") + \
-                        "\n\n...but I've not written it yet.." + \
-                        "\n\n\n\n" + \
-                        "Press the [any] key to continue".center(maxWidth, " ")
+    # Controls the display of the Traceroute dialogue
+    def __onDisplayTraceroute(self):
+        # Toggle the display of the traceroute table by toggling the display flag
+        if self.displayTraceRouteTable:
+            self.displayTraceRouteTable = False
+        else:
+            self.displayTraceRouteTable = True
+            # Reset display page to 0 when initially displaying the table
+            self.tablePageNo = 0
 
-        # Render the message in a pop-up box
-        self.__renderMessageBox(tableContents, "Traceroute")
 
+    # Renders the Traceroute dialogue
+    def __renderTracerouteTable(self):
+        termW, termH = Term.getTerminalSize()
+        # Calculate the maximum no. of lines that will fit within the table, given the terminal height
+        maxLines = termH - 20
+
+        # Get the traceroute hops list
+        # depending upon whether we're in RECEIVE or TRANSMIT mode
+        # The amount of lines displayed will adjust to the terminal height
+        # Get a handle on the selected RxRtpStream or TxResults
+        # Note, if we are in TRANSMIT mode, the selected stream should be the RtpGenerator dict.
+        # hence we have to manually retrieve the appropriate stream object by using the self.selectedStreamID
+        # and looking in the appropriate streams dictionary
+        selectedStream = None
+
+        if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+            try:
+                selectedStream = self.rtpRxStreamsDict[self.selectedStreamID]
+            except:
+                pass
+        elif self.operationMode == 'TRANSMIT':
+            try:
+                selectedStream = self.rtpTxStreamsDict[self.selectedStreamID]
+            except:
+                pass
+        tracerouteHopsList = []
+
+        friendlyName = ""
+        syncSourceID = 0
+        if selectedStream is not None:
+            try:
+                # Get tracerouteHopsList from selected stream
+                tracerouteHopsList = selectedStream.getTraceRouteHopsList()
+                # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
+                friendlyName = str(selectedStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
+                syncSourceID = str(selectedStream.getRtpStreamStatsByKey("stream_syncSource"))
+            except Exception as e:
+                Utils.Message.addMessage("ERR: UI.__onShowTracerouteDialogue(). getTraceRouteHopsList() " + str(e))
+            # Create a list of tuples containing the index no and the IP address
+            tableContents = []
+            if len(tracerouteHopsList) > 0:
+                tableRow = []
+                for hopNo in range(len(tracerouteHopsList)):
+                    # Construct a string containing the IP address octets
+                    hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
+                              str(tracerouteHopsList[hopNo][1]) + "." + \
+                              str(tracerouteHopsList[hopNo][2]) + "." + \
+                              str(tracerouteHopsList[hopNo][3])
+                    # Create a table row containing the hop no and ip address of the hop
+                    tableRow=[str(hopNo), hopAddr]
+                    # Append the table row tuple to the tableContents[] list
+                    tableContents.append(tableRow)
+                    # Clear the tableRow list ready for next time around the loop
+                    tableRow = []
+            else:
+                tableContents.append(["", "No traceroute data to display"])
+            # Now actually display the paged table list
+            title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+            footer = ["", "[<][>]page, [^][v] select stream, [t]exit"]
+            self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15)], tableContents,
+                                   footerRow=footer,
+                                   pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
 
     def __onDisplayEvents(self):
         # Toggle display of Events list dialogue
@@ -2169,7 +2234,7 @@ class UI(object):
                 self.__onShowHelpDialogue()
             # 't' Show traceroute
             elif self.keyPressed == ord('t'):
-                self.__onShowTraceroutepDialogue()
+                self.__onDisplayTraceroute()
 
             # Special features
             # 'z' Toggle packet generation on/off for selected stream
@@ -2450,6 +2515,14 @@ class UI(object):
                 # Without this update, the Events Table update lags behind the selected stream
                 validateSelectedStream()
                 self.__renderEventsListTable()
+
+            # Check to see if Traceroute table is to be overlaid
+            if self.displayTraceRouteTable:
+                # Confirm that self.selectedStream and self.selectedStreamID are up to date, before drawing the table
+                # Without this update, the traceroute table update lags behind the stream selection
+                validateSelectedStream()
+                self.__renderTracerouteTable()
+
 
             # Clear flag
             self.redrawScreen = False
