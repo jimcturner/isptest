@@ -1314,14 +1314,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                                         # so trim them
                                         self.tracerouteHopsList = self.tracerouteHopsList[:noOfHops]
                                     self.tracerouteHopsListMutex.release()
-
+                                    # Display message with all the hops
                                     # Utils.Message.addMessage("Rx'd tracetroute " + str(hopNo) + " of " + str(noOfHops) +\
                                     #                                                             ":" + hopAddrAsString)
-                                    hopList =""
-
-                                    for x in self.getTraceRouteHopsList():
-                                        hopList += str(x) + ", "
-                                    Utils.Message.addMessage(hopList)
+                                    # hopList =""
+                                    #
+                                    # for x in self.getTraceRouteHopsList():
+                                    #     hopList += str(x) + ", "
+                                    # Utils.Message.addMessage(hopList)
 
                             else:
                                 # Otherwise, stream is not recognised, so disable transmission of results
@@ -2172,6 +2172,9 @@ class RtpGenerator(object):
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread to end")
         self.rtpGeneratorThread.join()
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread has ended")
+        # Wait for __tracerouteThread to end
+        self.tracerouteThread.join()
+        Utils.Message.addMessage("RtpGenerator.killStream()  __tracerouteThread has ended")
 
         # Now kill corresponding RtpResultsReceiver object (should be a blocking call)
         self.rtpStreamResultsReceiver.kill()
@@ -2423,6 +2426,7 @@ class RtpGenerator(object):
         # Specify initial hopNo
         hopNo = 0
         # Run indefinitely unless timeToLive falls to zero
+        replies = [] # Used to keep track of replies that are 'None'
         while self.timeToLive != 0:
             # Create a UDP packet with an ever incrementing TTL
             # dst=self.UDP_TX_IP
@@ -2438,11 +2442,12 @@ class RtpGenerator(object):
                 # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
                 if self.timeToLive == 0:
                     break
+
                 if reply is None:
                     # No reply from upstream router or sr1() timed out on second attempt, using standard port
                     # This could be because the upstream router is set to not return icmp reports
                     hopAddr = [0,0,0,0]
-                    Utils.Message.addMessage("No response or timeout:" + str(hopNo))
+                    # Utils.Message.addMessage("No response or timeout:" + str(hopNo))
 
                     try:
                         # Attempt to update this list location
@@ -2450,7 +2455,6 @@ class RtpGenerator(object):
                     except:
                         # If it fails, it's because the list location doesn't exist yet
                         tracerouteHopsList.append(hopAddr)
-
                     # increment hopNo
                     hopNo += 1
                 else:
@@ -2466,13 +2470,12 @@ class RtpGenerator(object):
                     # Note: The Scapy 'type' code maps to the ICMP 'code'
                     # if reply.src == self.UDP_TX_IP:
                         # We've reached our destination. So append the final address to the traceroute hops list
-                        Utils.Message.addMessage("dest reached. hopNo:" + str(hopNo))
+                        # Utils.Message.addMessage("dest reached. hopNo:" + str(hopNo))
                         try:
                             # Attempt to update this list location
                             tracerouteHopsList[hopNo] = hopAddr
                             # Now trim off any old hops beyond this point of the list
                             if len(tracerouteHopsList) > (hopNo + 1):
-                                # Utils.Message.addMessage("trimming")
                                 tracerouteHopsList = tracerouteHopsList[:hopNo]
                         except:
                             # If it fails, it's because the list location doesn't exist yet, so add it
@@ -2492,7 +2495,17 @@ class RtpGenerator(object):
                             tracerouteHopsList.append(hopAddr)
                         # Increment the TTL of the packet by incrementing hopNo
                         hopNo += 1
-                if hopNo > Registry.tracerouteMaxHops:
+                # Now check for five 'None' replies in a row
+                # Append reply to replies[]
+                replies.append(reply)
+                # Check last five results of replies[]. If last 5 in a row are None, assume a dead end
+                if all(response is None for response in replies[-5:]):
+                    Utils.Message.addMessage("5 None replies in a row, assuming dead traceroute")
+                    # Trim any remaining hop entries beyond the current hopNo
+                    tracerouteHopsList = tracerouteHopsList[:hopNo]
+                    # Reset hopNo to restart the traceroute
+                    hopNo = 0
+                if hopNo >= Registry.tracerouteMaxHops:
                     # Reset the hopNo to 0 for the next time around the loop
                     hopNo = 0
                 # Utils.Message.addMessage("Hops:" + str(len(tracerouteHopsList)) + ", " + str(tracerouteHopsList))
@@ -2507,7 +2520,7 @@ class RtpGenerator(object):
                 self.tracerouteHopsListMutex.acquire()
                 self.tracerouteHopsList = tracerouteHopsList
                 self.tracerouteHopsListMutex.release()
-            time.sleep(1)
+            time.sleep(0.5)
         Utils.Message.addMessage("__tracerouteThread ending for stream " + str(self.syncSourceIdentifier))
 
 # An object that will act as a UDP receiver. It will receive server reports from ResultsTransmitter
