@@ -440,7 +440,7 @@ class RtpReceiveCommon(object):
         # Create a 'leaderboard' for the worst 10 glitches
         # In futire this will be a list of Glitch events
         # Currently this list only ever includes 1 item (the current worst glitch)
-        self.worstGlitchesList = [None]
+        self.worstGlitchesList = []
         self.worstGlitchesMutex = threading.Lock()
 
         self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
