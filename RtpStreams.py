@@ -870,7 +870,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__eventList.append(excessiveJitterEvent)
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
-                    Utils.Message.addMessage(excessiveJitterEvent.getSummary()['summary'])
+                    Utils.Message.addMessage(excessiveJitterEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                 # Update the event counter for Excess Jitter
                 self.__stats["jitter_excess_jitter_events_total"] += 1
@@ -984,9 +984,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Increment the all_events counter
                 self.__stats["stream_all_events_counter"] += 1
                 # Post a message
-                Utils.Message.addMessage(glitch.getSummary()['summary'])
+                Utils.Message.addMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'])
             else:
-                Utils.Message.addMessage(glitch.getSummary()['summary'] + " (ignore)")
+                Utils.Message.addMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'] + " (ignore)")
             # update glitch stats
             self.__updateGlitchStats(glitch)
 
@@ -1020,9 +1020,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
                     # Post a message
-                    Utils.Message.addMessage(glitch.getSummary()['summary'])
+                    Utils.Message.addMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'])
                 else:
-                    Utils.Message.addMessage(glitch.getSummary()['summary'] + " (ignore)")
+                    Utils.Message.addMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'] + " (ignore)")
 
                 # update glitch stats
                 self.__updateGlitchStats(glitch)
@@ -1094,7 +1094,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__eventList.append(streamStartedEvent)
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
-                    Utils.Message.addMessage(streamStartedEvent.getSummary()['summary'])
+                    Utils.Message.addMessage(streamStartedEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                 # Stream now being received so clear flag
                 if lossOfStreamFlag == True:
@@ -1156,7 +1156,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__eventList.append(streamLostEvent)
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
-                    Utils.Message.addMessage(streamLostEvent.getSummary()['summary'])
+                    Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
                     ######## POSSIBLY REVISIT THIS.....
                     # # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
                     # self.__stats["jitter_min_uS"] = 0
@@ -1362,9 +1362,11 @@ class RtpReceiveStream(RtpReceiveCommon):
 
             # If the CPU is >99% utilised, add event to the list (but only do this once)
             if self.__stats["stream_processor_utilisation_percent"] > 99:
-                self.__eventList.append(ProcessorOverload(self.__stats, lastReceivedRtpPacket))
+                processorOverloadEvent = ProcessorOverload(self.__stats, lastReceivedRtpPacket)
+                self.__eventList.append(processorOverloadEvent)
                 # Increment the all_events counter
                 self.__stats["stream_all_events_counter"] += 1
+                Utils.Message.addMessage(processorOverloadEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
 
 
