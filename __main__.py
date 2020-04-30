@@ -70,6 +70,9 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import textwrap
 import pickle
+# import cgitb
+# cgitb.enable(format='text')
+
 # Non standard external libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
