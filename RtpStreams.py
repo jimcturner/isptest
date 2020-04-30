@@ -2175,8 +2175,9 @@ class RtpGenerator(object):
         self.rtpGeneratorThread.join()
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread has ended")
         # Wait for __tracerouteThread to end
+        Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  Waiting for __tracerouteThread has ended")
         self.tracerouteThread.join()
-        Utils.Message.addMessage("RtpGenerator.killStream()  __tracerouteThread has ended")
+        Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  __tracerouteThread has ended")
 
         # Now kill corresponding RtpResultsReceiver object (should be a blocking call)
         self.rtpStreamResultsReceiver.kill()
