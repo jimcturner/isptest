@@ -2129,6 +2129,13 @@ class UI(object):
                               str(tracerouteHopsList[hopNo][1]) + "." + \
                               str(tracerouteHopsList[hopNo][2]) + "." + \
                               str(tracerouteHopsList[hopNo][3])
+                    # Now do reverse dns lookup to resolve address to a name
+                    # This will have to be done in a seperate thread. Too slow for a UI
+                    # hopName = ""
+                    # try:
+                    #     hopName = str(socket.gethostbyaddr(hopAddr))
+                    # except Exception as e:
+                    #     hopName = str(e)
                     # Create a table row containing the hop no and ip address of the hop
                     tableRow=[str(hopNo), hopAddr]
                     # Append the table row tuple to the tableContents[] list
@@ -2138,7 +2145,8 @@ class UI(object):
             else:
                 tableContents.append(["", "No traceroute data to display"])
             # Now actually display the paged table list
-            title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+            title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ") " +\
+                    str(len(tracerouteHopsList)) + " hops"
             footer = ["", "[<][>]page, [^][v] select stream, [t]exit"]
             self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15)], tableContents,
                                    footerRow=footer,

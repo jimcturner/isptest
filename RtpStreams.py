@@ -460,6 +460,13 @@ class RtpReceiveCommon(object):
         self.tracerouteHopsListMutex.release()
         return tracerouteHopsList
 
+    # Thread-safe method to set the self.tracerouteHopsList[]
+    def setTraceRouteHopsList(self, newList):
+        self.tracerouteHopsListMutex.acquire()
+        # Copy the new list into the instance variable list
+        self.tracerouteHopsList = deepcopy(newList)
+        self.tracerouteHopsListMutex.release()
+
     @abstractmethod
     def getRtpStreamStats(self):
         pass
@@ -1299,21 +1306,23 @@ class RtpReceiveStream(RtpReceiveCommon):
                                     hopAddr = [isptestHeaderData[4], isptestHeaderData[5],
                                                isptestHeaderData[6], isptestHeaderData[7]]
                                     # update the self.__tracerouteHopsList[]
-                                    self.tracerouteHopsListMutex.acquire()
+                                    # get working copy of the current tracerouteHops list
+                                    tracerouteHopsList = []
+                                    tracerouteHopsList = self.getTraceRouteHopsList()
+                                    # Compare length of existing list with that indicated in the header
+                                    # If they are different, assume that the list has been superceded
+                                    if len(tracerouteHopsList) != noOfHops:
+                                        # Utils.Message.addMessage("traceroute list lengths are different. Creating new list")
+                                        # Now initialise a new list of the same length as noOfHops
+                                        tracerouteHopsList = [[0,0,0,0]] * noOfHops
                                     try:
                                         # This will fail if the list element doesn't already exist
-                                        self.tracerouteHopsList[hopNo] = hopAddr
-                                    except:
-                                        # It doesn't exist, so append to the end of the list
-                                        self.tracerouteHopsList.append(hopAddr)
-                                    # Now check to see whether len(self.tracerouteHopsList) appears to be larger than
-                                    # the value indicated indicated in the header (noOfHops)
-                                    # If so, remove the extraneous hoplist entries
-                                    if len(self.tracerouteHopsList) > noOfHops:
-                                        # We must have some old/outdated entries at the end of the list
-                                        # so trim them
-                                        self.tracerouteHopsList = self.tracerouteHopsList[:noOfHops]
-                                    self.tracerouteHopsListMutex.release()
+                                        tracerouteHopsList[hopNo] = hopAddr
+                                    except Exception as e:
+                                        Utils.Message.addMessage("RtpReceiveStream.__calculateThread() parse traceroute message " + str(e))
+
+                                    # Now copy the local traceroute hops list back to the instance variable version
+                                    self.setTraceRouteHopsList(tracerouteHopsList)
                                     # Display message with all the hops
                                     # Utils.Message.addMessage("Rx'd tracetroute " + str(hopNo) + " of " + str(noOfHops) +\
                                     #                                                             ":" + hopAddrAsString)
@@ -2480,9 +2489,9 @@ class RtpGenerator(object):
                     if reply.type == 3: #(equates to port unreachable. Only the destination host knows about the port.
                     # Ergo, the destination IP address must have been reached
                     # Note: The Scapy 'type' code maps to the ICMP 'code'
-                    # if reply.src == self.UDP_TX_IP:
+
                         # We've reached our destination. So append the final address to the traceroute hops list
-                        Utils.Message.addMessage("dest reached. hopNo:" + str(hopNo))
+                        # Utils.Message.addMessage("DBUG: dest reached. hopNo:" + str(hopNo))
                         try:
                             # Attempt to update this list location
                             tracerouteHopsList[hopNo] = hopAddr
@@ -2512,7 +2521,7 @@ class RtpGenerator(object):
                 replies.append(reply)
                 # Check last five results of replies[]. If last 5 in a row are None, assume a dead end
                 if all(response is None for response in replies[-5:]):
-                    Utils.Message.addMessage("5 None replies in a row, assuming dead traceroute")
+                    # Utils.Message.addMessage("5 None replies in a row, assuming dead traceroute")
                     # Trim any remaining hop entries beyond the current hopNo
                     tracerouteHopsList = tracerouteHopsList[:hopNo]
                     # Reset hopNo to restart the traceroute
