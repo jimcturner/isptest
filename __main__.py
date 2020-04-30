@@ -2631,6 +2631,9 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                 Utils.Message.addMessage("ERR: __diskloggerThread.createLogFile() " + fileToCreate + ", " + str(e))
 
     # Sit in an infinite loop looking for new events (on all streams) and appending them to the log file(s)
+    # Create file handles for the csv and json files
+    file_csv = None
+    file_json = None
     while True:
         # Check status of shutdownFlag
         if shutdownFlag.is_set():
@@ -2731,14 +2734,18 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
             del lastWrittenEventNoDict[stream]
         time.sleep(1)
 
-    # If execution gets here, the thread is eding....
-    print("_diskLoggerThread ending\r")
+    # If execution gets here, the thread is ending....
     try:
-        Utils.Message.addMessage("__diskloggerThread: Closing files " + str(filename_json) + " and " + str(filename_csv))
-        file_csv.close()
-        file_json.close()
+        # check to see if object file_csv has a close() method (it won't if it hasn't been written to yet)
+        if "close" in dir(file_csv):
+            Utils.Message.addMessage("__diskloggerThread: Closing file " + str(filename_csv))
+            file_csv.close()
+        # check to see if object file_json has a close() method (it won't if it hasn't been written to yet)
+        if "close" in dir(file_json):
+            Utils.Message.addMessage("__diskloggerThread: Closing file " + str(filename_json))
+            file_json.close()
     except Exception as e:
-        Utils.Message.addMessage("ERR: __diskloggerThread. Error closing files " + str(e))
+        Utils.Message.addMessage("ERR: __diskloggerThread. Error closing file " + str(e))
 
 # Autonomous thread to decode rtp streams and pass the data into the relevant RtpRXStream
 def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
