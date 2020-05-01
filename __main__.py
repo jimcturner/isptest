@@ -2603,7 +2603,7 @@ class UI(object):
                     # Set a revertive to show that ____keysPressedThread (i.e getch) has been disabled
                     # Utils.Message.addMessage("DBUG: UI.__keysPressedThread: getchIsDisabled.set() ")
                     self.getchIsDisabled.set()
-            # If getch has been disabled, set a revertive to show it
+            # If getch has been disabled, set a revertive to show other parts of the program it has been acknowledged
             if self.enableGetch.is_set() is False:
                 # Set a revertive to show that ____keysPressedThread (i.e getch) has been disabled
                 # Utils.Message.addMessage("DBUG: UI.__keysPressedThread: getchIsDisabled.set() ")
