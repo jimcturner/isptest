@@ -256,8 +256,7 @@ class ProcessorOverload(Event):
         self.lastPacketReceived = lastPacketReceived
 
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
-        optionalFields =  " "+str(int(self.stats["stream_processor_utilisation_percent"])) + "%"
-        optionalFields = ", first rtp sequence no:" + str(self.firstPacketReceived.rtpSequenceNo)
+        optionalFields =  " "+str(int(self.stats["stream_processor_utilisation_percent"])) + "% cpu usage. "
         summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
