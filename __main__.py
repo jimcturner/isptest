@@ -2143,6 +2143,7 @@ class UI(object):
                                   str(tracerouteHopsList[hopNo][3])
                     except:
                         hopAddr = "Waiting...."
+
                     # Now do reverse dns lookup to resolve address to a name
                     # This will have to be done in a seperate thread. Too slow for a UI
                     # hopName = ""
@@ -2157,12 +2158,12 @@ class UI(object):
                     # Clear the tableRow list ready for next time around the loop
                     tableRow = []
             else:
-                tableContents.append(["", "No traceroute data to display"])
+                tableContents.append(["", "No traceroute data to display".ljust(50)])
             # Now actually display the paged table list
             title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ") " +\
                     str(len(tracerouteHopsList)) + " hops"
             footer = ["", "[<][>]page, [^][v] select stream, [t]exit"]
-            self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15)], tableContents,
+            self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(50)], tableContents,
                                    footerRow=footer,
                                    pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
 
