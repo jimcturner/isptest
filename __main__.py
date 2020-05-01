@@ -1547,6 +1547,8 @@ class UI(object):
                 'dialog frame.label': 'bg:ansiwhite ansired ',
                 'dialog.body': 'bg:ansiwhite ansiblack',
                 'dialog shadow': 'bg:ansiblack'})
+            # Now wait for confirtmation that __keysPressedThread is definitely disabled
+            self.getchIsDisabled.wait()
             text = input_dialog(
                 title='Enter friendly name',
                 text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':',
@@ -1674,13 +1676,16 @@ class UI(object):
 
                 # newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList, title='Enter parameters for new transmit stream', style=styleDefinition)
 
-                # Defsult title for the user dialogue
+                # Default title for the user dialogue
                 title = 'Enter parameters for new transmit stream'
 
                 # Keep displaying the dialogue until either ALL the input fields have been validated OR
                 # 'Cancel' was selected
                 while allFieldsValidatedFlag is False:
                     try:
+                        # Now wait for confirtmation that __keysPressedThread is definitely disabled
+                        # (otherwise my getch() would interfere with prompt_toolkits' getch())
+                        self.getchIsDisabled.wait()
                         # Display the user dialogue
                         newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
                                                                    title=title,
