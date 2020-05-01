@@ -1319,7 +1319,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                     if len(tracerouteHopsList) != noOfHops:
                                         # Utils.Message.addMessage("traceroute list lengths are different. Creating new list")
                                         # Now initialise a new list of the same length as noOfHops
-                                        tracerouteHopsList = [[0,0,0,0]] * noOfHops
+                                        tracerouteHopsList = [None] * noOfHops
                                     try:
                                         # This will fail if the list element doesn't already exist
                                         tracerouteHopsList[hopNo] = hopAddr

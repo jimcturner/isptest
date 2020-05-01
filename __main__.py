@@ -2125,10 +2125,15 @@ class UI(object):
                 tableRow = []
                 for hopNo in range(len(tracerouteHopsList)):
                     # Construct a string containing the IP address octets
-                    hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
-                              str(tracerouteHopsList[hopNo][1]) + "." + \
-                              str(tracerouteHopsList[hopNo][2]) + "." + \
-                              str(tracerouteHopsList[hopNo][3])
+                    try:
+                        # This will fail if the tracerouteHopsList hop hasn't been received in thr carousel yet
+                        # If so, the hopAddr entry in tracerouteHopsList will still be 'None'
+                        hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
+                                  str(tracerouteHopsList[hopNo][1]) + "." + \
+                                  str(tracerouteHopsList[hopNo][2]) + "." + \
+                                  str(tracerouteHopsList[hopNo][3])
+                    except:
+                        hopAddr = "Waiting...."
                     # Now do reverse dns lookup to resolve address to a name
                     # This will have to be done in a seperate thread. Too slow for a UI
                     # hopName = ""
