@@ -949,7 +949,13 @@ class RtpReceiveStream(RtpReceiveCommon):
             if latestGlitch.glitchLength > self.__stats["glitch_max_glitch_duration"]:
                 self.__stats["glitch_max_glitch_duration"] = latestGlitch.glitchLength
                 # add the new 'worst glitch' to the worstGlitches[] list
-                self.worstGlitchesList[0] = latestGlitch
+                try:
+                    # This will fail if the worstGlitchesList is empty
+                    self.worstGlitchesList[0] = latestGlitch
+                except:
+                    Utils.Message.addMessage("DBUG: RtpReceiveStream.__updateGlitchStats() Update self.worstGlitchesList")
+                    self.worstGlitchesList.append(latestGlitch)
+
 
         # Inhibit immediate jitter-event triggering by setting self.__stats["jitter_time_of_last_excess_jitter_event"]
         # to the current time
@@ -2485,7 +2491,7 @@ class RtpGenerator(object):
                     replyFromAddr = str(reply.src).split('.')
                     # Create the IP address as a list of Octets
                     hopAddr = [int(replyFromAddr[0]),int(replyFromAddr[1]),int(replyFromAddr[2]),int(replyFromAddr[3])]
-                    Utils.Message.addMessage(str(hopNo) + ":" + str(hopAddr) + ", " + str(reply.type))
+                    # Utils.Message.addMessage(str(hopNo) + ":" + str(hopAddr) + ", " + str(reply.type))
                     # Now determine where we are, within the traceroute
 
                     if reply.type == 3: #(equates to port unreachable. Only the destination host knows about the port.
