@@ -586,6 +586,8 @@ class UI(object):
 
         # Enables keyboard key press detection via __getch()
         self.enableGetch = threading.Event()
+        # Allows other parts of the program to query the current status of the __keysPressedThread
+        self.getchIsDisabled = threading.Event()
         self.wakeUpUI = threading.Event()
 
         # Flag to trigger redrawing of the screen
@@ -803,6 +805,7 @@ class UI(object):
     # It is designed to be a blocking method. It will return True/False depending upon whether
     # the user confirms the shutdown request
     def showShutDownDialogue(self):
+        Utils.Message.addMessage("DBUG: UI.showShutDownDialogue() called")
         # Cause the UI render thread to put up a Quit Y/N prompt
         self.displayQuitDialogueFlag = True
         # Clear the threading.Event signal for self.quitDialogueActiveFlag
@@ -811,6 +814,7 @@ class UI(object):
         self.wakeUpUI.set()
         # Now wait for the __renderDisplayThread to signal that the prompt has been answered (blocking call)
         # by 'setting' self.quitDialogueNotActiveFlag
+        Utils.Message.addMessage("DBUG: UI.showShutDownDialogue() waiting for self.quitDialogueNotActiveFlag to clear")
         self.quitDialogueNotActiveFlag.wait()
         # Return the response to the caller
         return self.quitConfirmed
@@ -2447,8 +2451,13 @@ class UI(object):
                 # Clear the flag
                 self.displayQuitDialogueFlag = False
                 # disable _getch() key capture (it will interfere with the Prompt_Toolkit code
+                Utils.Message.addMessage("DBUG: UI.__renderDisplayThread self.enableGetch.clear()")
                 self.enableGetch.clear()
-                time.sleep(0.2) # for safety, wait for timeout period of getch (to make sure it's disabled)
+                # Now wait for UI.__keysPressedThreasd() to acknowledge the self.enableGetch.clear() signal
+                Utils.Message.addMessage("DBUG: UI.__renderDisplayThread: Waiting for UI.__keysPressedThread to acknowledge self.enableGetch.clear()")
+                self.getchIsDisabled.wait()
+                Utils.Message.addMessage("DBUG: UI.__renderDisplayThread:  self.getchIsDisabled acknowledged")
+
                 # Put up the user prompt (blocking call)
                 styleDefinition = Style.from_dict({
                     'dialog': 'bg:ansiblue',  # Screen background
@@ -2576,6 +2585,8 @@ class UI(object):
             self.enableGetch.wait(timeout = 0.2)
             # Confirm that enableGetch was actually set (or was it just a timeout)
             if self.enableGetch.is_set():
+                # Set a revertive to show that getch is enabled
+                self.getchIsDisabled.clear()
                 # Capture keyboard presses via the getch method (with a 1 second timeout)
                 self.keyPressed = None  #clear the keyboard buffer
                 ch = self.__getch()
@@ -2589,7 +2600,16 @@ class UI(object):
                     self.wakeUpUI.set()
                     # Now disarm key checking (until it is re-enabled elsewhere)
                     self.enableGetch.clear()
-        print("UI.__keysPressedThread ended\r")
+                    # Set a revertive to show that ____keysPressedThread (i.e getch) has been disabled
+                    # Utils.Message.addMessage("DBUG: UI.__keysPressedThread: getchIsDisabled.set() ")
+                    self.getchIsDisabled.set()
+            # If getch has been disabled, set a revertive to show it
+            if self.enableGetch.is_set() is False:
+                # Set a revertive to show that ____keysPressedThread (i.e getch) has been disabled
+                # Utils.Message.addMessage("DBUG: UI.__keysPressedThread: getchIsDisabled.set() ")
+                self.getchIsDisabled.set()
+
+        Utils.Message.addMessage("DBUG: UI.__keysPressedThread ended")
 
 def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutdownFlag):
     # Autonomous thread to iterate over rtpStreamsDict and poll RtpStream eventLists for new events
@@ -3454,7 +3474,7 @@ def main(argv):
 
         # This code will execute if the RequestShutdown Exception is raised (SIGINT, Ctrl-C)
         except RequestShutdown:
-            Utils.Message.addMessage("DBUG: RequestShutdown Exception raised")
+            Utils.Message.addMessage("DBUG: __main__.RequestShutdown Exception raised")
             # Put up a Quit y/n dialogue
             userResponse = ui.showShutDownDialogue()
             # Utils.Message.addMessage(str(datetime.datetime.now()) + ", main() except RequestShutdown: " + str(userResponse))
@@ -3465,10 +3485,10 @@ def main(argv):
             else:
                 pass
 
-        # This code will execute if the ShutdownApplication Exception is raised (SIGTERM)
+        # This code will execute if the ShutdownApplication Exception is raised (SIGKILL)
         # It will cause the pgram to end, with no user prompt
         except ShutdownApplication:
-            Utils.Message.addMessage("DBUG: ShutdownApplication Exception raised (SIGTERM)")
+            Utils.Message.addMessage("DBUG: ShutdownApplication Exception raised (SIGKILL)")
             shutdownApplication()
 
 
