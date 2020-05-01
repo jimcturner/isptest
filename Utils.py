@@ -6,6 +6,7 @@ import datetime
 import socket
 import threading
 import platform
+from Registry import Registry
 
 # Formats a datetime.timedelta object as a simple string hh:mm:ss
 def dtstrft(timeDelta):
@@ -158,6 +159,7 @@ class Message(object):
 
     @classmethod
     def setVerbosity(cls, verbosity):
+        print("gets here\r")
         cls.verbosityLevel = verbosity
 
     # Class method to add a new message to the list
@@ -169,6 +171,15 @@ class Message(object):
         if len(cls.messages) > cls.historicMessagesToKeep:
             # Remove first (oldest) message
             del cls.messages[:1]
+        # Now log the message to disk
+        try:
+
+            fh = open(Registry.messageLogFilename,"a+")
+            logString = datetime.datetime.now().strftime("%H:%M:%S") + ": " + str(message) + "\n"
+            fh.write(logString)
+            fh.close()
+        except Exception as e:
+            pass
 
 
     # class method to filter cls.messages[] based on the message prefix and cls.verbosityLevel and return a sublist

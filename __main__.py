@@ -70,6 +70,9 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import textwrap
 import pickle
+# import cgitb
+# cgitb.enable(format='text')
+
 # Non standard external libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
 from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
@@ -87,9 +90,9 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 # Additonal libraries required (of my own making)
 from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch
-from Utils import *
+import Utils
 from Custom_prompt_toolkit_mods import multi_input_dialog
-
+from Traceroute import *
 
 
 ####################################################################################
@@ -493,17 +496,17 @@ def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMute
         x = [streamID, rtpStreamDict[streamID], 0]
         # Append the new tuple to rtpStreamList[]
         rtpStreamList.append(x)
-        Message.addMessage("INFO: __updateAvailableStreamsList() Added stream: " + str(x[0]) + ", " + str(type(x[1])))
+        Utils.Message.addMessage("INFO: __updateAvailableStreamsList() Added stream: " + str(x[0]) + ", " + str(type(x[1])))
     for streamID in deleteList:
         # Iterate over tuples in rtpStreamList[] searching for a match
         for index, stream in enumerate(rtpStreamList):
             if stream[0] == streamID:
                 # If stream found, delete that tuple from the list
-                Message.addMessage("INFO: __updateAvailableStreamsList() Removing stream " + str(stream[0]) + ", " + str(type(stream[1])))
+                Utils.Message.addMessage("INFO: __updateAvailableStreamsList() Removing stream " + str(stream[0]) + ", " + str(type(stream[1])))
                 try:
                     rtpStreamList.pop(index)
                 except Exception as e:
-                    Message.addMessage("ERR: __updateAvailableStreamsList: "+str(e))
+                    Utils.Message.addMessage("ERR: __updateAvailableStreamsList: "+str(e))
                 break
 
     # 8) Check that rtpStreamList and rtpStreamDict are actually looking at the same objects in memory
@@ -515,12 +518,12 @@ def __updateAvailableStreamsList(rtpStreamList, rtpStreamDict, rtpStreamDictMute
     for stream in rtpStreamList:
         try:
             if stream[1] is not rtpStreamDict[stream[0]]:
-                Message.addMessage("ERR:__updateAvailableStreamsList() Object mismatch for streamID "+str(stream[0])+". Repointing to correct object")
+                Utils.Message.addMessage("ERR:__updateAvailableStreamsList() Object mismatch for streamID "+str(stream[0])+". Repointing to correct object")
                 # Now re-point rtpStreamList to the correct version of that object
                 # by assigning the correct object to the entry in rtpStreamList[]
                 stream[1]=rtpStreamDict[stream[0]]
         except Exception as e:
-            Message.addMessage("ERR:__updateAvailableStreamsList(), rtpStreamDictkey error for stream "+str(stream[0])+", "+str(e))
+            Utils.Message.addMessage("ERR:__updateAvailableStreamsList(), rtpStreamDictkey error for stream "+str(stream[0])+", "+str(e))
     rtpStreamDictMutex.release()
     # 9) delete newStreamsList, currentStreamsList, diff, addList and deleteList
     del newStreamsList
@@ -565,6 +568,8 @@ class UI(object):
 
         # Use to control the display of the Events List dialogue
         self.displayEventsTable = False
+        # Use to control the display of the Traceroute dialogue
+        self.displayTraceRouteTable = False
         # Used by the EventsTable (and Traceroute table). Keeps track of the current display page
         self.tablePageNo = 0
         # Used by the EventsTable and CopyToClipboard/PasteBin.
@@ -581,6 +586,8 @@ class UI(object):
 
         # Enables keyboard key press detection via __getch()
         self.enableGetch = threading.Event()
+        # Allows other parts of the program to query the current status of the __keysPressedThread
+        self.getchIsDisabled = threading.Event()
         self.wakeUpUI = threading.Event()
 
         # Flag to trigger redrawing of the screen
@@ -737,7 +744,7 @@ class UI(object):
         self.lastMessageAdded = ""
 
         # Get Initial snapshot of current verbosity level
-        self.intialVerbosityLevel = Message.verbosityLevel
+        self.intialVerbosityLevel = Utils.Message.verbosityLevel
         # Flag to turn on/off error messages (verbosity level 1)
         self.showErrorsFlag = False
 
@@ -798,6 +805,7 @@ class UI(object):
     # It is designed to be a blocking method. It will return True/False depending upon whether
     # the user confirms the shutdown request
     def showShutDownDialogue(self):
+        Utils.Message.addMessage("DBUG: UI.showShutDownDialogue() called")
         # Cause the UI render thread to put up a Quit Y/N prompt
         self.displayQuitDialogueFlag = True
         # Clear the threading.Event signal for self.quitDialogueActiveFlag
@@ -806,6 +814,7 @@ class UI(object):
         self.wakeUpUI.set()
         # Now wait for the __renderDisplayThread to signal that the prompt has been answered (blocking call)
         # by 'setting' self.quitDialogueNotActiveFlag
+        Utils.Message.addMessage("DBUG: UI.showShutDownDialogue() waiting for self.quitDialogueNotActiveFlag to clear")
         self.quitDialogueNotActiveFlag.wait()
         # Return the response to the caller
         return self.quitConfirmed
@@ -1001,13 +1010,13 @@ class UI(object):
                                             # If tx stream has 'died', dim
                                             tableCell = Term.DIM + tableCell
                                 except Exception as e:
-                                    Message.addMessage(
+                                    Utils.Message.addMessage(
                                         "ERR: __displayThread: (colour coding of stream tables) " + str(e) + "**")
 
                             except Exception as e:
                                 # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
                                 tableCell = "keyErr"
-                                Message.addMessage("ERR: __displayThread (for key in keyList): " + str(e))
+                                Utils.Message.addMessage("ERR: __displayThread (for key in keyList): " + str(e))
 
                         # Check to see if this is the currently selected stream
                         # If so, highlight the row on the table
@@ -1031,7 +1040,7 @@ class UI(object):
                     tableData.append(tableRow)
 
         except Exception as e:
-            Message.addMessage("ERR: __displayThread. streamTable. selected row (" + str(self.selectedTableRow) + \
+            Utils.Message.addMessage("ERR: __displayThread. streamTable. selected row (" + str(self.selectedTableRow) + \
                                ") doesn't exist. (streamTableDataSetLength:" + str(
                 streamTableDataSetLength) + "), " + str(e))
 
@@ -1065,7 +1074,7 @@ class UI(object):
         maxNoOfMessagesThatWillFitScreen = int(self.currentTermHeight / 2) - 9
 
         # Get last x messages. Make a deep copy as we're going to add blankspace padding
-        messages = deepcopy(Message.getMessages(maxNoOfMessagesThatWillFitScreen))
+        messages = deepcopy(Utils.Message.getMessages(maxNoOfMessagesThatWillFitScreen))
         if len(messages) > 0:
             if self.lastMessageAdded != messages[-1][1]:
                 # New messages have been added, so set the redraw flag
@@ -1091,7 +1100,7 @@ class UI(object):
                         try:
                             message[1] += paddingString
                         except Exception as e:
-                            Message.addMessage("__displayThread: Invalid message")
+                            Utils.Message.addMessage("__displayThread: Invalid message")
 
             if len(messages) > 0:
                 width, height, tableData = Term.createTable(messages, "Messages")
@@ -1102,7 +1111,7 @@ class UI(object):
         del messages[:]
 
     def __renderTopToolbar(self):
-        Term.printTitleBar("IBEOO ISP Analyser V1.3", 1, Term.BLACK, Term.WHITE)
+        Term.printTitleBar("IBEOO ISP Analyser v" + Registry.version, 1, Term.BLACK, Term.WHITE)
         # Print operation mode (plus receive IP:Port if in Receive mode)
         if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
             Term.printAt(self.operationMode + " MODE", 1, 1, Term.BLACK, Term.WHITE)
@@ -1283,7 +1292,7 @@ class UI(object):
                 syncSourceID = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_syncSource"))
 
             except Exception as e:
-                Message.addMessage("ERR. UI.__renderEventsListTable. getRTPStreamEventList()")
+                Utils.Message.addMessage("ERR. UI.__renderEventsListTable. getRTPStreamEventList()")
 
         # Create a list of tuples containing the timestamp and the summary
         tableContents =[]
@@ -1298,7 +1307,7 @@ class UI(object):
                     tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
                     tableRow.append(" " + str(eventDetails['summary']).ljust(50))
                 except Exception as e:
-                    Message.addMessage("UI.__renderEventsListTable: " + str(e))
+                    Utils.Message.addMessage("UI.__renderEventsListTable: " + str(e))
                 #Append the complate table row to tableContents[]
                 tableContents.append(tableRow)
                 # Clear the tableRow list ready for next time around the loop
@@ -1380,7 +1389,7 @@ class UI(object):
                     # Copy to clipboard failed. Paste to pastebin.com instead
                     url = ""
                     try:
-                        url = pasteBin(streamReport, "isptest stream report for stream " +\
+                        url = Utils.pasteBin(streamReport, "isptest stream report for stream " +\
                                     str(self.selectedStreamID)).decode('utf-8')
                     except Exception as e:
                         url = "Error pasting to pastebin:- \n" + str(e)
@@ -1488,8 +1497,8 @@ class UI(object):
 
     # Cursor right
     def __onNavigateRight(self):
-        if self.displayEventsTable is False:
-            # Inhibit, if Events Table is currently being displayed
+        if self.displayEventsTable is False and self.displayTraceRouteTable is False:
+            # Inhibit, if Events Table or Traceroute table is currently being displayed
             self.selectedView += 1
             # Prevent an 'out of range' view being selected
             if self.selectedView > (len(self.views) - 1):
@@ -1501,8 +1510,8 @@ class UI(object):
 
     # Cursor left
     def __onNavigateLeft(self):
-        # Inhibit, if Events Table is currently being displayed
-        if self.displayEventsTable is False:
+        # Inhibit, if Events Table or Traceroute table is currently being displayed
+        if self.displayEventsTable is False and self.displayTraceRouteTable is False:
             self.selectedView -= 1
             # Prevent an 'out of range' view being selected
             if self.selectedView < 0:
@@ -1538,6 +1547,8 @@ class UI(object):
                 'dialog frame.label': 'bg:ansiwhite ansired ',
                 'dialog.body': 'bg:ansiwhite ansiblack',
                 'dialog shadow': 'bg:ansiblack'})
+            # Now wait for confirtmation that __keysPressedThread is definitely disabled
+            self.getchIsDisabled.wait()
             text = input_dialog(
                 title='Enter friendly name',
                 text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':',
@@ -1545,7 +1556,7 @@ class UI(object):
             if text is not None:
                 self.selectedStream.setFriendlyName(text)
         else:
-            Message.addMessage("Can't modify stream results. Change the name in the Transmit pane instead")
+            Utils.Message.addMessage("Can't modify stream results. Change the name in the Transmit pane instead")
 
     # This method is called if a previously expired stream (that is still listed in
     # self.rtpTxStreamsDict{} is requested to be restarted
@@ -1555,7 +1566,7 @@ class UI(object):
             # Attempt to get the parameters of the dead stream
             stats = RtpGeneratorToBeResurrected.getRtpStreamStats()
             # Remove the expired stream from self.rtpTxStreamsDict
-            Message.addMessage("UI.__recreateExpiredStream() Removing stream " + str(stats['Sync Source ID']))
+            Utils.Message.addMessage("UI.__recreateExpiredStream() Removing stream " + str(stats['Sync Source ID']))
             RtpGeneratorToBeResurrected.killStream()
             time.sleep(1)
             # Create new RtpStream based on the parameters of the old stream
@@ -1565,7 +1576,7 @@ class UI(object):
             try:
                 # If the RtpGenerator object still exists in the rtpTxStreamsDict, the killStream() must have failed
                 if stats['Sync Source ID'] in self.rtpTxStreamsDict:
-                    Message.addMessage("ERR: UI.__recreateExpiredStream() Expired stream" +
+                    Utils.Message.addMessage("ERR: UI.__recreateExpiredStream() Expired stream" +
                                        str(stats['Sync Source ID']) + " still exists, can't replace")
                 else:
                     # It has been removed, so add the new stream (a copy of the old, expired stream)
@@ -1575,9 +1586,9 @@ class UI(object):
                                  self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex,
                                  friendlyName=stats['Friendly Name'], UDP_SRC_PORT=stats['Tx Source Port'])
             except Exception as e:
-                Message.addMessage("ERR: UI.__recreateExpiredStream() inner " + str(e))
+                Utils.Message.addMessage("ERR: UI.__recreateExpiredStream() inner " + str(e))
         except Exception as e:
-            Message.addMessage("ERR: UI.__recreateExpiredStream() outer " + str(e))
+            Utils.Message.addMessage("ERR: UI.__recreateExpiredStream() outer " + str(e))
 
 
 
@@ -1665,13 +1676,16 @@ class UI(object):
 
                 # newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList, title='Enter parameters for new transmit stream', style=styleDefinition)
 
-                # Defsult title for the user dialogue
+                # Default title for the user dialogue
                 title = 'Enter parameters for new transmit stream'
 
                 # Keep displaying the dialogue until either ALL the input fields have been validated OR
                 # 'Cancel' was selected
                 while allFieldsValidatedFlag is False:
                     try:
+                        # Now wait for confirtmation that __keysPressedThread is definitely disabled
+                        # (otherwise my getch() would interfere with prompt_toolkits' getch())
+                        self.getchIsDisabled.wait()
                         # Display the user dialogue
                         newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
                                                                    title=title,
@@ -1783,13 +1797,13 @@ class UI(object):
                                                 self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex,
                                                 friendlyName=friendlyName, UDP_SRC_PORT=sourcePort)
 
-                    Message.addMessage("[a] Added new " + str(bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
+                    Utils.Message.addMessage("[a] Added new " + str(Utils.bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
                 # Force redraw
                 redrawScreen = True
             else:
                 # Note. This code should never be reachable because it shouldn't be possible to start in TRANSMIT mode
                 # without ever having specified an initial stream
-                Message.addMessage("ERR: No previous Tx stream stats to copy from. New stream not added")
+                Utils.Message.addMessage("ERR: No previous Tx stream stats to copy from. New stream not added")
 
     # 'd' -  Delete selected stream
     def __onDeleteStream(self):
@@ -1799,13 +1813,13 @@ class UI(object):
         if self.selectedStream != None:
             try:
 
-                Message.addMessage(
+                Utils.Message.addMessage(
                     "INFO: streamToDelete: " + str(self.selectedStreamID) + " of type " + str(type(self.selectedStream)))
 
                 # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
                 if type(self.selectedStream) == RtpGenerator:
                     # It is a generator object
-                    Message.addMessage("[d] Deleting Tx Stream: " + str(self.selectedStreamID))
+                    Utils.Message.addMessage("[d] Deleting Tx Stream: " + str(self.selectedStreamID))
                     # Instruct the RtpGenerator object to die (and it's associated corrseponding RtpStreamResults, if it exists)
                     self.selectedStream.killStream()
                     # Additionally, remove the corrseponding RtpStreamResults object for this stream
@@ -1813,16 +1827,16 @@ class UI(object):
 
                 elif type(self.selectedStream) == RtpReceiveStream:
                     # It is an RtpReceiveStream (receiver) object
-                    Message.addMessage("[d] Deleting Rx Stream: " + str(self.selectedStreamID))
+                    Utils.Message.addMessage("[d] Deleting Rx Stream: " + str(self.selectedStreamID))
                     # Safely shutdown the RtpStream object itself
                     self.selectedStream.killStream()
 
                 elif type(self.selectedStream) == RtpStreamResults:
-                    Message.addMessage("Can't delete Results line for stream. " + str(self.selectedStreamID) + \
+                    Utils.Message.addMessage("Can't delete Results line for stream. " + str(self.selectedStreamID) + \
                                        " Did you mean to delete the transmit stream instead?")
 
             except Exception as e:
-                Message.addMessage(
+                Utils.Message.addMessage(
                     "ERR: __displayThread. [d] Delete Stream request failed: " + str(self.selectedStreamID) +
                     ", " + str(e))
 
@@ -1894,11 +1908,11 @@ class UI(object):
                 if newTTL < 0:
                     # Set stream TTL to 'forever'
                     self.selectedStream.setTimeToLive(-1)
-                    Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to 'forever'")
+                    Utils.Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to 'forever'")
                 else:
                     # Otherwise update the stream with the new calculated TTL
                     self.selectedStream.setTimeToLive(newTTL)
-                    Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + dtstrft(
+                    Utils.Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + Utils.dtstrft(
                         datetime.timedelta(seconds=newTTL)))
 
 
@@ -1927,7 +1941,7 @@ class UI(object):
             self.selectedStream.setPayloadLength(currentTxPayloadSize + (10 * direction))
             # Verify new payload size
             currentTxPayloadSize = int(self.selectedStream.getRtpStreamStatsByKey('Packet size'))
-            Message.addMessage(
+            Utils.Message.addMessage(
                 " Stream " + str(self.selectedStreamID) + " packet size changed to " + str(currentTxPayloadSize) + " bytes")
 
     # 'p'
@@ -1955,7 +1969,7 @@ class UI(object):
             self.selectedStream.setSyncSourceIdentifier(currentSyncSourceID + (1 * direction))
             # Verify new sync source id
             currentSyncSourceID = int(self.selectedStream.getRtpStreamStatsByKey('Sync Source ID'))
-            Message.addMessage(
+            Utils.Message.addMessage(
                 " Stream " + str(self.selectedStreamID) + " sync source id changed to " + str(currentSyncSourceID))
 
 
@@ -1966,14 +1980,14 @@ class UI(object):
             # Set flag to true
             self.showErrorsFlag = True
             # Force a change of Message verbosity level to show errors
-            Message.setVerbosity(1)
-            Message.addMessage("[e] Error messages on")
+            Utils.Message.setVerbosity(1)
+            Utils.Message.addMessage("[e] Error messages on")
         else:
             # Set flag to false
             self.showErrorsFlag = False
             # Force a change of Message verbosity back to intial setting
-            Message.setVerbosity(self.intialVerbosityLevel)
-            Message.addMessage("[e] Reverting to initial verbosity level")
+            Utils.Message.setVerbosity(self.intialVerbosityLevel)
+            Utils.Message.addMessage("[e] Reverting to initial verbosity level")
 
     # 'z'
     def __onTogglePacketGenerationOnOff(self):
@@ -1983,11 +1997,11 @@ class UI(object):
             if self.selectedStream.getEnableStreamStatus():
                 # If currently enabled, disable it
                 self.selectedStream.disableStream()
-                Message.addMessage("[z] Stream " + str(self.selectedStreamID) + " packet generation disabled")
+                Utils.Message.addMessage("[z] Stream " + str(self.selectedStreamID) + " packet generation disabled")
             else:
                 # otherwise, enable it
                 self.selectedStream.enableStream()
-                Message.addMessage("[z] Stream " + str(self.selectedStreamID) + " packet generation enabled")
+                Utils.Message.addMessage("[z] Stream " + str(self.selectedStreamID) + " packet generation enabled")
 
 
     # 'x'
@@ -1996,10 +2010,10 @@ class UI(object):
             if self.selectedStream.getJitterStatus():
                 # if jitter simulation currently enabled, disable it
                 self.selectedStream.disableJitter()
-                Message.addMessage("[x] Stream " + str(self.selectedStreamID) + " jitter simulation disabled")
+                Utils.Message.addMessage("[x] Stream " + str(self.selectedStreamID) + " jitter simulation disabled")
             else:
                 self.selectedStream.enableJitter()
-                Message.addMessage("[x] Stream " + str(self.selectedStreamID) + " jitter simulation enabled")
+                Utils.Message.addMessage("[x] Stream " + str(self.selectedStreamID) + " jitter simulation enabled")
 
     # 'c'
     def __onInsertMinorPacketLoss(self):
@@ -2016,7 +2030,7 @@ class UI(object):
 
             # Simulate packet loss
             self.selectedStream.simulatePacketLoss(packetsToLose)
-            Message.addMessage(
+            Utils.Message.addMessage(
                 "[c] Stream " + str(self.selectedStreamID) + " simulate minor packet loss (" + str(packetsToLose) + \
                 " packets)")
 
@@ -2033,15 +2047,14 @@ class UI(object):
 
             # Simulate packet loss
             self.selectedStream.simulatePacketLoss(packetsToLose)
-            Message.addMessage("[v] Stream " + str(self.selectedStreamID) + " simulate major packet loss (" + str(packetsToLose) +\
+            Utils.Message.addMessage("[v] Stream " + str(self.selectedStreamID) + " simulate major packet loss (" + str(packetsToLose) +\
                                " packets)")
-
 
     # 't' - display the About dialogue
     def __onAboutDialogue(self):
         # NOTE: This is a blocking method
         maxWidth = 55
-        tableContents = ("BBC IBEOO Team ISP Analyser " + Registry.version).center(maxWidth, " ") + \
+        tableContents = ("BBC IBEOO Team ISP Analyser v" + Registry.version).center(maxWidth, " ") + \
                         "\n\n" + "(c) James Turner 2020".center(maxWidth, " ") + \
                         "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
                         "\n" + " measurement tool supporting multiple tx/rx streams".center(maxWidth, " ") + \
@@ -2066,16 +2079,92 @@ class UI(object):
         # Render the message in a pop-up box
         self.__renderMessageBox(tableContents, "Help")
 
-    def __onShowTraceroutepDialogue(self):
-        maxWidth = 55
-        tableContents = ("This will show a traceroute for the selected stream... ") + \
-                        "\n\n...but I've not written it yet.." + \
-                        "\n\n\n\n" + \
-                        "Press the [any] key to continue".center(maxWidth, " ")
+    # Controls the display of the Traceroute dialogue
+    def __onDisplayTraceroute(self):
+        # Toggle the display of the traceroute table by toggling the display flag
+        if self.displayTraceRouteTable:
+            self.displayTraceRouteTable = False
+        else:
+            self.displayTraceRouteTable = True
+            # Reset display page to 0 when initially displaying the table
+            self.tablePageNo = 0
 
-        # Render the message in a pop-up box
-        self.__renderMessageBox(tableContents, "Traceroute")
 
+    # Renders the Traceroute dialogue
+    def __renderTracerouteTable(self):
+        termW, termH = Term.getTerminalSize()
+        # Calculate the maximum no. of lines that will fit within the table, given the terminal height
+        maxLines = termH - 20
+
+        # Get the traceroute hops list
+        # depending upon whether we're in RECEIVE or TRANSMIT mode
+        # The amount of lines displayed will adjust to the terminal height
+        # Get a handle on the selected RxRtpStream or TxResults
+        # Note, if we are in TRANSMIT mode, the selected stream should be the RtpGenerator dict.
+        # hence we have to manually retrieve the appropriate stream object by using the self.selectedStreamID
+        # and looking in the appropriate streams dictionary
+        selectedStream = None
+
+        if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+            try:
+                selectedStream = self.rtpRxStreamsDict[self.selectedStreamID]
+            except:
+                pass
+        elif self.operationMode == 'TRANSMIT':
+            try:
+                selectedStream = self.rtpTxStreamsDict[self.selectedStreamID]
+            except:
+                pass
+        tracerouteHopsList = []
+
+        friendlyName = ""
+        syncSourceID = 0
+        if selectedStream is not None:
+            try:
+                # Get tracerouteHopsList from selected stream
+                tracerouteHopsList = selectedStream.getTraceRouteHopsList()
+                # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
+                friendlyName = str(selectedStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
+                syncSourceID = str(selectedStream.getRtpStreamStatsByKey("stream_syncSource"))
+            except Exception as e:
+                Utils.Message.addMessage("ERR: UI.__onShowTracerouteDialogue(). getTraceRouteHopsList() " + str(e))
+            # Create a list of tuples containing the index no and the IP address
+            tableContents = []
+            if len(tracerouteHopsList) > 0:
+                tableRow = []
+                for hopNo in range(len(tracerouteHopsList)):
+                    # Construct a string containing the IP address octets
+                    try:
+                        # This will fail if the tracerouteHopsList hop hasn't been received in thr carousel yet
+                        # If so, the hopAddr entry in tracerouteHopsList will still be 'None'
+                        hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
+                                  str(tracerouteHopsList[hopNo][1]) + "." + \
+                                  str(tracerouteHopsList[hopNo][2]) + "." + \
+                                  str(tracerouteHopsList[hopNo][3])
+                    except:
+                        hopAddr = "Waiting...."
+                    # Now do reverse dns lookup to resolve address to a name
+                    # This will have to be done in a seperate thread. Too slow for a UI
+                    # hopName = ""
+                    # try:
+                    #     hopName = str(socket.gethostbyaddr(hopAddr))
+                    # except Exception as e:
+                    #     hopName = str(e)
+                    # Create a table row containing the hop no and ip address of the hop
+                    tableRow=[str(hopNo), hopAddr]
+                    # Append the table row tuple to the tableContents[] list
+                    tableContents.append(tableRow)
+                    # Clear the tableRow list ready for next time around the loop
+                    tableRow = []
+            else:
+                tableContents.append(["", "No traceroute data to display"])
+            # Now actually display the paged table list
+            title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ") " +\
+                    str(len(tracerouteHopsList)) + " hops"
+            footer = ["", "[<][>]page, [^][v] select stream, [t]exit"]
+            self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15)], tableContents,
+                                   footerRow=footer,
+                                   pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
 
     def __onDisplayEvents(self):
         # Toggle display of Events list dialogue
@@ -2097,9 +2186,9 @@ class UI(object):
         else:
             # 'Ctrl-C' - request shutdown
             if self.keyPressed == 3:
-                Message.addMessage("DBUG: Ctrl-C Pressed")
+                Utils.Message.addMessage("DBUG: Ctrl-C Pressed")
 
-                # For Linux/OSX - Kill self (Windows will detect the SIGTERM in the signalHandler itself
+                # For Linux/OSX - Kill self (Windows will detect the SIGINT in the signalHandler itself
                 os.kill(os.getpid(), signal.SIGINT)
                 self.wakeUpUI.set()
             # Cursor Right
@@ -2170,7 +2259,7 @@ class UI(object):
                 self.__onShowHelpDialogue()
             # 't' Show traceroute
             elif self.keyPressed == ord('t'):
-                self.__onShowTraceroutepDialogue()
+                self.__onDisplayTraceroute()
 
             # Special features
             # 'z' Toggle packet generation on/off for selected stream
@@ -2232,20 +2321,20 @@ class UI(object):
             x = [streamID, rtpStreamDict[streamID], 0]
             # Append the new tuple to rtpStreamList[]
             rtpStreamList.append(x)
-            Message.addMessage(
+            Utils.Message.addMessage(
                 "INFO: __updateAvailableStreamsList() Added stream: " + str(x[0]) + ", " + str(type(x[1])))
         for streamID in deleteList:
             # Iterate over tuples in rtpStreamList[] searching for a match
             for index, stream in enumerate(rtpStreamList):
                 if stream[0] == streamID:
                     # If stream found, delete that tuple from the list
-                    Message.addMessage(
+                    Utils.Message.addMessage(
                         "INFO: __updateAvailableStreamsList() Removing stream " + str(stream[0]) + ", " + str(
                             type(stream[1])))
                     try:
                         rtpStreamList.pop(index)
                     except Exception as e:
-                        Message.addMessage("ERR: __updateAvailableStreamsList: " + str(e))
+                        Utils.Message.addMessage("ERR: __updateAvailableStreamsList: " + str(e))
                     break
 
         # 8) Check that rtpStreamList and rtpStreamDict are actually looking at the same objects in memory
@@ -2257,13 +2346,13 @@ class UI(object):
         for stream in rtpStreamList:
             try:
                 if stream[1] is not rtpStreamDict[stream[0]]:
-                    Message.addMessage("ERR:__updateAvailableStreamsList() Object mismatch for streamID " + str(
+                    Utils.Message.addMessage("ERR:__updateAvailableStreamsList() Object mismatch for streamID " + str(
                         stream[0]) + ". Repointing to correct object")
                     # Now re-point rtpStreamList to the correct version of that object
                     # by assigning the correct object to the entry in rtpStreamList[]
                     stream[1] = rtpStreamDict[stream[0]]
             except Exception as e:
-                Message.addMessage("ERR:__updateAvailableStreamsList(), rtpStreamDictkey error for stream " + str(
+                Utils.Message.addMessage("ERR:__updateAvailableStreamsList(), rtpStreamDictkey error for stream " + str(
                     stream[0]) + ", " + str(e))
         rtpStreamDictMutex.release()
         # 9) delete newStreamsList, currentStreamsList, diff, addList and deleteList
@@ -2287,7 +2376,7 @@ class UI(object):
             # We want this value in bps
             # Convert bytes to bits
             value *= 8
-            value = bToMb(value)
+            value = Utils.bToMb(value)
             return value
 
         if key == "stream_syncSource" or key == 'Sync Source ID':
@@ -2300,14 +2389,14 @@ class UI(object):
 
         if type(value) == datetime.timedelta:
             # Pass to (my) dtstrft() function to create a much shorter string
-            return dtstrft(value)
+            return Utils.dtstrft(value)
 
         if key == "packet_data_received_total_bytes" or key == "Bytes transmitted":
-            value = bToMb(value) + "B"
+            value = Utils.bToMb(value) + "B"
             return value
 
         if key == key == 'Tx Rate':
-            value = bToMb(value)
+            value = Utils.bToMb(value)
             return value
 
         if key.find('percent') > 0:
@@ -2351,9 +2440,9 @@ class UI(object):
         Term.clearTerminalScrollbackBuffer()
 
         if self.operationMode == 'RECEIVE':
-            Message.addMessage("Waiting for incoming RTP streams on " + str(self.UDP_RX_IP) + ":" + str(self.UDP_RX_PORT))
+            Utils.Message.addMessage("Waiting for incoming RTP streams on " + str(self.UDP_RX_IP) + ":" + str(self.UDP_RX_PORT))
         elif self.operationMode == 'TRANSMIT':
-            Message.addMessage("Waiting for receiving end to make contact..... ")
+            Utils.Message.addMessage("Waiting for receiving end to make contact..... ")
 
         # Endless 'state-driven' loop to render the screen
         while self.renderDisplayThreadActive == True:
@@ -2367,8 +2456,13 @@ class UI(object):
                 # Clear the flag
                 self.displayQuitDialogueFlag = False
                 # disable _getch() key capture (it will interfere with the Prompt_Toolkit code
+                Utils.Message.addMessage("DBUG: UI.__renderDisplayThread self.enableGetch.clear()")
                 self.enableGetch.clear()
-                time.sleep(0.2) # for safety, wait for timeout period of getch (to make sure it's disabled)
+                # Now wait for UI.__keysPressedThreasd() to acknowledge the self.enableGetch.clear() signal
+                Utils.Message.addMessage("DBUG: UI.__renderDisplayThread: Waiting for UI.__keysPressedThread to acknowledge self.enableGetch.clear()")
+                self.getchIsDisabled.wait()
+                Utils.Message.addMessage("DBUG: UI.__renderDisplayThread:  self.getchIsDisabled acknowledged")
+
                 # Put up the user prompt (blocking call)
                 styleDefinition = Style.from_dict({
                     'dialog': 'bg:ansiblue',  # Screen background
@@ -2441,7 +2535,7 @@ class UI(object):
             # draw the stream table
             self.__drawStreamsTable()
 
-            # Message.addMessage(str(listCurrentThreads()))
+            # Utils.Message.addMessage(str(listCurrentThreads()))
             # draw the messages table
             self.__drawMessageTable() # Should only take effect if there are any new messages/or self.redrawScreen is True
 
@@ -2451,6 +2545,14 @@ class UI(object):
                 # Without this update, the Events Table update lags behind the selected stream
                 validateSelectedStream()
                 self.__renderEventsListTable()
+
+            # Check to see if Traceroute table is to be overlaid
+            if self.displayTraceRouteTable:
+                # Confirm that self.selectedStream and self.selectedStreamID are up to date, before drawing the table
+                # Without this update, the traceroute table update lags behind the stream selection
+                validateSelectedStream()
+                self.__renderTracerouteTable()
+
 
             # Clear flag
             self.redrawScreen = False
@@ -2475,7 +2577,7 @@ class UI(object):
                 # And store the new values
                 self.currentTermWidth = w
                 self.currentTermHeight = h
-                Message.addMessage(
+                Utils.Message.addMessage(
                     "INFO: Terminal size has changed to " + str(self.currentTermWidth) + "," + str(self.currentTermHeight))
             time.sleep(0.2)
         print ("UI.__detectTerminalSizeThread ended\r")
@@ -2488,6 +2590,8 @@ class UI(object):
             self.enableGetch.wait(timeout = 0.2)
             # Confirm that enableGetch was actually set (or was it just a timeout)
             if self.enableGetch.is_set():
+                # Set a revertive to show that getch is enabled
+                self.getchIsDisabled.clear()
                 # Capture keyboard presses via the getch method (with a 1 second timeout)
                 self.keyPressed = None  #clear the keyboard buffer
                 ch = self.__getch()
@@ -2501,12 +2605,21 @@ class UI(object):
                     self.wakeUpUI.set()
                     # Now disarm key checking (until it is re-enabled elsewhere)
                     self.enableGetch.clear()
-        print("UI.__keysPressedThread ended\r")
+                    # Set a revertive to show that ____keysPressedThread (i.e getch) has been disabled
+                    # Utils.Message.addMessage("DBUG: UI.__keysPressedThread: getchIsDisabled.set() ")
+                    self.getchIsDisabled.set()
+            # If getch has been disabled, set a revertive to show other parts of the program it has been acknowledged
+            if self.enableGetch.is_set() is False:
+                # Set a revertive to show that ____keysPressedThread (i.e getch) has been disabled
+                # Utils.Message.addMessage("DBUG: UI.__keysPressedThread: getchIsDisabled.set() ")
+                self.getchIsDisabled.set()
+
+        Utils.Message.addMessage("DBUG: UI.__keysPressedThread ended")
 
 def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutdownFlag):
     # Autonomous thread to iterate over rtpStreamsDict and poll RtpStream eventLists for new events
     # and write them  to disk
-    Message.addMessage("INFO: diskLoggerThread starting")
+    Utils.Message.addMessage("INFO: diskLoggerThread starting")
     filename = ""
     # Create the full filename including path depending upon opersation mode (excluding file extension eg. csv/.json)
     if operationMode == 'RECEIVE':
@@ -2535,9 +2648,9 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                     # File is larger than the max threshold so rename it
                     archivedFilenameSuffix = "_ending_at_" + datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S")
                     os.rename(file, nameNoExtension+archivedFilenameSuffix+fileExtension)
-                    Message.addMessage("Auto archived " + file)
+                    Utils.Message.addMessage("Auto archived " + file)
             except Exception as e:
-                Message.addMessage("ERR: __diskloggerThread.archiveLogs() " + str(e))
+                Utils.Message.addMessage("ERR: __diskloggerThread.archiveLogs() " + str(e))
 
 
     # This function checks tp see if fileToCreate already exists. if it doesn't, it will create the file
@@ -2553,9 +2666,12 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                                "\r\n-------------------------------------------------------------------------\n")
                 fh.close()
             except Exception as e:
-                Message.addMessage("ERR: __diskloggerThread.createLogFile() " + fileToCreate + ", " + str(e))
+                Utils.Message.addMessage("ERR: __diskloggerThread.createLogFile() " + fileToCreate + ", " + str(e))
 
     # Sit in an infinite loop looking for new events (on all streams) and appending them to the log file(s)
+    # Create file handles for the csv and json files
+    file_csv = None
+    file_json = None
     while True:
         # Check status of shutdownFlag
         if shutdownFlag.is_set():
@@ -2607,7 +2723,7 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                             # Slice the latest portion of the allEvents list into a sub list
                             latestEvents = allEvents[(newEvents * -1):]
                 except Exception as e:
-                    Message.addMessage("DBUG: __diskLoggerThread - determining new events" + str(e))
+                    Utils.Message.addMessage("DBUG: __diskLoggerThread - determining new events" + str(e))
 
                 # Confirm to see that there are some events in the list
                 if len(latestEvents) > 0:
@@ -2632,7 +2748,7 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                         # Empty the latestEvents list
                         del latestEvents[:]
                     except Exception as e:
-                        Message.addMessage("DBUG: __diskLoggerThread - appending to file" + str(e))
+                        Utils.Message.addMessage("DBUG: __diskLoggerThread - appending to file" + str(e))
 
         # Finally, iterate over lastWrittenEventNoDict{} to confirm that all the stream objects listed
         # inside it still exist in rtpStreamsDict{} (in other words, synchronise the deletions within
@@ -2652,18 +2768,22 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
 
         # Now delete all keys listed in orphanStreamsToDelete[] from lastWrittenEventNoDict{}
         for stream in orphanStreamsToDelete:
-            Message.addMessage("INFO: _diskLoggerThread: Deleting orphan stream " + str(stream) + " from lastWrittenEventNoDict")
+            Utils.Message.addMessage("INFO: _diskLoggerThread: Deleting orphan stream " + str(stream) + " from lastWrittenEventNoDict")
             del lastWrittenEventNoDict[stream]
         time.sleep(1)
 
-    # If execution gets here, the thread is eding....
-    print("_diskLoggerThread ending\r")
+    # If execution gets here, the thread is ending....
     try:
-        Message.addMessage("__diskloggerThread: Closing files " + str(filename_json) + " and " + str(filename_csv))
-        file_csv.close()
-        file_json.close()
+        # check to see if object file_csv has a close() method (it won't if it hasn't been written to yet)
+        if "close" in dir(file_csv):
+            Utils.Message.addMessage("__diskloggerThread: Closing file " + str(filename_csv))
+            file_csv.close()
+        # check to see if object file_json has a close() method (it won't if it hasn't been written to yet)
+        if "close" in dir(file_json):
+            Utils.Message.addMessage("__diskloggerThread: Closing file " + str(filename_json))
+            file_json.close()
     except Exception as e:
-        Message.addMessage("ERR: __diskloggerThread. Error closing files " + str(e))
+        Utils.Message.addMessage("ERR: __diskloggerThread. Error closing file " + str(e))
 
 # Autonomous thread to decode rtp streams and pass the data into the relevant RtpRXStream
 def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
@@ -2705,20 +2825,20 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 refreshRtpStreamSocketsFlag = False
                 try:
                     # For Python3 (which has the id() function)
-                    Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(id(socket)))
+                    Utils.Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(id(socket)))
                 except:
                     # For Python2 which doesn't
-                    Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(socket))
+                    Utils.Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(socket))
                 # Update all streams in rtpRxStreamsDict
                 for stream in rtpRxStreamsDict:
                     rtpRxStreamsDict[stream].setSocket(udpSocket)
 
 
         except Exception as e:
-            Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on " + UDP_RX_IP + ":" + str(
+            Utils.Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on " + UDP_RX_IP + ":" + str(
                 UDP_RX_PORT) + ", " + str(e) + \
                                ". Try another port. Exiting" + Term.FG(Term.RESET))
-            Message.addMessage("__main(): " + str(e))
+            Utils.Message.addMessage("__main(): " + str(e))
             time.sleep(2)
             exit()
 
@@ -2737,7 +2857,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 data, addr = udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
                 # Confirm that we have some data (RTP header is 12 bytes long)
                 if len(data) == 0:
-                    Message.addMessage("socket is broken")
+                    # Utils.Message.addMessage("ERR:__main.__receiveRtpThread() 0 bytes received")
+                    pass
                 if len(data) >= RTP_HEADER_SIZE:
                     # Get timestamp at the point the packet was received
                     timeNow = datetime.datetime.now()
@@ -2781,7 +2902,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
 
                             if rtpSyncSourceIdentifier in rtpRxStreamTempDict:
                                 # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
-                                Message.addMessage(Fore.GREEN + "INFO: " + str(rtpSyncSourceIdentifier) +
+                                Utils.Message.addMessage(Fore.GREEN + "INFO: " + str(rtpSyncSourceIdentifier) +
                                                    " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
                                 # Create and add the new stream to the rtpRxStreamsDict
                                 newRtpStream = RtpReceiveStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, \
@@ -2794,7 +2915,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             else:
                                 # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
                                 # create a entry in the temporary list (with a timestamp)
-                                Message.addMessage(
+                                Utils.Message.addMessage(
                                     Fore.RED + "INFO: Stream doesn't exist yet, adding to temp list: " + str(
                                         rtpSyncSourceIdentifier))
                                 rtpRxStreamTempDict[rtpSyncSourceIdentifier] = timer()
@@ -2804,33 +2925,34 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         message = Fore.RED + "Cannot decode RTP headers. Is this an RTP packet? " + str(
                             e) + " Length:" + str(len(data)) + \
                                   " bytes received\r"
-                        print (message)
-                        Message.addMessage(message)
+                        # print (message)
+                        Utils.Message.addMessage(message)
                 else:
-                    message = Fore.RED + "ERR: Invalid/no data received: " + str(addr) + ", " + str(data)
-                    print (message)
-                    Message.addMessage(message)
+                    # message = Fore.RED + "ERR: Invalid data received: " + str(addr) + ", " + str(data)
+                    # print (message)
+                    # Utils.Message.addMessage(message)
+                    pass
 
                 # Now delete contents of data[]
                 data = b""
 
             # Catch timeout exception (and ignore it)
             except socket.timeout:
-                # Message.addMessage("DBUG: main() recvfrom. timeout exception")
+                # Utils.Message.addMessage("DBUG: main() recvfrom. timeout exception")
                 pass
 
 
             # Catch all other exceptions
             except Exception as e:
-                Message.addMessage(Term.WhiRed + "ERR: __main()udpSocket.recvfrom():" + UDP_RX_IP + ":" + \
+                Utils.Message.addMessage(Term.WhiRed + "ERR: __main()udpSocket.recvfrom():" + UDP_RX_IP + ":" + \
                                    str(UDP_RX_PORT) + ", " + str(id(udpSocket)))
 
-                Message.addMessage("__main() recvfrom: " + str(e))
+                Utils.Message.addMessage("__main() recvfrom: " + str(e))
                 try:
                     # Close existing socket
                     udpSocket.close()
                 except Exception as e:
-                    Message.addMessage("ERR: main() udpSocket.close() " + str(e))
+                    Utils.Message.addMessage("ERR: main() udpSocket.close() " + str(e))
 
                 # Now try to recreate the socket
                 # break out of this inner while loop to the outer while loop (where the socket is created)
@@ -2850,7 +2972,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # If there are some streams to purge, purge them
             if len(streamsToPurge) > 0:
                 for stream in streamsToPurge:
-                    Message.addMessage("INFO: Deleting orphan stream: " + str(stream) + " from rtpRxStreamTempDict{}")
+                    Utils.Message.addMessage("INFO: Deleting orphan stream: " + str(stream) + " from rtpRxStreamTempDict{}")
                     # Delete the stream (key) from the dictionary as not wanted
                     rtpRxStreamTempDict.pop(stream, None)
 
@@ -2860,7 +2982,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             break
 
         # If program execution gets here, the udp socket must have been corrupted
-        Message.addMessage(
+        Utils.Message.addMessage(
             Term.WhiRed + "WARNING. Recreating UDP receive socket. Glitches might not be genuine          ")
         refreshRtpStreamSocketsFlag = True
 
@@ -2871,9 +2993,9 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
         # Close the recvfrom socket in
         udpSocket.close()
     except Exception as e:
-        Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
+        Utils.Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
 
-    Message.addMessage("__receiveRTPThread exiting")
+    Utils.Message.addMessage("__receiveRTPThread exiting")
     print("__receiveRTPThread exiting\r")
 
 
@@ -2907,20 +3029,15 @@ class ShutdownApplication(Exception):
 
 # Define a callback function to handle SIGINT and SIGTERM messages from the OS
 
-# This function will be invoked by SIGTERM (i.e by the OS sending a kill signal)
+# This function will be invoked by SIGINT (e.g from a Ctrl -C i.e by the OS sending a SIGINT signal)
 def requestShutdownSignalHandler(signum, frame):
-    Message.addMessage("DBUG: requestShutdownSignalHandler called")
-    print('Caught signal ' + str(signum) + "\r")
+    Utils.Message.addMessage("DBUG: __main_.requestShutdownSignalHandler() called with signal " + str(signum))
     raise RequestShutdown
 
 # This function will be invoked by SIGTERM (i.e by the OS sending a kill signal)
 def shutdownApplicationSignalHandler(signum, frame):
-    Message.addMessage("DBUG: shutdownApplicationSignalHandler called")
-    print('Caught signal ' + str(signum) + "\r")
+    Utils.Message.addMessage("DBUG: shutdownApplicationSignalHandler() called with signal " + str(signum))
     raise ShutdownApplication
-
-
-
 
 
 #### Experimental functions
@@ -2933,46 +3050,8 @@ def copyPaste():
 # #####################
 
 def main(argv):
-    # copyPaste()
-    # print(str(pasteBin("Some\n\tnew\n\ttext", title="test paste")))
-    #
+    # traceroute()
     # exit()
-    # # x = multi_input_dialog3(title="will it work?", text="default text").run()
-    # x = input_dialog(title="will it work?", text="default text").run()
-    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
-    # print(str(multi_input_dialog3(textFieldsList, title='Enter IP addr and port').run()))
-    #
-    # exit()
-    # try:
-    #     # x = validators.integer(41, allow_empty=False, minimum=25, maximum=40)
-    #     x= validators.ip_address("192.168.0.2", allow_empty=False)
-    # except Exception as e:
-    #     print (str(e) + "\r")
-    # exit()
-    # textFieldsList = [["dest addr", "127.0.0.1"], ["port", "5000"]]
-    # print(str(multi_input_dialog(textFieldsList, title='Enter IP addr and port')))
-    # exit()
-
-    # # Invoke colorama init() method to allow ansi escape sequences to work on Windows
-    # init(autoreset=True)
-
-    # # Create empty file
-    # from pathlib import Path
-    # Path('empty_file').touch()
-
-    # os.rename("test", "renamed_test") # rename file
-    # os.path.isfile("changelog.txt") #Check if file exists
-    # b = os.path.getsize("notepad2.py") # get file size
-    #  os.remove("renamed_test") # delete file
-
-    # while True:
-    #     x = getch()
-    #     if x == ord('x'):
-    #         break
-    #     if x is not None:
-    #         print("you pressed: " + str(x) + "\r")
-    # exit()
-
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
@@ -3012,8 +3091,10 @@ def main(argv):
     # Default message verbosity
     defaultVerbosityLevel = 0
     # Set default value
-    Message.setVerbosity(defaultVerbosityLevel)
+    Utils.Message.setVerbosity(defaultVerbosityLevel)
+    # Utils.Message.addMessage("hello")
 
+    # exit()
     # print ('Argument List: '+ str(argv))
     try:
         # options are:
@@ -3053,8 +3134,10 @@ def main(argv):
                 print("Additional transmit parameters:-\r")
                 print ("\t-s [val] udp transmit source port (for transmit or loopback mode)\r")
                 print ("\t-u [val] sync source ID (for transmit or loopback mode)")
-                print ("\t-l: [val] duration of transmission (in seconds. Default 1hr (3600 sec). A value of -1 means 'forever'\r")
-                print ("\t-b [val] tx bandwidth (append k for kbps, m for mbps eg -b 1m or -b 500k). Default 1Mbps\r")
+                print ("\t-l: [val] duration of transmission (in seconds. Default 1hr (3600 sec).\r")
+                print ("\t    A value of -1 means 'forever'\r")
+                print ("\t-b [val] tx bandwidth (append k for kbps, m for mbps\r")
+                print ("\t   eg -b 1m or -b 500k). Default 1Mbps\r")
                 print ("\t-d [val] rtp payload size (bytes). Default = 1300 bytes\r")
                 print ("\t-n: [name] friendly name for tx stream (10 chars max)\r")
                 print ("\r")
@@ -3110,7 +3193,7 @@ def main(argv):
                     # If only a single parameter supplied, use the 'OS supplied' address
                     # and the supplied value as a UDP receive port
                     # Get the ip address of the host machine
-                    UDP_RX_IP = get_ip()
+                    UDP_RX_IP = Utils.get_ip()
                     try:
                         arg = int(arg) + 1 - 1
                         if arg < 1024:
@@ -3230,7 +3313,7 @@ def main(argv):
                     # Test for an int
                     arg = int(arg) + 1 -1
                     # assign the value
-                    Message.setVerbosity(arg)
+                    Utils.Message.setVerbosity(arg)
                 except:
                     print ("Invalid -v message verbosity value supplied. " + str(arg))
                     exit()
@@ -3258,7 +3341,7 @@ def main(argv):
         if not os.path.exists(directory):
             txt = "subfolder for results doesn't exist. Creating " + Registry.resultsSubfolder
             print(txt + "\r")
-            Message.addMessage(txt)
+            Utils.Message.addMessage(txt)
             os.makedirs(Registry.resultsSubfolder)
     except OSError:
         print("Could not create sub folder " + Registry.resultsSubfolder + \
@@ -3332,7 +3415,7 @@ def main(argv):
 
     # Define a local function that will perform a graceful shutdown of all threads and resources
     def shutdownApplication():
-        Message.addMessage("main.shutdownApplication() called")
+        Utils.Message.addMessage("main.shutdownApplication() called")
         # Attempt to remove all rtp stream objects
         for dict in [rtpTxStreamsDict, rtpRxStreamsDict]:
             if len(dict) > 0:
@@ -3347,7 +3430,7 @@ def main(argv):
                     tempStreamList.append(stream)
                 # Now iterate of the new streamList, calling .killStream() on all the objects within
                 for stream in tempStreamList:
-                    Message.addMessage("INFO: Killing " + str(type(dict[stream])) + ": " + str(stream))
+                    Utils.Message.addMessage("INFO: Killing " + str(type(dict[stream])) + ": " + str(stream))
                     print("Killing stream " + str(stream) + "\n")
                     # Invoke the kill method of each stream
                     dict[stream].killStream()
@@ -3396,10 +3479,10 @@ def main(argv):
 
         # This code will execute if the RequestShutdown Exception is raised (SIGINT, Ctrl-C)
         except RequestShutdown:
-            Message.addMessage("DBUG: RequestShutdown Exception raised")
+            Utils.Message.addMessage("DBUG: __main__.RequestShutdown Exception raised")
             # Put up a Quit y/n dialogue
             userResponse = ui.showShutDownDialogue()
-            # Message.addMessage(str(datetime.datetime.now()) + ", main() except RequestShutdown: " + str(userResponse))
+            # Utils.Message.addMessage(str(datetime.datetime.now()) + ", main() except RequestShutdown: " + str(userResponse))
             # If yes, quit
             if userResponse:
                 shutdownApplication()
@@ -3407,10 +3490,10 @@ def main(argv):
             else:
                 pass
 
-        # This code will execute if the ShutdownApplication Exception is raised (SIGTERM)
+        # This code will execute if the ShutdownApplication Exception is raised (SIGKILL)
         # It will cause the pgram to end, with no user prompt
         except ShutdownApplication:
-            Message.addMessage("DBUG: ShutdownApplication Exception raised (SIGTERM)")
+            Utils.Message.addMessage("DBUG: ShutdownApplication Exception raised (SIGKILL)")
             shutdownApplication()
 
 

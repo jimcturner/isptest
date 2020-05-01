@@ -4,7 +4,7 @@
 # This will be used as the source of default values
 class Registry(object):
     streamReportFilename = "Stream_report_"
-    version = "1.5"
+    version = "1.6"
     pythonMinimumVersionRequired_Major = 3  # Specfify the minimum version of the Python interpreter required
     pythonMinimumVersionRequired_Minor = 6  # This equates to Python version 3.6
 
@@ -12,4 +12,7 @@ class Registry(object):
     receiverLogFilename = "isptest_Receiver_Events_Log"
     transmitterLogFilename= "isptest_Transmitter_Events_Log"
     maximumLogFileSize_bytes = 1024 * 1024 # 1Mb maximum size
-
+    tracerouteMaxHops = 28 # The maximum no of hops traceroute will consider before resetting
+    tracerouteFallbackUDPDestPort = 33434 # The 'fallback' port used by the RtpGenerator.traceroute thread if no reply
+                                            # is received from a host
+    messageLogFilename = "log.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
