@@ -2179,7 +2179,7 @@ class UI(object):
             if self.keyPressed == 3:
                 Utils.Message.addMessage("DBUG: Ctrl-C Pressed")
 
-                # For Linux/OSX - Kill self (Windows will detect the SIGTERM in the signalHandler itself
+                # For Linux/OSX - Kill self (Windows will detect the SIGINT in the signalHandler itself
                 os.kill(os.getpid(), signal.SIGINT)
                 self.wakeUpUI.set()
             # Cursor Right
@@ -2832,7 +2832,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 data, addr = udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
                 # Confirm that we have some data (RTP header is 12 bytes long)
                 if len(data) == 0:
-                    Utils.Message.addMessage("ERR:__main.__receiveRtpThread() 0 bytes received")
+                    # Utils.Message.addMessage("ERR:__main.__receiveRtpThread() 0 bytes received")
+                    pass
                 if len(data) >= RTP_HEADER_SIZE:
                     # Get timestamp at the point the packet was received
                     timeNow = datetime.datetime.now()
@@ -2902,9 +2903,10 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         # print (message)
                         Utils.Message.addMessage(message)
                 else:
-                    message = Fore.RED + "ERR: Invalid data received: " + str(addr) + ", " + str(data)
+                    # message = Fore.RED + "ERR: Invalid data received: " + str(addr) + ", " + str(data)
                     # print (message)
-                    Utils.Message.addMessage(message)
+                    # Utils.Message.addMessage(message)
+                    pass
 
                 # Now delete contents of data[]
                 data = b""
@@ -3002,20 +3004,15 @@ class ShutdownApplication(Exception):
 
 # Define a callback function to handle SIGINT and SIGTERM messages from the OS
 
-# This function will be invoked by SIGTERM (i.e by the OS sending a kill signal)
+# This function will be invoked by SIGINT (e.g from a Ctrl -C i.e by the OS sending a SIGINT signal)
 def requestShutdownSignalHandler(signum, frame):
-    Utils.Message.addMessage("DBUG: requestShutdownSignalHandler called")
-    print('Caught signal ' + str(signum) + "\r")
+    Utils.Message.addMessage("DBUG: __main_.requestShutdownSignalHandler() called with signal " + str(signum))
     raise RequestShutdown
 
 # This function will be invoked by SIGTERM (i.e by the OS sending a kill signal)
 def shutdownApplicationSignalHandler(signum, frame):
-    Utils.Message.addMessage("DBUG: shutdownApplicationSignalHandler called")
-    print('Caught signal ' + str(signum) + "\r")
+    Utils.Message.addMessage("DBUG: shutdownApplicationSignalHandler() called with signal " + str(signum))
     raise ShutdownApplication
-
-
-
 
 
 #### Experimental functions
