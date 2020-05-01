@@ -12,4 +12,7 @@ class Registry(object):
     receiverLogFilename = "isptest_Receiver_Events_Log"
     transmitterLogFilename= "isptest_Transmitter_Events_Log"
     maximumLogFileSize_bytes = 1024 * 1024 # 1Mb maximum size
-
+    tracerouteMaxHops = 28 # The maximum no of hops traceroute will consider before resetting
+    tracerouteFallbackUDPDestPort = 33434 # The 'fallback' port used by the RtpGenerator.traceroute thread if no reply
+                                            # is received from a host
+    messageLogFilename = "log.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
