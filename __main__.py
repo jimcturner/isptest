@@ -2152,7 +2152,7 @@ class UI(object):
                     # except Exception as e:
                     #     hopName = str(e)
                     # Create a table row containing the hop no and ip address of the hop
-                    tableRow=[str(hopNo), hopAddr]
+                    tableRow=[str(hopNo + 1), hopAddr]
                     # Append the table row tuple to the tableContents[] list
                     tableContents.append(tableRow)
                     # Clear the tableRow list ready for next time around the loop
@@ -2162,7 +2162,7 @@ class UI(object):
             # Now actually display the paged table list
             title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ") " +\
                     str(len(tracerouteHopsList)) + " hops"
-            footer = ["", "[<][>]page, [^][v] select stream, [t]exit"]
+            footer = ["", "[<][>]page, [^][v] select stream, [t]exit\nTo save/export, go to [report] page"]
             self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(50)], tableContents,
                                    footerRow=footer,
                                    pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)

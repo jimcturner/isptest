@@ -491,6 +491,8 @@ class RtpReceiveCommon(object):
         # The '\r\n' escape sequence is required for Windows
         eventsList = self.getRTPStreamEventList(filterList=eventFilterList)
         worstGlitchesList = self.getWorstGlitches()
+        tracerouteHopsList = self.getTraceRouteHopsList()
+
 
         separator = ("-" * 63) + "\r\n"
         title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(
@@ -527,6 +529,24 @@ class RtpReceiveCommon(object):
                 Utils.Message.addMessage("ERR: RtpReceiveCommon.generateReport() compile worst glitches list: " + str(e))
 
 
+        # Create a traceroute list of hops
+        tracerouteHopsListAsString = "Traceroute:\r\n"
+        if len(tracerouteHopsList) > 0:
+            for hopNo in range(len(tracerouteHopsList)):
+                try:
+                    tracerouteHopsListAsString += str(hopNo + 1 ) + "\t" + \
+                        str(tracerouteHopsList[hopNo][0]) + "." + \
+                        str(tracerouteHopsList[hopNo][1]) + "." + \
+                        str(tracerouteHopsList[hopNo][2]) + "." + \
+                        str(tracerouteHopsList[hopNo][3]) + "\r\n"
+
+                except Exception as e:
+
+                    Utils.Message.addMessage("DBUG: RtpReceiveCommon.generateReport() Create traceroute string: " + str(e))
+                    tracerouteHopsListAsString += "--Invalid traceroute data--"
+        else:
+            tracerouteHopsListAsString += "No traceroute info available" + "\r\n"
+
         # Create list of events (as a string)
         eventsListAsAString = "Events:\r\n"
         # Display the events list in reverse order (most recent first)
@@ -538,7 +558,8 @@ class RtpReceiveCommon(object):
                                     ", " + str(eventDetails['summary']) + "\r\n")
 
         outputString = title + separator + streamIPDetails + separator + streamPerformance + separator +\
-                    worstGlitchesListAsString + separator + eventsListAsAString
+                    tracerouteHopsListAsString + separator +\
+                       worstGlitchesListAsString + separator + eventsListAsAString
 
         # Return a string containing the output
         return outputString
