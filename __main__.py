@@ -570,6 +570,8 @@ class UI(object):
         self.displayEventsTable = False
         # Use to control the display of the Traceroute dialogue
         self.displayTraceRouteTable = False
+        # Used to control the display of the help pages
+        self.displayHelpTable = False
         # Used by the EventsTable (and Traceroute table). Keeps track of the current display page
         self.tablePageNo = 0
         # Used by the EventsTable and CopyToClipboard/PasteBin.
@@ -1497,8 +1499,8 @@ class UI(object):
 
     # Cursor right
     def __onNavigateRight(self):
-        if self.displayEventsTable is False and self.displayTraceRouteTable is False:
-            # Inhibit, if Events Table or Traceroute table is currently being displayed
+        if self.displayEventsTable is False and self.displayTraceRouteTable is False and self.displayHelpTable is False:
+            # Inhibit, if Events Table, Traceroute or help tables are currently being displayed
             self.selectedView += 1
             # Prevent an 'out of range' view being selected
             if self.selectedView > (len(self.views) - 1):
@@ -1510,8 +1512,8 @@ class UI(object):
 
     # Cursor left
     def __onNavigateLeft(self):
-        # Inhibit, if Events Table or Traceroute table is currently being displayed
-        if self.displayEventsTable is False and self.displayTraceRouteTable is False:
+        # Inhibit, if Events Table, Traceroute or help tables are currently being displayed
+        if self.displayEventsTable is False and self.displayTraceRouteTable is False and self.displayHelpTable is False:
             self.selectedView -= 1
             # Prevent an 'out of range' view being selected
             if self.selectedView < 0:
@@ -2068,16 +2070,41 @@ class UI(object):
         self.__renderMessageBox(tableContents, "About")
 
     # Show a help page
-    def __onShowHelpDialogue(self):
-        maxWidth = 55
-        tableContents = ("This will show help... ") + \
-                        "\n\n...but in the mean time.." +\
-                        "\n see https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
-                        "\n\n\n\n" + \
-                        "Press the [any] key to continue".center(maxWidth, " ")
+    def __onShowHelpTable(self):
+        # Toggle the display of the help pages
+        if self.displayHelpTable:
+            self.displayHelpTable = False
+        else:
+            self.displayHelpTable = True
+            self.displayTraceRouteTable = False
+            self.displayEventsTable = False
+            # Reset display page to 0 when initially displaying the table
+            self.tablePageNo = 0
 
-        # Render the message in a pop-up box
-        self.__renderMessageBox(tableContents, "Help")
+        # maxWidth = 55
+        # tableContents = ("This will show help... ") + \
+        #                 "\n\n...but in the mean time.." +\
+        #                 "\n see https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
+        #                 "\n\n\n\n" + \
+        #                 "Press the [any] key to continue".center(maxWidth, " ")
+        #
+        # # Render the message in a pop-up box
+        # self.__renderMessageBox(tableContents, "Help")
+
+    # Renders the Help page table
+    def __renderHelpTable(self):
+        termW, termH = Term.getTerminalSize()
+        # Calculate the maximum no. of lines that will fit within the table, given the terminal height
+        maxLines = termH - 20
+        tableContents =[["h","Display this page"]]
+        # Now actually display the paged table list
+        title = "Help"
+        footer = ["", "[<][>]page, [h]exit"]
+        self.__renderPagedList(self.tablePageNo, title, ["Key".ljust(5), "Function".ljust(50)], tableContents,
+                               footerRow=footer,
+                               pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
+
+
 
     # Controls the display of the Traceroute dialogue
     def __onDisplayTraceroute(self):
@@ -2086,6 +2113,8 @@ class UI(object):
             self.displayTraceRouteTable = False
         else:
             self.displayTraceRouteTable = True
+            self.displayEventsTable = False
+            self.displayHelpTable = False
             # Reset display page to 0 when initially displaying the table
             self.tablePageNo = 0
 
@@ -2171,6 +2200,8 @@ class UI(object):
         # Toggle display of Events list dialogue
         if self.displayEventsTable == False:
             self.displayEventsTable = True
+            self.displayTraceRouteTable = False
+            self.displayHelpTable = False
             # Reset display page to 0 when initially displaying the table
             self.tablePageNo = 0
             # Turn off filtering of displayed events when initially displaying the table
@@ -2257,7 +2288,7 @@ class UI(object):
                 self.__onSaveReportToDisk()
             # 'h' Show help page
             elif self.keyPressed == ord('h'):
-                self.__onShowHelpDialogue()
+                self.__onShowHelpTable()
             # 't' Show traceroute
             elif self.keyPressed == ord('t'):
                 self.__onDisplayTraceroute()
@@ -2553,6 +2584,10 @@ class UI(object):
                 # Without this update, the traceroute table update lags behind the stream selection
                 validateSelectedStream()
                 self.__renderTracerouteTable()
+
+            # Check to see if Helkp table is to be overlaid
+            if self.displayHelpTable:
+                self.__renderHelpTable()
 
 
             # Clear flag
