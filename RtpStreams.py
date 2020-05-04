@@ -1324,7 +1324,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                                         # This will fail if the list element doesn't already exist
                                         tracerouteHopsList[hopNo] = hopAddr
                                     except Exception as e:
-                                        Utils.Message.addMessage("RtpReceiveStream.__calculateThread() parse traceroute message " + str(e))
+                                        # Utils.Message.addMessage("RtpReceiveStream.__calculateThread() parse traceroute message " + str(e))
+                                        pass
 
                                     # Now copy the local traceroute hops list back to the instance variable version
                                     self.setTraceRouteHopsList(tracerouteHopsList)
