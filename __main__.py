@@ -1147,8 +1147,26 @@ class UI(object):
         # Calculate the maximum no. of lines that will fit within the table, given the terminal height
         maxLines = termH - 20
 
-        # Calculate the no of pages required to show all the items (given the terminal size)
+        # Count how many newlines there are in the table data
+        noOfNewlinesInTableData = 0
+        # Iterate over the rows
+        for row in tableData:
+            # Iterate over the cells within each row
+            # Each cell might have different no of lines, so have to find the cell with the most no of newline char
+            maxLinesCurrentRow = 0
+            for cell in row:
+                # Count the no of lines in this cell
+                linesInCurrentCell = len(str(cell).split('\n'))
+                # See if the no of lines in this cell exceeds those of the previous cells in this row
+                if linesInCurrentCell > maxLinesCurrentRow:
+                    maxLinesCurrentRow = linesInCurrentCell
+            # Update the tableData line count
+            noOfNewlinesInTableData += maxLinesCurrentRow
+        # Utils.Message.addMessage("Current table has " + str(maxLinesCurrentRow) + " lines")
+
+        # Calculate the no of pages required to show all the items (given the terminal size and no of lines of data)
         noOfPages = int(math.ceil(len(tableData) / maxLines))
+        # noOfPages = int(math.ceil(noOfNewlinesInTableData / maxLines))
         # Check that we're not trying to display a non-existent page
         # if pageNo > (noOfPages - 1):
         #     pageNo = (noOfPages - 1)
@@ -2096,7 +2114,8 @@ class UI(object):
         termW, termH = Term.getTerminalSize()
         # Calculate the maximum no. of lines that will fit within the table, given the terminal height
         maxLines = termH - 20
-        tableContents =[["h","Display this page"]]
+        # Get help table contents from Registry
+        tableContents = Registry.helpTableContents
         # Now actually display the paged table list
         title = "Help"
         footer = ["", "[<][>]page, [h]exit"]
