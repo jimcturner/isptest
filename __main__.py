@@ -1381,6 +1381,10 @@ class UI(object):
         yPos = int((termH - height) / 2)
 
         Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, textColour, bgColour)
+        # Disable existing getch thread
+        self.enableGetch.clear()
+        # Check to see that  getch to have been disabled
+        self.getchIsDisabled.wait()
         # Wait for a key press
         ch = None
         # Endless loop until either a key is pressed or the self.renderDisplayThreadActive flag is cleared
@@ -2631,9 +2635,6 @@ class UI(object):
             if self.displayFatalErrorDialogue:
                 # clear flag
                 self.displayFatalErrorDialogue = False
-                self.enableGetch.clear()
-                # Check to see that  getch to have been disabled
-                self.getchIsDisabled.wait()
 
                 # Put up error message (this is a blocking call)
                 self.__renderMessageBox(self.fatalErrorDialogueMessageText, self.fatalErrorDialogueTitle, \
@@ -2932,10 +2933,14 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # Display a message box with a URL or an error message
 
             # Now signal to the UI object that there is a problem
+            maxWidth = 60
             Utils.Message.addMessage("DBUG:__receiveRtpThread(): calling UI.showFatalErrorDialogue()")
-            errorText = "UDP Listen port (" + str(UDP_RX_PORT) + ") already in use" +\
-                        "\n" + "Please restart the app".center(50) +\
-                        "\n\n" + "<Press [Enter] to continue>".center(50)
+            errorText = str("UDP Listen port (" + str(UDP_RX_PORT) + ") already in use by another program").center(maxWidth) + \
+                        "\n" + "(eg vlc, or a different instance of isptest?)".center(maxWidth) + \
+                        "\n\n" + "Please restart the app using a different port, or else close".center(maxWidth) + \
+                        "\n" + "the other application".center(maxWidth) + \
+                        "\n" + "TIP: On Linux, run 'netstat -lnup' to query what's running".center(maxWidth) + \
+                        "\n\n" + "<Press any key to continue>".center(maxWidth)
             uiObjectHandle.showFatalErrorDialogue("Network Error", errorText)
             break
 
