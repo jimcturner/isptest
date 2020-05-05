@@ -574,6 +574,10 @@ class UI(object):
         self.displayHelpTable = False
         # Used by the EventsTable (and Traceroute table). Keeps track of the current display page
         self.tablePageNo = 0
+        # Used to send popup error messages to UI.__renderDisplayThread
+        self.displayFatalErrorDialogue = False
+        self.fatalErrorDialogueMessageText = ""
+        self.fatalErrorDialogueTitle = ""
         # Used by the EventsTable and CopyToClipboard/PasteBin.
         # Currently, if the list is populated, the events table will only show that type of Event
         self.filterListForDisplayedEvents = None
@@ -801,6 +805,15 @@ class UI(object):
             # Block until the thread ends
             print("UI.kill() Waiting for detectTerminalSizeThread to end\r")
             self.detectTerminalSizeThread.join()
+
+    # This method will cause an error message to be shown by the main __renderDisplayThread
+    # it will wait for a key press, and then cause the app to shut down (without user confirmation) via a SIGTERM
+    def showFatalErrorDialogue(self, errorTitle, errorMessageText):
+        Utils.Message.addMessage("DBUG: UI.showFatalErrorDialogue() called")
+        self.fatalErrorDialogueTitle = errorTitle
+        self.fatalErrorDialogueMessageText = errorMessageText
+        self.displayFatalErrorDialogue = True
+
 
     # This method will pause the normal screen rendering/key catching and cause a
     # 'do you want to quit? dialogue to be displayed
@@ -2495,6 +2508,7 @@ class UI(object):
         elif self.operationMode == 'TRANSMIT':
             Utils.Message.addMessage("Waiting for receiving end to make contact..... ")
 
+
         # Endless 'state-driven' loop to render the screen
         while self.renderDisplayThreadActive == True:
             # Blocking Wait for the wakeUpUi Event (or a 1 sec timeout, whichever first)
@@ -2590,6 +2604,14 @@ class UI(object):
             # draw the messages table
             self.__drawMessageTable() # Should only take effect if there are any new messages/or self.redrawScreen is True
 
+            # Check to see if Fatal Error Message is to be displayed
+            if self.displayFatalErrorDialogue:
+                # clear flag
+                self.displayFatalErrorDialogue = False
+                # Put up error message (this is a blocking call)
+                self.__renderMessageBox(self.fatalErrorDialogueMessageText, self.fatalErrorDialogueTitle,\
+                                        textColour=Term.WHITE, bgColour=Term.RED)
+
             # Check to see if Events List is to be overlaid?
             if self.displayEventsTable:
                 # Confirm that self.selectedStream and self.selectedStreamID are up to date, before drawing the table
@@ -2615,12 +2637,34 @@ class UI(object):
             # Now re-arm the getch thread
             self.enableGetch.set()
 
+            # # Catch a fatal exception raised if the UDP listener fails (because the specified port is already in use)
+            # # Under these circumstances, the only thing to do is kill the application
+            # except UDPListenException:
+            #     # disable _getch() key capture
+            #     Utils.Message.addMessage("DBUG: UI.__renderDisplayThread UDPListenException caught: self.enableGetch.clear()")
+            #     self.enableGetch.clear()
+            #     # Now wait for UI.__keysPressedThreasd() to acknowledge the self.enableGetch.clear() signal
+            #     Utils.Message.addMessage(
+            #         "DBUG: UI.__renderDisplayThread: DBUG: UI.__renderDisplayThread UDPListenException caught: Waiting for UI.__keysPressedThread to acknowledge self.enableGetch.clear()")
+            #     self.getchIsDisabled.wait()
+            #     Utils.Message.addMessage("DBUG: UI.__renderDisplayThread:  self.getchIsDisabled acknowledged")
+            #     # Now put up a helpful warning message
+            #     Term.printAt("Unable to listen, press a key")
+            #     ch = None
+            #     # Endless loop whilst we wait for a key press
+            #     while ch is not None:
+            #         ch = self.__getch()
+            #
+            #     Utils.Message.addMessage("DBUG: UI.__renderDisplayThread:  sending SIGTERM")
+            #     os.kill(os.getpid(), signal.SIGTERM)
+        Utils.Message.addMessage("UI.__renderDisplayThread ending")
         # Exit alternate screen
         Term.exitAlternateScreen()
         Term.clearScreen()
-        print ("UI.__renderDisplayThread ended")
+        print("UI.__renderDisplayThread ended")
 
-    # Autonomous thread to monitor the size of the terminal window
+
+            # Autonomous thread to monitor the size of the terminal window
     def __detectTerminalSizeThread(self):
         while self.detectTerminalSizeThreadActive == True:
             # Check to see if terminal has been resized
@@ -2841,8 +2885,11 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
         Utils.Message.addMessage("ERR: __diskloggerThread. Error closing file " + str(e))
 
 # Autonomous thread to decode rtp streams and pass the data into the relevant RtpRXStream
+# The uiObjectHandle allows this thread to access methods/variables within the UI class for the app
+# This is required because this thread has the power to shut the app down should the UDP listen port
+# not be available
 def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
-                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold):
+                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, uiObjectHandle):
     # An RTP header is 12 bytes long
     RTP_HEADER_SIZE = 12
 
@@ -2890,12 +2937,19 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
 
 
         except Exception as e:
-            Utils.Message.addMessage(Term.FG(Term.RED) + "__main(): Cannot create socket listen on " + UDP_RX_IP + ":" + str(
+            Utils.Message.addMessage(Term.FG(Term.RED) + "__receiveRtpThread(): Cannot create socket listen on " + UDP_RX_IP + ":" + str(
                 UDP_RX_PORT) + ", " + str(e) + \
                                ". Try another port. Exiting" + Term.FG(Term.RESET))
-            Utils.Message.addMessage("__main(): " + str(e))
-            time.sleep(2)
-            exit()
+            Utils.Message.addMessage("DBUG:__receiveRtpThread(): " + str(e))
+            # Display a message box with a URL or an error message
+
+            # Now signal to the UI object that there is a problem
+            Utils.Message.addMessage("DBUG:__receiveRtpThread(): Instructing ui object of error")
+            errorText = str("UDP Listen port (" + str(UDP_RX_PORT) + ") already in use").center(50) +\
+                        + "\n" + "Please restart the app".center(50) +\
+                        + "\n\n" + "<Press [Enter] to continue>".center(50)
+            uiObjectHandle.showFatalErrorDialogue("Network Error", errorText)
+
 
         data = b""  # Will hold the data received - specify a bytes string
 
@@ -3521,7 +3575,7 @@ def main(argv):
         # Create a thread to receive the RTP streams
         receiveRtpThread = threading.Thread(target=__receiveRtpThread,
                                             args=(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
-                   UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold,))
+                   UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, ui))
         receiveRtpThread.setName("__receiveRtpThread")
         receiveRtpThread.start()
 
@@ -3545,10 +3599,10 @@ def main(argv):
             else:
                 pass
 
-        # This code will execute if the ShutdownApplication Exception is raised (SIGKILL)
+        # This code will execute if the ShutdownApplication Exception is raised (SIGTERM)
         # It will cause the pgram to end, with no user prompt
         except ShutdownApplication:
-            Utils.Message.addMessage("DBUG: ShutdownApplication Exception raised (SIGKILL)")
+            Utils.Message.addMessage("DBUG: ShutdownApplication Exception raised (SIGTERM)")
             shutdownApplication()
 
 
