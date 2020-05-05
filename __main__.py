@@ -2926,20 +2926,22 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
 
 
         except Exception as e:
-            Utils.Message.addMessage(Term.FG(Term.RED) + "__receiveRtpThread(): Cannot create socket listen on " + UDP_RX_IP + ":" + str(
-                UDP_RX_PORT) + ", " + str(e) + \
-                               ". Try another port. Exiting" + Term.FG(Term.RESET))
+            Utils.Message.addMessage(Term.FG(Term.RED) + "__receiveRtpThread(): Cannot listen on " + UDP_RX_IP + ":" + str(
+                UDP_RX_PORT) + ", " + str(e) + Term.FG(Term.RESET))
             Utils.Message.addMessage("DBUG:__receiveRtpThread(): " + str(e))
             # Display a message box with a URL or an error message
 
             # Now signal to the UI object that there is a problem
-            maxWidth = 60
+            maxWidth = 70
             Utils.Message.addMessage("DBUG:__receiveRtpThread(): calling UI.showFatalErrorDialogue()")
             errorText = str("UDP Listen port (" + str(UDP_RX_PORT) + ") already in use by another program").center(maxWidth) + \
                         "\n" + "(eg vlc, or a different instance of isptest?)".center(maxWidth) + \
                         "\n\n" + "Please restart the app using a different port, or else close".center(maxWidth) + \
                         "\n" + "the other application".center(maxWidth) + \
-                        "\n" + "TIP: On Linux, run 'netstat -lnup' to query what's running".center(maxWidth) + \
+                        "\n\n" + "TIP: To query what's listening on ports already, run the following:".center(maxWidth) +\
+                        "\n" +"Linux: 'netstat -lnup'".center(maxWidth) + \
+                        "\n" + "OSX: 'lsof -nP | grep UDP'".center(maxWidth) + \
+                        "\n" + "Windows: 'netstat -an | find \"UDP\"'".center(maxWidth) + \
                         "\n\n" + "<Press any key to continue>".center(maxWidth)
             uiObjectHandle.showFatalErrorDialogue("Network Error", errorText)
             break
