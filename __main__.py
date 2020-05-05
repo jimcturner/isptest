@@ -2604,13 +2604,7 @@ class UI(object):
             # draw the messages table
             self.__drawMessageTable() # Should only take effect if there are any new messages/or self.redrawScreen is True
 
-            # Check to see if Fatal Error Message is to be displayed
-            if self.displayFatalErrorDialogue:
-                # clear flag
-                self.displayFatalErrorDialogue = False
-                # Put up error message (this is a blocking call)
-                self.__renderMessageBox(self.fatalErrorDialogueMessageText, self.fatalErrorDialogueTitle,\
-                                        textColour=Term.WHITE, bgColour=Term.RED)
+
 
             # Check to see if Events List is to be overlaid?
             if self.displayEventsTable:
@@ -2626,42 +2620,36 @@ class UI(object):
                 validateSelectedStream()
                 self.__renderTracerouteTable()
 
-            # Check to see if Helkp table is to be overlaid
+            # Check to see if Help table is to be overlaid
             if self.displayHelpTable:
                 self.__renderHelpTable()
-
 
             # Clear flag
             self.redrawScreen = False
 
+            # Finally, Check to see if Fatal Error Message is to be displayed
+            if self.displayFatalErrorDialogue:
+                # clear flag
+                self.displayFatalErrorDialogue = False
+                self.enableGetch.clear()
+                # Check to see that  getch to have been disabled
+                self.getchIsDisabled.wait()
+
+                # Put up error message (this is a blocking call)
+                self.__renderMessageBox(self.fatalErrorDialogueMessageText, self.fatalErrorDialogueTitle, \
+                                        textColour=Term.WHITE, bgColour=Term.RED)
+                Utils.Message.addMessage("DBUG: __renderDisplayThread() displayFatalErrorDialogue..key pressed")
+
+
+
             # Now re-arm the getch thread
             self.enableGetch.set()
 
-            # # Catch a fatal exception raised if the UDP listener fails (because the specified port is already in use)
-            # # Under these circumstances, the only thing to do is kill the application
-            # except UDPListenException:
-            #     # disable _getch() key capture
-            #     Utils.Message.addMessage("DBUG: UI.__renderDisplayThread UDPListenException caught: self.enableGetch.clear()")
-            #     self.enableGetch.clear()
-            #     # Now wait for UI.__keysPressedThreasd() to acknowledge the self.enableGetch.clear() signal
-            #     Utils.Message.addMessage(
-            #         "DBUG: UI.__renderDisplayThread: DBUG: UI.__renderDisplayThread UDPListenException caught: Waiting for UI.__keysPressedThread to acknowledge self.enableGetch.clear()")
-            #     self.getchIsDisabled.wait()
-            #     Utils.Message.addMessage("DBUG: UI.__renderDisplayThread:  self.getchIsDisabled acknowledged")
-            #     # Now put up a helpful warning message
-            #     Term.printAt("Unable to listen, press a key")
-            #     ch = None
-            #     # Endless loop whilst we wait for a key press
-            #     while ch is not None:
-            #         ch = self.__getch()
-            #
-            #     Utils.Message.addMessage("DBUG: UI.__renderDisplayThread:  sending SIGTERM")
-            #     os.kill(os.getpid(), signal.SIGTERM)
-        Utils.Message.addMessage("UI.__renderDisplayThread ending")
+        Utils.Message.addMessage("UI.__renderDisplayThread ending *****")
         # Exit alternate screen
         Term.exitAlternateScreen()
         Term.clearScreen()
-        print("UI.__renderDisplayThread ended")
+        print(Term.FG(Term.BLACK) + "UI.__renderDisplayThread ended")
 
 
             # Autonomous thread to monitor the size of the terminal window
@@ -2944,11 +2932,12 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # Display a message box with a URL or an error message
 
             # Now signal to the UI object that there is a problem
-            Utils.Message.addMessage("DBUG:__receiveRtpThread(): Instructing ui object of error")
-            errorText = str("UDP Listen port (" + str(UDP_RX_PORT) + ") already in use").center(50) +\
-                        + "\n" + "Please restart the app".center(50) +\
-                        + "\n\n" + "<Press [Enter] to continue>".center(50)
+            Utils.Message.addMessage("DBUG:__receiveRtpThread(): calling UI.showFatalErrorDialogue()")
+            errorText = "UDP Listen port (" + str(UDP_RX_PORT) + ") already in use" +\
+                        "\n" + "Please restart the app".center(50) +\
+                        "\n\n" + "<Press [Enter] to continue>".center(50)
             uiObjectHandle.showFatalErrorDialogue("Network Error", errorText)
+            break
 
 
         data = b""  # Will hold the data received - specify a bytes string
@@ -3104,8 +3093,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     except Exception as e:
         Utils.Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
 
-    Utils.Message.addMessage("__receiveRTPThread exiting")
-    print("__receiveRTPThread exiting\r")
+    Utils.Message.addMessage("DBUG:__receiveRTPThread exiting")
+    # print("__receiveRTPThread exiting\r")
 
 
 ####################################################################################
