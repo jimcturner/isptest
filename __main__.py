@@ -2943,7 +2943,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         "\n" + "OSX: 'lsof -nP | grep UDP'".center(maxWidth) + \
                         "\n" + "Windows: 'netstat -an | find \"UDP\"'".center(maxWidth) + \
                         "\n\n" + "<Press any key to continue>".center(maxWidth)
-            uiInstance.showFatalErrorDialogue("Network Error", errorText)
+            uiInstance.showErrorDialogue("Network Error", errorText)
             # Cause thread to end by breaking out of while loop
             break
 

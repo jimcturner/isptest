@@ -2566,12 +2566,12 @@ class RtpGenerator(object):
                 Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
                 # Put up an error message on the UI to warn the user
                 maxWidth = 60
-                errorText = "Insufficient priveledges to enable traceroute functionality.".center(maxWidth) +\
+                errorText = "Insufficient rights to enable traceroute functionality.".center(maxWidth) +\
                     "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) +\
                     "\n" + "To enable this function, exit again and run as sudo ".center(maxWidth) + \
                     "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
                     "\n\n" + "<Press any key to continue>".center(maxWidth)
-                self.uiInstance.showFatalErrorDialogue("Traceroute error", errorText)
+                self.uiInstance.showErrorDialogue("Traceroute error", errorText)
                 # Now break out of while loop
                 break
             finally:
