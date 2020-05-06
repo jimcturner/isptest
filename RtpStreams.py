@@ -2594,8 +2594,8 @@ class RtpGenerator(object):
                 # Copy the RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
                 rtpStreamResults.setTraceRouteHopsList(self.getTraceRouteHopsList())
 
-            except:
-                Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList")
+            except Exception as e:
+                Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
             time.sleep(0.5)
         Utils.Message.addMessage("__tracerouteThread ending for stream " + str(self.syncSourceIdentifier))
 
