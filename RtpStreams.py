@@ -1923,7 +1923,7 @@ class RtpGenerator(object):
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
                  rtpTxStreamsDict, rtpTxStreamsDictMutex,\
-                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, **kwargs):
+                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance = None, **kwargs):
         # The last arguments (**kwargs) are optional. it allows you to specify a source port or friendly name on creation
         # kwargs are "friendlyName" and "UDP_SRC_PORT"
 
@@ -1948,6 +1948,7 @@ class RtpGenerator(object):
         self.tracerouteCarouselIndexNo = 0  # Keeps track of which traceroute hop value is currently being transmitted
                                             # in the isptest header (in RtpGenerator.generateIsptestHeader()
 
+        self.uiInstance = uiInstance   # This allows access to the methods of the UI class
         # Attempt to set the friendly name from the optional supplied kwargs
         try:
             # If name supplied
@@ -2563,6 +2564,14 @@ class RtpGenerator(object):
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sr1() " + str(e))
                 Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
+                # Put up an error message on the UI to warn the user
+                maxWidth = 60
+                errorText = "Insufficient priveledges to enable traceroute functionality.".center(maxWidth) +\
+                    "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) +\
+                    "\n" + "To enable this function, exit again and run as sudo ".center(maxWidth) + \
+                    "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
+                    "\n\n" + "<Press any key to continue>".center(maxWidth)
+                self.uiInstance.showFatalErrorDialogue("Traceroute error", errorText)
                 # Now break out of while loop
                 break
             finally:

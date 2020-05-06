@@ -808,7 +808,7 @@ class UI(object):
 
     # This method will cause an error message to be shown by the main __renderDisplayThread
     # it will wait for a key press, and then cause the app to shut down (without user confirmation) via a SIGTERM
-    def showFatalErrorDialogue(self, errorTitle, errorMessageText):
+    def showErrorDialogue(self, errorTitle, errorMessageText):
         Utils.Message.addMessage("DBUG: UI.showFatalErrorDialogue() called")
         self.fatalErrorDialogueTitle = errorTitle
         self.fatalErrorDialogueMessageText = errorMessageText
@@ -2874,11 +2874,11 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
         Utils.Message.addMessage("ERR: __diskloggerThread. Error closing file " + str(e))
 
 # Autonomous thread to decode rtp streams and pass the data into the relevant RtpRXStream
-# The uiObjectHandle allows this thread to access methods/variables within the UI class for the app
+# The uiInstance allows this thread to access methods/variables within the UI class for the app
 # This is required because this thread has the power to shut the app down should the UDP listen port
 # not be available
 def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
-                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, uiObjectHandle):
+                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, uiInstance):
     # An RTP header is 12 bytes long
     RTP_HEADER_SIZE = 12
 
@@ -2943,7 +2943,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         "\n" + "OSX: 'lsof -nP | grep UDP'".center(maxWidth) + \
                         "\n" + "Windows: 'netstat -an | find \"UDP\"'".center(maxWidth) + \
                         "\n\n" + "<Press any key to continue>".center(maxWidth)
-            uiObjectHandle.showFatalErrorDialogue("Network Error", errorText)
+            uiInstance.showFatalErrorDialogue("Network Error", errorText)
+            # Cause thread to end by breaking out of while loop
             break
 
 
