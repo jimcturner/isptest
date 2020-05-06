@@ -2584,6 +2584,18 @@ class RtpGenerator(object):
                 self.tracerouteHopsListMutex.acquire()
                 self.tracerouteHopsList = tracerouteHopsList
                 self.tracerouteHopsListMutex.release()
+
+            # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
+            # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
+            # So has to be updated manually here
+            try:
+                # get the instance of the corresponding RtpStreamResults object
+                rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                # Copy the RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+                rtpStreamResults.setTraceRouteHopsList(self.getTraceRouteHopsList())
+
+            except:
+                Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList")
             time.sleep(0.5)
         Utils.Message.addMessage("__tracerouteThread ending for stream " + str(self.syncSourceIdentifier))
 
