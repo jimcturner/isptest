@@ -2564,14 +2564,19 @@ class RtpGenerator(object):
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sr1() " + str(e))
                 Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
-                # Put up an error message on the UI to warn the user
+                # If a UI instance (user interface) reference was supplied, display an error message on the UI
                 maxWidth = 60
                 errorText = "Insufficient rights to enable traceroute functionality.".center(maxWidth) +\
                     "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) +\
-                    "\n" + "To enable this function, exit again and run as sudo ".center(maxWidth) + \
+                    "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
                     "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
                     "\n\n" + "<Press any key to continue>".center(maxWidth)
-                self.uiInstance.showErrorDialogue("Traceroute error", errorText)
+                if self.uiInstance is not None:
+                    try:
+                        self.uiInstance.showErrorDialogue("Traceroute error", errorText)
+                    except Exception as e:
+                        Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " +\
+                                                 str(e))
                 # Now break out of while loop
                 break
             finally:

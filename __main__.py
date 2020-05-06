@@ -1620,15 +1620,12 @@ class UI(object):
                     RtpGenerator(stats['Dest IP'], stats['Dest Port'], stats['Tx Rate'], stats['Packet size'],
                                  stats['Sync Source ID'], 3600, \
                                  self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
-                                 self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex,
+                                 self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex, uiInstance=self,
                                  friendlyName=stats['Friendly Name'], UDP_SRC_PORT=stats['Tx Source Port'])
             except Exception as e:
                 Utils.Message.addMessage("ERR: UI.__recreateExpiredStream() inner " + str(e))
         except Exception as e:
             Utils.Message.addMessage("ERR: UI.__recreateExpiredStream() outer " + str(e))
-
-
-
 
 
     # 'a' pressed (only when in Tx or Loopback mode)
@@ -1831,7 +1828,7 @@ class UI(object):
                     # All tx stream parameters validated so create the new RtpGenerator object
                     rtpGenerator = RtpGenerator(destAddr, destPort, txRate_bps, packetLength, syncSourceID, timeToLive, \
                                                 self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
-                                                self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex,
+                                                self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex, uiInstance=self,\
                                                 friendlyName=friendlyName, UDP_SRC_PORT=sourcePort)
 
                     Utils.Message.addMessage("[a] Added new " + str(Utils.bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
@@ -3506,7 +3503,7 @@ def main(argv):
         rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
                                     payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
                                     rtpTxStreamsDict, rtpTxStreamsDictMutex,
-                                    rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
+                                    rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance=ui,
                                     UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME)
 
         # Create a diskLogging Thread - pass rtpStream object to it
