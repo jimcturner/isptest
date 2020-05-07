@@ -473,15 +473,19 @@ class RtpReceiveCommon(object):
     # If there is a discrepency, it will reinitialise the list to the new length
     # The arg 'hop' is zero indexed (so hop 0 is the first address in the hop list)
     def updateTraceRouteHopsList(self, hopNo, noOfHops, hopAddr):
-        self.tracerouteHopsListMutex.acquire()
-        if len(self.tracerouteHopsList) == noOfHops:
-            pass
-        else:
-            # If there is a discrepancy between the length the list and the latest known length
-            # Throw away the current list and initialise a new empty list
-            self.tracerouteHopsList = [None] * noOfHops
-        self.tracerouteHopsList[hopNo] = hopAddr
-        self.tracerouteHopsListMutex.release()
+        if noOfHops > 0:
+            self.tracerouteHopsListMutex.acquire()
+            try:
+                if len(self.tracerouteHopsList) == noOfHops:
+                    pass
+                else:
+                    # If there is a discrepancy between the length the list and the latest known length
+                    # Throw away the current list and initialise a new empty list
+                    self.tracerouteHopsList = [None] * noOfHops
+                self.tracerouteHopsList[hopNo] = hopAddr
+            except Exception as e:
+                Utils.Message.addMessage("ERR:RtpReceiveCommon.updateTraceRouteHopsList() " + str(e))
+            self.tracerouteHopsListMutex.release()
 
     @abstractmethod
     def getRtpStreamStats(self):
@@ -1251,7 +1255,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Take timestamp of last packet in this batch
                 self.__stats["packet_last_seen_received_timestamp"] = lastReceivedRtpPacket.timestamp
 
-                # Extract isptest header data from first packet in this batch
+                # # Extract isptest header using data from first packet in this batch
                 self.__extractIsptestHeaderData(self.rtpStream[0].isptestHeaderData)
 
             else:
