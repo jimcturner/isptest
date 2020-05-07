@@ -460,10 +460,27 @@ class RtpReceiveCommon(object):
         return tracerouteHopsList
 
     # Thread-safe method to set the self.tracerouteHopsList[]
+    # This completely replaces the existing list with a new supplied list
     def setTraceRouteHopsList(self, newList):
         self.tracerouteHopsListMutex.acquire()
         # Copy the new list into the instance variable list
         self.tracerouteHopsList = deepcopy(newList)
+        self.tracerouteHopsListMutex.release()
+
+    # This method attempts to update an individual tracerouteHopsList list entry
+    # It should be much faster than setTraceRouteHopsList (which has to copy the entire list)
+    # It begins by comparing the lengths of the current stored list with the latest known length
+    # If there is a discrepency, it will reinitialise the list to the new length
+    # The arg 'hop' is zero indexed (so hop 0 is the first address in the hop list)
+    def updateTraceRouteHopsList(self, noOfHops, hopNo, hopAddr):
+        self.tracerouteHopsListMutex.acquire()
+        if len(self.tracerouteHopsList) == noOfHops:
+            pass
+        else:
+            # If there is a discrepancy between the length the list and the latest known length
+            # Throw away the current list and initialise a new empty list
+            self.tracerouteHopsList = [None] * noOfHops
+        self.tracerouteHopsList[hopNo] = hopAddr
         self.tracerouteHopsListMutex.release()
 
     @abstractmethod
@@ -1347,25 +1364,26 @@ class RtpReceiveStream(RtpReceiveCommon):
                                     # Create a list containing the octets of the traceroute hop IP address
                                     hopAddr = [isptestHeaderData[4], isptestHeaderData[5],
                                                isptestHeaderData[6], isptestHeaderData[7]]
-                                    # update the self.__tracerouteHopsList[]
-                                    # get working copy of the current tracerouteHops list
-                                    tracerouteHopsList = []
-                                    tracerouteHopsList = self.getTraceRouteHopsList()
-                                    # Compare length of existing list with that indicated in the header
-                                    # If they are different, assume that the list has been superceded
-                                    if len(tracerouteHopsList) != noOfHops:
-                                        # Utils.Message.addMessage("traceroute list lengths are different. Creating new list")
-                                        # Now initialise a new list of the same length as noOfHops
-                                        tracerouteHopsList = [None] * noOfHops
-                                    try:
-                                        # This will fail if the list element doesn't already exist
-                                        tracerouteHopsList[hopNo] = hopAddr
-                                    except Exception as e:
-                                        # Utils.Message.addMessage("RtpReceiveStream.__calculateThread() parse traceroute message " + str(e))
-                                        pass
-
-                                    # Now copy the local traceroute hops list back to the instance variable version
-                                    self.setTraceRouteHopsList(tracerouteHopsList)
+                                    # update the self.__tracerouteHopsList[] with the latest received address/hopNo
+                                    self.updateTraceRouteHopsList(noOfHops, hopNo, hopAddr)
+                                    # # get working copy of the current tracerouteHops list
+                                    # tracerouteHopsList = []
+                                    # tracerouteHopsList = self.getTraceRouteHopsList()
+                                    # # Compare length of existing list with that indicated in the header
+                                    # # If they are different, assume that the list has been superceded
+                                    # if len(tracerouteHopsList) != noOfHops:
+                                    #     # Utils.Message.addMessage("traceroute list lengths are different. Creating new list")
+                                    #     # Now initialise a new list of the same length as noOfHops
+                                    #     tracerouteHopsList = [None] * noOfHops
+                                    # try:
+                                    #     # This will fail if the list element doesn't already exist
+                                    #     tracerouteHopsList[hopNo] = hopAddr
+                                    # except Exception as e:
+                                    #     # Utils.Message.addMessage("RtpReceiveStream.__calculateThread() parse traceroute message " + str(e))
+                                    #     pass
+                                    #
+                                    # # Now copy the local traceroute hops list back to the instance variable version
+                                    # self.setTraceRouteHopsList(tracerouteHopsList)
                                     # Display message with all the hops
                                     # Utils.Message.addMessage("Rx'd tracetroute " + str(hopNo) + " of " + str(noOfHops) +\
                                     #                                                             ":" + hopAddrAsString)
