@@ -1150,8 +1150,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__parseIsptestHeaderData(isptestHeaderData)
                 else:
                     # Otherwise, stream is not recognised, so disable transmission of results
-                    # Utils.Message.addMessage("DBUG:__RtpReceiveStream.__extractIsptestHeaderData(): Unable to decode stream")
-                    # self.resultsTransmitter.transmitActiveFlag = False
+                    Utils.Message.addMessage("DBUG:__RtpReceiveStream.__extractIsptestHeaderData(): Unable to decode stream, setting resultsTransmitter.transmitActiveFlag to False")
+                    self.resultsTransmitter.transmitActiveFlag = False
                     pass
         except Exception as e:
             pass
