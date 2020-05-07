@@ -24,3 +24,5 @@ class Registry(object):
                          ["t", "Show traceroute for the currently selected stream"],
                          ["a", "Show 'About' dialogue"]
                          ]
+    # Getting false positives at the moment (because the CPU can keep up!) so creating lots of unhelpful events
+    allowProcessorOverloadEventGeneration = False

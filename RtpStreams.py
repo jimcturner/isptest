@@ -1251,9 +1251,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Take timestamp of last packet in this batch
                 self.__stats["packet_last_seen_received_timestamp"] = lastReceivedRtpPacket.timestamp
 
-                # # Extract isptest header data from first packet in this batch
-                # self.__extractIsptestHeaderData(self.rtpStream[0].isptestHeaderData)
-
+                # Extract isptest header data from first packet in this batch
+                self.__extractIsptestHeaderData(self.rtpStream[0].isptestHeaderData)
 
             else:
                 # No data, so set lossOfStreamFlag (unless it's already been set)
@@ -1417,9 +1416,12 @@ class RtpReceiveStream(RtpReceiveCommon):
             # If the CPU is >99% utilised, add event to the list (but only do this once)
             if self.__stats["stream_processor_utilisation_percent"] > 99:
                 processorOverloadEvent = ProcessorOverload(self.__stats, lastReceivedRtpPacket)
-                self.__eventList.append(processorOverloadEvent)
-                # Increment the all_events counter
-                self.__stats["stream_all_events_counter"] += 1
+                # Check to see if processorOverloadEvent Event creation is enabled
+                if Registry.allowProcessorOverloadEventGeneration:
+                    # if so, add the event
+                    self.__eventList.append(processorOverloadEvent)
+                    # Increment the all_events counter
+                    self.__stats["stream_all_events_counter"] += 1
                 Utils.Message.addMessage(processorOverloadEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
 
