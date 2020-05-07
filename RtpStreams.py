@@ -472,7 +472,7 @@ class RtpReceiveCommon(object):
     # It begins by comparing the lengths of the current stored list with the latest known length
     # If there is a discrepency, it will reinitialise the list to the new length
     # The arg 'hop' is zero indexed (so hop 0 is the first address in the hop list)
-    def updateTraceRouteHopsList(self, noOfHops, hopNo, hopAddr):
+    def updateTraceRouteHopsList(self, hopNo, noOfHops, hopAddr):
         self.tracerouteHopsListMutex.acquire()
         if len(self.tracerouteHopsList) == noOfHops:
             pass
@@ -1096,6 +1096,62 @@ class RtpReceiveStream(RtpReceiveCommon):
                 (self.sumOfTimeElapsedSinceLastGlitch + self.__stats["glitch_time_elapsed_since_last_glitch"]) / \
                 self.__stats["glitch_counter_total_glitches"]
 
+    # This method will parse the isptest header data (and update the instance variables accordingly)
+    def __parseIsptestHeaderData(self, isptestHeaderData):
+        try:
+            # Determine what type of message this is
+            # Note element 0 is the 'UniqueIDforISPTESTstreams'.
+            # element 1 is the message type
+            # The data itself is in the subsequent 6 bytes
+            if isptestHeaderData[1] == 0:
+                # This is a traceroute message
+                # Extract the hop no. and the address octets isptestHeaderData[2] - isptestHeaderData[7]
+                hopNo = isptestHeaderData[2]
+                noOfHops = isptestHeaderData[3]
+
+                # Elements 4-7 contain the octets of the traceroute hop IP address
+                # hopAddr = [isptestHeaderData[4], isptestHeaderData[5],
+                #            isptestHeaderData[6], isptestHeaderData[7]]
+                # update the self.__tracerouteHopsList[] with the latest received address/hopNo
+                self.updateTraceRouteHopsList(hopNo, noOfHops, isptestHeaderData[4:])
+
+        except Exception as e:
+            Utils.Message.addMessage("DBUG:__RtpReceiveStream.__pasrseIsptestHeader " + str(e))
+
+    # This method examines the payload of the RTP packet to see if it's been sent by an instance of an isptest TRANSMITTER
+    # It will then split off the numerical data part and the 'friendly name' string for the stream
+    def __extractIsptestHeaderData(self, rtpPayload):
+        # Extract ispheader data from first packet in this batch
+        # Calculate the split between the numerical data and the friendly name
+        numericalHeaderDataLength = self.ISPTEST_HEADER_SIZE - self.maxNameLength
+        try:
+            # substring the part of the data holding the numerical values
+            isptestHeaderDataStruct = rtpPayload[:numericalHeaderDataLength]
+            # substring the part of the data holding the friendly name of the stream
+            isptestHeaderDataFriendlyName = str(rtpPayload[numericalHeaderDataLength:].decode('utf-8'))
+            # unpack the values from the struct
+            isptestHeaderData = struct.unpack("!HBBBBBBB", isptestHeaderDataStruct)
+            # Utils.Message.addMessage("INFO: Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
+            # Check to see if we've managed to unpack the data
+            if len(isptestHeaderData) > 0:
+                # Check to see that if this a stream sent by an instance of isptest
+                if isptestHeaderData[0] == RtpGenerator.getUniqueIDforISPTESTstreams():
+                    # If so, make use the friendly name field to name this receive stream
+                    self.__stats["stream_friendly_name"] = isptestHeaderDataFriendlyName
+                    # And enable transmission of results back to sender
+                    self.resultsTransmitter.transmitActiveFlag = True
+                    # Utils.Message.addMessage(isptestHeaderDataFriendlyName)
+                    # Now decode the messages contained within the isptest header
+                    self.__parseIsptestHeaderData(isptestHeaderData)
+                else:
+                    # Otherwise, stream is not recognised, so disable transmission of results
+                    Utils.Message.addMessage("DBUG:__RtpReceiveStream.__extractIsptestHeaderData(): Stream not recognised. Setting self.resultsTransmitter.transmitActiveFlag to False")
+                    self.resultsTransmitter.transmitActiveFlag = False
+        except Exception as e:
+            pass
+            # Utils.Message.addMessage("DBUG: Decoded header: " + str(e) + str(self.rtpStream[0].isptestHeaderData))
+
+
     # Define a private calculation method that will run autonomously as a thread
     # This thread will
     def __calculateThread(self):
@@ -1331,74 +1387,34 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # If so, create a results transmitter object
                 if len(self.rtpStream) > 0 :
                     # Extract ispheader data from first packet in this batch
-                    # Calculate the split between the numerical data and the friendly name
-                    numericalHeaderDataLength = self.ISPTEST_HEADER_SIZE - self.maxNameLength
-                    try:
-                        # substring the part of the data holding the numerical values
-                        isptestHeaderDataStruct = self.rtpStream[0].isptestHeaderData[:numericalHeaderDataLength]
-                        # substring the part of the data holding the friendly name of the stream
-                        isptestHeaderDataFriendlyName = str(self.rtpStream[0].isptestHeaderData[numericalHeaderDataLength:].decode('utf-8'))
-                        # unpack the values from the struct
-                        isptestHeaderData = struct.unpack("!HBBBBBBB", isptestHeaderDataStruct)
-                        # Utils.Message.addMessage("INFO: Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
-                        # Check to see if we've managed to unpack the data
-                        if len(isptestHeaderData) > 0:
-                            # Check to see that if this a stream sent by an instance of isptest
-                            if isptestHeaderData[0] == RtpGenerator.getUniqueIDforISPTESTstreams():
-                                # If so, make use the friendly name field to name this receive stream
-                                self.__stats["stream_friendly_name"] = isptestHeaderDataFriendlyName
-                                # And enable transmission of results back to sender
-                                self.resultsTransmitter.transmitActiveFlag = True
-                                # Utils.Message.addMessage(isptestHeaderDataFriendlyName)
-                                # Now decode the messages contained within the isptest header
-                                # Attempt to extract the traceroute data
-                                if isptestHeaderData[1] == 0:
-                                    # This is a traceroute message
-                                    # Extract the hop no. and the address octets
-                                    hopNo = isptestHeaderData[2]
-                                    noOfHops = isptestHeaderData[3]
-                                    hopAddrAsString = str(isptestHeaderData[4]) + "." + \
-                                              str(isptestHeaderData[5]) + "." + \
-                                              str(isptestHeaderData[6]) + "." + \
-                                              str(isptestHeaderData[7])
-                                    # Create a list containing the octets of the traceroute hop IP address
-                                    hopAddr = [isptestHeaderData[4], isptestHeaderData[5],
-                                               isptestHeaderData[6], isptestHeaderData[7]]
-                                    # update the self.__tracerouteHopsList[] with the latest received address/hopNo
-                                    self.updateTraceRouteHopsList(noOfHops, hopNo, hopAddr)
-                                    # # get working copy of the current tracerouteHops list
-                                    # tracerouteHopsList = []
-                                    # tracerouteHopsList = self.getTraceRouteHopsList()
-                                    # # Compare length of existing list with that indicated in the header
-                                    # # If they are different, assume that the list has been superceded
-                                    # if len(tracerouteHopsList) != noOfHops:
-                                    #     # Utils.Message.addMessage("traceroute list lengths are different. Creating new list")
-                                    #     # Now initialise a new list of the same length as noOfHops
-                                    #     tracerouteHopsList = [None] * noOfHops
-                                    # try:
-                                    #     # This will fail if the list element doesn't already exist
-                                    #     tracerouteHopsList[hopNo] = hopAddr
-                                    # except Exception as e:
-                                    #     # Utils.Message.addMessage("RtpReceiveStream.__calculateThread() parse traceroute message " + str(e))
-                                    #     pass
-                                    #
-                                    # # Now copy the local traceroute hops list back to the instance variable version
-                                    # self.setTraceRouteHopsList(tracerouteHopsList)
-                                    # Display message with all the hops
-                                    # Utils.Message.addMessage("Rx'd tracetroute " + str(hopNo) + " of " + str(noOfHops) +\
-                                    #                                                             ":" + hopAddrAsString)
-                                    # hopList =""
-                                    #
-                                    # for x in self.getTraceRouteHopsList():
-                                    #     hopList += str(x) + ", "
-                                    # Utils.Message.addMessage(hopList)
-
-                            else:
-                                # Otherwise, stream is not recognised, so disable transmission of results
-                                self.resultsTransmitter.transmitActiveFlag = False
-                    except Exception as e:
-                        pass
-                        # Utils.Message.addMessage("DBUG: Decoded header: " + str(e) + str(self.rtpStream[0].isptestHeaderData))
+                    self.__extractIsptestHeaderData(self.rtpStream[0].isptestHeaderData)
+                    # # Calculate the split between the numerical data and the friendly name
+                    # numericalHeaderDataLength = self.ISPTEST_HEADER_SIZE - self.maxNameLength
+                    # try:
+                    #     # substring the part of the data holding the numerical values
+                    #     isptestHeaderDataStruct = self.rtpStream[0].isptestHeaderData[:numericalHeaderDataLength]
+                    #     # substring the part of the data holding the friendly name of the stream
+                    #     isptestHeaderDataFriendlyName = str(self.rtpStream[0].isptestHeaderData[numericalHeaderDataLength:].decode('utf-8'))
+                    #     # unpack the values from the struct
+                    #     isptestHeaderData = struct.unpack("!HBBBBBBB", isptestHeaderDataStruct)
+                    #     # Utils.Message.addMessage("INFO: Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
+                    #     # Check to see if we've managed to unpack the data
+                    #     if len(isptestHeaderData) > 0:
+                    #         # Check to see that if this a stream sent by an instance of isptest
+                    #         if isptestHeaderData[0] == RtpGenerator.getUniqueIDforISPTESTstreams():
+                    #             # If so, make use the friendly name field to name this receive stream
+                    #             self.__stats["stream_friendly_name"] = isptestHeaderDataFriendlyName
+                    #             # And enable transmission of results back to sender
+                    #             self.resultsTransmitter.transmitActiveFlag = True
+                    #             # Utils.Message.addMessage(isptestHeaderDataFriendlyName)
+                    #             # Now decode the messages contained within the isptest header
+                    #             self.__parseIsptestHeaderData(isptestHeaderData)
+                    #         else:
+                    #             # Otherwise, stream is not recognised, so disable transmission of results
+                    #             self.resultsTransmitter.transmitActiveFlag = False
+                    # except Exception as e:
+                    #     pass
+                    #     # Utils.Message.addMessage("DBUG: Decoded header: " + str(e) + str(self.rtpStream[0].isptestHeaderData))
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
