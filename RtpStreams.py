@@ -548,23 +548,23 @@ class RtpReceiveCommon(object):
             "Mean interval between glitches: ".rjust(labelWidth) + str(
                 Utils.dtstrft(stats["glitch_mean_time_between_glitches"])) + "\r\n"
         worstGlitchesListAsString = "Worst Glitch:\r\n"
-        if getOperationMode() == "RECEIVE":
-            if len(worstGlitchesList) > 0:
-                try:
-                    # Generate list of the worst glitches
-                    for glitch in worstGlitchesList:
-                        glitchDetails = glitch.getSummary(includeStreamSyncSourceID=False,
-                                                                includeEventNo=False,
-                                                                includeType=False,
-                                                                includeFriendlyName=False)
-                        worstGlitchesListAsString += \
-                            str(glitchDetails['timeCreated'].strftime("%d/%m %H:%M:%S")) + \
-                            ", " + str(glitchDetails['summary']) + "\r\n"
-                except Exception as e:
-                    Utils.Message.addMessage("ERR: RtpReceiveCommon.generateReport() compile worst glitches list: " + str(e))
+
+        if len(worstGlitchesList) > 0:
+            try:
+                # Generate list of the worst glitches
+                for glitch in worstGlitchesList:
+                    glitchDetails = glitch.getSummary(includeStreamSyncSourceID=False,
+                                                            includeEventNo=False,
+                                                            includeType=False,
+                                                            includeFriendlyName=False)
+                    worstGlitchesListAsString += \
+                        str(glitchDetails['timeCreated'].strftime("%d/%m %H:%M:%S")) + \
+                        ", " + str(glitchDetails['summary']) + "\r\n"
+            except Exception as e:
+                Utils.Message.addMessage("ERR: RtpReceiveCommon.generateReport() compile worst glitches list: " + str(e))
+
         else:
-            worstGlitchesListAsString +=\
-                "Worst glitches list not currently available when in TRANSMIT mode. \r\nSee RECEIVER report instead" + "\r\n"
+            worstGlitchesListAsString += "No glitches to report\r\n"
 
         # Create a traceroute list of hops
         tracerouteHopsListAsString = "Traceroute:\r\n"
