@@ -593,9 +593,15 @@ class RtpReceiveCommon(object):
             eventsListAsAString += (str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")) + \
                                     ", " + str(eventDetails['summary']) + "\r\n")
 
-        outputString = title + subtitle + separator + streamIPDetails + separator + streamPerformance + separator +\
-                    tracerouteHopsListAsString + separator +\
-                       worstGlitchesListAsString + separator + eventsListAsAString
+        if getOperationMode()== "RECEIVE":
+            outputString = title + subtitle + separator + streamIPDetails + separator + streamPerformance + separator +\
+                        tracerouteHopsListAsString + separator +\
+                           worstGlitchesListAsString + separator + eventsListAsAString
+        elif getOperationMode()=="TRANSMIT":
+            # In transmit mode, the worstGlitches list isn't currently populated, so exclude from the report
+            outputString = title + subtitle + separator + streamIPDetails + separator + streamPerformance + separator + \
+                           tracerouteHopsListAsString + separator + \
+                           eventsListAsAString
 
         # Return a string containing the output
         return outputString
