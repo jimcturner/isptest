@@ -1359,10 +1359,32 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Wait a second, in order to know we're in a steady state
                 if self.__stats["packet_instantaneous_receive_period_uS"] > 0 and \
                         self.__stats["stream_time_elapsed_total"].seconds > 1:
-                    self.__stats["calculate_thread_sampling_interval_S"] = 10.0 * \
-                                                                           self.__stats[
-                                                                               "packet_instantaneous_receive_period_uS"] / 1000000.0
+                    # self.__stats["calculate_thread_sampling_interval_S"] = 10.0 * \
+                    #                                                        self.__stats[
+                    #                                                            "packet_instantaneous_receive_period_uS"] / 1000000.0
+                    ### NEW CODE TO HELP WITH CHOPPY LOSSY LINKS - OLD CODE USED TO CAUSE EXXCESSIVE CPU USAGE ###
+                    ###ERROR:  File "/usr/local/Cellar/python/3.7.7/Frameworks/Python.framework/Versions/3.7/lib/python3.7/threading.py",$
+                    #     self._target(*self._args, **self._kwargs)
+                #   File "/Volumes/Transcend/Dropbox (BBC)/Software_Dev/Python/isptest/RtpStreams.py", line 1470, in __calcula$
+                #     time.sleep(self.__stats["calculate_thread_sampling_interval_S"])
+                # ValueError: sleep length must be non-negative
 
+
+                    # snapshot the previous timing interval
+                    oldSamplingRateInterval = self.__stats["calculate_thread_sampling_interval_S"]
+                    # Calculate the current timing interval based on the current rate of incoming packets
+                    newSamplingRateInterval = 10.0 *self.__stats["packet_instantaneous_receive_period_uS"] / 1000000.0
+                    # If the timing interval has to be reduced, apply the change immediately
+                    if newSamplingRateInterval < oldSamplingRateInterval:
+                        self.__stats["calculate_thread_sampling_interval_S"] = newSamplingRateInterval
+                    else:
+                        # If the timing interval can be increased, apply the change more slowly
+                        diff = newSamplingRateInterval - oldSamplingRateInterval
+
+                        self.__stats["calculate_thread_sampling_interval_S"] += 0.2 * diff
+
+                # Utils.Message.addMessage("sampling interval " + str(self.__stats["calculate_thread_sampling_interval_S"])+\
+                #                          " Len " + str(len(self.rtpStream)))
                 ######### Now calculate moving glitch counters by iterating over the self.movingGlitchCounters array
                 # firstly recalculate, then generate stats keys automatically for any moving totals counters
                 # within self.movingGlitchCounters
