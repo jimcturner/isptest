@@ -568,20 +568,18 @@ class RtpReceiveCommon(object):
 
         # Create a traceroute list of hops
         tracerouteHopsListAsString = "Traceroute:\r\n"
-        if len(tracerouteHopsList) > 0:
+        if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
             for hopNo in range(len(tracerouteHopsList)):
-                if tracerouteHopsList[hopNo] is not None:
-                    try:
-                        tracerouteHopsListAsString += str(hopNo + 1 ) + "\t" + \
-                            str(tracerouteHopsList[hopNo][0]) + "." + \
-                            str(tracerouteHopsList[hopNo][1]) + "." + \
-                            str(tracerouteHopsList[hopNo][2]) + "." + \
-                            str(tracerouteHopsList[hopNo][3]) + "\r\n"
+                try:
+                    tracerouteHopsListAsString += str(hopNo + 1 ) + "\t" + \
+                        str(tracerouteHopsList[hopNo][0]) + "." + \
+                        str(tracerouteHopsList[hopNo][1]) + "." + \
+                        str(tracerouteHopsList[hopNo][2]) + "." + \
+                        str(tracerouteHopsList[hopNo][3]) + "\r\n"
 
-                    except Exception as e:
-
-                        Utils.Message.addMessage("DBUG: RtpReceiveCommon.generateReport() Create traceroute string: " + str(e))
-                        tracerouteHopsListAsString += "--Invalid traceroute data--"
+                except Exception as e:
+                    Utils.Message.addMessage("DBUG: RtpReceiveCommon.generateReport() Create traceroute string: " + str(e))
+                    tracerouteHopsListAsString += "--Invalid traceroute data--"
         else:
             tracerouteHopsListAsString += "No traceroute info available" + "\r\n"
 
