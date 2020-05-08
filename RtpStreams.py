@@ -1451,6 +1451,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Increment the all_events counter
                     self.__stats["stream_all_events_counter"] += 1
                 Utils.Message.addMessage(processorOverloadEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
+                Utils.Message.addMessage("["+ str(self.__stats["stream_syncSource"]) +"][" + \
+                                         str(self.__stats["stream_friendly_name"]).rstrip() +
+                                         "] Bursty incoming data " + str(len(self.rtpStream)) + " packets")
 
 
 
