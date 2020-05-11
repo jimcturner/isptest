@@ -2661,7 +2661,7 @@ class RtpGenerator(object):
             except Exception as e:
                 Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
             time.sleep(0.5)
-        Utils.Message.addMessage("__tracerouteThread ending for stream " + str(self.syncSourceIdentifier))
+        Utils.Message.addMessage("DBUG:__tracerouteThread ending for stream " + str(self.syncSourceIdentifier))
 
 # An object that will act as a UDP receiver. It will receive server reports from ResultsTransmitter
 class ResultsReceiver(object):
