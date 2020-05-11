@@ -1688,7 +1688,7 @@ class UI(object):
                 class InvalidUserresponse(Exception):
                     pass
 
-                # Simple fucntion to parse a number-letter suffix (k or m) and return the actuak value
+                # Simple fucntion to parse a number-letter suffix (k or m) and return the actual value
                 def parseSuffix(input):
                     try:
                         # Use regex to split -b argument into numerical and string parts
