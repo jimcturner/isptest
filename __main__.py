@@ -1721,6 +1721,7 @@ class UI(object):
                         # (otherwise my getch() would interfere with prompt_toolkits' getch())
                         self.getchIsDisabled.wait()
                         # Display the user dialogue
+                        Utils.Message.addMessage("DBUG:UI.__onAddTxStream() Display multi_input_dialog")
                         newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
                                                                    title=title,
                                                                    style=styleDefinition).run()
