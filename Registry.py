@@ -18,6 +18,7 @@ class Registry(object):
     messageLogFilename = "log.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
     # Provides content for the help popup
     helpTableContents = [["h","Display/hide this page"],
+                         ["Ctrl-C", "Quit the application"],
                          ["d", "Delete the currently selected transmit or receive stream"],
                          ["l","Sets the friendly name of the stream (10 chars max)"],
                          ["r", "Show report for the currently stream"],
