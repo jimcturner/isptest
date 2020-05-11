@@ -3148,17 +3148,12 @@ def shutdownApplicationSignalHandler(signum, frame):
 
 
 #### Experimental functions
-def copyPaste():
-    pyperclip.copy("new_clip\n\tNew line")
 
-    print(pyperclip.paste())
 
 # Main prog starts here
 # #####################
 
 def main(argv):
-    # traceroute()
-    # exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""

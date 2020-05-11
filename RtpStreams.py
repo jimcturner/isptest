@@ -671,6 +671,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_srcPort"] = srcPort
         self.__stats["stream_rxAddress"] = rxAddress
         self.__stats["stream_rxPort"] = rxPort
+        self.__stats["stream_transmitter_localAddress"] = "" # Will be populated by incoming isptest header data
+        self.__stats["stream_transmitter_destAddress"] = "" # Will be populated by incoming isptest header data
+        self.__stats["stream_transmitterVersion"] = 0
         Utils.Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
 
         # This is a reference to the UDP listening socket created in main() (to receive all incoming streams)
@@ -1124,6 +1127,27 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # update the self.__tracerouteHopsList[] with the latest received address/hopNo
                 self.updateTraceRouteHopsList(hopNo, noOfHops, isptestHeaderData[4:])
 
+            elif isptestHeaderData[1] == 1:
+                # This is a message containing the transmitter local address
+                # Create a an IP address string from the seperate octets
+                self.__stats["stream_transmitter_localAddress"] = str(isptestHeaderData[4]) + "." + \
+                                                                  str(isptestHeaderData[5]) + "." + \
+                                                                  str(isptestHeaderData[6]) + "." + \
+                                                                  str(isptestHeaderData[7])
+
+            elif isptestHeaderData[1] == 2:
+                # This is a message containing the transmitter destination address for the stream
+                # Create a an IP address string from the seperate octets
+                self.__stats["stream_transmitter_destAddress"] = str(isptestHeaderData[4]) + "." + \
+                                                                  str(isptestHeaderData[5]) + "." + \
+                                                                  str(isptestHeaderData[6]) + "." + \
+                                                                  str(isptestHeaderData[7])
+
+            elif isptestHeaderData[1] == 3:
+                # This is a message containing version no information about the transmitter
+                txVersionNo = str(isptestHeaderData[2]) + "." + str(isptestHeaderData[3])
+                self.__stats["stream_transmitterVersion"] = float(txVersionNo)
+
         except Exception as e:
             Utils.Message.addMessage("DBUG:__RtpReceiveStream.__pasrseIsptestHeader " + str(e))
 
@@ -1423,6 +1447,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                 #     # Extract ispheader data from first packet in this batch
                 #     self.__extractIsptestHeaderData(self.rtpStream[0].isptestHeaderData)
 
+                Utils.Message.addMessage(str(self.__stats["stream_transmitter_localAddress"]) + ", " +\
+                                         str(self.__stats["stream_transmitter_destAddress"]) + ", " +\
+                                        str(self.__stats["stream_transmitterVersion"]))
 
             # Calculate how long it has taken for the stats analysis to have been performed
             calculationEndTime = timer()
@@ -1992,7 +2019,7 @@ class RtpGenerator(object):
         # kwargs are "friendlyName" and "UDP_SRC_PORT"
 
         # Assign instance variables
-        self.UDP_TX_IP = UDP_TX_IP
+        self.UDP_TX_IP = UDP_TX_IP  # The destination address
         self.UDP_TX_PORT = int(UDP_TX_PORT)
         self.UDP_TX_SRC_PORT = 0
         self.txRate = int(txRate)
@@ -2012,7 +2039,18 @@ class RtpGenerator(object):
         self.tracerouteCarouselIndexNo = 0  # Keeps track of which traceroute hop value is currently being transmitted
                                             # in the isptest header (in RtpGenerator.generateIsptestHeader()
 
+        self.isptestHeaderMessageIndex = 0 # Keeps track of which type of message we are sending in the header
+        self.noOfMessageTypes = 4 # The current message types are:
+                                    # 0 Traceroute
+                                    # 1 private LAN Address of the local interface used for transmitting
+                                    # 2 The 'public' destination address
+                                    # 3 The current version of isptest
+
         self.uiInstance = uiInstance   # This allows access to the methods of the UI class
+        # Query the routing table to determine the address of the Ethernet interface that will be used to transmit
+        self.SRC_IP_ADDR = Utils.get_ip(self.UDP_TX_IP)
+        Utils.Message.addMessage("Transmitting from " + str(self.SRC_IP_ADDR))
+
         # Attempt to set the friendly name from the optional supplied kwargs
         try:
             # If name supplied
@@ -2144,11 +2182,35 @@ class RtpGenerator(object):
         # Generate the 'isptest' header
         # Header currently consists of 19 bytes of data NOTE. This is defined in RtpGenerator.getIsptestHeaderSize():
         # [uniqueValue(David's birthday)(short, 2 bytes)
+        # plus....
         # [byte1] Message type (0: Traceroute)
         # [byte2] Hop no
         # [byte3] Total no of hops
         # [byte4][byte5][byte6][byte7] Hop id address octets
         # [friendlyName] 10 bytes
+
+        # OR
+        # [byte1] Message type (1: SRC IP address (the local LAN address of the transmitting machine)
+        #         # [byte2] 0/not used
+        #         # [byte3] 0/not used
+        #         # [byte4][byte5][byte6][byte7] local ip address octets
+        #         # [friendlyName] 10 bytes
+
+        # OR
+        # [byte1] Message type (2: DST IP address) (the destination PUBLIC address that the transmitter is sending to)
+        #         # [byte2] 0/not used
+        #         # [byte3] 0/not used
+        #         # [byte4][byte5][byte6][byte7] dest ip address octets
+        #         # [friendlyName] 10 bytes
+
+        # OR
+        # [byte1] Message type (3: Transmitter isptest version no.
+        #         # [byte2] major version no
+        #         # [byte3] minor version no
+        #         # [byte4][byte5][byte6][byte7] all 0/not used
+        #         # [friendlyName] 10 bytes
+
+
 
         header = b""  # Specify byte string
         # Initialise messageData to zero
@@ -2157,48 +2219,115 @@ class RtpGenerator(object):
         try:
             # Note: a short is 16 bits - max value 65535
             uniqueValue = RtpGenerator.UNIQUE_ID_FOR_ISPTEST_STREAMS & 0xFFFF
-            # Get copy of tracerouteHopsList[]
-            tracerouteHopsList = self.getTraceRouteHopsList()
-            # Transmit each element of the self.tracerouteHopsList sequentially (as a carousel)
-            if len(tracerouteHopsList) > 0:
-                try:
+            # Test what type of message we are scheduled to send
+            if self.isptestHeaderMessageIndex == 0:
+                # This is traceroute message - Get copy of tracerouteHopsList[]
+                tracerouteHopsList = self.getTraceRouteHopsList()
+                # Transmit each element of the self.tracerouteHopsList sequentially (as a carousel)
+                if len(tracerouteHopsList) > 0:
+                    try:
+                        messageData = [0 & 0xFF,  # Message type 0: traceroute
+                                       self.tracerouteCarouselIndexNo & 0xFF,  # Traceroute Hop no
+                                       len(tracerouteHopsList) & 0xFF,  # # Traceroute total no of hops
+                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][0] & 0xFF,  # IP address octet 1
+                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][1] & 0xFF,  # IP address octet 2
+                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][2] & 0xFF,  # IP address octet 3
+                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][3] & 0xFF]  # IP address octet 4
+                        # Now increment the carousel index so that the next hop value will be transmitted the next time this
+                        # method is called
+                        self.tracerouteCarouselIndexNo += 1
+
+                    except Exception as e:
+                        Utils.Message.addMessage("DBUG: RtpGenerator.generateIsptestHeader():tracerouteHopsList[] " + str(e))
+                else:
+                    # Create a dummy traceroute message
                     messageData = [0 & 0xFF,  # Message type 0: traceroute
-                                   self.tracerouteCarouselIndexNo & 0xFF,  # Traceroute Hop no
-                                   len(tracerouteHopsList) & 0xFF,  # # Traceroute total no of hops
-                                  tracerouteHopsList[self.tracerouteCarouselIndexNo][0] & 0xFF,  # IP address octet 1
-                                  tracerouteHopsList[self.tracerouteCarouselIndexNo][1] & 0xFF,  # IP address octet 2
-                                  tracerouteHopsList[self.tracerouteCarouselIndexNo][2] & 0xFF,  # IP address octet 3
-                                  tracerouteHopsList[self.tracerouteCarouselIndexNo][3] & 0xFF]  # IP address octet 4
-                    # Now increment the carousel index so that the next hop value will be transmitted the next time this
-                    # method is called
-                    self.tracerouteCarouselIndexNo += 1
+                                   0 & 0xFF,  # Traceroute Hop no
+                                   0 & 0xFF,  # Traceroute total no of hops
+                                   0 & 0xFF,  # IP address octet 1
+                                   0 & 0xFF,  # IP address octet 2
+                                   0 & 0xFF,  # IP address octet 3
+                                   0 & 0xFF]  # IP address octet 4
 
+                # Bounds check tracerouteCarouselIndexNo
+                if self.tracerouteCarouselIndexNo > (len(tracerouteHopsList) - 1):
+                    # Reset the carousel value
+                    self.tracerouteCarouselIndexNo = 0
+
+            elif self.isptestHeaderMessageIndex == 1:
+                # This is a 'local adapter IP address' message
+                localAddr = str(self.SRC_IP_ADDR).split(".") # Seperate out the address octets into a list
+                try:
+                    # Create the message data
+                    messageData = [1 & 0xFF,  # Message type 1: src (local) ip address
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   int(localAddr[0]) & 0xFF,  # IP address octet 1
+                                   int(localAddr[1]) & 0xFF,  # IP address octet 2
+                                   int(localAddr[2]) & 0xFF,  # IP address octet 3
+                                   int(localAddr[3]) & 0xFF]  # IP address octet 4
                 except Exception as e:
-                    Utils.Message.addMessage("DBUG: RtpGenerator.generateIsptestHeader():tracerouteHopsList[] " + str(e))
-            else:
-                # Create a dummy traceroute message
-                messageData = [0 & 0xFF,  # Message type 0: traceroute
-                               0 & 0xFF,  # Traceroute Hop no
-                               0 & 0xFF,  # Traceroute total no of hops
-                               0 & 0xFF,  # IP address octet 1
-                               0 & 0xFF,  # IP address octet 2
-                               0 & 0xFF,  # IP address octet 3
-                               0 & 0xFF]  # IP address octet 4
+                    messageData = [1 & 0xFF,  # Message type 0: traceroute
+                                   0 & 0xFF,  # Traceroute Hop no
+                                   0 & 0xFF,  # Traceroute total no of hops
+                                   0 & 0xFF,  # IP address octet 1
+                                   0 & 0xFF,  # IP address octet 2
+                                   0 & 0xFF,  # IP address octet 3
+                                   0 & 0xFF]  # IP address octet 4
+                    Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx local adapter addr " + str(e))
 
-            # Bounds check tracerouteCarouselIndexNo
-            if self.tracerouteCarouselIndexNo > (len(tracerouteHopsList) - 1):
-                # Reset the carousel value
-                self.tracerouteCarouselIndexNo = 0
+            elif self.isptestHeaderMessageIndex == 2:
+                # This is a 'destination IP address' message
+                destAddr = str(self.UDP_TX_IP).split(".") # Seperate out the address octets into a list
+                try:
+                    # Create the message data
+                    messageData = [2 & 0xFF,  # Message type 1: src (local) ip address
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   int(destAddr[0]) & 0xFF,  # IP address octet 1
+                                   int(destAddr[1]) & 0xFF,  # IP address octet 2
+                                   int(destAddr[2]) & 0xFF,  # IP address octet 3
+                                   int(destAddr[3]) & 0xFF]  # IP address octet 4
+                except Exception as e:
+                    messageData = [2 & 0xFF,  # Message type 2: destination addr
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # IP address octet 1
+                                   0 & 0xFF,  # IP address octet 2
+                                   0 & 0xFF,  # IP address octet 3
+                                   0 & 0xFF]  # IP address octet 4
+                    Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx dest addr " + str(e))
+
+            elif self.isptestHeaderMessageIndex == 3:
+                # This is 'isptest version' message
+                try:
+                    # Split the version no into a major and minor part
+                    version = str(Registry.version).split('.')
+                    messageData = [3 & 0xFF,  # Message type 3: Destination addr
+                                   int(version[0]) & 0xFF,  # Major version no
+                                   int(version[1]) & 0xFF,  # Minor version no
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF]  # not used
+                except Exception as e:
+                    messageData = [3 & 0xFF,  # Message type 3: Destination addr
+                                   0 & 0xFF,  # Major version no
+                                   0 & 0xFF,  # Minor version no
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF]  # not used
+                    Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx version info " + str(e))
+
+            # Now That the message data list has been created, increment the message type index
+            self.isptestHeaderMessageIndex += 1
+            # Bounds check isptestHeaderMessageIndex
+            if self.isptestHeaderMessageIndex >=self.noOfMessageTypes:
+                self.isptestHeaderMessageIndex = 0
+
+
             # Now assemble the header
-            # # Create a dummy traceroute message
-            # messageData = [0 & 0xFF,  # Message type 0: traceroute
-            #                1 & 0xFF,  # Traceroute Hop no
-            #                1 & 0xFF,  # Traceroute total no of hops
-            #                10 & 0xFF,  # IP address octet 1
-            #                20 & 0xFF,  # IP address octet 2
-            #                30 & 0xFF,  # IP address octet 3
-            #                40 & 0xFF]  # IP address octet 4
-
             header = struct.pack("!HBBBBBBB", uniqueValue, messageData[0], messageData[1], messageData[2], \
                                  messageData[3], messageData[4], messageData[5], messageData[6])
 
@@ -2659,7 +2788,8 @@ class RtpGenerator(object):
                 rtpStreamResults.setTraceRouteHopsList(self.getTraceRouteHopsList())
 
             except Exception as e:
-                Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
+                # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
+                pass
             time.sleep(0.5)
         Utils.Message.addMessage("DBUG:__tracerouteThread ending for stream " + str(self.syncSourceIdentifier))
 

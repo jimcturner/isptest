@@ -16,13 +16,15 @@ def dtstrft(timeDelta):
 
     return str(hours).zfill(2)+":"+str(minutes).zfill(2)+":"+str(seconds).zfill(2)
 
-# Returns the IP address of the network interface currently used as the default route to the internet
-def get_ip():
+# Returns the IP address of the network interface currently used as the default route to the internet (if no args supplied)
+# Alternatively, for a supplied ip address, it will return ip address of the interface that, according to the OS
+# routing table will be used to send from.
+def get_ip(ipAddrToTest = '10.255.255.255'):
     # Lifted from here https://stackoverflow.com/questions/166506/finding-local-ip-addresses-using-pythons-stdlib
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
         # doesn't even have to be reachable
-        s.connect(('10.255.255.255', 1))
+        s.connect((ipAddrToTest, 1))
         IP = s.getsockname()[0]
     except:
         IP = '127.0.0.1'
