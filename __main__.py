@@ -2931,15 +2931,18 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # Now signal to the UI object that there is a problem
             maxWidth = 70
             Utils.Message.addMessage("DBUG:__receiveRtpThread(): calling UI.showFatalErrorDialogue()")
-            errorText = str("UDP Listen port (" + str(UDP_RX_PORT) + ") already in use by another program").center(maxWidth) + \
-                        "\n" + "(eg vlc, or a different instance of isptest?)".center(maxWidth) + \
-                        "\n\n" + "Please restart the app using a different port, or else close".center(maxWidth) + \
-                        "\n" + "the other application".center(maxWidth) + \
-                        "\n\n" + "TIP: To query what's listening on ports already, run the following:".center(maxWidth) +\
-                        "\n" +"Linux: 'netstat -lnup'".center(maxWidth) + \
-                        "\n" + "OSX: 'lsof -nP | grep UDP'".center(maxWidth) + \
-                        "\n" + "Windows: 'netstat -an | find \"UDP\"'".center(maxWidth) + \
-                        "\n\n" + "<Press any key to continue>".center(maxWidth)
+            errorText =  textwrap.fill(str(e), width=maxWidth) +\
+                    "\n\n" + str("This error is most likely due to the UDP Listen port (" + str(UDP_RX_PORT) + ")").center(maxWidth) +\
+                    "\n" + "already in use (eg. by vlc, or another instance of isptest?)".center(maxWidth) +\
+                    "\n" + "You must exit this app and either restart it using a different port,".center(maxWidth) +\
+                    "\n" + "or else shut down the competing application first, and then restart".center(maxWidth) +\
+                    "\n\n" + "TIP: To query what's listening on ports already, run the following:".center(maxWidth) + \
+                    "\n" + "Linux: 'netstat -lnup'".center(maxWidth) + \
+                    "\n" + "OSX: 'lsof -nP | grep UDP'".center(maxWidth) + \
+                    "\n" + "Windows: 'netstat -an | find \"UDP\"'".center(maxWidth) + \
+                    "\n\n" + "<Press any key to continue>".center(maxWidth)
+
+
             uiInstance.showErrorDialogue("Network Error", errorText)
             # Cause thread to end by breaking out of while loop
             break
