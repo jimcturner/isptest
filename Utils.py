@@ -33,12 +33,20 @@ def get_ip(ipAddrToTest = '10.255.255.255'):
     return IP
 
 # Returns a string listing the names of the currently running threads
-def listCurrentThreads():
+# if asList = True, will return as a list of strings
+def listCurrentThreads(asList = False):
     activeThreads = threading.enumerate()
-    s = ""
-    for x in activeThreads:
-        s += str(x.getName()) + ", "
-    return s
+    if asList is False:
+        s = ""
+        for x in activeThreads:
+            s += str(x.getName()) + ", "
+        return s
+    else:
+        threadsList =[]
+        for thread in activeThreads:
+            threadsList.append(thread.getName())
+        return threadsList
+
 
 
 # This function will break a string into a list of tuples containing smaller strings (portions).

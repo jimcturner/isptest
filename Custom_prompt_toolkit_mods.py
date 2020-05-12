@@ -97,7 +97,7 @@ def multi_input_dialog(
         textArea = TextArea(multiline=False,
                     password=password,
                     completer=completer,
-                    accept_handler=accept, focus_on_click=True, text=textField[1])
+                    accept_handler=accept, focus_on_click=False, text=textField[1])
         textAreas.append(textArea)
         # Append label object to the userFields[] list
         userFields.append(Label(text=textField[0], dont_extend_height=True))

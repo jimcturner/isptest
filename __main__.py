@@ -2131,6 +2131,9 @@ class UI(object):
         maxLines = termH - 20
         # Get help table contents from Registry
         tableContents = Registry.helpTableContents
+
+        # Create some debug information
+
         # Now actually display the paged table list
         title = "Help"
         footer = ["", "[<][>]page, [h]exit"]
