@@ -15,7 +15,7 @@ class Registry(object):
     tracerouteMaxHops = 28 # The maximum no of hops traceroute will consider before resetting
     tracerouteFallbackUDPDestPort = 33434 # The 'fallback' port used by the RtpGenerator.traceroute thread if no reply
                                             # is received from a host
-    messageLogFilename = "log.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
+    messageLogFilename = "isptest_log.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
     # Provides content for the help popup
     helpTableContents = [["h","Display/hide this page"],
                          ["Ctrl-C", "Quit the application"],
