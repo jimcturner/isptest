@@ -2130,10 +2130,25 @@ class UI(object):
         # Calculate the maximum no. of lines that will fit within the table, given the terminal height
         maxLines = termH - 20
         # Get help table contents from Registry
+
         tableContents = Registry.helpTableContents
 
-        # Create some debug information
+        # Create some debug information to append to the end of the help list
+        debugInfo = [["",""],["Debug info",""]]
+        try:
+            # Get list of running threads
+            runningThreads = Utils.listCurrentThreads(asList=True)
+            # runningThreads = ["cake"]
+            # Now format the running threads list (by adding a column to each list event, in order to fit the help table)
+            if len(runningThreads) > 0:
+                debugInfo.append(["Running Threads..", str(len(runningThreads))])
+                for thread in runningThreads:
+                     debugInfo.append(["",thread])
+        except Exception as e:
+            Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
 
+        # append the two lists to create a single list
+        tableContents = Registry.helpTableContents + debugInfo
         # Now actually display the paged table list
         title = "Help"
         footer = ["", "[<][>]page, [h]exit"]
