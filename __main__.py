@@ -2129,9 +2129,6 @@ class UI(object):
         termW, termH = Term.getTerminalSize()
         # Calculate the maximum no. of lines that will fit within the table, given the terminal height
         maxLines = termH - 20
-        # Get help table contents from Registry
-
-        tableContents = Registry.helpTableContents
 
         # Create some debug information to append to the end of the help list
         debugInfo = [["",""],["Debug info",""]]
@@ -2147,6 +2144,7 @@ class UI(object):
         except Exception as e:
             Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
 
+        # Get help table contents from Registry
         # append the two lists to create a single list
         tableContents = Registry.helpTableContents + debugInfo
         # Now actually display the paged table list
