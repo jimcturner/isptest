@@ -736,7 +736,15 @@ class UI(object):
                        ["1S \nmean", "jitter_mean_1S_uS"]
                        ], self.streamResultsDataSet])
 
-        # views.append(["Misc",
+        self.views.append(["NAT",
+                      [["#", 0],  # Used as an index[]
+                       ["Tx Local address", "stream_transmitter_localAddress"],
+                       ["Tx Natted address", "stream_srcAddress"],
+                       ["Rx Public address", "stream_transmitter_destAddress"],
+                       ["Rx Local address", "stream_rxAddress"]
+                       ],self.streamResultsDataSet])
+
+        # self.views.append(["Misc",
         #               [["#", 0],  # Used as an index[]
         #                ["", ""],
         #                ["", ""],
@@ -744,7 +752,7 @@ class UI(object):
         #                ["", ""],
         #                ["", ""],
         #                ["", ""],
-        #                ],DATASET_TO_DISPLAY,ROW_SELECTOR])
+        #                ],DATASET_TO_DISPLAY])
 
         # Stores the most recent message - used to determine whether we need to redraw the message table
         self.lastMessageAdded = ""
