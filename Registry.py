@@ -27,3 +27,6 @@ class Registry(object):
                          ]
     # Getting false positives at the moment (because the CPU can keep up!) so creating lots of unhelpful events
     allowProcessorOverloadEventGeneration = False
+    ######### RtpReceiveStream
+    lossOfStreamAlarmThreshold_s = 5 # Specifies how long before a loss of stream Event is triggered by RtpReceiveStream
+    streamIsDeadThreshold_s = 30 # Specifies how long to wait with no incoming rtp packets before a stream is presumed dead

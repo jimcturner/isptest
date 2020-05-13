@@ -787,17 +787,17 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["jitter_mean_time_between_excess_jitter_events"] = datetime.timedelta()
         self.sumOfTimeElapsedSinceLastExcessJitterEvents = datetime.timedelta()
 
-        # Initially, __CalculateThread loop will execute every 10mS (but will then be modified dynamically
+        # Initially, __CalculateThread loop will execute every 1mS (but will then be modified dynamically
         # based on the packet Rx period)
-        self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL = 0.01
+        self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL = 0.001
         self.__stats["calculate_thread_sampling_interval_S"] = self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL
 
         # Amount of time to elapse before a lossOfStream alarm event is triggered
-        self.lossOfStreamAlarmThreshold_s = 1
+        self.lossOfStreamAlarmThreshold_s = Registry.lossOfStreamAlarmThreshold_s
 
         # Amount of time to elapse before a stream is believed completely dead (and automatically
         # destroyed)
-        self.streamIsDeadThreshold_s = 30
+        self.streamIsDeadThreshold_s = Registry.streamIsDeadThreshold_s
         # Create a flag to signal when the stream is believed dead (is therefore scheduled to delete itself)
         self.believedDeadFlag = False
 
