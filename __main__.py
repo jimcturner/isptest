@@ -738,10 +738,12 @@ class UI(object):
 
         self.views.append(["NAT",
                       [["#", 0],  # Used as an index[]
-                       ["Tx Local address", "stream_transmitter_localAddress"],
-                       ["Tx Natted address", "stream_srcAddress"],
-                       ["Rx Public address", "stream_transmitter_destAddress"],
-                       ["Rx Local address", "stream_rxAddress"]
+                       ["src\nport", "stream_transmitter_local_srcPort"],
+                       ["Tx Local addr", "stream_transmitter_localAddress"],
+                       ["Tx Natted addr", "stream_srcAddress"],
+                       ["src\nport", "stream_srcPort"],
+                       ["Rx Public addr", "stream_transmitter_destAddress"],
+                       ["Rx Local addr", "stream_rxAddress"]
                        ],self.streamResultsDataSet])
 
         # self.views.append(["Misc",

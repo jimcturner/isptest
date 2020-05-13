@@ -674,6 +674,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_rxAddress"] = rxAddress
         self.__stats["stream_rxPort"] = rxPort
         self.__stats["stream_transmitter_localAddress"] = "" # Will be populated by incoming isptest header data
+        self.__stats["stream_transmitter_local_srcPort"] = 0  # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_destAddress"] = "" # Will be populated by incoming isptest header data
         self.__stats["stream_transmitterVersion"] = 0
         Utils.Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
@@ -1130,7 +1131,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                 self.updateTraceRouteHopsList(hopNo, noOfHops, isptestHeaderData[4:])
 
             elif isptestHeaderData[1] == 1:
-                # This is a message containing the transmitter local address
+                # This is a message containing the transmitter local address and also the UDP src port of the tx'd packets
+                # Regenerate the 16bit UDP source port value from bytes 2 (the MSB) and 3 (the LSB)
+                self.__stats["stream_transmitter_local_srcPort"] = (isptestHeaderData[2] << 8) | isptestHeaderData[3]
                 # Create a an IP address string from the seperate octets
                 self.__stats["stream_transmitter_localAddress"] = str(isptestHeaderData[4]) + "." + \
                                                                   str(isptestHeaderData[5]) + "." + \
@@ -1435,14 +1438,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                 #  Finally, remove this RtpStream object from the dictionary
                 try:
                     if (datetime.datetime.now() - self.__stats["packet_last_seen_received_timestamp"]) > \
-                            datetime.timedelta(seconds = self.streamIsDeadThreshold_s):
+                            datetime.timedelta(seconds=self.streamIsDeadThreshold_s):
                         # Set the 'to be deleted' flag
                         self.believedDeadFlag = True
 
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR: RtpStream.__calc..Thread. Testing for dead receive stream: " + str(e))
-
 
 
             # Calculate how long it has taken for the stats analysis to have been performed
@@ -2188,8 +2190,8 @@ class RtpGenerator(object):
 
         # OR
         # [byte1] Message type (1: SRC IP address (the local LAN address of the transmitting machine)
-        #         # [byte2] 0/not used
-        #         # [byte3] 0/not used
+        #         # [byte2] src port (MSB)
+        #         # [byte3] src port (LSB)
         #         # [byte4][byte5][byte6][byte7] local ip address octets
         #         # [friendlyName] 10 bytes
 
@@ -2252,21 +2254,23 @@ class RtpGenerator(object):
                     self.tracerouteCarouselIndexNo = 0
 
             elif self.isptestHeaderMessageIndex == 1:
-                # This is a 'local adapter IP address' message
+                # This is a 'local adapter IP address and src port' message
                 localAddr = str(self.SRC_IP_ADDR).split(".") # Seperate out the address octets into a list
+                srcPortMSB = self.UDP_TX_SRC_PORT >> 8  # Isolate the top byte of the source port
+                srcPortLSB = self.UDP_TX_SRC_PORT & 0xFF # Isolate the bottom byte of the source port
                 try:
                     # Create the message data
                     messageData = [1 & 0xFF,  # Message type 1: src (local) ip address
-                                   0 & 0xFF,  # not used
-                                   0 & 0xFF,  # not used
+                                   srcPortMSB & 0xFF,  # Top byte (MSB) of the source port
+                                   srcPortLSB & 0xFF,  # Bottom byte (LSB) of the source port
                                    int(localAddr[0]) & 0xFF,  # IP address octet 1
                                    int(localAddr[1]) & 0xFF,  # IP address octet 2
                                    int(localAddr[2]) & 0xFF,  # IP address octet 3
                                    int(localAddr[3]) & 0xFF]  # IP address octet 4
                 except Exception as e:
                     messageData = [1 & 0xFF,  # Message type 0: traceroute
-                                   0 & 0xFF,  # Traceroute Hop no
-                                   0 & 0xFF,  # Traceroute total no of hops
+                                   0 & 0xFF,  # Top byte (MSB) of the source port
+                                   0 & 0xFF,  # Bottom byte (LSB) of the source port
                                    0 & 0xFF,  # IP address octet 1
                                    0 & 0xFF,  # IP address octet 2
                                    0 & 0xFF,  # IP address octet 3
