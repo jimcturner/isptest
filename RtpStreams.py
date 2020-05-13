@@ -1701,6 +1701,9 @@ class ResultsTransmitter(object):
                                     # The corresponding RtpReceiveStream.__calculateThread() will enable it,
                                     # if approproate
 
+        self.sendtoErrorCounter = 0 # Count's the no. of socket.sendto() errors
+        self.sendtoErrorCounterThreshold = 10 # No of consecutive socket.sendto() errors that the thread will
+                                            # tolerate before it gives up
 
         # Get the destination addr and src port from the supplied rtpStream object
         self.syncSource, self.destAddr, self.destPort, self.friendlyName =\
@@ -1765,17 +1768,17 @@ class ResultsTransmitter(object):
                             txMessage = pickle.dumps(fragment,protocol=2)
                             # Utils.Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
                             self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
-
+                            # clear the socket.sendto() error counter
+                            self.sendtoErrorCounter = 0
 
                     except Exception as e:
-                        try:
-                            # For Python3 (which has the id() function)
-                            Utils.Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(id(self.udpSocket)))
-                        except:
-                            # For Python2 which doesn't
-                            Utils.Message.addMessage("ERR:__resultsTransmitterThread sendto() " + str(self.udpSocket))
-                        finally:
-                            Utils.Message.addMessage("ERR: __resultsTransmitterThread. Killing object for stream: " + str(self.syncSource))
+                        Utils.Message.addMessage("ERR:__resultsTransmitterThread sendto() socket id:" + str(id(self.udpSocket)) +", " + str(e))
+                        # Test to see if we've exceeeded the no of tolerable socket errors
+                        if self.sendtoErrorCounter >= self.sendtoErrorCounterThreshold:
+                            Utils.Message.addMessage("__resultsTransmitterThread. socket.sendto() error threshold exceeded (" +
+                                                     str(self.sendtoErrorCounterThreshold) +\
+                                                        "). Killing object for stream: " + str(self.syncSource))
+                            # Now kill the object itself
                             self.kill()
 
                 else:
