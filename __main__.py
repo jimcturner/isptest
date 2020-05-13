@@ -2140,13 +2140,14 @@ class UI(object):
 
         # Create some debug information to append to the end of the help list
         debugInfo = [["",""],["Debug info",""]]
+        debugInfo.append(["Process ID ", str(os.getpid())])
         try:
             # Get list of running threads
             runningThreads = Utils.listCurrentThreads(asList=True)
             # runningThreads = ["cake"]
             # Now format the running threads list (by adding a column to each list event, in order to fit the help table)
             if len(runningThreads) > 0:
-                debugInfo.append(["Running Threads..", str(len(runningThreads))])
+                debugInfo.append(["Threads..", str(len(runningThreads))])
                 for thread in runningThreads:
                      debugInfo.append(["",thread])
         except Exception as e:
