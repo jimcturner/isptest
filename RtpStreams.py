@@ -532,9 +532,9 @@ class RtpReceiveCommon(object):
                    " running in " + str(getOperationMode()) + " mode at " +\
             datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
         streamIPDetails = \
-            str(stats["stream_srcPort"]) + ":" + str(stats["stream_transmitter_localAddress"]) +\
-            "(" + str(stats["stream_srcAddress"]) + ")" + " ---> " +\
-            "(" + str(stats["stream_transmitter_destAddress"]) + ")" + str(stats["stream_rxAddress"]) + ":" +\
+            str(stats["stream_transmitter_local_srcPort"]) + ":" + str(stats["stream_transmitter_localAddress"]) +\
+            "(" + str(stats["stream_srcAddress"]) + ")" + " ---> " + "(" + str(stats["stream_srcPort"]) + ":" +\
+            str(stats["stream_transmitter_destAddress"]) + ")" + str(stats["stream_rxAddress"]) + ":" +\
             str(stats["stream_rxPort"]) + "\r\n" + \
             "Packet size: " + str(stats["packet_payload_size_mean_1S_bytes"]) + " bytes" + \
             ", Bitrate: " + str(Utils.bToMb(8 * stats["packet_data_received_1S_bytes"])) + "bps" + "\r\n"
