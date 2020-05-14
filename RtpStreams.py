@@ -574,7 +574,7 @@ class RtpReceiveCommon(object):
             str(stats["stream_transmitter_destAddress"]) + ")" + str(stats["stream_rxAddress"]) + ":" +\
             str(stats["stream_rxPort"]) + "\r\n" + \
             "Packet size: " + str(stats["packet_payload_size_mean_1S_bytes"]) + " bytes" + \
-            ", Bitrate: " + str(Utils.bToMb(8 * stats["packet_data_received_1S_bytes"])) + "bps" + "\r\n"
+            ", Received bitrate: " + str(Utils.bToMb(8 * stats["packet_data_received_1S_bytes"])) + "bps" + "\r\n"
 
         labelWidth = 33
         streamPerformance = \
