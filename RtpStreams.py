@@ -588,13 +588,10 @@ class RtpReceiveCommon(object):
                 Utils.dtstrft(stats["glitch_mean_time_between_glitches"])) + "\r\n"
         worstGlitchesListAsString = "Worst Glitches:\r\n"
 
-        if len(worstGlitchesList) > 0:
-            try:
-                # Generate list of the worst glitches
-                for glitch in worstGlitchesList:
-                    worstGlitchesListAsString += str(glitch) + "\r\n"
-            except Exception as e:
-                Utils.Message.addMessage("ERR: RtpReceiveCommon.generateReport() compile worst glitches list: " + str(e))
+
+        if len(stats["glitch_worst_glitches_list"]) > 0:
+            for glitch in stats["glitch_worst_glitches_list"]:
+                worstGlitchesListAsString += str(glitch) + "\r\n"
 
         else:
             worstGlitchesListAsString += "No glitches to report\r\n"
@@ -766,6 +763,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["glitch_packets_lost_per_glitch_min"] = 0
         self.__stats["glitch_packets_lost_per_glitch_max"] = 0
         self.__stats["glitch_counter_total_glitches"] = 0
+        self.__stats["glitch_worst_glitches_list"] = [] # A maintained list of the summaries of the top n worst glitches
 
         # Keeps a count of all events recorded against this RtpReceiveStream
         self.__stats["stream_all_events_counter"] = 0
@@ -1048,9 +1046,10 @@ class RtpReceiveStream(RtpReceiveCommon):
             if latestGlitch.glitchLength > self.__stats["glitch_max_glitch_duration"]:
                 self.__stats["glitch_max_glitch_duration"] = latestGlitch.glitchLength
 
-            # Add the glitch to the worstGlitches leaderboard
+            # Add the glitch to the worstGlitches leaderboard Where it will be analysed to see if it's in the top 'n')
             self.addToWorstGlitchesList(latestGlitch)
-
+            # Get a text version of the worst glitches, and copy to the __stats[] dict
+            self.__stats["glitch_worst_glitches_list"] = self.getWorstGlitches(returnSummaries=True)
 
         # Inhibit immediate jitter-event triggering by setting self.__stats["jitter_time_of_last_excess_jitter_event"]
         # to the current time
