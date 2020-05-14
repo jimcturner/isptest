@@ -3255,7 +3255,7 @@ def main(argv):
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
             if opt == '-h':
-                print ("Version 1.1\r")
+                print ("isptest Version " + str(Registry.version) + "\r")
                 print ("options are:\r")
                 print ("-h: help (this message)\r")
                 print ("-x: loopback mode\r")

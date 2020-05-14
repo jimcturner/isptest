@@ -458,10 +458,13 @@ class RtpReceiveCommon(object):
             # Return a list of text strings containing summaries of the glitch event
             glitchSummariesList = []
             for glitch in worstGlitchesList:
-                glitchSummariesList.append(glitch.getSummary(includeStreamSyncSourceID=False,
-                                                            includeEventNo=False,
+
+                g = glitch.getSummary(includeStreamSyncSourceID=False,
+                                                            includeEventNo=True,
                                                             includeType=False,
-                                                            includeFriendlyName=False))
+                                                            includeFriendlyName=False)
+                summary = str(g['timeCreated'].strftime("%d/%m %H:%M:%S")) + ", " + str(g['summary'])
+                glitchSummariesList.append(summary)
             return glitchSummariesList
 
     # Populates self.worstGlitchesList
@@ -545,7 +548,7 @@ class RtpReceiveCommon(object):
         # Retrieve the desired event types from the RTP Stream object
         # The '\r\n' escape sequence is required for Windows
         eventsList = self.getRTPStreamEventList(filterList=eventFilterList)
-        worstGlitchesList = self.getWorstGlitches()
+        worstGlitchesList = self.getWorstGlitches(returnSummaries=True)
         tracerouteHopsList = self.getTraceRouteHopsList()
 
         # Simple local function to determine the current operation mode based on the type of 'this' object instance
@@ -583,19 +586,13 @@ class RtpReceiveCommon(object):
             "Mean glitch dur: ".rjust(labelWidth) + str(Utils.dtstrft(stats["glitch_mean_glitch_duration"])) + "\r\n" + \
             "Mean interval between glitches: ".rjust(labelWidth) + str(
                 Utils.dtstrft(stats["glitch_mean_time_between_glitches"])) + "\r\n"
-        worstGlitchesListAsString = "Worst Glitch:\r\n"
+        worstGlitchesListAsString = "Worst Glitches:\r\n"
 
         if len(worstGlitchesList) > 0:
             try:
                 # Generate list of the worst glitches
                 for glitch in worstGlitchesList:
-                    glitchDetails = glitch.getSummary(includeStreamSyncSourceID=False,
-                                                            includeEventNo=False,
-                                                            includeType=False,
-                                                            includeFriendlyName=False)
-                    worstGlitchesListAsString += \
-                        str(glitchDetails['timeCreated'].strftime("%d/%m %H:%M:%S")) + \
-                        ", " + str(glitchDetails['summary']) + "\r\n"
+                    worstGlitchesListAsString += str(glitch) + "\r\n"
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpReceiveCommon.generateReport() compile worst glitches list: " + str(e))
 
