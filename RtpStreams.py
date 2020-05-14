@@ -446,11 +446,45 @@ class RtpReceiveCommon(object):
         self.tracerouteHopsListMutex = threading.Lock()
 
     # Thread-safe method to return a list of the worst glitches
-    def getWorstGlitches(self):
+    # If returnSummaries is True, will return a list of summary strings. Otherwise will return a list of events
+    def getWorstGlitches(self, returnSummaries = False):
         self.worstGlitchesMutex.acquire()
         worstGlitchesList = deepcopy(self.worstGlitchesList)
         self.worstGlitchesMutex.release()
-        return worstGlitchesList
+        if returnSummaries is False:
+            # Default behaviour, return a list of events
+            return worstGlitchesList
+        else:
+            # Return a list of text strings containing summaries of the glitch event
+            glitchSummariesList = []
+            for glitch in worstGlitchesList:
+                glitchSummariesList.append(glitch.getSummary(includeStreamSyncSourceID=False,
+                                                            includeEventNo=False,
+                                                            includeType=False,
+                                                            includeFriendlyName=False))
+            return glitchSummariesList
+
+    # Populates self.worstGlitchesList
+    # It will also maintain a top ten list of the worst glitches so far
+    def addToWorstGlitchesList(self, glitch):
+        # Specify the length of the 'glitch wall of shame' leaderboard
+        listLength = 10
+        # First, get a local copy of the glitches list
+        worstGlitchesList = []
+        worstGlitchesList = self.getWorstGlitches()
+        # Append the latest glitch to the local copy of the list
+        worstGlitchesList.append(glitch)
+        # Now sort the list, based on glitch.packetsLost parameter in descending order
+        worstGlitchesList.sort(key=lambda x: x.packetsLost, reverse=True)
+        # Trim off any excess list entries beyond that specified by listLength
+        if len(worstGlitchesList) > listLength:
+            # Remove the last element of the list
+            worstGlitchesList.pop()
+        # Copy the sorted list back into the instance variable
+        self.worstGlitchesMutex.acquire()
+        self.worstGlitchesList = deepcopy(worstGlitchesList)
+        self.worstGlitchesMutex.release()
+
 
     # Thread-safe method to return a list of the traceroute hops
     def getTraceRouteHopsList(self):
@@ -1016,13 +1050,9 @@ class RtpReceiveStream(RtpReceiveCommon):
 
             if latestGlitch.glitchLength > self.__stats["glitch_max_glitch_duration"]:
                 self.__stats["glitch_max_glitch_duration"] = latestGlitch.glitchLength
-                # add the new 'worst glitch' to the worstGlitches[] list
-                try:
-                    # This will fail if the worstGlitchesList is empty
-                    self.worstGlitchesList[0] = latestGlitch
-                except:
-                    Utils.Message.addMessage("DBUG: RtpReceiveStream.__updateGlitchStats() Update self.worstGlitchesList")
-                    self.worstGlitchesList.append(latestGlitch)
+
+            # Add the glitch to the worstGlitches leaderboard
+            self.addToWorstGlitchesList(latestGlitch)
 
 
         # Inhibit immediate jitter-event triggering by setting self.__stats["jitter_time_of_last_excess_jitter_event"]
