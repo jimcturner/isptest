@@ -85,6 +85,7 @@ from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
 from prompt_toolkit.styles import Style
 import pyperclip
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
+from ipwhois import IPWhois
 # Additional experimental libraries
 
 
@@ -3132,6 +3133,66 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     Utils.Message.addMessage("DBUG:__receiveRTPThread exiting")
     # print("__receiveRTPThread exiting\r")
 
+# This class continually monitors the getTraceRouteHopsList() method of an Rtp transmit/receive/results object
+# and quietly queries the IP address it finds in the background.
+# It then provides a dictionary where the IP addresses are the Keys and domnain names are the values.
+# These can then be used to populate the Traceroute tables/reports
+class WhoisResolver(object):
+    def __init__(self, operationMode, rtpStreamsDict, rtpStreamsDictMutex):
+        self.whoisLookupThreadActive = True
+        # A dictionary to hold the results of the whois query
+        # The key is the IP address, the Value is a tuple ['asn_description', lastAccessedTimestamp, timeCreatedTimestamp]
+        self.whoisCache = {}
+
+        # Create a background thread to do the querying
+        self.whoisLookupThread = threading.Thread(target=self.__whoisLookupThread, args=())
+        self.whoisLookupThread.daemon = False
+        self.whoisLookupThread.setName("__whoisLookupThread")
+        self.whoisLookupThread.start()
+
+
+    # This method queries the internet whois servers to determine thw owner (ASN_Description) of the IP address
+    def __whoisLookup(self, addr):
+        # See here for docs: https://ipwhois.readthedocs.io/en/latest/index.html
+        # Create an IPWhois object
+        obj = IPWhois(addr)
+        # The function for retrieving and parsing whois information for an IP address via port 43
+        ret = obj.lookup_whois()
+
+        # Return the 'autonomous system number description field'
+        try:
+            return ret['asn_description']
+        except:
+            return None
+
+    # Blocking method to cause the object to die (by killing the thread)
+    def kill(self):
+        # Set the flag to false
+        self.whoisLookupThreadActive = False
+        # Block until the thread ends
+        self.whoisLookupThread.join()
+        Utils.Message.addMessage("DBUG:WhoisResolver. whoisLookupThread has ended")
+
+    # This method will query the  whoisCache and return info about the supplied IP address
+    def lookup(self, address):
+        pass
+
+    # This method will examine the lastAccessedTimestamp of the entries in the self.whoIsCache{} dict
+    # and automatically re-check or purge old entries
+    def __houseKeep(self):
+        pass
+
+
+    # Background thread to continually monitor the lists of IP addresses picked up by RtpStream.getTraceRouteHopsList()
+    # and determine the owner of that address
+    #
+    def __whoisLookupThread(self):
+        Utils.Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread started")
+        while self.whoisLookupThreadActive:
+
+
+            time.sleep(0.5)
+        Utils.Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread ending")
 
 ####################################################################################
 
@@ -3181,7 +3242,44 @@ def shutdownApplicationSignalHandler(signum, frame):
 # #####################
 
 def main(argv):
+    # def reverseDNSUsingSCAPY(ipAddr, dnsServer="8.8.8.8"):
+    #     from scapy.layers.inet import IP, UDP
+    #     from scapy.layers.dns import DNS, DNSQR
+    #     from scapy.sendrecv import sr1
+    #     # Reverse the IP address and append .in-addr.arpa
+    #     ipAddr = ipAddr.split('.')
+    #     ipAddr.reverse()
+    #     ipAddr = '.'.join(ipAddr) + ".in-addr.arpa"
+    #
+    #     reply = sr1(IP(dst=dnsServer) / UDP() / DNS(rd=1, qd=DNSQR(qname=ipAddr, qtype='PTR')), timeout=1)
+    #     # reply = sr1(IP(dst="192.168.3.1") / UDP() / DNS(rd=1, qd=DNSQR(qname="8.8.8.8.in-addr.arpa", qtype='PTR')), timeout=1)
+    #     try:
+    #         return reply["DNS"].an.rdata[:-1]
+    #         # return reply.summary()
+    #     except:
+    #         return None
+    # # print(str(reverseDNSUsingSCAPY("132.185.161.1", dnsServer="8.8.8.8"))) # , dnsServer="192.168.3.1"
+    # def reverseDNSUsingDnsPython(ipAddr):
+    #     import dns.reversename, dns.resolver
+    #     # Convert IPv4 and IPv6 addresses to its corresponding DNS reverse map names (backwards, and with ".in-addr.arpa" appended)
+    #     address = dns.reversename.from_address(ipAddr)
+    #     name = dns.resolver.query(address, "PTR")
+    #     return name
+    #
+    # # reply = reverseDNSUsingDnsPython("212.58.231.1")
+    # # for rr in reply:
+    # #     print(str(rr))
 
+
+    # import socket
+    # try:
+    #     # x = socket.gethostbyaddr("90.248.2.233")
+    #     x = socket.gethostbyaddr("212.58.231.1")
+    # except Exception as e:
+    #     x = e
+    #
+    # print(str(x))
+    # exit()
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
 
