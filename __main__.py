@@ -2224,6 +2224,8 @@ class UI(object):
             tableContents = []
             if len(tracerouteHopsList) > 0:
                 tableRow = []
+                whoisNetName = ""
+                hopAddr = ""
                 for hopNo in range(len(tracerouteHopsList)):
                     # Construct a string containing the IP address octets
                     try:
@@ -2233,29 +2235,27 @@ class UI(object):
                                   str(tracerouteHopsList[hopNo][1]) + "." + \
                                   str(tracerouteHopsList[hopNo][2]) + "." + \
                                   str(tracerouteHopsList[hopNo][3])
+                        # Now query the isptest whois cache for the address
+                        whoisResult = WhoisResolver.queryWhoisCache(hopAddr)
+                        if whoisResult is not None:
+                            whoisNetName = whoisResult[0]["netname"]
+
                     except:
                         hopAddr = "Waiting...."
 
-                    # Now do reverse dns lookup to resolve address to a name
-                    # This will have to be done in a seperate thread. Too slow for a UI
-                    # hopName = ""
-                    # try:
-                    #     hopName = str(socket.gethostbyaddr(hopAddr))
-                    # except Exception as e:
-                    #     hopName = str(e)
                     # Create a table row containing the hop no and ip address of the hop
-                    tableRow=[str(hopNo + 1), hopAddr]
+                    tableRow=[str(hopNo + 1), hopAddr, whoisNetName]
                     # Append the table row tuple to the tableContents[] list
                     tableContents.append(tableRow)
                     # Clear the tableRow list ready for next time around the loop
                     tableRow = []
             else:
-                tableContents.append(["", "No traceroute data to display".ljust(50)])
+                tableContents.append(["", "", "No traceroute data to display".ljust(40)])
             # Now actually display the paged table list
             title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ") " +\
                     str(len(tracerouteHopsList)) + " hops"
-            footer = ["", "[<][>]page, [^][v] select stream, [t]exit\nTo save/export, go to [report] page"]
-            self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(50)], tableContents,
+            footer = ["", "", "[<][>]page, [^][v] select stream, [t]exit\nTo save/export, go to [report] page"]
+            self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15), "Whois".ljust(40)], tableContents,
                                    footerRow=footer,
                                    pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
 
@@ -3276,8 +3276,7 @@ class WhoisResolver(object):
     # Once the address has been looked up, it's details will be added to whoisCache{} and thus removed from the
     # pendingQueries{} dict because it has been dealt with
     def __whoisLookupThread(self):
-        print("__whoisLookupThread starting")
-        # Utils.Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread started")
+        Utils.Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread started")
         while self.whoisLookupThreadActive:
             if len(WhoisResolver.pendingQueries) > 0:
                 for address in WhoisResolver.pendingQueries:
@@ -3297,7 +3296,7 @@ class WhoisResolver(object):
 
 
             time.sleep(0.5)
-        # Utils.Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread ending")
+        Utils.Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread ending")
 
 ####################################################################################
 
@@ -3351,29 +3350,29 @@ def main(argv):
     # y=str(x).splitlines()
     # print(y)
     # Create new instance of WhoisResolver
-    whoIsResolver = WhoisResolver()
-    while True:
-        query = whoIsResolver.queryWhoisCache("90.248.2.233")
-        if query is not None:
-            print (query[0]["netname"] + " : " + query[1].strftime("%H%M%S") + " : " + query[2].strftime("%H%M%S"))
-        else:
-            print("waiting")
-        # print ("pending: " + str(WhoisResolver.getPendingQueries()))
-        # print ("whoisCache: " + str(WhoisResolver.getWhoisCache()))
-        time.sleep(1)
+    # whoIsResolver = WhoisResolver()
+    # while True:
+    #     query = whoIsResolver.queryWhoisCache("90.248.2.233")
+    #     if query is not None:
+    #         print (query[0]["netname"] + " : " + query[1].strftime("%H%M%S") + " : " + query[2].strftime("%H%M%S"))
+    #     else:
+    #         print("waiting")
+    #     # print ("pending: " + str(WhoisResolver.getPendingQueries()))
+    #     # print ("whoisCache: " + str(WhoisResolver.getWhoisCache()))
+    #     time.sleep(1)
 
 
-    z = WhoisResolver.whoisLookup("90.248.2.233")
-    if z is not None:
-        for item in z:
-            # print(z["netname"])
-            print (item + ": " + z[item])
-
-    else:
-        print ("nowt found")
-    # for k,v in z.items():
-    #     print(k + ": " + v)
-    exit()
+    # z = WhoisResolver.whoisLookup("90.248.2.233")
+    # if z is not None:
+    #     for item in z:
+    #         # print(z["netname"])
+    #         print (item + ": " + z[item])
+    #
+    # else:
+    #     print ("nowt found")
+    # # for k,v in z.items():
+    # #     print(k + ": " + v)
+    # exit()
     # def reverseDNSUsingSCAPY(ipAddr, dnsServer="8.8.8.8"):
     #     from scapy.layers.inet import IP, UDP
     #     from scapy.layers.dns import DNS, DNSQR
@@ -3752,6 +3751,9 @@ def main(argv):
         rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,\
         UDP_RX_IP, UDP_RX_PORT)
 
+    # Create new instance of WhoisResolver (which will create a background __whoisLookupThread)
+    whoIsResolver = WhoisResolver()
+
     # Start traffic generator thread
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # If UDP source port specified
@@ -3803,9 +3805,13 @@ def main(argv):
         # wait for __receiveRtpStream Thread to end (if it exists)
         if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
             receiveRtpThread.join()
+
+        # Kill the whoIsResolver object
+        whoIsResolver.kill()
+
         time.sleep(0.2)
-        Term.clearScreen()
-        Term.printAt("main.shutdownApplication() in progress", 1, 1)
+        # Term.clearScreen()
+        # Term.printAt("main.shutdownApplication() in progress", 1, 1)
 
         # Now kill UI
         ui.kill()
