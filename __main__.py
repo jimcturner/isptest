@@ -3146,6 +3146,8 @@ class WhoisResolver(object):
     # A list of ip addresses in the process of being looked up (by the __whoisReolverThread)
     pendingQueries = {}
 
+    whoisAuthorities = ["whois.ripe.net", "whois.iana.org"]
+
     # Self-rolled whois querier based on scapy.utils.whois
     # It will return a dictionary of the whois information
     # 'netname' seems to be the most useful parameter to me - this holds
@@ -3278,22 +3280,30 @@ class WhoisResolver(object):
     def __whoisLookupThread(self):
         Utils.Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread started")
         while self.whoisLookupThreadActive:
-            if len(WhoisResolver.pendingQueries) > 0:
-                for address in WhoisResolver.pendingQueries:
-                    # Query the supplied ip address
-                    whoisDetails = WhoisResolver.whoisLookup(address)
-                    dateCreated = datetime.datetime.now()
-                    lastAccessed = dateCreated
-                    # Add the the ip details and time created entry to whoisCache{}
-                    WhoisResolver.whoisCache[address] = [whoisDetails, dateCreated, lastAccessed]
+            address = None
+            try:
+                if len(WhoisResolver.pendingQueries) > 0:
+                    for address in WhoisResolver.pendingQueries:
+                        # Query the supplied ip address
+                        whoisDetails = WhoisResolver.whoisLookup(address)
+                        dateCreated = datetime.datetime.now()
+                        lastAccessed = dateCreated
+                        # Add the the ip details and time created entry to whoisCache{}
+                        WhoisResolver.whoisCache[address] = [whoisDetails, dateCreated, lastAccessed]
+            except Exception as e:
+                Utils.Message.addMessage("ERR:WhoisResolver.__whoisLookupThread().whoisLookup(" + \
+                                         str(address) + ") "+ str(e))
 
             # Now check for duplicate addresses in both the whoisCache and pendingQueries dicts.
             # If present in both, remove from the pendingQueries as already dealt with
-            for address in WhoisResolver.whoisCache:
-                if address in WhoisResolver.pendingQueries:
-                    # Remove from pending dict
-                    del WhoisResolver.pendingQueries[address]
-
+            try:
+                for address in WhoisResolver.whoisCache:
+                    if address in WhoisResolver.pendingQueries:
+                        # Remove from pending dict
+                        del WhoisResolver.pendingQueries[address]
+            except Exception as e:
+                Utils.Message.addMessage("ERR:WhoisResolver.__whoisLookupThread().del pendingQueries (" + \
+                                         str(address) + ") " + str(e))
 
             time.sleep(0.5)
         Utils.Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread ending")
