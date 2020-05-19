@@ -3167,8 +3167,8 @@ class WhoisResolver(object):
         except Exception:
             query = whois_ip
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect(("whois.ripe.net", 43))
-        # s.connect(("whois.iana.org", 43))
+        # s.connect(("whois.ripe.net", 43))
+        s.connect(("whois.iana.org", 43))
         s.send(query.encode("utf8") + b"\r\n")
         answer = b""
         while True:
