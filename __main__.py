@@ -85,7 +85,7 @@ from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
 from prompt_toolkit.styles import Style
 import pyperclip
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
-from ipwhois import IPWhois
+from ipwhois import IPWhois, exceptions
 from scapy.utils import whois
 # Additional experimental libraries
 
@@ -2186,7 +2186,10 @@ class UI(object):
     def __renderTracerouteTable(self):
         termW, termH = Term.getTerminalSize()
         # Calculate the maximum no. of lines that will fit within the table, given the terminal height
-        maxLines = termH - 20
+        # maxLines = termH - 20
+        maxWidth = 40 + (termW - 80) # Used to automatically truncate the whois table column data
+        if maxWidth < 10:
+            maxWidth = 10
 
         # Get the traceroute hops list
         # depending upon whether we're in RECEIVE or TRANSMIT mode
@@ -2238,24 +2241,27 @@ class UI(object):
                         # Now query the isptest whois cache for the address
                         whoisResult = WhoisResolver.queryWhoisCache(hopAddr)
                         if whoisResult is not None:
-                            whoisNetName = whoisResult[0]["netname"]
-
+                            whoisNetName = whoisResult[0]['asn_description']
+                            # Truncate the string (if too long to fit on the table)
+                            whoisNetName = (whoisNetName[:maxWidth] + '..') if len(whoisNetName) > maxWidth else whoisNetName
                     except:
                         hopAddr = "Waiting...."
 
                     # Create a table row containing the hop no and ip address of the hop
                     tableRow=[str(hopNo + 1), hopAddr, whoisNetName]
+                    # Clear whoisNetName ready for next line
+                    whoisNetName = ""
                     # Append the table row tuple to the tableContents[] list
                     tableContents.append(tableRow)
                     # Clear the tableRow list ready for next time around the loop
                     tableRow = []
             else:
-                tableContents.append(["", "", "No traceroute data to display".ljust(40)])
+                tableContents.append(["", "", "No traceroute data to display".ljust(maxWidth)])
             # Now actually display the paged table list
             title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ") " +\
                     str(len(tracerouteHopsList)) + " hops"
             footer = ["", "", "[<][>]page, [^][v] select stream, [t]exit\nTo save/export, go to [report] page"]
-            self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15), "Whois".ljust(40)], tableContents,
+            self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15), "Whois".ljust(maxWidth)], tableContents,
                                    footerRow=footer,
                                    pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
 
@@ -3138,6 +3144,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
 # and quietly queries the IP address it finds in the background.
 # It then provides a dictionary where the IP addresses are the Keys and domnain names are the values.
 # These can then be used to populate the Traceroute tables/reports
+
 class WhoisResolver(object):
     # A dictionary to hold the results of the whois query
     # The key is the IP address, the Value is a tuple ['dictionary of details',  timeCreatedTimestamp, lastAccessedTimestamp,]
@@ -3152,13 +3159,18 @@ class WhoisResolver(object):
     # It will return a dictionary of the whois information
     # 'netname' seems to be the most useful parameter to me - this holds
     # Example usage:
-    # z = WhoisResolver.whoisLookup("212.58.231.0")
+    # z = WhoisResolver.whoisLookup("212.58.231.0", "whois.ripe.net")
     # print(z["netname"])
     # In theory, it should be able to do a reverse lookup (by supplying domain name as an argument, although this doesn't
     # seem to work terribly well
     # Note: this is a blocking method
+    # example whoisAuthorities are ["whois.ripe.net", "whois.iana.org"]
+    # Note: Each authority only looks a geographic region. If they don't know about a domain, then they should be
+    # able to redirect you to an authority that does know
+    # In practice, I decided it would just be easier to make use of the IPWhois library becasuse this already takes
+    # redirections (and probably may other things that I haven't thought about)
     @classmethod
-    def whoisLookup(cls, ip_address):
+    def simpleWhoisLookup(cls, ip_address, authorityHostname):
         """Whois client for Python"""
         whois_ip = str(ip_address)
         try:
@@ -3236,6 +3248,8 @@ class WhoisResolver(object):
     def getPendingQueries(cls):
         return cls.pendingQueries
 
+
+    # This constructor method sets running a background thread to maintain a cache of the previously queried domains
     def __init__(self):
         self.whoisLookupThreadActive = True
 
@@ -3245,19 +3259,18 @@ class WhoisResolver(object):
         self.whoisLookupThread.setName("__whoisLookupThread")
         self.whoisLookupThread.start()
 
-    # # This method queries the internet whois servers to determine thw owner (ASN_Description) of the IP address
-    # def __whoisLookupUsingIPWhoisLibrary(self, addr):
-    #     # See here for docs: https://ipwhois.readthedocs.io/en/latest/index.html
-    #     # Create an IPWhois object
-    #     obj = IPWhois(addr)
-    #     # The function for retrieving and parsing whois information for an IP address via port 43
-    #     ret = obj.lookup_whois()
-    #
-    #     # Return the 'autonomous system number description field'
-    #     try:
-    #         return ret['asn_description']
-    #     except:
-    #         return None
+    # This method queries the internet whois servers to determine thw owner (ASN_Description) of the IP address
+    @classmethod
+    def whoisLookup(cls, addr):
+        # See here for docs: https://ipwhois.readthedocs.io/en/latest/index.html
+        # Create an IPWhois object
+        obj = IPWhois(addr)
+        # The function for retrieving and parsing whois information for an IP address via port 43
+        # lookup
+        whoisInfo = obj.lookup_whois()
+
+        # return ret['asn_description'] # This is probably the most useful field
+        return whoisInfo
 
     # Blocking method to cause the object to die (by killing the thread)
     def kill(self):
@@ -3281,18 +3294,40 @@ class WhoisResolver(object):
         Utils.Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread started")
         while self.whoisLookupThreadActive:
             address = None
-            try:
-                if len(WhoisResolver.pendingQueries) > 0:
-                    for address in WhoisResolver.pendingQueries:
+
+            if len(WhoisResolver.pendingQueries) > 0:
+                # Take a snapshot of the class var WhoisResolver.pendingQueries{}
+                # This may be modified outside of this thread so can't use original
+                addressesToQuery = dict(WhoisResolver.pendingQueries)
+                for address in addressesToQuery:
+                    dateCreated = datetime.datetime.now()
+                    lastAccessed = dateCreated
+                    try:
                         # Query the supplied ip address
                         whoisDetails = WhoisResolver.whoisLookup(address)
-                        dateCreated = datetime.datetime.now()
-                        lastAccessed = dateCreated
                         # Add the the ip details and time created entry to whoisCache{}
                         WhoisResolver.whoisCache[address] = [whoisDetails, dateCreated, lastAccessed]
-            except Exception as e:
-                Utils.Message.addMessage("ERR:WhoisResolver.__whoisLookupThread().whoisLookup(" + \
-                                         str(address) + ") "+ str(e))
+                    except exceptions.IPDefinedError as e:
+                        # This exception will occur if a non-public address is queried (eg 0.0.0.0, 192.168.0.0, 127.0.0.1 etc)
+                        dateCreated = datetime.datetime.now()
+                        lastAccessed = dateCreated
+                        # Create an entry for each address with a useful description by parsing the error message
+                        # Or by looking at the address itself
+                        desc = ""
+                        if address == "127.0.0.1":
+                            desc = "Loopback"
+                        elif address == "0.0.0.0":
+                            desc = "Router didn't respond"
+                        elif str(e).find('Private') > 0:
+                            desc = "Local address"
+                        else:
+                            desc = str(e)
+                        # Creat a new entry for this address (with a locally generated 'asn_description' key)
+                        WhoisResolver.whoisCache[address] = [{'asn_description':desc}, dateCreated, lastAccessed]
+                    # Catch all other errors
+                    except Exception as e:
+                        Utils.Message.addMessage("ERR:WhoisResolver.__whoisLookupThread().whoisLookup(" + \
+                                             str(address) + ") "+ str(e))
 
             # Now check for duplicate addresses in both the whoisCache and pendingQueries dicts.
             # If present in both, remove from the pendingQueries as already dealt with
@@ -3356,7 +3391,15 @@ def shutdownApplicationSignalHandler(signum, frame):
 # #####################
 
 def main(argv):
-    # x=whois("90.248.2.233")
+    # try:
+    #     x = WhoisResolver.whoisLookup("192.168.0.0")
+    #     # print(str(x))
+    #     for k in x:
+    #         print(str(k) + ": " + str(x[k]) + "\r")
+    # except Exception as e:
+    #     print ("error: " + str(type(e)) + ", " + str(e))
+    # exit()
+
     # y=str(x).splitlines()
     # print(y)
     # Create new instance of WhoisResolver
