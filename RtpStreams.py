@@ -22,6 +22,7 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 # from scapy.all import *
 from scapy.layers.inet import IP, UDP
 from scapy.sendrecv import sr1
+from Utils import WhoisResolver
 
 
 # Additonal libraries required (of my own making)
@@ -602,11 +603,16 @@ class RtpReceiveCommon(object):
         if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
             for hopNo in range(len(tracerouteHopsList)):
                 try:
-                    tracerouteHopsListAsString += str(hopNo + 1 ) + "\t" + \
-                        str(tracerouteHopsList[hopNo][0]) + "." + \
+                    hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
                         str(tracerouteHopsList[hopNo][1]) + "." + \
                         str(tracerouteHopsList[hopNo][2]) + "." + \
-                        str(tracerouteHopsList[hopNo][3]) + "\r\n"
+                              str(tracerouteHopsList[hopNo][3])
+                    tracerouteHopsListAsString += str(hopNo + 1) + "\t" + hopAddr
+                    # Now query the hop name to see if it's in the whois cache
+                    hopName = WhoisResolver.queryWhoisCache(hopAddr)
+                    if hopName is not None:
+                        tracerouteHopsListAsString += "\t" + hopName[0]['asn_description']
+                    tracerouteHopsListAsString += "\r\n"
 
                 except Exception as e:
                     Utils.Message.addMessage("DBUG: RtpReceiveCommon.generateReport() Create traceroute string: " + str(e))
