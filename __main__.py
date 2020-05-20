@@ -2232,7 +2232,7 @@ class UI(object):
                 for hopNo in range(len(tracerouteHopsList)):
                     # Construct a string containing the IP address octets
                     try:
-                        # This will fail if the tracerouteHopsList hop hasn't been received in thr carousel yet
+                        # This will fail if the tracerouteHopsList hop hasn't been received in the carousel yet
                         # If so, the hopAddr entry in tracerouteHopsList will still be 'None'
                         hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
                                   str(tracerouteHopsList[hopNo][1]) + "." + \
@@ -3298,6 +3298,7 @@ class WhoisResolver(object):
             if len(WhoisResolver.pendingQueries) > 0:
                 # Take a snapshot of the class var WhoisResolver.pendingQueries{}
                 # This may be modified outside of this thread so can't use original
+                #Iterate over pendingQueries dict
                 addressesToQuery = dict(WhoisResolver.pendingQueries)
                 for address in addressesToQuery:
                     dateCreated = datetime.datetime.now()
