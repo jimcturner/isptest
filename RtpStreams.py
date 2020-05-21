@@ -2714,7 +2714,7 @@ class RtpGenerator(object):
             # Iterate over the list starting at the last element. matching [0,0,0,0]
             # If matched, delete that element
             elementsToTrim = 0
-            for x in range(-1,(-1 * (len(tracerouteHopsList) - 1)), -1):
+            for x in range(len(tracerouteHopsList) - 1, 0, -1):
                 if tracerouteHopsList[x] == [0,0,0,0]:
                     elementsToTrim +=1
             # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
