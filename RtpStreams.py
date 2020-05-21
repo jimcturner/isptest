@@ -2721,7 +2721,7 @@ class RtpGenerator(object):
             Utils.Message.addMessage("RTPGenerator: gets here " + str(elementsToTrim))
             if elementsToTrim > 0:
                 try:
-                    tracerouteHopsList = tracerouteHopsList[:(-1 * elementsToTrim) - 1]
+                    tracerouteHopsList = tracerouteHopsList[:(-1 * elementsToTrim) + 1]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveCommon.getTracerouteHopsList() trim trailing 0.0.0.0s " + str(e))
             return tracerouteHopsList
