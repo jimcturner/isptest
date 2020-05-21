@@ -2714,14 +2714,14 @@ class RtpGenerator(object):
             # Iterate over the list starting at the last element. matching [0,0,0,0]
             # If matched, delete that element
             elementsToTrim = 0
-            for x in range(-1,(-1 * len(tracerouteHopsList)), -1):
+            for x in range(-1,(-1 * (len(tracerouteHopsList) - 2)), -1):
                 if tracerouteHopsList[x] == [0,0,0,0]:
                     elementsToTrim +=1
             # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
             Utils.Message.addMessage("RTPGenerator: gets here " + str(elementsToTrim))
             if elementsToTrim > 0:
                 try:
-                    tracerouteHopsList = tracerouteHopsList[:(-1 * elementsToTrim) + 1]
+                    tracerouteHopsList = tracerouteHopsList[:(-1 * elementsToTrim)]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveCommon.getTracerouteHopsList() trim trailing 0.0.0.0s " + str(e))
             return tracerouteHopsList
