@@ -2786,8 +2786,8 @@ class RtpGenerator(object):
                 if all(response is None for response in replies[(-1 * maxNoOfNoResponse):]):
                     # Utils.Message.addMessage("5 None replies in a row, assuming dead traceroute")
 
-                    # Trim any remaining hop entries beyond the last hop to actually contain a response
-                    tracerouteHopsList = tracerouteHopsList[:hopNo - maxNoOfNoResponse]
+                    # Trim any remaining hop entries beyond the last hop no.
+                    tracerouteHopsList = tracerouteHopsList[:hopNo]
                     # Reset hopNo to restart the traceroute
                     hopNo = 0
                 if hopNo >= Registry.tracerouteMaxHops:
@@ -2814,6 +2814,21 @@ class RtpGenerator(object):
                 # Now break out of while loop
                 break
             finally:
+                # Clean up the tail end of the hops list which is liable to be full of 0.0.0.0's if
+                # a series of routers didn't respond. This isn't very helpful, so get rid of them
+                # Iterate over the list starting at the last element. matching [0,0,0,0]
+                # If matched, delete that element
+                elementsToTrim = 0
+                for addr in range(-1,(-1 * len(tracerouteHopsList)), -1):
+                    if addr == [0,0,0,0]:
+                        elementsToTrim +=1
+                # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
+                if elementsToTrim > 0:
+                    try:
+                        tracerouteHopsList = tracerouteHopsList[:(-1 * elementsToTrim)]
+                    except Exception as e:
+                        Utils.Message.addMessage("ERR:RtpGenerator.__tracerouteThread() trim trailing 0.0.0.0s")
+
                 # copy the working tracerouteHopsList back into the instance variable version
                 self.tracerouteHopsListMutex.acquire()
                 self.tracerouteHopsList = tracerouteHopsList
