@@ -492,11 +492,31 @@ class RtpReceiveCommon(object):
 
 
     # Thread-safe method to return a list of the traceroute hops
-    def getTraceRouteHopsList(self):
+    # If trimEndOfList=True, all the trailing '0.0.0.0' hops will omitted from the returned list
+    def getTraceRouteHopsList(self, trimEndOfList=False):
         self.tracerouteHopsListMutex.acquire()
         tracerouteHopsList = deepcopy(self.tracerouteHopsList)
         self.tracerouteHopsListMutex.release()
-        return tracerouteHopsList
+        if trimEndOfList and len(tracerouteHopsList) > 1:
+            # Clean up the tail end of the hops list which is liable to be full of 0.0.0.0's if
+            # a series of routers didn't respond. This isn't very helpful, so get rid of them
+            # Iterate over the list starting at the last element. matching [0,0,0,0]
+            # If matched, delete that element
+            elementsToTrim = 0
+            for x in range(-1,(-1 * len(tracerouteHopsList)), -1):
+                if tracerouteHopsList[x] == [0,0,0,0]:
+                    elementsToTrim +=1
+            # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
+            Utils.Message.addMessage("RTPReceiveCommon gets here " + str(elementsToTrim))
+            if elementsToTrim > 0:
+                try:
+                    tracerouteHopsList = tracerouteHopsList[:(-1 * elementsToTrim)]
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveCommon.getTracerouteHopsList() trim trailing 0.0.0.0s " + str(e))
+            return tracerouteHopsList
+        else:
+            # Otherwise, return the list as-is
+            return tracerouteHopsList
 
     # Thread-safe method to set the self.tracerouteHopsList[]
     # This completely replaces the existing list with a new supplied list
@@ -2683,11 +2703,31 @@ class RtpGenerator(object):
                 break
 
     # Thread-safe method to return a list of the traceroute hops
-    def getTraceRouteHopsList(self):
+    # If trimEndOfList=True, all the trailing '0.0.0.0' hops will omitted from the returned list
+    def getTraceRouteHopsList(self, , trimEndOfList=False):
         self.tracerouteHopsListMutex.acquire()
         tracerouteHopsList = deepcopy(self.tracerouteHopsList)
         self.tracerouteHopsListMutex.release()
-        return tracerouteHopsList
+        if trimEndOfList and len(tracerouteHopsList) > 1:
+            # Clean up the tail end of the hops list which is liable to be full of 0.0.0.0's if
+            # a series of routers didn't respond. This isn't very helpful, so get rid of them
+            # Iterate over the list starting at the last element. matching [0,0,0,0]
+            # If matched, delete that element
+            elementsToTrim = 0
+            for x in range(-1,(-1 * len(tracerouteHopsList)), -1):
+                if tracerouteHopsList[x] == [0,0,0,0]:
+                    elementsToTrim +=1
+            # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
+            Utils.Message.addMessage("RTPGenerator: gets here " + str(elementsToTrim))
+            if elementsToTrim > 0:
+                try:
+                    tracerouteHopsList = tracerouteHopsList[:(-1 * elementsToTrim)]
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveCommon.getTracerouteHopsList() trim trailing 0.0.0.0s " + str(e))
+            return tracerouteHopsList
+        else:
+            # Otherwise, return the list as-is
+            return tracerouteHopsList
 
     # Define a seperate thread to run a traceroute
     def __tracerouteThread(self):
@@ -2815,21 +2855,6 @@ class RtpGenerator(object):
                 # Now break out of while loop
                 break
             finally:
-                # Clean up the tail end of the hops list which is liable to be full of 0.0.0.0's if
-                # a series of routers didn't respond. This isn't very helpful, so get rid of them
-                # Iterate over the list starting at the last element. matching [0,0,0,0]
-                # If matched, delete that element
-                # elementsToTrim = 0
-                # for x in range(-1,(-1 * len(tracerouteHopsList)), -1):
-                #     if tracerouteHopsList[x] == [0,0,0,0]:
-                #         elementsToTrim +=1
-                # # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
-                # if elementsToTrim > 0:
-                #     try:
-                #         tracerouteHopsList = tracerouteHopsList[:(-1 * elementsToTrim)]
-                #     except Exception as e:
-                #         Utils.Message.addMessage("ERR:RtpGenerator.__tracerouteThread() trim trailing 0.0.0.0s " + str(e))
-
                 # copy the working tracerouteHopsList back into the instance variable version
                 self.tracerouteHopsListMutex.acquire()
                 self.tracerouteHopsList = tracerouteHopsList
