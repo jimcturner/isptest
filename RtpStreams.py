@@ -2704,7 +2704,7 @@ class RtpGenerator(object):
 
     # Thread-safe method to return a list of the traceroute hops
     # If trimEndOfList=True, all the trailing '0.0.0.0' hops will omitted from the returned list
-    def getTraceRouteHopsList(self, , trimEndOfList=False):
+    def getTraceRouteHopsList(self, trimEndOfList=False):
         self.tracerouteHopsListMutex.acquire()
         tracerouteHopsList = deepcopy(self.tracerouteHopsList)
         self.tracerouteHopsListMutex.release()
