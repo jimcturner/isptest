@@ -2742,7 +2742,8 @@ class RtpGenerator(object):
                     # Utils.Message.addMessage(str(hopNo) + ":" + str(hopAddr) + ", " + str(reply.type))
                     # Now determine where we are, within the traceroute
 
-                    if reply.type == 3: #(equates to port unreachable. Only the destination host knows about the port.
+                    if reply.type == 3 or reply.src == self.UDP_TX_IP:
+                    #(type 3 equates to port unreachable. Only the destination host knows about the port.
                     # Ergo, the destination IP address must have been reached
                     # Note: The Scapy 'type' code maps to the ICMP 'code'
 
