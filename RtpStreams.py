@@ -2717,8 +2717,11 @@ class RtpGenerator(object):
             for x in range(len(tracerouteHopsList) - 1, 0, -1):
                 if tracerouteHopsList[x] == [0,0,0,0]:
                     elementsToTrim +=1
+                else:
+                    # Otherwise a non-0.0.0.0 address present, so break out of the loop
+                    break
             # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
-            Utils.Message.addMessage("RTPGenerator: elements to trim " + str(elementsToTrim))
+            Utils.Message.addMessage("RTPGenerator: elements to trim.. " + str(elementsToTrim))
             if elementsToTrim > 0:
                 try:
                     # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
