@@ -522,10 +522,6 @@ class RtpReceiveCommon(object):
                     # Throw away the current list and initialise a new empty list
                     self.tracerouteHopsList = [None] * noOfHops
                 self.tracerouteHopsList[hopNo] = hopAddr
-                # Now pass the hop address  to WhoisResolver.queryWhoisCache
-                # to populate the cache
-                hopAddrAsString = str(hopAddr[0]) + "." + str(hopAddr[1]) + "." + str(hopAddr[2]) + "." + str(hopAddr[3])
-                Utils.WhoisResolver.queryWhoisCache(hopAddrAsString)
             except Exception as e:
                 Utils.Message.addMessage("ERR:RtpReceiveCommon.updateTraceRouteHopsList() " + str(e))
             self.tracerouteHopsListMutex.release()
@@ -1160,6 +1156,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                 #            isptestHeaderData[6], isptestHeaderData[7]]
                 # update the self.__tracerouteHopsList[] with the latest received address/hopNo
                 self.updateTraceRouteHopsList(hopNo, noOfHops, isptestHeaderData[4:])
+                # Now pass the hop address to WhoisResolver.queryWhoisCache
+                # to populate the whois cache for later use
+                hopAddrAsString = str(isptestHeaderData[4]) + "." + str(isptestHeaderData[5]) + "." +\
+                                  str(isptestHeaderData[6]) + "." + str(isptestHeaderData[7])
+                Utils.WhoisResolver.queryWhoisCache(hopAddrAsString)
 
             elif isptestHeaderData[1] == 1:
                 # This is a message containing the transmitter local address and also the UDP src port of the tx'd packets
@@ -2771,6 +2772,12 @@ class RtpGenerator(object):
                             tracerouteHopsList.append(hopAddr)
                         # Increment the TTL of the packet by incrementing hopNo
                         hopNo += 1
+
+                # Pass the most recent hopAddress to the Whois cache so that the address can be queried in the
+                # background, for later use
+                hopAddrAsString = str(hopAddr[0]) + "." + str(hopAddr[1]) + "." + str(hopAddr[2]) + "." + str(hopAddr[3])
+                Utils.WhoisResolver.queryWhoisCache(hopAddrAsString)
+
                 # Now check for five 'None' replies in a row
                 # Append reply to replies[]
                 replies.append(reply)
@@ -2816,7 +2823,7 @@ class RtpGenerator(object):
             try:
                 # get the instance of the corresponding RtpStreamResults object
                 rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                # Copy the RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+                # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
                 rtpStreamResults.setTraceRouteHopsList(self.getTraceRouteHopsList())
 
             except Exception as e:
