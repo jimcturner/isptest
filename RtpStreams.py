@@ -607,11 +607,11 @@ class RtpReceiveCommon(object):
                         str(tracerouteHopsList[hopNo][1]) + "." + \
                         str(tracerouteHopsList[hopNo][2]) + "." + \
                               str(tracerouteHopsList[hopNo][3])
-                    tracerouteHopsListAsString += str(hopNo + 1) + "\t" + hopAddr
+                    tracerouteHopsListAsString += str(hopNo + 1) + "\t" + hopAddr.ljust(16)
                     # Now query the hop name to see if it's in the whois cache
                     hopName = WhoisResolver.queryWhoisCache(hopAddr)
                     if hopName is not None:
-                        tracerouteHopsListAsString += "\t" + hopName[0]['asn_description']
+                        tracerouteHopsListAsString += hopName[0]['asn_description']
                     tracerouteHopsListAsString += "\r\n"
 
                 except Exception as e:
