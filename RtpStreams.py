@@ -2779,13 +2779,15 @@ class RtpGenerator(object):
                 Utils.WhoisResolver.queryWhoisCache(hopAddrAsString)
 
                 # Now check for five 'None' replies in a row
+                maxNoOfNoResponse = 5
                 # Append reply to replies[]
                 replies.append(reply)
-                # Check last five results of replies[]. If last 5 in a row are None, assume a dead end
-                if all(response is None for response in replies[-5:]):
+                # Check last five results of replies[]. If last 5 '-5' in a row are None, assume a dead end
+                if all(response is None for response in replies[(-1 * maxNoOfNoResponse):]):
                     # Utils.Message.addMessage("5 None replies in a row, assuming dead traceroute")
-                    # Trim any remaining hop entries beyond the current hopNo
-                    tracerouteHopsList = tracerouteHopsList[:hopNo]
+
+                    # Trim any remaining hop entries beyond the last hop to actually contain a response
+                    tracerouteHopsList = tracerouteHopsList[:hopNo - maxNoOfNoResponse]
                     # Reset hopNo to restart the traceroute
                     hopNo = 0
                 if hopNo >= Registry.tracerouteMaxHops:
