@@ -2725,7 +2725,7 @@ class RtpGenerator(object):
             if elementsToTrim > 0:
                 try:
                     # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
-                    tracerouteHopsList = tracerouteHopsList[:(len(tracerouteHopsList) - elementsToTrim) + 1]
+                    tracerouteHopsList = tracerouteHopsList[:(len(tracerouteHopsList) - elementsToTrim)]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveCommon.getTracerouteHopsList() trim trailing 0.0.0.0s " + str(e))
             return tracerouteHopsList
