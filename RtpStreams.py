@@ -2819,16 +2819,16 @@ class RtpGenerator(object):
                 # a series of routers didn't respond. This isn't very helpful, so get rid of them
                 # Iterate over the list starting at the last element. matching [0,0,0,0]
                 # If matched, delete that element
-                elementsToTrim = 0
-                for x in range(-1,(-1 * len(tracerouteHopsList)), -1):
-                    if tracerouteHopsList[x] == [0,0,0,0]:
-                        elementsToTrim +=1
-                # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
-                if elementsToTrim > 0:
-                    try:
-                        tracerouteHopsList = tracerouteHopsList[:(-1 * elementsToTrim)]
-                    except Exception as e:
-                        Utils.Message.addMessage("ERR:RtpGenerator.__tracerouteThread() trim trailing 0.0.0.0s " + str(e))
+                # elementsToTrim = 0
+                # for x in range(-1,(-1 * len(tracerouteHopsList)), -1):
+                #     if tracerouteHopsList[x] == [0,0,0,0]:
+                #         elementsToTrim +=1
+                # # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
+                # if elementsToTrim > 0:
+                #     try:
+                #         tracerouteHopsList = tracerouteHopsList[:(-1 * elementsToTrim)]
+                #     except Exception as e:
+                #         Utils.Message.addMessage("ERR:RtpGenerator.__tracerouteThread() trim trailing 0.0.0.0s " + str(e))
 
                 # copy the working tracerouteHopsList back into the instance variable version
                 self.tracerouteHopsListMutex.acquire()
