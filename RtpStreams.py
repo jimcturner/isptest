@@ -522,6 +522,10 @@ class RtpReceiveCommon(object):
                     # Throw away the current list and initialise a new empty list
                     self.tracerouteHopsList = [None] * noOfHops
                 self.tracerouteHopsList[hopNo] = hopAddr
+                # Now pass the hop address  to WhoisResolver.queryWhoisCache
+                # to populate the cache
+                hopAddrAsString = str(hopAddr[0]) + "." + str(hopAddr[1]) + "." + str(hopAddr[2]) + "." + str(hopAddr[3])
+                Utils.WhoisResolver.queryWhoisCache(hopAddrAsString)
             except Exception as e:
                 Utils.Message.addMessage("ERR:RtpReceiveCommon.updateTraceRouteHopsList() " + str(e))
             self.tracerouteHopsListMutex.release()
