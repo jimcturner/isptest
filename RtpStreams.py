@@ -493,7 +493,7 @@ class RtpReceiveCommon(object):
 
     # Thread-safe method to return a list of the traceroute hops
     # If trimEndOfList=True, all the trailing '0.0.0.0' hops will omitted from the returned list
-    def getTraceRouteHopsList(self, trimEndOfList=False):
+    def getTraceRouteHopsList(self, trimEndOfList=True):
         self.tracerouteHopsListMutex.acquire()
         tracerouteHopsList = deepcopy(self.tracerouteHopsList)
         self.tracerouteHopsListMutex.release()
@@ -503,14 +503,18 @@ class RtpReceiveCommon(object):
             # Iterate over the list starting at the last element. matching [0,0,0,0]
             # If matched, delete that element
             elementsToTrim = 0
-            for x in range(-1,(-1 * len(tracerouteHopsList)), -1):
+            for x in range(len(tracerouteHopsList) - 1, 0, -1):
                 if tracerouteHopsList[x] == [0,0,0,0]:
                     elementsToTrim +=1
+                else:
+                    # Otherwise a non-0.0.0.0 address present, so break out of the loop
+                    break
             # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
-            Utils.Message.addMessage("RTPReceiveCommon gets here " + str(elementsToTrim))
+            Utils.Message.addMessage("RTPReceiveCommon elements to trim " + str(elementsToTrim))
             if elementsToTrim > 0:
                 try:
-                    tracerouteHopsList = tracerouteHopsList[:(-1 * elementsToTrim) - 1]
+                    # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
+                    tracerouteHopsList = tracerouteHopsList[:(len(tracerouteHopsList) - elementsToTrim)]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveCommon.getTracerouteHopsList() trim trailing 0.0.0.0s " + str(e))
             return tracerouteHopsList
@@ -2704,7 +2708,7 @@ class RtpGenerator(object):
 
     # Thread-safe method to return a list of the traceroute hops
     # If trimEndOfList=True, all the trailing '0.0.0.0' hops will omitted from the returned list
-    def getTraceRouteHopsList(self, trimEndOfList=False):
+    def getTraceRouteHopsList(self, trimEndOfList=True):
         self.tracerouteHopsListMutex.acquire()
         tracerouteHopsList = deepcopy(self.tracerouteHopsList)
         self.tracerouteHopsListMutex.release()
@@ -2748,7 +2752,7 @@ class RtpGenerator(object):
             # dport=33434   # This seems to be the standard port for traceroute according to man traceroute
             # dst="8.8.8.8"
             # Get local working copy of self.tracerouteHopsList
-            tracerouteHopsList = self.getTraceRouteHopsList()
+            tracerouteHopsList = self.getTraceRouteHopsList(trimEndOfList=False)
             pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=self.UDP_TX_PORT)
             # pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=33434)
             pkt_fallback = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=33434)
