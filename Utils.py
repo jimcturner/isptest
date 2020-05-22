@@ -649,7 +649,7 @@ class WhoisResolver(object):
                             desc = str(e)
                         # Create a new entry for this address (with a locally generated 'asn_description' key)
                         WhoisResolver.whoisCache[address] = [{'asn_description':desc}, dateCreated, lastAccessed]
-                    except exceptions.WhoisLookupError as e:
+                    except (exceptions.WhoisLookupError, exceptions.ASNRegistryError) as e:
                         # Create an entry for the address with the error message as the description
                         WhoisResolver.whoisCache[address] = [{'asn_description': str(e)}, dateCreated, lastAccessed]
 
