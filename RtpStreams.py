@@ -510,7 +510,6 @@ class RtpReceiveCommon(object):
                     # Otherwise a non-0.0.0.0 address present, so break out of the loop
                     break
             # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
-            Utils.Message.addMessage("RTPReceiveCommon elements to trim " + str(elementsToTrim))
             if elementsToTrim > 0:
                 try:
                     # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
@@ -2725,7 +2724,6 @@ class RtpGenerator(object):
                     # Otherwise a non-0.0.0.0 address present, so break out of the loop
                     break
             # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
-            Utils.Message.addMessage("RTPGenerator: elements to trim.. " + str(elementsToTrim))
             if elementsToTrim > 0:
                 try:
                     # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
