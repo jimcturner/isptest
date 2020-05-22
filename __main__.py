@@ -2102,6 +2102,7 @@ class UI(object):
         maxWidth = 55
         tableContents = ("BBC IBEOO Team ISP Analyser v" + Registry.version).center(maxWidth, " ") + \
                         "\n\n" + "(c) James Turner 2020".center(maxWidth, " ") + \
+                        "\n" + "With special thanks to Gary Podmore".center(maxWidth, " ") +\
                         "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
                         "\n" + " measurement tool supporting multiple tx/rx streams".center(maxWidth, " ") + \
                         "\n" + "  and event logging".center(maxWidth, " ") + \
