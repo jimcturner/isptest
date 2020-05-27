@@ -2020,6 +2020,7 @@ class RtpStreamResults(RtpReceiveCommon):
             del self.__eventList[:noOfMessagesToPurge]
         self.__accessRtpStreamEventListMutex.release()
 
+
 # Define an RTP Generator that can run autonomously as a thread
 class RtpGenerator(object):
     # How this works:
@@ -2054,6 +2055,14 @@ class RtpGenerator(object):
     # val, so 65535 is the max)
     UNIQUE_ID_FOR_ISPTEST_STREAMS = 10518
 
+    # Constants. Used in the calculation of transmitted data rate
+    UDP_HEADER_LENGTH_BYTES = 8
+    RTP_HEADER_LENGTH_BYTES = 12
+
+    # Constants. Used in the construction of the rtp header
+    rtpParams = 0b01000000
+    rtpPayloadType = 0b00000000
+
     @classmethod
     def getMaxFriendlyNameLength(cls):
         return cls.MAX_FRIENDLY_NAME_LENGTH
@@ -2084,7 +2093,15 @@ class RtpGenerator(object):
         self.txBps_1s = 0               # Used to 'sample' the actual tx rate
         self.syncSourceIdentifier = int(syncSourceID)
         self.rtpPayload = ""                 # The 'dummy data' sent in the packet
+        self.regeneratePayloadFlag = True   # A flag to specify the the 'dummy data' should be recalculated during the
+                                            # next call to RtpGenerator.prepareNextRtpPacket()
+
         self.isptestHeader = ""
+        # Create bytearray to hold the actual data to be transmitted over the wire
+        # As a minimum, this will be decared with a default length large enough to hold the rtp and isptest headers
+        # In due course, an additional payload of random data will be appended to it
+        self.udpTxData = bytearray(RtpGenerator.RTP_HEADER_LENGTH_BYTES + RtpGenerator.getIsptestHeaderSize())
+        self.rtpSequenceNo = 0 # The incrementing index within the rtp header
         self.payloadMutex = threading.Lock()    # Used to control access to self.rtpPayload and self.isptestHeader
         self.elapsedTime = datetime.timedelta()
         self.friendlyName = ""
@@ -2101,6 +2118,7 @@ class RtpGenerator(object):
                                     # 3 The current version of isptest
 
         self.uiInstance = uiInstance   # This allows access to the methods of the UI class
+
         # Query the routing table to determine the address of the Ethernet interface that will be used to transmit
         self.SRC_IP_ADDR = Utils.get_ip(self.UDP_TX_IP)
         Utils.Message.addMessage("Transmitting from " + str(self.SRC_IP_ADDR))
@@ -2217,19 +2235,21 @@ class RtpGenerator(object):
 
 
     def generatePayload(self):
-        # Generate random string of length 'length' to create a payload of length self.payloadLength
+        # Generate random byte string of length 'length' to create a payload of length self.payloadLength
         # (but taking into account the length of the isptest payload
 
-        # Create string containing all uppercase and lowercase letters
+        # Create byte string containing all uppercase and lowercase letters
         letters = string.ascii_letters
         # Calculate length of required randome string after our header taken into account,
         randomDataLength = self.payloadLength - RtpGenerator.ISPTEST_HEADER_SIZE
         # iterate over stringLength picking random letters from 'letters'
         randomDataString = ''.join(random.choice(letters) for i in range(randomDataLength))
-        # Now assign the complete payload (including header and random data) to the instance variable
-        self.payloadMutex.acquire()
-        self.rtpPayload = randomDataString
-        self.payloadMutex.release()
+        # # Now assign the complete payload (including header and random data) to the instance variable
+        # self.payloadMutex.acquire()
+        # self.rtpPayload = randomDataString
+        # self.payloadMutex.release()
+        # Return as a bytestring
+        return randomDataString.encode('ascii')
 
     # Generates the isptest (this program) specific header to convey extra info (like the friendly name) to the receiver
     def generateIsptestHeader(self):
@@ -2404,11 +2424,11 @@ class RtpGenerator(object):
         except Exception as e:
             Utils.Message.addMessage("ERR: RtpGenerator.generatePayload(). Header err: " + str(e))
 
-        # Now assign the complete header to the instance variable
-        self.payloadMutex.acquire()
-        self.isptestHeader = header
-        self.payloadMutex.release()
-
+        # # Now assign the complete header to the instance variable
+        # self.payloadMutex.acquire()
+        # self.isptestHeader = header
+        # self.payloadMutex.release()
+        return header
 
     def setSyncSourceIdentifier(self,value):
         # Sets the self self.syncSourceIdentifier value
@@ -2447,8 +2467,9 @@ class RtpGenerator(object):
             payloadLength_bytes =20
         # Set instance variable
         self.payloadLength = payloadLength_bytes
-        # Regenerate payload based on new payload length
-        self.generatePayload()
+        # Trigger regeneration of entire udp data frame (rtp header + isptest header + dummy payload)
+        # self.generatePayload()
+        self.regeneratePayloadFlag = True
 
     def setTimeToLive(self, newTimeToLive):
         # Modifies the existing time to live value
@@ -2510,8 +2531,208 @@ class RtpGenerator(object):
     def getUDPSocket(self):
         # returns a reference to the socket created by __rtpGeneratorThread
         return self.udpTxSocket
-    def __rtpGeneratorThread(self):
 
+    # This thread runs a 1 second timer and updates
+    # self.elapsedTime
+
+    # Controlled by:
+    # self.enablePacketGeneration
+    # self.timeToLive ==0
+    # self.elapsedTime
+    # self.txBps_1s, self.txActualTxRate_bps # Are these the same?
+
+    def rtpGeneratorSamplingLoop(self):
+        pass
+
+    # This utility method will take a source bytearray and copy it into an existing bytearray, overwriting
+    # the existing contents. If the srcData exceeds the length of buffer at the given stating position, the buffer
+    # will be extended. If the position value is outside the range of the buffer, the new value will be appended to
+    # the end of the buffer
+    def copyIntoByteArray(self, destBytesArray, srcBytesArray, position):
+        destBytesArray[position:position + len(srcBytesArray)] = srcBytesArray
+
+    # This method will create the next Rtp packet to be generated, all apart from the timestamp which is created at the
+    # last possible moment before socket.sendto()
+    # If self.regeneratePayloadFlag is set, it will recreate the rtp header, isptest header and 'dummy payload' data
+    # from scratch (essentially the entire udp payload)
+    # If not, it will just increment the rtp sequence no within the rtp header and also update the isptest header data
+    def prepareNextRtpPacket(self):
+        if self.regeneratePayloadFlag is True:
+            # Clear the flag
+            self.regeneratePayloadFlag = False
+            # Create 12 byte RTP header structure (including sequence no). timestamp will be set to zero (as set later)
+            # B: unsigned char, H: unsigned short (2 bytes), L: unsigned long (4 bytes)
+            rtpTimestamp = 0 & 0xFFFFFFFF
+            rtpHeader = struct.pack("!BBHLL", RtpGenerator.rtpParams, RtpGenerator.rtpPayloadType,
+                                    self.rtpSequenceNo, rtpTimestamp, self.syncSourceIdentifier)
+
+            # Create an empty placeholder for the isptestheader data
+            isptestHeaderData = bytearray(RtpGenerator.getIsptestHeaderSize())
+
+            # Create dummy payload (based on the current value of self.payloadLength)
+            dummyPayload = self.generatePayload()
+
+            # Construct the entire udp data frame
+            self.udpTxData = rtpHeader + isptestHeaderData + dummyPayload
+
+        else:
+            # The only part of the rtp header that needs to be modified is the sequence no
+            # Overwrite old rtp sequence no with new (the rtp sequence no is a 16 bit int starting at the 17th byte
+            # of the header
+            try:
+                struct.pack_into("!H", self.udpTxData, 16 , self.rtpSequenceNo)
+            except Exception as e:
+                Utils.Message.addMessage("ERR:RtpGenerator.prepareNextRtpPacket() struct.pack_into() seq no. " + str(e))
+
+        # Create isptest header data
+        isptestHeaderData = self.generateIsptestHeader()
+        # Copy the isptest header data into the udp message frame.
+        # The rtp header occupies bytes 0-95, the first bit of actual data starts at byte 96
+        self.copyIntoByteArray(self.udpTxData, isptestHeaderData, 96)
+
+
+        # increment sequence no. for next time this method is called
+        self.rtpSequenceNo += 1
+        # Seq no is only a 16 bit value, so reset at max value (65535)
+        if self.rtpSequenceNo > 65535:
+            self.rtpSequenceNo = 0
+            Utils.Message.addMessage(
+                "INFO: rtpGenerator. " + str(self.syncSourceIdentifier) + " Seq no wrapping to zero")
+
+
+    # Exception raised by RtpGenerator.createUDPSocket()
+    class RtpGeneratorCreateUDPSocketException(Exception):
+        pass
+
+    # Create a UDP socket for transmission and reception of the rtp packets (and received results)
+    # Raises an RtpGeneratorCreateUDPSocketException on failure
+    def __createUDPSocket(self):
+        # Attempt to create UDP socket
+        try:
+            self.udpTxSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # Internet, UDP
+            # Set a timeout of 1 second (required because we will use recvfrom() in the corresponding
+            # ResultsReceiver object (which will use this same socket, but to receive)
+            self.udpTxSocket.settimeout(1)
+            # Utils.Message.addMessage(str(self.udpTxSocket.get))
+            # If a UDP source port has been specified, use it
+            if self.UDP_TX_SRC_PORT > 1024:
+                # Bind to the socket, allows you to specify the source port
+                try:
+                    self.udpTxSocket.bind(('0.0.0.0', int(self.UDP_TX_SRC_PORT)))
+                except Exception as e:
+                    Utils.Message.addMessage(
+                        "ERR: RtpGenerator.__rtpGeneratorThread. self.udpTxSocket.bind (User supplied source port). " + str(
+                            e))
+            else:
+                # Let the OS determine the source port
+                self.udpTxSocket.bind(('0.0.0.0', 0))
+                self.UDP_TX_SRC_PORT = self.udpTxSocket.getsockname()[1]
+        except Exception as e:
+            raise RtpGenerator.RtpGeneratorCreateUDPSocketException(str(e))
+            # Utils.Message.addMessage(
+            #     "ERR:\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Please quit now\x1B[0m" + self.UDP_TX_IP + ":" + \
+            #     str(self.UDP_TX_PORT) + ", " + str(e))
+
+    def __rtpGeneratorThread(self):
+        # This function will actually create and send the rtp packets
+        def sendPacket(rtpGeneratorInstance):
+            # If all tx flags are set then transmit the (previously created) rtp packet
+            if rtpGeneratorInstance.enablePacketGeneration == True and rtpGeneratorInstance.packetsToSkip < 1:
+                try:
+                    # Create a new timestamp. This has to be done at the last moment before the packet is sent
+                    # Create a 32 bit timestamp (needs truncating to 32 bits before passing to struct.pack)
+                    # 0xFFFFFFFF is 32 '1's, so the '&' operation will throw away MSBs larger than this
+                    rtpTimestampAsInt = int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
+
+                    # Directly modify the timestamp field of the rtp header within the self.udpTxData bytearray
+                    # The RTP timestamp field is byte 32 of the RTP header
+                    struct.pack_into("!L", self.udpTxData, 32 , rtpTimestampAsInt)
+                    # Send the data
+                    sentBytes = rtpGeneratorInstance.udpTxSocket.sendto(rtpGeneratorInstance.udpTxData,
+                                                            (rtpGeneratorInstance.UDP_TX_IP,
+                                                             rtpGeneratorInstance.UDP_TX_PORT))
+                    # Update tx bytes counter (taking packet headers into account)
+                    rtpGeneratorInstance.txCounter_bytes += sentBytes
+                    # Update tx bps data counter (*8 converts bytes to bits)
+                    rtpGeneratorInstance.txBps_1s += sentBytes * 8
+
+                except Exception as e:
+                    Utils.Message.addMessage("\x1B[31 RtpGenerator.__newImprovedRtpGeneratorThread() sendto().   \x1B[0m " + str(e))
+                    time.sleep(1)  # Throttle rate of error messages from this thread
+            else:
+                # Decrement self.packetsToSkip. Once this var reaches zero, packet generation will resume
+                rtpGeneratorInstance.packetsToSkip -= 1
+
+            # Prepare the next packet
+            rtpGeneratorInstance.prepareNextRtpPacket()
+
+        # This Generator-based function will repeatedly call the functionToBeScheduled every 'period' seconds
+        # A python 'Generator' is a function with 'memory'. Every time 'next' is called, it will return (or 'yield')
+        # a value based on the previous returned value
+        # If the execution of the code in sendPacket() exceeds the transmission period, calculateSleepTime() will
+        # Return zero, so that the code in sendPacket() will be called immediately
+        def txScheduler(rtpGeneratorInstance):
+            # Calculate the sleep period based on the last time this function was called (this is a 'Generator' function
+            # so it has 'memory'
+            def calculateSleepPeriod():
+                t = time.time()
+                count = 0
+                while True:
+                    count += 1
+                    yield max(t + count * rtpGeneratorInstance.txPeriod - time.time(), 0)
+
+            # Infinite loop.
+            # 'functionToBeScheduled will be called indefintely, with a sleep interval calculated by calculateSleepPeriod()
+            # Until timeToLive == 0
+            g = calculateSleepPeriod()
+            while rtpGeneratorInstance.timeToLive != 0:
+                time.sleep(next(g))
+                sendPacket(rtpGeneratorInstance)
+
+        Utils.Message.addMessage("DBUG:New RtpGen thread. Thread starting")
+        # Prepare the first rtp packet to be sent
+        self.prepareNextRtpPacket()
+        Utils.Message.addMessage("DBUG:New RtpGen thread. Gets here")
+        # Calculate tx period required to provide supplied txRate for a given stringLength
+        # Note: txPeriod = self.payloadLength * 8.0 / self.txRate
+        self.txPeriod = self.calculateTxPeriod(self.txRate)
+
+        # Calculate the maximum intentional timing deviation to be add/subtracted from txPeriod if jitter is enabled
+        maxDeviation = self.txPeriod * Registry.simulatedJitterPercent / 100
+
+        try:
+            # Create a UDP socket for UDP transmission and reception
+            self.__createUDPSocket()
+
+            # start the scheduler that will actually regulate the rate of transmission of packets
+            # This is a blocking function call
+            txScheduler(self)
+
+            # If timeToLive has decremented to zero, the scheduler will end and execution will reach this point
+            # Now check to see if there is a corresponding RtpStreamResults object for this Tx stream
+            self.rtpTxStreamResultsDictMutex.acquire()
+            if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
+                try:
+                    # Get a handle on the RtpStreamResults object
+                    rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                    # invoke the writeReportToDisk() method to dump a report to disk automatically
+                    # Retrieve the auto-generated filename
+                    _filename = rtpTxStreamResults.createFilenameForReportExport()
+                    Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + " expiring")
+                    # Write a report to disk
+                    rtpTxStreamResults.writeReportToDisk(fileName=_filename)
+                except Exception as e:
+                    Utils.Message.addMessage(
+                        "ERR: RtpGenerator.killStream() rtpTxStreamResults.generateReport(): " + str(e))
+            self.rtpTxStreamResultsDictMutex.release()
+
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR:__newImprovedRtpGeneratorThread " + str(e))
+
+
+
+    def __oldrtpGeneratorThread(self):
         # Constants. Used in calculation of transmitted data rate
         UDP_HEADER_LENGTH_BYTES = 8
         RTP_HEADER_LENGTH_BYTES = 12
@@ -2537,10 +2758,9 @@ class RtpGenerator(object):
                 self.udpTxSocket.bind(('0.0.0.0', 0))
                 self.UDP_TX_SRC_PORT = self.udpTxSocket.getsockname()[1]
         except Exception as e:
-            Utils.Message.addMessage("ERR:\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Exiting\x1B[0m" + self.UDP_TX_IP + ":" + \
+            Utils.Message.addMessage("ERR:\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Please quit now\x1B[0m" + self.UDP_TX_IP + ":" + \
                                str(self.UDP_TX_PORT) + ", " + str(e))
             time.sleep(2)
-            exit()
 
         msg = "INFO: TX stream thread started. Sending to " + self.UDP_TX_IP + ":" + str(self.UDP_TX_PORT) + \
               ", " + str(self.txRate) + "bps, Length:" + str(self.payloadLength) +" bytes, src Port: "+ str(self.UDP_TX_SRC_PORT)
@@ -2572,6 +2792,7 @@ class RtpGenerator(object):
             rtpTimestamp = int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
 
             # Construct 12 byte header
+            # B: unsigned char, H: unsigned short (2 bytes), L: unsigned long (4 bytes)
             txRtpHeader = struct.pack("!BBHLL", rtpParams, rtpPayloadType, rtpSequenceNo, rtpTimestamp,
                                       self.syncSourceIdentifier)
             # Force an update of the isptest header

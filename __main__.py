@@ -3401,6 +3401,33 @@ def shutdownApplicationSignalHandler(signum, frame):
 # #####################
 
 def main(argv):
+    # def scheduler(period):
+    #     # Calculate the sleep period based on the last time this function was called (this is a 'Generator' function
+    #     # so it has 'memory'
+    #     def calculateSleepPeriod():
+    #         t = time.time()
+    #         count = 0
+    #         while True:
+    #             count += 1
+    #             yield max(t + count * period - time.time(), 0)
+    #
+    #     # Infinite loop.
+    #     # 'functionToBeScheduled will be called indefintely, with a sleep interval calculated by calculateSleepPeriod()
+    #     g = calculateSleepPeriod()
+    #     maxLoops = 5
+    #     loopCounter = 0
+    #     while loopCounter < maxLoops:
+    #         time.sleep(next(g))
+    #         sendPacket("foobar")
+    #         loopCounter += 1
+    #
+    #
+    # def sendPacket(s):
+    #     print('hello {} ({:.4f})'.format(s, time.time()))
+    #     time.sleep(.9)
+    #
+    # scheduler(1)
+    # print("Ending")
     # try:
     #     x = WhoisResolver.whoisLookup("192.168.0.0")
     #     # print(str(x))
