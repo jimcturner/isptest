@@ -2560,6 +2560,7 @@ class RtpGenerator(object):
         if self.regeneratePayloadFlag is True:
             # Clear the flag
             self.regeneratePayloadFlag = False
+            Utils.Message.addMessage("DBUG:prepareNextRtpPacket() self.regeneratePayloadFlag is True")
             # Create 12 byte RTP header structure (including sequence no). timestamp will be set to zero (as set later)
             # B: unsigned char, H: unsigned short (2 bytes), L: unsigned long (4 bytes)
             rtpTimestamp = 0 & 0xFFFFFFFF
@@ -2574,22 +2575,23 @@ class RtpGenerator(object):
 
             # Construct the entire udp data frame
             self.udpTxData = rtpHeader + isptestHeaderData + dummyPayload
-
+            Utils.Message.addMessage("DBUG:prepareNextRtpPacket() len(udpData) " + str(len(self.udpTxData)))
         else:
             # The only part of the rtp header that needs to be modified is the sequence no
             # Overwrite old rtp sequence no with new (the rtp sequence no is a 16 bit int starting at the 17th byte
             # of the header
             try:
-                struct.pack_into("!H", self.udpTxData, 16 , self.rtpSequenceNo)
+                struct.pack_into("!H", self.udpTxData, 16, self.rtpSequenceNo)
             except Exception as e:
                 Utils.Message.addMessage("ERR:RtpGenerator.prepareNextRtpPacket() struct.pack_into() seq no. " + str(e))
 
         # Create isptest header data
-        isptestHeaderData = self.generateIsptestHeader()
+        Utils.Message.addMessage("DBUG:RtpGenerator.prepareNextRtpPacket() generateIsptestHeader()")
+        isptestHeaderData = self.generateIsptestHeader()        # <------ Getting stuch in here
         # Copy the isptest header data into the udp message frame.
         # The rtp header occupies bytes 0-95, the first bit of actual data starts at byte 96
         self.copyIntoByteArray(self.udpTxData, isptestHeaderData, 96)
-
+        Utils.Message.addMessage("DBUG:RtpGenerator.prepareNextRtpPacket() copy isptestHeader into self.udpTxData")
 
         # increment sequence no. for next time this method is called
         self.rtpSequenceNo += 1
@@ -2598,7 +2600,7 @@ class RtpGenerator(object):
             self.rtpSequenceNo = 0
             Utils.Message.addMessage(
                 "INFO: rtpGenerator. " + str(self.syncSourceIdentifier) + " Seq no wrapping to zero")
-
+        Utils.Message.addMessage("DBUG:RtpGenerator.prepareNextRtpPacket() function ended")
 
     # Exception raised by RtpGenerator.createUDPSocket()
     class RtpGeneratorCreateUDPSocketException(Exception):
