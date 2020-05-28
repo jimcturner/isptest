@@ -2234,14 +2234,14 @@ class RtpGenerator(object):
         self.friendlyName = friendlyName
 
 
-    def generatePayload(self):
+    def generatePayload(self, payloadLength):
         # Generate random byte string of length 'length' to create a payload of length self.payloadLength
         # (but taking into account the length of the isptest payload
 
         # Create byte string containing all uppercase and lowercase letters
         letters = string.ascii_letters
         # Calculate length of required randome string after our header taken into account,
-        randomDataLength = self.payloadLength - RtpGenerator.ISPTEST_HEADER_SIZE
+        randomDataLength = payloadLength - RtpGenerator.ISPTEST_HEADER_SIZE
         # iterate over stringLength picking random letters from 'letters'
         randomDataString = ''.join(random.choice(letters) for i in range(randomDataLength))
         # # Now assign the complete payload (including header and random data) to the instance variable
@@ -2571,27 +2571,30 @@ class RtpGenerator(object):
             isptestHeaderData = bytearray(RtpGenerator.getIsptestHeaderSize())
 
             # Create dummy payload (based on the current value of self.payloadLength)
-            dummyPayload = self.generatePayload()
+            dummyPayload = self.generatePayload(self.payloadLength)
 
             # Construct the entire udp data frame
-            self.udpTxData = rtpHeader + isptestHeaderData + dummyPayload
-            Utils.Message.addMessage("DBUG:prepareNextRtpPacket() len(udpData) " + str(len(self.udpTxData)))
+            self.udpTxData = bytearray(rtpHeader + isptestHeaderData + dummyPayload)
         else:
             # The only part of the rtp header that needs to be modified is the sequence no
             # Overwrite old rtp sequence no with new (the rtp sequence no is a 16 bit int starting at the 17th byte
-            # of the header
+            # of the header (i.e the third and fourth byte)
             try:
-                struct.pack_into("!H", self.udpTxData, 16, self.rtpSequenceNo)
+                struct.pack_into("!H", self.udpTxData, 2, self.rtpSequenceNo)
+                # Utils.Message.addMessage("seq. no" + str(self.rtpSequenceNo))
+                # Utils.Message.addMessage("DBUG:self.udpTxData::" + str(self.udpTxData))
             except Exception as e:
                 Utils.Message.addMessage("ERR:RtpGenerator.prepareNextRtpPacket() struct.pack_into() seq no. " + str(e))
 
         # Create isptest header data
-        Utils.Message.addMessage("DBUG:RtpGenerator.prepareNextRtpPacket() generateIsptestHeader()")
-        isptestHeaderData = self.generateIsptestHeader()        # <------ Getting stuch in here
+        isptestHeaderData = self.generateIsptestHeader()
         # Copy the isptest header data into the udp message frame.
-        # The rtp header occupies bytes 0-95, the first bit of actual data starts at byte 96
-        self.copyIntoByteArray(self.udpTxData, isptestHeaderData, 96)
-        Utils.Message.addMessage("DBUG:RtpGenerator.prepareNextRtpPacket() copy isptestHeader into self.udpTxData")
+        # The rtp header occupies bytes 0-11, the first bit of actual data starts at byte 12
+        try:
+            self.copyIntoByteArray(self.udpTxData, isptestHeaderData, 12)
+            pass
+        except Exception as e:
+            Utils.Message.addMessage("prepareNextPacket() copy isptestHeader into self.udpTxData " + str(type(self.udpTxData)) + ", " + str(e))
 
         # increment sequence no. for next time this method is called
         self.rtpSequenceNo += 1
@@ -2600,7 +2603,6 @@ class RtpGenerator(object):
             self.rtpSequenceNo = 0
             Utils.Message.addMessage(
                 "INFO: rtpGenerator. " + str(self.syncSourceIdentifier) + " Seq no wrapping to zero")
-        Utils.Message.addMessage("DBUG:RtpGenerator.prepareNextRtpPacket() function ended")
 
     # Exception raised by RtpGenerator.createUDPSocket()
     class RtpGeneratorCreateUDPSocketException(Exception):
@@ -2647,8 +2649,8 @@ class RtpGenerator(object):
                     rtpTimestampAsInt = int(datetime.datetime.now().strftime("%H%M%S%f")) & 0xFFFFFFFF
 
                     # Directly modify the timestamp field of the rtp header within the self.udpTxData bytearray
-                    # The RTP timestamp field is byte 32 of the RTP header
-                    struct.pack_into("!L", self.udpTxData, 32 , rtpTimestampAsInt)
+                    # The RTP timestamp field is bytes 4-7 of the RTP header
+                    struct.pack_into("!L", rtpGeneratorInstance.udpTxData, 4, rtpTimestampAsInt)
                     # Send the data
                     sentBytes = rtpGeneratorInstance.udpTxSocket.sendto(rtpGeneratorInstance.udpTxData,
                                                             (rtpGeneratorInstance.UDP_TX_IP,
