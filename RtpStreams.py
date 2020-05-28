@@ -2092,17 +2092,14 @@ class RtpGenerator(object):
         self.txActualTxRate_bps = 0
         self.txBps_1s = 0               # Used to 'sample' the actual tx rate
         self.syncSourceIdentifier = int(syncSourceID)
-        self.rtpPayload = ""                 # The 'dummy data' sent in the packet
         self.regeneratePayloadFlag = True   # A flag to specify the the 'dummy data' should be recalculated during the
                                             # next call to RtpGenerator.prepareNextRtpPacket()
 
-        self.isptestHeader = ""
         # Create bytearray to hold the actual data to be transmitted over the wire
         # As a minimum, this will be decared with a default length large enough to hold the rtp and isptest headers
         # In due course, an additional payload of random data will be appended to it
         self.udpTxData = bytearray(RtpGenerator.RTP_HEADER_LENGTH_BYTES + RtpGenerator.getIsptestHeaderSize())
         self.rtpSequenceNo = 0 # The incrementing index within the rtp header
-        self.payloadMutex = threading.Lock()    # Used to control access to self.rtpPayload and self.isptestHeader
         self.elapsedTime = datetime.timedelta()
         self.friendlyName = ""
         self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ipopctet4]
@@ -2244,10 +2241,7 @@ class RtpGenerator(object):
         randomDataLength = payloadLength - RtpGenerator.ISPTEST_HEADER_SIZE
         # iterate over stringLength picking random letters from 'letters'
         randomDataString = ''.join(random.choice(letters) for i in range(randomDataLength))
-        # # Now assign the complete payload (including header and random data) to the instance variable
-        # self.payloadMutex.acquire()
-        # self.rtpPayload = randomDataString
-        # self.payloadMutex.release()
+
         # Return as a bytestring
         return randomDataString.encode('ascii')
 
@@ -2424,10 +2418,7 @@ class RtpGenerator(object):
         except Exception as e:
             Utils.Message.addMessage("ERR: RtpGenerator.generatePayload(). Header err: " + str(e))
 
-        # # Now assign the complete header to the instance variable
-        # self.payloadMutex.acquire()
-        # self.isptestHeader = header
-        # self.payloadMutex.release()
+        # Return the isptestheader data (as a bytestring)
         return header
 
     def setSyncSourceIdentifier(self,value):
@@ -2560,7 +2551,7 @@ class RtpGenerator(object):
         if self.regeneratePayloadFlag is True:
             # Clear the flag
             self.regeneratePayloadFlag = False
-            Utils.Message.addMessage("DBUG:prepareNextRtpPacket() self.regeneratePayloadFlag is True")
+            Utils.Message.addMessage("DBUG:prepareNextRtpPacket() self.regeneratePayloadFlag is True. Regenerating packet")
             # Create 12 byte RTP header structure (including sequence no). timestamp will be set to zero (as set later)
             # B: unsigned char, H: unsigned short (2 bytes), L: unsigned long (4 bytes)
             rtpTimestamp = 0 & 0xFFFFFFFF
@@ -2579,12 +2570,7 @@ class RtpGenerator(object):
             # The only part of the rtp header that needs to be modified is the sequence no
             # Overwrite old rtp sequence no with new (the rtp sequence no is a 16 bit int starting at the 17th byte
             # of the header (i.e the third and fourth byte)
-            try:
-                struct.pack_into("!H", self.udpTxData, 2, self.rtpSequenceNo)
-                # Utils.Message.addMessage("seq. no" + str(self.rtpSequenceNo))
-                # Utils.Message.addMessage("DBUG:self.udpTxData::" + str(self.udpTxData))
-            except Exception as e:
-                Utils.Message.addMessage("ERR:RtpGenerator.prepareNextRtpPacket() struct.pack_into() seq no. " + str(e))
+            struct.pack_into("!H", self.udpTxData, 2, self.rtpSequenceNo)
 
         # Create isptest header data
         isptestHeaderData = self.generateIsptestHeader()
