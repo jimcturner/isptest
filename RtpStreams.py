@@ -2187,6 +2187,10 @@ class RtpGenerator(object):
         self.rtpTxStreamsDict[self.syncSourceIdentifier] = self
         self.rtpTxStreamsDictMutex.release()
 
+        # start the 1 second sampling loop (blocking call)
+        self.samplingLoop()
+
+
     def getRtpStreamStats(self):
         # Returns a dictionary of useful stats
         return {'Dest IP': self.UDP_TX_IP,
@@ -2532,8 +2536,24 @@ class RtpGenerator(object):
     # self.elapsedTime
     # self.txBps_1s, self.txActualTxRate_bps # Are these the same?
 
-    def rtpGeneratorSamplingLoop(self):
-        pass
+    # This (blocking method) collects time averaged values and performs housekeeping
+    def samplingLoop(self):
+        # Snapshot current value
+        prevTxCounter_Bytes = self.txCounter_bytes
+        # Infinite loop
+        while self.timeToLive != 0:
+            # Take snapshot of current tx byte counter
+            currentTxCounter_Bytes = self.txCounter_bytes
+            # Calculate bits transmitted in the last second
+            self.txBps_1s = (currentTxCounter_Bytes - prevTxCounter_Bytes) * 8
+            # Store current value of currentTxCounter_Bytes for next time around the loop
+            prevTxCounter_Bytes = currentTxCounter_Bytes
+            Utils.Message.addMessage("txBps_1s: " + str(self.txBps_1s))
+            time.sleep(1)
+
+        Utils.Message.addMessage("RtpGenerator.samplingLoop() ending for stream " + str(self.syncSourceIdentifier))
+
+
 
     # This utility method will take a source bytearray and copy it into an existing bytearray, overwriting
     # the existing contents. If the srcData exceeds the length of buffer at the given stating position, the buffer
