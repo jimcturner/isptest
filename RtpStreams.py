@@ -2741,20 +2741,19 @@ class RtpGenerator(object):
 
                     yield max(t + count * txPeriod - time.time(), 0)
 
-            # Infinite loop.
-            # 'functionToBeScheduled will be called indefintely, with a sleep interval calculated by calculateSleepPeriod()
-            # Until timeToLive == 0
+            # Infinite loop until timeToLive == 0
             g = calculateSleepPeriod()
             while rtpGeneratorInstance.timeToLive != 0:
+                # Get (dynamic) sleep interval
                 sleepTime = next(g)
-                # try:
-                #     sleepTime = rtpGeneratorInstance.txPeriod - rtpGeneratorInstance.meanCalculationTime
-                #     if sleepTime < 0:
-                #         sleepTime = 0
-                #         Utils.Message.addMessage("Max speed reached?")
-                # except:
-                #     sleepTime = rtpGeneratorInstance.txPeriod
-
+                # sleep
+                time.sleep(sleepTime)
+                # start timer
+                processingStartTime = timer()
+                # send previously prepared packet
+                sendPacket(rtpGeneratorInstance)
+                # Prepare the next packet
+                rtpGeneratorInstance.prepareNextRtpPacket()
 
                 # Update sleepTime stats
                 if rtpGeneratorInstance.minSleepTime is None:
@@ -2775,14 +2774,7 @@ class RtpGenerator(object):
                     # Calculate mean
                     rtpGeneratorInstance.meanSleepTime = (rtpGeneratorInstance.meanSleepTime + sleepTime) / 2.0
 
-                time.sleep(sleepTime)
-                processingStartTime = timer()
-                sendPacket(rtpGeneratorInstance)
-                # Prepare the next packet
-                rtpGeneratorInstance.prepareNextRtpPacket()
-
-
-
+                # Stop calculation timer
                 calculationTime = timer() - processingStartTime
                 # Update calculation time stats
                 if rtpGeneratorInstance.minCalculationTime is None:
