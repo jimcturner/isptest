@@ -2790,8 +2790,8 @@ class RtpGenerator(object):
                 if rtpGeneratorInstance.meanCalculationTime is None:
                     rtpGeneratorInstance.meanCalculationTime = calculationTime
                 else:
-                    rtpGeneratorInstance.meanCalculationTime = (
-                                                                           rtpGeneratorInstance.meanCalculationTime + calculationTime) / 2.0
+                    rtpGeneratorInstance.meanCalculationTime =\
+                        (rtpGeneratorInstance.meanCalculationTime + calculationTime) / 2.0
 
         Utils.Message.addMessage("DBUG:New RtpGen thread. Thread starting")
         # Prepare the first rtp packet to be sent
