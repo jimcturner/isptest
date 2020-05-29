@@ -2086,7 +2086,7 @@ class RtpGenerator(object):
         self.UDP_TX_PORT = int(UDP_TX_PORT)
         self.UDP_TX_SRC_PORT = 0
         self.txRate = int(txRate)
-        self.txPeriod = 0  # Calculated from self.txRate
+        self.txPeriod = 0  # Calculated from self.txRate and set by RtpGenerator.calculateTxPeriod()
         self.payloadLength = int(payloadLength)
         self.txCounter_bytes = 0
         self.txActualTxRate_bps = 0
@@ -2115,6 +2115,12 @@ class RtpGenerator(object):
                                     # 3 The current version of isptest
 
         self.uiInstance = uiInstance   # This allows access to the methods of the UI class
+        self.minSleepTime = None
+        self.maxSleepTime = None
+        self.meanSleepTime = None
+        self.minCalculationTime = None
+        self.maxCalculationTime = None
+        self.meanCalculationTime = None
 
         # Query the routing table to determine the address of the Ethernet interface that will be used to transmit
         self.SRC_IP_ADDR = Utils.get_ip(self.UDP_TX_IP)
@@ -2187,8 +2193,11 @@ class RtpGenerator(object):
         self.rtpTxStreamsDict[self.syncSourceIdentifier] = self
         self.rtpTxStreamsDictMutex.release()
 
-        # start the 1 second sampling loop (blocking call)
-        self.samplingLoop()
+        # start the 1 second sampling thread
+        self.samplingThread = threading.Thread(target=self.__samplingThread, args=())
+        self.samplingThread.daemon = False
+        self.samplingThread.setName(str(self.syncSourceIdentifier) + ":samplingThread")
+        self.samplingThread.start()
 
 
     def getRtpStreamStats(self):
@@ -2450,9 +2459,9 @@ class RtpGenerator(object):
         # Update instance variable
         self.txRate = newTxRate_bps
         # Calculates then set the new txPeriod for a given newTxRate_bps
-        self.txPeriod = self.calculateTxPeriod(newTxRate_bps)
-        # Reset txBps_1s counter
-        self.txBps_1s = 0
+        txPeriod = self.calculateTxPeriod(newTxRate_bps)
+        self.txPeriod = txPeriod
+
 
     def setPayloadLength(self, payloadLength_bytes):
         # Modifies the payload length of this RTP TX stream
@@ -2482,6 +2491,10 @@ class RtpGenerator(object):
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  Waiting for __tracerouteThread has ended")
         self.tracerouteThread.join()
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  __tracerouteThread has ended")
+        # Wait for __samplingThread to end
+        Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread to end")
+        self.samplingThread.join()
+        Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread has ended")
 
         # Now kill corresponding RtpResultsReceiver object (should be a blocking call)
         self.rtpStreamResultsReceiver.kill()
@@ -2536,20 +2549,48 @@ class RtpGenerator(object):
     # self.elapsedTime
     # self.txBps_1s, self.txActualTxRate_bps # Are these the same?
 
-    # This (blocking method) collects time averaged values and performs housekeeping
-    def samplingLoop(self):
+    # This thread collects time averaged values and performs housekeeping
+    def __samplingThread(self):
+        loopCounter =0
+        # The tx bps counter is a 1 second moving average with 0.2 sec accuracy
+        bpsCounterList = []
         # Snapshot current value
         prevTxCounter_Bytes = self.txCounter_bytes
         # Infinite loop
         while self.timeToLive != 0:
             # Take snapshot of current tx byte counter
             currentTxCounter_Bytes = self.txCounter_bytes
-            # Calculate bits transmitted in the last second
-            self.txBps_1s = (currentTxCounter_Bytes - prevTxCounter_Bytes) * 8
+            # Append the latest bytes transmitted (during the last 0.2 seconds) to the list
+            bpsCounterList.append(currentTxCounter_Bytes - prevTxCounter_Bytes)
+            # If we have more than 5 historic samples, remove the oldest item from the list
+            if len(bpsCounterList)>5:
+                del bpsCounterList[0]
             # Store current value of currentTxCounter_Bytes for next time around the loop
             prevTxCounter_Bytes = currentTxCounter_Bytes
-            Utils.Message.addMessage("txBps_1s: " + str(self.txBps_1s))
-            time.sleep(1)
+
+
+            # 1 second counter
+            if loopCounter % 5 == 0:
+                # 1 Second has elapsed
+                # Calculate the tx bps by summing the bpsCounterList and converting bytes to bits
+                bps = 0
+                for x in bpsCounterList:
+                    bps += x
+                self.txBps_1s = bps * 8
+                try:
+                    Utils.Message.addMessage(str(Utils.bToMb(self.txBps_1s)) + "bps, period: " + str("%.6f" %self.txPeriod) + ", " +\
+                                             str("%.6f" %self.minSleepTime) + ":" +\
+                                             str("%.6f" %self.meanSleepTime) + ":" + str("%.6f" %self.maxSleepTime))
+                    Utils.Message.addMessage("Calculation times: " + str("%.6f" % self.minCalculationTime) + ":" +\
+                                             str("%.6f" % self.meanCalculationTime) + ":" + \
+                                             str("%.6f" % self.maxCalculationTime))
+                except:
+                    pass
+
+            # Increment loop counter
+            loopCounter += 1
+            # Sleep for a fifth of a second
+            time.sleep(0.2)
 
         Utils.Message.addMessage("RtpGenerator.samplingLoop() ending for stream " + str(self.syncSourceIdentifier))
 
@@ -2673,8 +2714,6 @@ class RtpGenerator(object):
                 # Decrement self.packetsToSkip. Once this var reaches zero, packet generation will resume
                 rtpGeneratorInstance.packetsToSkip -= 1
 
-            # Prepare the next packet
-            rtpGeneratorInstance.prepareNextRtpPacket()
 
         # This Generator-based function will repeatedly call the functionToBeScheduled every 'period' seconds
         # A python 'Generator' is a function with 'memory'. Every time 'next' is called, it will return (or 'yield')
@@ -2687,22 +2726,84 @@ class RtpGenerator(object):
             def calculateSleepPeriod():
                 t = time.time()
                 count = 0
+                prevTxPeriod = rtpGeneratorInstance.txPeriod
                 while True:
                     count += 1
-                    yield max(t + count * rtpGeneratorInstance.txPeriod - time.time(), 0)
+                    txPeriod = rtpGeneratorInstance.txPeriod
+                    # If the txPeriod has changed (which it will, if the tx rate is changed), reset the counter
+                    if prevTxPeriod != txPeriod:
+                        # Reset the initial time reference
+                        t = time.time()
+                        # Reset the counter
+                        count = 1
+                        # Capture the latest txPeriod value
+                        prevTxPeriod = txPeriod
+
+                    yield max(t + count * txPeriod - time.time(), 0)
 
             # Infinite loop.
             # 'functionToBeScheduled will be called indefintely, with a sleep interval calculated by calculateSleepPeriod()
             # Until timeToLive == 0
             g = calculateSleepPeriod()
             while rtpGeneratorInstance.timeToLive != 0:
-                time.sleep(next(g))
+                sleepTime = next(g)
+                # try:
+                #     sleepTime = rtpGeneratorInstance.txPeriod - rtpGeneratorInstance.meanCalculationTime
+                #     if sleepTime < 0:
+                #         sleepTime = 0
+                #         Utils.Message.addMessage("Max speed reached?")
+                # except:
+                #     sleepTime = rtpGeneratorInstance.txPeriod
+
+
+                # Update sleepTime stats
+                if rtpGeneratorInstance.minSleepTime is None:
+                    rtpGeneratorInstance.minSleepTime = sleepTime
+                elif sleepTime < rtpGeneratorInstance.minSleepTime:
+                    # record new minimum
+                    rtpGeneratorInstance.minSleepTime = sleepTime
+
+                if rtpGeneratorInstance.maxSleepTime is None:
+                    rtpGeneratorInstance.maxSleepTime = sleepTime
+                elif sleepTime > rtpGeneratorInstance.maxSleepTime:
+                    # record new maximum
+                    rtpGeneratorInstance.maxSleepTime = sleepTime
+
+                if rtpGeneratorInstance.meanSleepTime is None:
+                    rtpGeneratorInstance.meanSleepTime = sleepTime
+                else:
+                    # Calculate mean
+                    rtpGeneratorInstance.meanSleepTime = (rtpGeneratorInstance.meanSleepTime + sleepTime) / 2.0
+
+                time.sleep(sleepTime)
+                processingStartTime = timer()
                 sendPacket(rtpGeneratorInstance)
+                # Prepare the next packet
+                rtpGeneratorInstance.prepareNextRtpPacket()
+
+
+
+                calculationTime = timer() - processingStartTime
+                # Update calculation time stats
+                if rtpGeneratorInstance.minCalculationTime is None:
+                    rtpGeneratorInstance.minCalculationTime = calculationTime
+                elif calculationTime < rtpGeneratorInstance.minCalculationTime:
+                    rtpGeneratorInstance.minCalculationTime = calculationTime
+
+                if rtpGeneratorInstance.maxCalculationTime is None:
+                    rtpGeneratorInstance.maxCalculationTime = calculationTime
+                elif calculationTime > rtpGeneratorInstance.maxCalculationTime:
+                    rtpGeneratorInstance.maxCalculationTime = calculationTime
+
+                if rtpGeneratorInstance.meanCalculationTime is None:
+                    rtpGeneratorInstance.meanCalculationTime = calculationTime
+                else:
+                    rtpGeneratorInstance.meanCalculationTime = (
+                                                                           rtpGeneratorInstance.meanCalculationTime + calculationTime) / 2.0
 
         Utils.Message.addMessage("DBUG:New RtpGen thread. Thread starting")
         # Prepare the first rtp packet to be sent
         self.prepareNextRtpPacket()
-        Utils.Message.addMessage("DBUG:New RtpGen thread. Gets here")
         # Calculate tx period required to provide supplied txRate for a given stringLength
         # Note: txPeriod = self.payloadLength * 8.0 / self.txRate
         self.txPeriod = self.calculateTxPeriod(self.txRate)
@@ -2735,7 +2836,7 @@ class RtpGenerator(object):
                     Utils.Message.addMessage(
                         "ERR: RtpGenerator.killStream() rtpTxStreamResults.generateReport(): " + str(e))
             self.rtpTxStreamResultsDictMutex.release()
-
+            Utils.Message.addMessage("DBUG: __newImprovedRtpGeneratorThread ending for stream " + str(self.syncSourceIdentifier))
 
         except Exception as e:
             Utils.Message.addMessage("ERR:__newImprovedRtpGeneratorThread " + str(e))
