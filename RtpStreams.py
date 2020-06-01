@@ -1868,7 +1868,7 @@ class RtpStreamResults(RtpReceiveCommon):
         self.__eventList = []
 
         # No of historic events to keep in memory (before housekeeping)
-        self.historicEventsLimit = 50
+        self.historicEventsLimit = Registry.rtpStreamResultsistoricEventsLimit
 
         # Create mutex locks for data access
         self.__accessRtpStreamStatsMutex = threading.Lock()         # for the stats dictionary
@@ -2019,10 +2019,14 @@ class RtpStreamResults(RtpReceiveCommon):
     def houseKeepEventList(self):
         self.__accessRtpStreamEventListMutex.acquire()
         # Check size of self.__eventList[] and therefore no of events to purge
-        noOfMessagesToPurge = len(self.__eventList) - self.historicEventsLimit
+        currentNoOfEventsInMemory = len(self.__eventList)
+        noOfMessagesToPurge = currentNoOfEventsInMemory - self.historicEventsLimit
         if noOfMessagesToPurge > 0:
             # Remove first x events
             del self.__eventList[:noOfMessagesToPurge]
+            Utils.Message.addMessage("Purging " + str(noOfMessagesToPurge) + " events from events list for stream " +\
+                                str(self.syncSourceID) + " Old length: " + str(currentNoOfEventsInMemory) +\
+                                     ", New length: " + str(len(self.__eventList)))
         self.__accessRtpStreamEventListMutex.release()
 
 
