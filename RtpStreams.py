@@ -2215,7 +2215,9 @@ class RtpGenerator(object):
                 'Friendly Name': self.friendlyName,
                 'stream_friendly_name': self.friendlyName, # Duplicate entry to harmonise with RtpReceiveStream and RtpStreamResults
                 'Tx Source Port': self.UDP_TX_SRC_PORT,
-                'Time to live': self.timeToLive
+                'Time to live': self.timeToLive,
+                'Sleep Time mean': self.meanSleepTime,
+                'Calculation time mean': self.meanCalculationTime
                 }
 
     def getRtpStreamStatsByKey(self, key):

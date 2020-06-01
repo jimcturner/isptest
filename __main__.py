@@ -651,7 +651,7 @@ class UI(object):
                            ["Dest\n IP", 'Dest IP'],
                            ["Dest\nPort", 'Dest Port'],
                            ["Sync\nsrcID", 'Sync Source ID'],
-                           ["Tx\nbps", 'Tx Rate'],
+                           ["Tx\nbps", 'Tx Rate (actual)'],
                            ["Size", 'Packet size'],
                            ["Bytes\n tx'd", 'Bytes transmitted'],
                            [" Time\nremain", 'Time to live']
@@ -1913,12 +1913,15 @@ class UI(object):
             # If less than 1Mbps increment/decrement by 256kbps
             if currentTxRate < 1048576:
                 newTxRate = currentTxRate + (262144 * direction)
+
                 self.selectedStream.setTxRate(newTxRate)
             # Otherwise increment/decrement by 500kbps
             else:
                 newTxRate = currentTxRate + (524288 * direction)
                 self.selectedStream.setTxRate(newTxRate)
 
+            Utils.Message.addMessage("Setting Tx rate for stream " + str(self.selectedStreamID) + " to " + \
+                                     str(Utils.bToMb(newTxRate)) + "bps")
     # 'j'
     def __onIncreaseTimeToLive(self):
         self.__modifyTimeToLive(1)
@@ -2145,6 +2148,14 @@ class UI(object):
         # Create some debug information to append to the end of the help list
         debugInfo = [["",""],["Debug info",""]]
         debugInfo.append(["Process ID ", str(os.getpid())])
+        try:
+            # This will only work if the stream type is an RtpGenerator object
+            debugInfo.append(["sleep time ",
+                              str(int(self.selectedStream.getRtpStreamStatsByKey('Sleep Time mean')*100000)) + "uS"])
+            debugInfo.append(["calc time",\
+                        str(int(self.selectedStream.getRtpStreamStatsByKey('Calculation time mean')*100000)) + "uS"])
+        except:
+            pass
         try:
             # Get list of running threads
             runningThreads = Utils.listCurrentThreads(asList=True)
@@ -2496,7 +2507,7 @@ class UI(object):
             value = Utils.bToMb(value) + "B"
             return value
 
-        if key == key == 'Tx Rate':
+        if key == key == 'Tx Rate (actual)':
             value = Utils.bToMb(value)
             return value
 
