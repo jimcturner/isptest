@@ -1831,7 +1831,7 @@ class ResultsTransmitter(object):
                                 # clear the socket.sendto() error counter
                                 self.sendtoErrorCounter = 0
                         else:
-                            Utils.Message.addMessage("DBUG:__resultsTransmitterThread  - fragmentedMessage[] is empty")
+                            Utils.Message.addMessage("DBUG:__resultsTransmitterThread  - fragmentedMessage[] is None or empty")
 
                     except Exception as e:
                         Utils.Message.addMessage("ERR:__resultsTransmitterThread sendto() socket id:" + str(id(self.udpSocket)) +", " + str(e))
