@@ -2572,20 +2572,11 @@ class RtpGenerator(object):
             # 1 second counter
             if loopCounter % 5 == 0:
                 # 1 Second has elapsed
-                # Calculate the tx bps by summing the bpsCounterList and converting bytes to bits
+                # Calculate the actual tx bps by summing the bpsCounterList and converting bytes to bits
                 bps = 0
                 for x in bpsCounterList:
                     bps += x
                 self.txActualTxRate_bps = bps * 8
-                try:
-                    Utils.Message.addMessage(str(Utils.bToMb(self.txActualTxRate_bps)) + "bps, period: " + str("%.6f" %self.txPeriod) + ", " +\
-                                             str("%.6f" %self.minSleepTime) + ":" +\
-                                             str("%.6f" %self.meanSleepTime) + ":" + str("%.6f" %self.maxSleepTime))
-                    Utils.Message.addMessage("Calculation times: " + str("%.6f" % self.minCalculationTime) + ":" +\
-                                             str("%.6f" % self.meanCalculationTime) + ":" + \
-                                             str("%.6f" % self.maxCalculationTime))
-                except:
-                    pass
 
             # Increment loop counter
             loopCounter += 1
