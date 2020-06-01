@@ -38,4 +38,4 @@ class Registry(object):
 
     # RtpStreamResults
     # No of historic events to keep in memory (before events are purged)
-    rtpStreamResultsistoricEventsLimit = 3
+    rtpStreamResultsistoricEventsLimit = 50

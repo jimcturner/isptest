@@ -2024,9 +2024,9 @@ class RtpStreamResults(RtpReceiveCommon):
         if noOfMessagesToPurge > 0:
             # Remove first x events
             del self.__eventList[:noOfMessagesToPurge]
-            Utils.Message.addMessage("Purging " + str(noOfMessagesToPurge) + " events from events list for stream " +\
-                                str(self.syncSourceID) + " Old length: " + str(currentNoOfEventsInMemory) +\
-                                     ", New length: " + str(len(self.__eventList)))
+            # Utils.Message.addMessage("Purging " + str(noOfMessagesToPurge) + " events from events list for stream " +\
+            #                     str(self.syncSourceID) + " Old length: " + str(currentNoOfEventsInMemory) +\
+            #                          ", New length: " + str(len(self.__eventList)))
         self.__accessRtpStreamEventListMutex.release()
 
 
