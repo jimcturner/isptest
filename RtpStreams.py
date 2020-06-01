@@ -2578,6 +2578,11 @@ class RtpGenerator(object):
                     bps += x
                 self.txActualTxRate_bps = bps * 8
 
+                # Decrement timeToLive seconds counter but only if current value is +ve
+                # A -ve value is used to denote 'live for ever'
+                if self.timeToLive > 0:
+                    self.timeToLive -= 1
+
             # Increment loop counter
             loopCounter += 1
             # Sleep for a fifth of a second
