@@ -2572,7 +2572,7 @@ class RtpGenerator(object):
             prevTxCounter_Bytes = currentTxCounter_Bytes
 
 
-            # 1 second counter
+            ######## 1 second counter
             if loopCounter % 5 == 0:
                 # 1 Second has elapsed
                 # Calculate the actual tx bps by summing the bpsCounterList and converting bytes to bits
@@ -2585,6 +2585,20 @@ class RtpGenerator(object):
                 # A -ve value is used to denote 'live for ever'
                 if self.timeToLive > 0:
                     self.timeToLive -= 1
+
+                # Now housekeep the associated rtpTxStreamResults object for this stream
+                # Check to see that rtpTxStreamResultsDict contains this stream objects
+                if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
+                    try:
+                        # Get a handle on the rtpTxStreamResults object
+                        rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                        if type(rtpTxStreamResults) == RtpStreamResults:
+                            # Invoke the housekeeping method to purge any really old events
+                            rtpTxStreamResults.houseKeepEventList()
+                    except Exception as e:
+                        Utils.Message.addMessage(
+                            "ERR: __samplingThread rtpTxStreamResults.houseKeepEventList(): " + str(e))
+            ###########
 
             # Increment loop counter
             loopCounter += 1
