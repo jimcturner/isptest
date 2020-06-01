@@ -1820,15 +1820,18 @@ class ResultsTransmitter(object):
                         MAX_UDP_TX_LENGTH = 512
                         # Split the message up
                         fragmentedMessage = Utils.fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
+                        if len(fragmentedMessage) > 0:
 
-                        # iterate over fragments
-                        for fragment in fragmentedMessage:
-                            # Pickle and send each fragment one at a time
-                            txMessage = pickle.dumps(fragment,protocol=2)
-                            # Utils.Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
-                            self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
-                            # clear the socket.sendto() error counter
-                            self.sendtoErrorCounter = 0
+                            # iterate over fragments and send
+                            for fragment in fragmentedMessage:
+                                # Pickle and send each fragment one at a time
+                                txMessage = pickle.dumps(fragment,protocol=2)
+                                # Utils.Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
+                                self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
+                                # clear the socket.sendto() error counter
+                                self.sendtoErrorCounter = 0
+                        else:
+                            Utils.Message.addMessage("DBUG:__resultsTransmitterThread  - fragmentedMessage[] is empty")
 
                     except Exception as e:
                         Utils.Message.addMessage("ERR:__resultsTransmitterThread sendto() socket id:" + str(id(self.udpSocket)) +", " + str(e))
