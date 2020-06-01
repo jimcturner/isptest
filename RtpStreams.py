@@ -1781,7 +1781,7 @@ class ResultsTransmitter(object):
 
 
     def __resultsTransmitterThread(self):
-        Utils.Message.addMessage("INFO: __resultsTransmitterThread started: "+str(self.udpSocket))
+        Utils.Message.addMessage("INFO: __resultsTransmitterThread started for stream: "+ str(self.syncSource))
 
         oldSocket = self.parentRtpRxStream.getSocket()
         # Utils.Message.addMessage("__resultsTransmitterThread. Initial socket" + str(id(oldSocket)))
