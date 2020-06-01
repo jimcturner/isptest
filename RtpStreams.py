@@ -1820,7 +1820,7 @@ class ResultsTransmitter(object):
                         MAX_UDP_TX_LENGTH = 512
                         # Split the message up
                         fragmentedMessage = Utils.fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
-                        if len(fragmentedMessage) > 0:
+                        if fragmentedMessage is not None and len(fragmentedMessage) > 0:
 
                             # iterate over fragments and send
                             for fragment in fragmentedMessage:
