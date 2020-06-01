@@ -1409,9 +1409,11 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                 # Calculate self.__stats["packet_payload_size_mean_1S_bytes"]
                 # Need to deduct 20 (8 bytes for the UDP header and 12 bytes for the RTP header)
+                totalHeaderLength_bytes = UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES
                 if self.__stats["packet_counter_1S"] > 0:
                     self.__stats["packet_payload_size_mean_1S_bytes"] = \
-                        int(self.__stats["packet_data_received_1S_bytes"] / self.__stats["packet_counter_1S"]) - 20
+                        int(self.__stats["packet_data_received_1S_bytes"] / self.__stats["packet_counter_1S"]) -\
+                            totalHeaderLength_bytes
                 # Clear running totals
                 runningTotalPacketsPerSecond = 0
                 runningTotalDataReceivedPerSecond = 0
@@ -2089,8 +2091,7 @@ class RtpGenerator(object):
         self.txPeriod = 0  # Calculated from self.txRate and set by RtpGenerator.calculateTxPeriod()
         self.payloadLength = int(payloadLength)
         self.txCounter_bytes = 0
-        self.txActualTxRate_bps = 0
-        self.txBps_1s = 0               # Used to 'sample' the actual tx rate
+        self.txActualTxRate_bps = 0 # Used to 'sample' the actual tx rate
         self.syncSourceIdentifier = int(syncSourceID)
         self.regeneratePayloadFlag = True   # A flag to specify the the 'dummy data' should be recalculated during the
                                             # next call to RtpGenerator.prepareNextRtpPacket()
@@ -2246,14 +2247,11 @@ class RtpGenerator(object):
 
     def generatePayload(self, payloadLength):
         # Generate random byte string of length 'length' to create a payload of length self.payloadLength
-        # (but taking into account the length of the isptest payload
 
         # Create byte string containing all uppercase and lowercase letters
         letters = string.ascii_letters
-        # Calculate length of required randome string after our header taken into account,
-        randomDataLength = payloadLength - RtpGenerator.ISPTEST_HEADER_SIZE
         # iterate over stringLength picking random letters from 'letters'
-        randomDataString = ''.join(random.choice(letters) for i in range(randomDataLength))
+        randomDataString = ''.join(random.choice(letters) for i in range(payloadLength))
 
         # Return as a bytestring
         return randomDataString.encode('ascii')
@@ -2576,9 +2574,9 @@ class RtpGenerator(object):
                 bps = 0
                 for x in bpsCounterList:
                     bps += x
-                self.txBps_1s = bps * 8
+                self.txActualTxRate_bps = bps * 8
                 try:
-                    Utils.Message.addMessage(str(Utils.bToMb(self.txBps_1s)) + "bps, period: " + str("%.6f" %self.txPeriod) + ", " +\
+                    Utils.Message.addMessage(str(Utils.bToMb(self.txActualTxRate_bps)) + "bps, period: " + str("%.6f" %self.txPeriod) + ", " +\
                                              str("%.6f" %self.minSleepTime) + ":" +\
                                              str("%.6f" %self.meanSleepTime) + ":" + str("%.6f" %self.maxSleepTime))
                     Utils.Message.addMessage("Calculation times: " + str("%.6f" % self.minCalculationTime) + ":" +\
@@ -2623,7 +2621,8 @@ class RtpGenerator(object):
             isptestHeaderData = bytearray(RtpGenerator.getIsptestHeaderSize())
 
             # Create dummy payload (based on the current value of self.payloadLength)
-            dummyPayload = self.generatePayload(self.payloadLength)
+            dummyPayload = self.generatePayload(self.payloadLength -\
+                                                RtpGenerator.ISPTEST_HEADER_SIZE - RtpGenerator.RTP_HEADER_LENGTH_BYTES)
 
             # Construct the entire udp data frame
             self.udpTxData = bytearray(rtpHeader + isptestHeaderData + dummyPayload)
@@ -2685,6 +2684,46 @@ class RtpGenerator(object):
             #     str(self.UDP_TX_PORT) + ", " + str(e))
 
     def __rtpGeneratorThread(self):
+
+        # This utility method will update the stats relating to the sleep period used to regulate the transmission rate
+        def updateSleepTimeStats(rtpGeneratorInstance, sleepTime):
+            if rtpGeneratorInstance.minSleepTime is None:
+                rtpGeneratorInstance.minSleepTime = sleepTime
+            elif sleepTime < rtpGeneratorInstance.minSleepTime:
+                # record new minimum
+                rtpGeneratorInstance.minSleepTime = sleepTime
+
+            if rtpGeneratorInstance.maxSleepTime is None:
+                rtpGeneratorInstance.maxSleepTime = sleepTime
+            elif sleepTime > rtpGeneratorInstance.maxSleepTime:
+                # record new maximum
+                rtpGeneratorInstance.maxSleepTime = sleepTime
+
+            if rtpGeneratorInstance.meanSleepTime is None:
+                rtpGeneratorInstance.meanSleepTime = sleepTime
+            else:
+                # Calculate mean
+                rtpGeneratorInstance.meanSleepTime = (rtpGeneratorInstance.meanSleepTime + sleepTime) / 2.0
+
+        # This utility method will update the stats relating to the time taken for the RtpGenerator thread to prepare
+        # and transmit each rtp packet
+        def updateCalculationTimeStats(rtpGeneratorInstance, calculationTime):
+            if rtpGeneratorInstance.minCalculationTime is None:
+                rtpGeneratorInstance.minCalculationTime = calculationTime
+            elif calculationTime < rtpGeneratorInstance.minCalculationTime:
+                rtpGeneratorInstance.minCalculationTime = calculationTime
+
+            if rtpGeneratorInstance.maxCalculationTime is None:
+                rtpGeneratorInstance.maxCalculationTime = calculationTime
+            elif calculationTime > rtpGeneratorInstance.maxCalculationTime:
+                rtpGeneratorInstance.maxCalculationTime = calculationTime
+
+            if rtpGeneratorInstance.meanCalculationTime is None:
+                rtpGeneratorInstance.meanCalculationTime = calculationTime
+            else:
+                rtpGeneratorInstance.meanCalculationTime = \
+                    (rtpGeneratorInstance.meanCalculationTime + calculationTime) / 2.0
+
         # This function will actually create and send the rtp packets
         def sendPacket(rtpGeneratorInstance):
             # If all tx flags are set then transmit the (previously created) rtp packet
@@ -2704,8 +2743,6 @@ class RtpGenerator(object):
                                                              rtpGeneratorInstance.UDP_TX_PORT))
                     # Update tx bytes counter (taking packet headers into account)
                     rtpGeneratorInstance.txCounter_bytes += sentBytes
-                    # Update tx bps data counter (*8 converts bytes to bits)
-                    rtpGeneratorInstance.txBps_1s += sentBytes * 8
 
                 except Exception as e:
                     Utils.Message.addMessage("\x1B[31 RtpGenerator.__newImprovedRtpGeneratorThread() sendto().   \x1B[0m " + str(e))
@@ -2741,10 +2778,13 @@ class RtpGenerator(object):
 
                     yield max(t + count * txPeriod - time.time(), 0)
 
+            # This is the infinite loop that actually transmits the rtp packet at an interval determined
+            # by the tx period. The sleep period is determined by the calculateSleepPeriod() 'generator' function
             # Infinite loop until timeToLive == 0
             g = calculateSleepPeriod()
             while rtpGeneratorInstance.timeToLive != 0:
-                # Get (dynamic) sleep interval
+                # Get (dynamic) sleep interval. This should ensure that the next packet is sent at precisely the correct
+                # time with any processing delays compensated for
                 sleepTime = next(g)
                 # sleep
                 time.sleep(sleepTime)
@@ -2756,42 +2796,12 @@ class RtpGenerator(object):
                 rtpGeneratorInstance.prepareNextRtpPacket()
 
                 # Update sleepTime stats
-                if rtpGeneratorInstance.minSleepTime is None:
-                    rtpGeneratorInstance.minSleepTime = sleepTime
-                elif sleepTime < rtpGeneratorInstance.minSleepTime:
-                    # record new minimum
-                    rtpGeneratorInstance.minSleepTime = sleepTime
+                updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
 
-                if rtpGeneratorInstance.maxSleepTime is None:
-                    rtpGeneratorInstance.maxSleepTime = sleepTime
-                elif sleepTime > rtpGeneratorInstance.maxSleepTime:
-                    # record new maximum
-                    rtpGeneratorInstance.maxSleepTime = sleepTime
-
-                if rtpGeneratorInstance.meanSleepTime is None:
-                    rtpGeneratorInstance.meanSleepTime = sleepTime
-                else:
-                    # Calculate mean
-                    rtpGeneratorInstance.meanSleepTime = (rtpGeneratorInstance.meanSleepTime + sleepTime) / 2.0
-
-                # Stop calculation timer
-                calculationTime = timer() - processingStartTime
+                # Stop calculation timer - calculate how long the packet preparation and transmission has taken
+                calculationPeriod = timer() - processingStartTime
                 # Update calculation time stats
-                if rtpGeneratorInstance.minCalculationTime is None:
-                    rtpGeneratorInstance.minCalculationTime = calculationTime
-                elif calculationTime < rtpGeneratorInstance.minCalculationTime:
-                    rtpGeneratorInstance.minCalculationTime = calculationTime
-
-                if rtpGeneratorInstance.maxCalculationTime is None:
-                    rtpGeneratorInstance.maxCalculationTime = calculationTime
-                elif calculationTime > rtpGeneratorInstance.maxCalculationTime:
-                    rtpGeneratorInstance.maxCalculationTime = calculationTime
-
-                if rtpGeneratorInstance.meanCalculationTime is None:
-                    rtpGeneratorInstance.meanCalculationTime = calculationTime
-                else:
-                    rtpGeneratorInstance.meanCalculationTime =\
-                        (rtpGeneratorInstance.meanCalculationTime + calculationTime) / 2.0
+                updateCalculationTimeStats(rtpGeneratorInstance, calculationPeriod)
 
         Utils.Message.addMessage("DBUG:New RtpGen thread. Thread starting")
         # Prepare the first rtp packet to be sent

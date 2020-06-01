@@ -123,7 +123,7 @@ def bToMb(value):
     else:
         return str(value)
 
-# Utility function to convert a value in micros to millies (eg uS to mS)
+# Utility function to convert an interger value in micros to millies (eg uS to mS)
 def uTom(value):
     # It will append a 'u' or 'm' suffix and return a string
     # If > 1000u, express as a m

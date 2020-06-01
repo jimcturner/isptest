@@ -2984,7 +2984,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             break
 
 
-        data = b""  # Will hold the data received - specify a bytes string
+        data = b""  # Will hold the data received - specify a bytestring (i.e an ascii encoded string)
 
         while True:
             # Check status of shutdownFlag
@@ -3015,7 +3015,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
 
                         # Calculate the data payload size
-                        payloadSize = len(data) - RTP_HEADER_SIZE
+                        payloadSize = len(data)
 
                         # Take copies of the data values that we need
                         # 	sequence no=rtpHeader[2]
