@@ -31,6 +31,8 @@ class Registry(object):
     allowProcessorOverloadEventGeneration = False
     # No of historic events to keep in memory (before events are purged)
     rtpReceiveStreamHistoricEventsLimit = 50
+    rtpReceiveStreamJitterExcessiveAlarmThresholdPercent = 100 # The amount of jitter in the received packet arrival time
+    # before an excessive jitter event is registered
 
     # RtpGenerator
     tracerouteMaxHops = 28  # The maximum no of hops traceroute will consider before resetting
