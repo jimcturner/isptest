@@ -830,7 +830,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_processor_utilisation_percent"] = 0
 
         # % ratio of 1S Jitter_uS to packet_mean_receive_period_uS that will trigger an excessJitterEvent
-        self.__stats["jitter_excessive_alarm_threshold_percent"] = 30
+        self.__stats["jitter_excessive_alarm_threshold_percent"] = 100
         self.excessJitterThresholdFactor = (self.__stats["jitter_excessive_alarm_threshold_percent"] / 100.0)
 
         # No of seconds to inhibit an excessive jitter alarm
