@@ -29,6 +29,8 @@ class Registry(object):
     streamIsDeadThreshold_s = 30 # Specifies how long to wait with no incoming rtp packets before a stream is presumed dead
     # Getting false positives at the moment (because the CPU can keep up!) so creating lots of unhelpful events
     allowProcessorOverloadEventGeneration = False
+    # No of historic events to keep in memory (before events are purged)
+    rtpReceiveStreamHistoricEventsLimit = 50
 
     # RtpGenerator
     tracerouteMaxHops = 28  # The maximum no of hops traceroute will consider before resetting

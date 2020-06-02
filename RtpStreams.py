@@ -764,7 +764,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.sumOfJitter_1s = 0
 
         # No of events to keep before purging self.__eventList = []
-        self.historicEventsLimit = 50
+        self.historicEventsLimit = Registry.rtpReceiveStreamHistoricEventsLimit
         self.__stats["glitch_Event_Trigger_Threshold_packets"]= glitchEventTriggerThreshold
         self.__stats["glitch_glitches_ignored_counter"] = 0
 
@@ -1831,7 +1831,8 @@ class ResultsTransmitter(object):
                                 # clear the socket.sendto() error counter
                                 self.sendtoErrorCounter = 0
                         else:
-                            Utils.Message.addMessage("DBUG:__resultsTransmitterThread  - fragmentedMessage[] is None or empty")
+                            # Utils.Message.addMessage("DBUG:__resultsTransmitterThread  - fragmentedMessage[] is None or empty")
+                            pass
 
                     except Exception as e:
                         Utils.Message.addMessage("ERR:__resultsTransmitterThread sendto() socket id:" + str(id(self.udpSocket)) +", " + str(e))
@@ -2797,14 +2798,31 @@ class RtpGenerator(object):
 
                     yield max(t + count * txPeriod - time.time(), 0)
 
+            # This function calculates a deliberately inconsistent sleep period, to simulate network jitter
+            def calculateJitterySleepPeriod():
+                # Calculate the maximum intentional timing deviation to be add/subtracted from txPeriod if jitter is enabled
+                maxDeviation = self.txPeriod * Registry.simulatedJitterPercent / 100
+                jitter = random.uniform(-1 * maxDeviation, maxDeviation)
+                sleepTime = rtpGeneratorInstance.txPeriod + jitter - rtpGeneratorInstance.meanCalculationTime
+
+                if sleepTime < 0:
+                    return 0
+                else:
+                    return sleepTime
+
             # This is the infinite loop that actually transmits the rtp packet at an interval determined
             # by the tx period. The sleep period is determined by the calculateSleepPeriod() 'generator' function
             # Infinite loop until timeToLive == 0
+            # Create a Generator function (which is a bit like an object, in that it will continue to exist after returning)
             g = calculateSleepPeriod()
             while rtpGeneratorInstance.timeToLive != 0:
-                # Get (dynamic) sleep interval. This should ensure that the next packet is sent at precisely the correct
-                # time with any processing delays compensated for
-                sleepTime = next(g)
+                if rtpGeneratorInstance.jitterGenerationFlag is False:
+                    # Get (dynamic) sleep interval. This should ensure that the next packet is sent at precisely the correct
+                    # time with any processing delays compensated for
+                    sleepTime = next(g)
+                else:
+                    # Otherwise, deliberately get a jittery sleep value
+                    sleepTime = calculateJitterySleepPeriod()
                 # sleep
                 time.sleep(sleepTime)
                 # start timer
@@ -2828,9 +2846,6 @@ class RtpGenerator(object):
         # Calculate tx period required to provide supplied txRate for a given stringLength
         # Note: txPeriod = self.payloadLength * 8.0 / self.txRate
         self.txPeriod = self.calculateTxPeriod(self.txRate)
-
-        # Calculate the maximum intentional timing deviation to be add/subtracted from txPeriod if jitter is enabled
-        maxDeviation = self.txPeriod * Registry.simulatedJitterPercent / 100
 
         try:
             # Create a UDP socket for UDP transmission and reception
