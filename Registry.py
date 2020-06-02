@@ -29,8 +29,17 @@ class Registry(object):
     streamIsDeadThreshold_s = 30 # Specifies how long to wait with no incoming rtp packets before a stream is presumed dead
     # Getting false positives at the moment (because the CPU can keep up!) so creating lots of unhelpful events
     allowProcessorOverloadEventGeneration = False
+    # No of historic events to keep in memory (before events are purged)
+    rtpReceiveStreamHistoricEventsLimit = 50
+    rtpReceiveStreamJitterExcessiveAlarmThresholdPercent = 100 # The amount of jitter in the received packet arrival time
+    # before an excessive jitter event is registered
 
     # RtpGenerator
     tracerouteMaxHops = 28  # The maximum no of hops traceroute will consider before resetting
     tracerouteFallbackUDPDestPort = 33434  # The 'fallback' port used by the RtpGenerator.traceroute thread if no reply
     # is received from a host
+    simulatedJitterPercent = 50 # The amount of 'simulated jitter' to add to the tx packets, if the feature is enabled
+
+    # RtpStreamResults
+    # No of historic events to keep in memory (before events are purged)
+    rtpStreamResultsistoricEventsLimit = 50

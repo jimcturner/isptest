@@ -651,7 +651,7 @@ class UI(object):
                            ["Dest\n IP", 'Dest IP'],
                            ["Dest\nPort", 'Dest Port'],
                            ["Sync\nsrcID", 'Sync Source ID'],
-                           ["Tx\nbps", 'Tx Rate'],
+                           ["Tx\nbps", 'Tx Rate (actual)'],
                            ["Size", 'Packet size'],
                            ["Bytes\n tx'd", 'Bytes transmitted'],
                            [" Time\nremain", 'Time to live']
@@ -1913,12 +1913,15 @@ class UI(object):
             # If less than 1Mbps increment/decrement by 256kbps
             if currentTxRate < 1048576:
                 newTxRate = currentTxRate + (262144 * direction)
+
                 self.selectedStream.setTxRate(newTxRate)
             # Otherwise increment/decrement by 500kbps
             else:
                 newTxRate = currentTxRate + (524288 * direction)
                 self.selectedStream.setTxRate(newTxRate)
 
+            Utils.Message.addMessage("Setting Tx rate for stream " + str(self.selectedStreamID) + " to " + \
+                                     str(Utils.bToMb(newTxRate)) + "bps")
     # 'j'
     def __onIncreaseTimeToLive(self):
         self.__modifyTimeToLive(1)
@@ -2145,6 +2148,14 @@ class UI(object):
         # Create some debug information to append to the end of the help list
         debugInfo = [["",""],["Debug info",""]]
         debugInfo.append(["Process ID ", str(os.getpid())])
+        try:
+            # This will only work if the stream type is an RtpGenerator object
+            debugInfo.append(["sleep time ",
+                              str(int(self.selectedStream.getRtpStreamStatsByKey('Sleep Time mean')*100000)) + "uS"])
+            debugInfo.append(["calc time",\
+                        str(int(self.selectedStream.getRtpStreamStatsByKey('Calculation time mean')*100000)) + "uS"])
+        except:
+            pass
         try:
             # Get list of running threads
             runningThreads = Utils.listCurrentThreads(asList=True)
@@ -2496,7 +2507,7 @@ class UI(object):
             value = Utils.bToMb(value) + "B"
             return value
 
-        if key == key == 'Tx Rate':
+        if key == key == 'Tx Rate (actual)':
             value = Utils.bToMb(value)
             return value
 
@@ -2984,7 +2995,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             break
 
 
-        data = b""  # Will hold the data received - specify a bytes string
+        data = b""  # Will hold the data received - specify a bytestring (i.e an ascii encoded string)
 
         while True:
             # Check status of shutdownFlag
@@ -3015,7 +3026,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
 
                         # Calculate the data payload size
-                        payloadSize = len(data) - RTP_HEADER_SIZE
+                        payloadSize = len(data)
 
                         # Take copies of the data values that we need
                         # 	sequence no=rtpHeader[2]
@@ -3401,6 +3412,33 @@ def shutdownApplicationSignalHandler(signum, frame):
 # #####################
 
 def main(argv):
+    # def scheduler(period):
+    #     # Calculate the sleep period based on the last time this function was called (this is a 'Generator' function
+    #     # so it has 'memory'
+    #     def calculateSleepPeriod():
+    #         t = time.time()
+    #         count = 0
+    #         while True:
+    #             count += 1
+    #             yield max(t + count * period - time.time(), 0)
+    #
+    #     # Infinite loop.
+    #     # 'functionToBeScheduled will be called indefintely, with a sleep interval calculated by calculateSleepPeriod()
+    #     g = calculateSleepPeriod()
+    #     maxLoops = 5
+    #     loopCounter = 0
+    #     while loopCounter < maxLoops:
+    #         time.sleep(next(g))
+    #         sendPacket("foobar")
+    #         loopCounter += 1
+    #
+    #
+    # def sendPacket(s):
+    #     print('hello {} ({:.4f})'.format(s, time.time()))
+    #     time.sleep(.9)
+    #
+    # scheduler(1)
+    # print("Ending")
     # try:
     #     x = WhoisResolver.whoisLookup("192.168.0.0")
     #     # print(str(x))
