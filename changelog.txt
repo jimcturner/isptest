@@ -6,3 +6,4 @@ V1.6 Adds a UDP traceroute
 V1.7 Improves report generation, adds popup messages to detect blocked listening ports and also non-admin mode transmit (which is required for traceroute)
 V1.8 Adds a NAT table to the streams table. Also includes local and public ip addresses and ports on the report
 V1.9 Adds a whois lookup feature on the traceroute table (and report). Adds a faster traceroute response on the Receiver end
+V2.0 Rewritten RtpGenerator tx thread to improve stability of tx rate. Changes excess jitter event threshold to 100% (was 30% leading to too many unuseful events). 
