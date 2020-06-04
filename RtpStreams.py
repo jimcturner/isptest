@@ -2589,9 +2589,11 @@ class RtpGenerator(object):
 
                 # Calculate the transmitted bits per second
                 self.txActualTxRate_bps = bytesPerSec * 8
-                # Check to see if actual Tx rate is > 10 higher than the rate specified by txRate
-                if self.txActualTxRate_bps > (1.1 * self.txRate):
-                    Utils.Message.addMessage("Warning: Stream " + str (self.syncSourceIdentifier) + " tx rate exceeding " +\
+                # Check to see if actual Tx rate is > 12.5% higher than the rate specified by txRate
+                # For the sake of speed, shift txRate by '3 bits' rather than using division
+                if self.txActualTxRate_bps > (self.txRate + (self.txRate >> 3)):
+                    Utils.Message.addMessage("Warning: Stream " + str (self.syncSourceIdentifier) +\
+                                             " tx rate exceeding " +\
                                              str(Utils.bToMb(self.txRate)) + "(" +\
                                              str(Utils.bToMb(self.txActualTxRate_bps)) + ")bps")
 
