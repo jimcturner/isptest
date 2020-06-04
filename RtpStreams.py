@@ -2127,9 +2127,9 @@ class RtpGenerator(object):
                                     # 3 The current version of isptest
 
         self.uiInstance = uiInstance   # This allows access to the methods of the UI class
-        self.minSleepTime = None
-        self.maxSleepTime = None
-        self.meanSleepTime = None
+        # self.minSleepTime = None
+        # self.maxSleepTime = None
+        self.meanSleepTime = 0
         self.minCalculationTime = None
         self.maxCalculationTime = None
         self.meanCalculationTime = None
@@ -2228,7 +2228,8 @@ class RtpGenerator(object):
                 'Tx Source Port': self.UDP_TX_SRC_PORT,
                 'Time to live': self.timeToLive,
                 'Sleep Time mean': self.meanSleepTime,
-                'Calculation time mean': self.meanCalculationTime
+                'Calculation time mean': self.meanCalculationTime,
+                'Tx period': self.txPeriod
                 }
 
     def getRtpStreamStatsByKey(self, key):
@@ -2551,169 +2552,73 @@ class RtpGenerator(object):
         # returns a reference to the socket created by __rtpGeneratorThread
         return self.udpTxSocket
 
-
-
-    # # This thread collects time averaged values and performs housekeeping
-    # def __samplingThread(self):
-    #     loopCounter =0
-    #     # The tx bps counter is a 1 second moving average with 0.2 sec accuracy
-    #     bpsCounterList = []
-    #     # Snapshot current value
-    #     prevTxCounter_Bytes = self.txCounter_bytes
-    #     # Infinite loop
-    #     while self.timeToLive != 0:
-    #         # Take snapshot of current tx byte counter
-    #         currentTxCounter_Bytes = self.txCounter_bytes
-    #         # Append the latest bytes transmitted (during the last 0.2 seconds) to the list
-    #         bpsCounterList.append(currentTxCounter_Bytes - prevTxCounter_Bytes)
-    #         # If we have more than 5 historic samples, remove the oldest item from the list
-    #         if len(bpsCounterList)>5:
-    #             del bpsCounterList[0]
-    #         # Store current value of currentTxCounter_Bytes for next time around the loop
-    #         prevTxCounter_Bytes = currentTxCounter_Bytes
-    #
-    #
-    #         ######## 1 second counter
-    #         if loopCounter % 5 == 0:
-    #             # 1 Second has elapsed
-    #             # Calculate the actual tx bps by summing the bpsCounterList and converting bytes to bits
-    #             bps = 0
-    #             for x in bpsCounterList:
-    #                 bps += x
-    #             self.txActualTxRate_bps = bps * 8
-    #
-    #             # Decrement timeToLive seconds counter but only if current value is +ve
-    #             # A -ve value is used to denote 'live for ever'
-    #             if self.timeToLive > 0:
-    #                 self.timeToLive -= 1
-    #
-    #             # Now housekeep the associated rtpTxStreamResults object for this stream
-    #             # Check to see that rtpTxStreamResultsDict contains this stream objects
-    #             if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
-    #                 try:
-    #                     # Get a handle on the rtpTxStreamResults object
-    #                     rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-    #                     if type(rtpTxStreamResults) == RtpStreamResults:
-    #                         # Invoke the housekeeping method to purge any really old events
-    #                         rtpTxStreamResults.houseKeepEventList()
-    #                 except Exception as e:
-    #                     Utils.Message.addMessage(
-    #                         "ERR: __samplingThread rtpTxStreamResults.houseKeepEventList(): " + str(e))
-    #         ###########
-    #
-    #         # Increment loop counter
-    #         loopCounter += 1
-    #         # Sleep for a fifth of a second
-    #         time.sleep(0.2)
-    #
-    #     Utils.Message.addMessage("RtpGenerator.samplingLoop() ending for stream " + str(self.syncSourceIdentifier))
-    # This thread collects time averaged values and performs housekeeping
+    # This thread samples the actual transmitter tx rate and also housekeeps
     def __samplingThread(self):
-        def scheduler(rtpGeneratorInstance):
-            # Calculate the sleep period based on the last time this function was called (this is a 'Generator' function
-            # so it has 'memory'
-            def calculateSleepPeriod(timeToSleep):
-                # Snapshot the starting time
-                t = time.time()
-                count = 0
-                while True:
-                    count += 1
-                    yield max(t + count * timeToSleep - time.time(), 0)
-
-            # Create a Generator function (which is a bit like an object, in that it will continue to exist after returning)
-            # g = calculateSleepPeriod(0.2)
-
-            # Initialise variables to be used within the loop
-            loopCounter = 0
-            # The tx bps counter is a 1 second moving average with 0.2 sec accuracy
-            bpsCounterList = []
-            # Snapshot current value
-            prevTxCounter_Bytes = rtpGeneratorInstance.txCounter_bytes
-
-            meanDiff = 0  # The mean of all the difference values (a 1Sec moving average)
-            errorPc = 0
-
-            # Infinite loop = this should accurately fire every 0.2 seconds
-            while rtpGeneratorInstance.timeToLive != 0:
-                # Get (dynamic) sleep interval.
-                # sleepTime = next(g)
-                sleepTime = 0.2
-                # sleep
-                time.sleep(sleepTime)
-                ########### Timed loop starts -  Now do 'the thing'
-                # Take snapshot of current tx byte counter
-                currentTxCounter_Bytes = self.txCounter_bytes
-                # Append the latest bytes transmitted (during the last 0.2 seconds) to the list
-                bpsCounterList.append(currentTxCounter_Bytes - prevTxCounter_Bytes)
-                # If we have more than 5 historic samples, remove the oldest item from the list
-                if len(bpsCounterList) > 5:
-                    del bpsCounterList[0]
-                # Store current value of currentTxCounter_Bytes for next time around the loop
-                prevTxCounter_Bytes = currentTxCounter_Bytes
-
-                # Reset the counters
-                bytesPerSec = 0
-                sumOfDiffs = 0
-                # Wait until we have all our data points
-                if len(bpsCounterList) >= 5:
-                    for x in range(0, 5):
-                        # Sum the entire list to calculate the bytes per sec tx rate
-                        bytesPerSec += bpsCounterList[x]
-
-                        # Now sum the differences between the values in each 200mS sample to calculate the stability
-                        # Our list of 5 sample points will give us four diffs. (fences/fenceposts)
-                        # if x > 0:
-                        #     diff = abs(bpsCounterList[x] - bpsCounterList[x - 1])
-                        #     sumOfDiffs += diff
-                    # Calculate the transmitted bits per second
-                    self.txActualTxRate_bps = bytesPerSec * 8
-
-                    # # Calculate the stream error as a percentage of sumOfDiffs to total bytes/sec sent
-                    # # We only have 4 sample points from the current list, so have to reuse the prev
-                    # # calculated meanDiff value
-                    # try:
-                    #     errorPc = ((meanDiff + sumOfDiffs) / bytesPerSec) * 100.0
-                    # except Exception as e:
-                    #     Utils.Message.addMessage("Calculate errorPC " + str(e))
-                    #
-                    # # Calculate the mean difference between samples transmitted in the last second
-                    # instantaneousMeanDiff = sumOfDiffs / 4
-                    # # Calculate a long term mean using the new and previous mean diff value
-                    # meanDiff = (meanDiff + instantaneousMeanDiff) / 2
-
-                ######## 1 second counter
-                if loopCounter % 5 == 0:
-                    # 1 Second has elapsed
-
-                    # Utils.Message.addMessage(str(bpsCounterList) + ", " + \
-                    #                          ", meanDiff " + str(meanDiff) + ", " + str("%0.2f" % errorPc) + "%")
-                    # Decrement timeToLive seconds counter but only if current value is +ve
-                    # A -ve value is used to denote 'live for ever'
-                    if self.timeToLive > 0:
-                        self.timeToLive -= 1
-
-                    # Now housekeep the associated rtpTxStreamResults object for this stream
-                    # Check to see that rtpTxStreamResultsDict contains this stream objects
-                    if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
-                        try:
-                            # Get a handle on the rtpTxStreamResults object
-                            rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                            if type(rtpTxStreamResults) == RtpStreamResults:
-                                # Invoke the housekeeping method to purge any really old events
-                                rtpTxStreamResults.houseKeepEventList()
-                        except Exception as e:
-                            Utils.Message.addMessage(
-                                "ERR: __samplingThread rtpTxStreamResults.houseKeepEventList(): " + str(e))
-                ######## 1 second counter end of code ########
-
-                # Increment 1 sec loop counter
-                loopCounter += 1
-                ########### 0.2 sec timed loop ends
-
         Utils.Message.addMessage(
             "DBUG:RtpGenerator.__samplingThread starting for stream " + str(self.syncSourceIdentifier))
-        # Start the sampling loop (blocking call until stream time to leave == 0)
-        scheduler(self)
+        # Initialise variables to be used within the loop
+        loopCounter = 0
+        # The tx bps counter is a 1 second moving average with 0.2 sec accuracy
+        bpsCounterList = []
+        # Snapshot current value
+        prevTxCounter_Bytes = self.txCounter_bytes
+
+        # Infinite loop = this should fire every 0.2 seconds
+        while self.timeToLive != 0:
+            sleepTime = 0.2
+            # sleep
+            time.sleep(sleepTime)
+            ########### Timed loop starts -  Now do 'the thing'
+            # Take snapshot of current tx byte counter
+            currentTxCounter_Bytes = self.txCounter_bytes
+            # Append the latest bytes transmitted (during the last 0.2 seconds) to the list
+            bpsCounterList.append(currentTxCounter_Bytes - prevTxCounter_Bytes)
+            # If we have more than 5 historic samples, remove the oldest item from the list
+            if len(bpsCounterList) > 5:
+                del bpsCounterList[0]
+            # Store current value of currentTxCounter_Bytes for next time around the loop
+            prevTxCounter_Bytes = currentTxCounter_Bytes
+
+            # Reset the counters
+            bytesPerSec = 0
+            # Wait until we have all our data points
+            if len(bpsCounterList) >= 5:
+                for x in range(0, 5):
+                    # Sum the entire list to calculate the bytes per sec tx rate
+                    bytesPerSec += bpsCounterList[x]
+
+                # Calculate the transmitted bits per second
+                self.txActualTxRate_bps = bytesPerSec * 8
+                if self.txActualTxRate_bps > (1.05 * self.txRate):
+                    Utils.Message.addMessage("Warning: Stream " + str (self.syncSourceIdentifier) + " tx rate exceeding " +\
+                                             str(Utils.bToMb(self.txRate)) + "(" +\
+                                             str(Utils.bToMb(self.txActualTxRate_bps)) + ")bps")
+
+            ######## 1 second counter
+            if loopCounter % 5 == 0:
+                # 1 Second has elapsed
+                # Decrement timeToLive seconds counter but only if current value is +ve
+                # A -ve value is used to denote 'live for ever'
+                if self.timeToLive > 0:
+                    self.timeToLive -= 1
+
+                # Now housekeep the associated rtpTxStreamResults object for this stream
+                # Check to see that rtpTxStreamResultsDict contains this stream objects
+                if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
+                    try:
+                        # Get a handle on the rtpTxStreamResults object
+                        rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                        if type(rtpTxStreamResults) == RtpStreamResults:
+                            # Invoke the housekeeping method to purge any really old events
+                            rtpTxStreamResults.houseKeepEventList()
+                    except Exception as e:
+                        Utils.Message.addMessage(
+                            "ERR: __samplingThread rtpTxStreamResults.houseKeepEventList(): " + str(e))
+            ######## 1 second counter end of code ########
+
+            # Increment 1 sec loop counter
+            loopCounter += 1
+            ########### 0.2 sec timed loop ends
 
         Utils.Message.addMessage(
             "DBUG:RtpGenerator.__samplingThread ending for stream " + str(self.syncSourceIdentifier))
@@ -2812,23 +2717,23 @@ class RtpGenerator(object):
 
         # This utility method will update the stats relating to the sleep period used to regulate the transmission rate
         def updateSleepTimeStats(rtpGeneratorInstance, sleepTime):
-            if rtpGeneratorInstance.minSleepTime is None:
-                rtpGeneratorInstance.minSleepTime = sleepTime
-            elif sleepTime < rtpGeneratorInstance.minSleepTime:
-                # record new minimum
-                rtpGeneratorInstance.minSleepTime = sleepTime
-
-            if rtpGeneratorInstance.maxSleepTime is None:
-                rtpGeneratorInstance.maxSleepTime = sleepTime
-            elif sleepTime > rtpGeneratorInstance.maxSleepTime:
-                # record new maximum
-                rtpGeneratorInstance.maxSleepTime = sleepTime
-
-            if rtpGeneratorInstance.meanSleepTime is None:
-                rtpGeneratorInstance.meanSleepTime = sleepTime
-            else:
-                # Calculate mean
-                rtpGeneratorInstance.meanSleepTime = (rtpGeneratorInstance.meanSleepTime + sleepTime) / 2.0
+            # if rtpGeneratorInstance.minSleepTime is None:
+            #     rtpGeneratorInstance.minSleepTime = sleepTime
+            # elif sleepTime < rtpGeneratorInstance.minSleepTime:
+            #     # record new minimum
+            #     rtpGeneratorInstance.minSleepTime = sleepTime
+            #
+            # if rtpGeneratorInstance.maxSleepTime is None:
+            #     rtpGeneratorInstance.maxSleepTime = sleepTime
+            # elif sleepTime > rtpGeneratorInstance.maxSleepTime:
+            #     # record new maximum
+            #     rtpGeneratorInstance.maxSleepTime = sleepTime
+            #
+            # if rtpGeneratorInstance.meanSleepTime is None:
+            #     rtpGeneratorInstance.meanSleepTime = sleepTime
+            # else:
+            # Calculate mean
+            rtpGeneratorInstance.meanSleepTime = (rtpGeneratorInstance.meanSleepTime + sleepTime) / 2.0
 
         # This utility method will update the stats relating to the time taken for the RtpGenerator thread to prepare
         # and transmit each rtp packet
@@ -2931,7 +2836,7 @@ class RtpGenerator(object):
                 # sleep
                 time.sleep(sleepTime)
                 # start timer
-                processingStartTime = timer()
+                # processingStartTime = timer()
                 # send previously prepared packet
                 sendPacket(rtpGeneratorInstance)
                 # Prepare the next packet
@@ -2941,9 +2846,9 @@ class RtpGenerator(object):
                 updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
 
                 # Stop calculation timer - calculate how long the packet preparation and transmission has taken
-                calculationPeriod = timer() - processingStartTime
+                # calculationPeriod = timer() - processingStartTime
                 # Update calculation time stats
-                updateCalculationTimeStats(rtpGeneratorInstance, calculationPeriod)
+                # updateCalculationTimeStats(rtpGeneratorInstance, calculationPeriod)
 
         Utils.Message.addMessage("DBUG:New RtpGen thread. Thread starting")
         # Prepare the first rtp packet to be sent

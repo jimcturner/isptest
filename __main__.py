@@ -2151,11 +2151,13 @@ class UI(object):
         try:
             # This will only work if the stream type is an RtpGenerator object
             debugInfo.append(["sleep time ",
-                              str(int(self.selectedStream.getRtpStreamStatsByKey('Sleep Time mean')*100000)) + "uS"])
-            debugInfo.append(["calc time",\
-                        str(int(self.selectedStream.getRtpStreamStatsByKey('Calculation time mean')*100000)) + "uS"])
-        except:
-            pass
+                              str("%0.20f" %self.selectedStream.getRtpStreamStatsByKey('Sleep Time mean')) + "S"])
+            # debugInfo.append(["calc time",\
+                        # str(int(self.selectedStream.getRtpStreamStatsByKey('Calculation time mean')*100000)) + "uS"])
+            debugInfo.append(["Tx period ",
+                              str("%0.10f" %self.selectedStream.getRtpStreamStatsByKey('Tx period')) + "S"])
+        except Exception as e:
+            Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
         try:
             # Get list of running threads
             runningThreads = Utils.listCurrentThreads(asList=True)
