@@ -2586,6 +2586,7 @@ class RtpGenerator(object):
                     # Sum the entire list to calculate the bytes per sec tx rate
                     bytesPerSec += bpsCounterList[x]
 
+
                 # Calculate the transmitted bits per second
                 self.txActualTxRate_bps = bytesPerSec * 8
                 # Check to see if actual Tx rate is > 12.5% higher than the rate specified by txRate
