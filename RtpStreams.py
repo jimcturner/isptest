@@ -12,6 +12,7 @@ import threading
 import random
 import string
 import platform
+from queue import Queue, Empty
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 import json
@@ -712,8 +713,11 @@ class RtpReceiveStream(RtpReceiveCommon):
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold, rxSocket,
                  rtpRxStreamsDict, rtpRxStreamsDictMutex):
-
+        # Call super constructor
         super().__init__()
+        # Create Queue to accept the received packets
+        self.rtpStreamQueue = Queue()
+
         self.rtpRxStreamsDict = rtpRxStreamsDict
         self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
         # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
@@ -857,10 +861,17 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Create a flag to signal when the stream is believed dead (is therefore scheduled to delete itself)
         self.believedDeadFlag = False
 
+        # Create a _consumeReceiveQueueThread
+        self.queueReceiverThreadActiveFlag = True # Used as a signal to shut down the thread
+        self.queueReceiverThread = threading.Thread(target=self.__queueReceiverThread, args=())
+        self.queueReceiverThread.daemon = False
+        self.queueReceiverThread.setName(str(self.__stats["stream_syncSource"]) + ":queueReceiverThread")
+        self.queueReceiverThread.start()
+
         # Create a __calculateThread
         self.calculateThreadActiveFlag = True # Used as a signal to shut down the calculateThread
         self.calculateThread = threading.Thread(target=self.__calculateThread, args=())
-        self.calculateThread.daemon = True  # Thread will auto shutdown when the prog ends
+        self.calculateThread.daemon = False  # Thread will auto shutdown when the prog ends
         self.calculateThread.setName(str(self.__stats["stream_syncSource"]) + ":calculateThread")
         self.calculateThread.start()
 
@@ -883,6 +894,11 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Also kill the __calculateThread associated with this receive stream
         self.calculateThreadActiveFlag = False
+
+        # Kill the  __queueReceiverThread associated with this receive stream
+        self.queueReceiverThreadActiveFlag = False
+        self.queueReceiverThread.join()
+        Utils.Message.addMessage("DBUG: self.queueReceiverThread.join() complete")
 
         # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
         self.rtpRxStreamsDictMutex.acquire()
@@ -1248,6 +1264,27 @@ class RtpReceiveStream(RtpReceiveCommon):
             pass
             # Utils.Message.addMessage("DBUG: Decoded header: " + str(e) + str(self.rtpStream[0].isptestHeaderData))
 
+    # This thread monitors the packet receive Queue
+    def __queueReceiverThread(self):
+        Utils.Message.addMessage("DBUG: Starting __queueReceiverThread for stream " + \
+                                 str(self.__stats["stream_syncSource"]))
+        while self.queueReceiverThreadActiveFlag:
+            # Now wait for items to appear in the queue (with a timeout)
+            try:
+                # Wait for a packet to arrive in the receive queue
+                rtpPacketData = self.rtpStreamQueue.get(timeout=0.2)
+
+                x = rtpPacketData.rtpSequenceNo
+                if x % 20 == 0:
+                    Utils.Message.addMessage("__queueReceiverThread " + str(x))
+            except Empty:
+            # Will be raised if there is a queue timeout (i.e no data in the queue)
+                pass
+            except Exception as e:
+                Utils.Message.addMessage("ERR:__queueReceiverThread.get() " + str(e))
+
+        Utils.Message.addMessage("DBUG: Ending __queueReceiverThread for stream " + \
+                                 str(self.__stats["stream_syncSource"]))
 
     # Define a private calculation method that will run autonomously as a thread
     # This thread will
@@ -1740,7 +1777,13 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpStreamData.append(newData)
         # Release the mutex
         self.__accessRtpDataMutex.release()
-        # Now we've added the newData object to the list rtpStreamData[] we cab delete the newData object
+
+        # Add the new data to the queue
+        try:
+            self.rtpStreamQueue.put(newData)
+        except Exception as e:
+            Utils.Message.addMessage("RtpReceiveStream.addData() " + str(e))
+        # Now we've added the newData object to the list rtpStreamData[] we can delete the newData object
         del newData
 
 # An object that will transmit stream results back from the receiving end to to the sender
@@ -2590,7 +2633,7 @@ class RtpGenerator(object):
                 # Calculate the transmitted bits per second
                 self.txActualTxRate_bps = bytesPerSec * 8
                 # Check to see if actual Tx rate is > 12.5% higher than the rate specified by txRate
-                # For the sake of speed, shift txRate by '3 bits' rather than using division
+                # For the sake of speed, shift txRate by '3 bits' to divide by 8 rather than using division
                 if self.txActualTxRate_bps > (self.txRate + (self.txRate >> 3)):
                     Utils.Message.addMessage("Warning: Stream " + str (self.syncSourceIdentifier) +\
                                              " tx rate exceeding " +\
