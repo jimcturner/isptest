@@ -1920,8 +1920,10 @@ class UI(object):
                 newTxRate = currentTxRate + (524288 * direction)
                 self.selectedStream.setTxRate(newTxRate)
 
+            # get new confirmed rate from RtpGenrator object
+            confirmedTxRate = int(self.selectedStream.getRtpStreamStatsByKey('Tx Rate'))
             Utils.Message.addMessage("Setting Tx rate for stream " + str(self.selectedStreamID) + " to " + \
-                                     str(Utils.bToMb(newTxRate)) + "bps")
+                                     str(Utils.bToMb(confirmedTxRate)) + "bps")
     # 'j'
     def __onIncreaseTimeToLive(self):
         self.__modifyTimeToLive(1)
