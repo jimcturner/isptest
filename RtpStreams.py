@@ -868,6 +868,13 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.queueReceiverThread.setName(str(self.__stats["stream_syncSource"]) + ":queueReceiverThread")
         self.queueReceiverThread.start()
 
+        # Create a __samplingThread
+        self.samplingThreadActiveFlag = True # Used as a signal to shut down the thread
+        self.samplingThread = threading.Thread(target=self.__samplingThread, args=())
+        self.samplingThread.daemon = False
+        self.samplingThread.setName(str(self.__stats["stream_syncSource"]) + ":samplingThread")
+        self.samplingThread.start()
+
         # Create a __calculateThread
         self.calculateThreadActiveFlag = True # Used as a signal to shut down the calculateThread
         self.calculateThread = threading.Thread(target=self.__calculateThread, args=())
@@ -899,6 +906,11 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.queueReceiverThreadActiveFlag = False
         self.queueReceiverThread.join()
         Utils.Message.addMessage("DBUG: self.queueReceiverThread.join() complete")
+
+        # Kill the __samplingThread associated with this stream
+        self.samplingThreadActiveFlag = False
+        self.samplingThread.join()
+        Utils.Message.addMessage("DBUG: self.samplingThread.join() complete")
 
         # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
         self.rtpRxStreamsDictMutex.acquire()
@@ -1264,10 +1276,86 @@ class RtpReceiveStream(RtpReceiveCommon):
             pass
             # Utils.Message.addMessage("DBUG: Decoded header: " + str(e) + str(self.rtpStream[0].isptestHeaderData))
 
+    # This thread updates the 1sec averages, moving counters and also housekeeps
+    def __samplingThread(self):
+        Utils.Message.addMessage("DBUG: __samplingThread started for stream " + str(self.__stats["stream_syncSource"]))
+        # Initialise variables to be used within the loop
+        loopCounter = 0
+
+        # Infinite loop
+        while self.samplingThreadActiveFlag:
+            time.sleep(0.2)
+            ######## 1 second counter
+            if loopCounter % 5 == 0:
+                Utils.Message.addMessage("RtpReceiveStream.__samplingThread " + str(loopCounter))
+            ######## 1 second counter end of code ########
+            # Increment 1 sec loop counter
+            loopCounter += 1
+        ########### 0.2 sec timed loop ends
+
+        Utils.Message.addMessage("DBUG: __samplingThread ended for stream " + str(self.__stats["stream_syncSource"]))
     # This thread monitors the packet receive Queue
+    # To implement:-
+    #   self.__stats["packet_counter_1S"]
+    #   self.__stats["packet_counter_received_total"]
+    #   self.__stats["packet_data_received_1S_bytes"]
+    #   self.__stats["packet_data_received_total_bytes"]
+    #   self.__stats["packet_payload_size_mean_1S_bytes"]
+    #   self.__stats["packet_instantaneous_receive_period_uS"]
+    #
+    #   Events
+    #   StreamStarted Event self.__stats["packet_first_packet_received_timestamp"]
+    #   All events counter self.__stats["stream_all_events_counter"]
+    #   self.__stats["packet_last_seen_received_timestamp"]
+    #   Loss of Stream alarm
+    #
+    #   Jitter
+    #   self.__stats["jitter_long_term_uS"]
+    #   self.__stats["jitter_mean_1S_uS"]
+    #   self.__stats["jitter_mean_10S_uS"]
+    #   self.__stats["jitter_min_uS"]
+    #   self.__stats["jitter_max_uS"]
+    #   self.__stats["jitter_max_uS"]
+    #   self.__stats["jitter_range_uS"]
+    #   self.__stats["jitter_instantaneous"]
+    #   self.__stats["jitter_alarm_event_timeout_S"]
+    #   self.__stats["jitter_excess_jitter_events_total"]
+    #   self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"]
+    #   self.__stats["jitter_time_of_last_excess_jitter_event"]
+    #   self.__stats["jitter_excess_jitter_events_total"]
+    #   self.__stats["jitter_mean_time_between_excess_jitter_events"]
+
+
+    #   Glitches
+    #   self.__stats["glitch_counter_total_glitches"]
+    #   self.__stats["glitch_time_elapsed_since_last_glitch"
+    #   self.__stats["glitch_most_recent_timestamp"]
+    #   self.__stats["glitch_packets_lost_total_count"]
+    #   self.__stats["glitch_packets_lost_total_percent"]
+    #   Moving glitch counters
+    #   self.__stats["glitch_Event_Trigger_Threshold_packets"]
+    #   self.__stats["glitch_glitches_ignored_counter"]
+    #   self.__stats["glitch_length_total_time"]
+    #   self.__stats["glitch_mean_glitch_duration"]
+    #   self.__stats["glitch_packets_lost_per_glitch_mean"]
+    #   self.__stats["glitch_packets_lost_per_glitch_min"]
+    #   self.__stats["glitch_packets_lost_per_glitch_max"]
+    #   self.__stats["glitch_min_glitch_duration"]
+    #   self.__stats["glitch_max_glitch_duration"]
+    #   self.__stats["glitch_worst_glitches_list"]
+
+
+    #   Stream
+    #   self.__stats["stream_time_elapsed_total"]
+
+    #   Other
+    #   Housekeep eventsList
+    #   Test for dead stream --> Save report to disk --> kill itself
     def __queueReceiverThread(self):
         Utils.Message.addMessage("DBUG: Starting __queueReceiverThread for stream " + \
                                  str(self.__stats["stream_syncSource"]))
+        prevRtpPacketData = None
+
         while self.queueReceiverThreadActiveFlag:
             # Now wait for items to appear in the queue (with a timeout)
             try:
@@ -1777,14 +1865,15 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpStreamData.append(newData)
         # Release the mutex
         self.__accessRtpDataMutex.release()
+        # Now we've added the newData object to the list rtpStreamData[] we can delete the newData object
+        del newData
 
         # Add the new data to the queue
         try:
-            self.rtpStreamQueue.put(newData)
+            self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData))
         except Exception as e:
             Utils.Message.addMessage("RtpReceiveStream.addData() " + str(e))
-        # Now we've added the newData object to the list rtpStreamData[] we can delete the newData object
-        del newData
+
 
 # An object that will transmit stream results back from the receiving end to to the sender
 # It is designed as a counterpart to class ResultsReceiver
