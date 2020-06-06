@@ -3414,6 +3414,12 @@ def shutdownApplicationSignalHandler(signum, frame):
 
 # Main prog starts here
 # #####################
+# x =0
+# while True:
+#     time.sleep(0.00006670440)
+#     x+=1
+#     if x % 1000000:
+#         print ("x=0")
 
 def main(argv):
     # def scheduler(period):

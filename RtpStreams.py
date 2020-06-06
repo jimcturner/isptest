@@ -2326,7 +2326,7 @@ class RtpGenerator(object):
         self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
         self.tracerouteThread.daemon = False
         self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":traceroute")
-        self.tracerouteThread.start()
+        # self.tracerouteThread.start()
 
         # create a stream results receiver object for this tx stream
         self.rtpStreamResultsReceiver = ResultsReceiver(self)
