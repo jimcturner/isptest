@@ -1383,7 +1383,12 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                 # Detect sequence no. anomoly (i.e a glitch)
                 # Test the latest seq no against the previous
+                # Detect against false glitches when the seq no wraps around
+                if rtpPackets[1].rtpSequenceNo == 65535:
+                    rtpPackets[1].rtpSequenceNo = -1
+
                 if (rtpPackets[2].rtpSequenceNo - rtpPackets[1].rtpSequenceNo) > 1:
+                    # Glitch detected
                     Utils.Message.addMessage("Glitch!")
 
                 # Calculate receive period of latest packet
