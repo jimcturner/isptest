@@ -19,6 +19,7 @@ import json
 from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import pickle
+from collections import deque   # Used for circular buffers
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 # from scapy.all import *
 from scapy.layers.inet import IP, UDP
@@ -1354,7 +1355,17 @@ class RtpReceiveStream(RtpReceiveCommon):
     def __queueReceiverThread(self):
         Utils.Message.addMessage("DBUG: Starting __queueReceiverThread for stream " + \
                                  str(self.__stats["stream_syncSource"]))
-        prevRtpPacketData = None
+
+        # Circular buffer to contine the latest, and previous two packets. This will allow detection of glitches,
+        # the receive period and also the jitter (which requires three samples)
+        rtpPackets = deque(maxlen=3)
+        # Packet counters
+        packet_counter_received_total = 0
+        packet_data_received_total_bytes = 0
+
+        # Create timedelta objects for jitter variables
+        receivePeriod = datetime.timedelta()
+        prevReceivePeriod = datetime.timedelta()
 
         while self.queueReceiverThreadActiveFlag:
             # Now wait for items to appear in the queue (with a timeout)
@@ -1362,9 +1373,38 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Wait for a packet to arrive in the receive queue
                 rtpPacketData = self.rtpStreamQueue.get(timeout=0.2)
 
-                x = rtpPacketData.rtpSequenceNo
+                # Increment packet received counter
+                packet_counter_received_total += 1
+                # Update total bytes received
+                packet_data_received_total_bytes += rtpPacketData.payloadSize
+
+                # Add the packet to the circular packet buffer
+                rtpPackets.append(rtpPacketData)
+
+                # Detect sequence no. anomoly (i.e a glitch)
+                # Test the latest seq no against the previous
+                if (rtpPackets[2].rtpSequenceNo - rtpPackets[1].rtpSequenceNo) > 1:
+                    Utils.Message.addMessage("Glitch!")
+
+                # Calculate receive period of latest packet
+                receivePeriod = rtpPackets[2].timestamp - rtpPackets[1].timestamp
+
+                # Calculate jitter of latest packet by calcuating the difference in receive periods
+                jitter = abs(receivePeriod - prevReceivePeriod)
+                # Snapshot latest receive period
+                prevReceivePeriod = receivePeriod
+
+                x = rtpPackets[2].rtpSequenceNo
                 if x % 20 == 0:
-                    Utils.Message.addMessage("__queueReceiverThread " + str(x))
+                    # Utils.Message.addMessage("__queueReceiverThread " + str(x) + " Packets Rx'd: " +\
+                    #                          str(packet_counter_received_total) +\
+                    #                          ", bytes rx'd " + str(packet_data_received_total_bytes))
+                    # seqNos = str(rtpPackets[0].rtpSequenceNo) + ", " + \
+                    #          str(rtpPackets[1].rtpSequenceNo) + ", " + \
+                    #          str(rtpPackets[2].rtpSequenceNo) + ", "
+                    # Utils.Message.addMessage(seqNos)
+                    Utils.Message.addMessage("receivePeriod " + str(receivePeriod) + ", jitter " + str(jitter))
+
             except Empty:
             # Will be raised if there is a queue timeout (i.e no data in the queue)
                 pass
@@ -2261,9 +2301,9 @@ class RtpGenerator(object):
         # self.minSleepTime = None
         # self.maxSleepTime = None
         self.meanSleepTime = 0
-        self.minCalculationTime = None
-        self.maxCalculationTime = None
-        self.meanCalculationTime = None
+        # self.minCalculationTime = None
+        # self.maxCalculationTime = None
+        # self.meanCalculationTime = None
 
         # Query the routing table to determine the address of the Ethernet interface that will be used to transmit
         self.SRC_IP_ADDR = Utils.get_ip(self.UDP_TX_IP)
@@ -2326,7 +2366,7 @@ class RtpGenerator(object):
         self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
         self.tracerouteThread.daemon = False
         self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":traceroute")
-        # self.tracerouteThread.start()
+        self.tracerouteThread.start()
 
         # create a stream results receiver object for this tx stream
         self.rtpStreamResultsReceiver = ResultsReceiver(self)
@@ -2359,7 +2399,7 @@ class RtpGenerator(object):
                 'Tx Source Port': self.UDP_TX_SRC_PORT,
                 'Time to live': self.timeToLive,
                 'Sleep Time mean': self.meanSleepTime,
-                'Calculation time mean': self.meanCalculationTime,
+                #'Calculation time mean': self.meanCalculationTime,
                 'Tx period': self.txPeriod
                 }
 
@@ -2872,22 +2912,22 @@ class RtpGenerator(object):
 
         # This utility method will update the stats relating to the time taken for the RtpGenerator thread to prepare
         # and transmit each rtp packet
-        def updateCalculationTimeStats(rtpGeneratorInstance, calculationTime):
-            if rtpGeneratorInstance.minCalculationTime is None:
-                rtpGeneratorInstance.minCalculationTime = calculationTime
-            elif calculationTime < rtpGeneratorInstance.minCalculationTime:
-                rtpGeneratorInstance.minCalculationTime = calculationTime
-
-            if rtpGeneratorInstance.maxCalculationTime is None:
-                rtpGeneratorInstance.maxCalculationTime = calculationTime
-            elif calculationTime > rtpGeneratorInstance.maxCalculationTime:
-                rtpGeneratorInstance.maxCalculationTime = calculationTime
-
-            if rtpGeneratorInstance.meanCalculationTime is None:
-                rtpGeneratorInstance.meanCalculationTime = calculationTime
-            else:
-                rtpGeneratorInstance.meanCalculationTime = \
-                    (rtpGeneratorInstance.meanCalculationTime + calculationTime) / 2.0
+        # def updateCalculationTimeStats(rtpGeneratorInstance, calculationTime):
+        #     if rtpGeneratorInstance.minCalculationTime is None:
+        #         rtpGeneratorInstance.minCalculationTime = calculationTime
+        #     elif calculationTime < rtpGeneratorInstance.minCalculationTime:
+        #         rtpGeneratorInstance.minCalculationTime = calculationTime
+        #
+        #     if rtpGeneratorInstance.maxCalculationTime is None:
+        #         rtpGeneratorInstance.maxCalculationTime = calculationTime
+        #     elif calculationTime > rtpGeneratorInstance.maxCalculationTime:
+        #         rtpGeneratorInstance.maxCalculationTime = calculationTime
+        #
+        #     if rtpGeneratorInstance.meanCalculationTime is None:
+        #         rtpGeneratorInstance.meanCalculationTime = calculationTime
+        #     else:
+        #         rtpGeneratorInstance.meanCalculationTime = \
+        #             (rtpGeneratorInstance.meanCalculationTime + calculationTime) / 2.0
 
         # This function will actually create and send the rtp packets
         def sendPacket(rtpGeneratorInstance):
@@ -2948,8 +2988,11 @@ class RtpGenerator(object):
                 # Calculate the maximum intentional timing deviation to be add/subtracted from txPeriod if jitter is enabled
                 maxDeviation = self.txPeriod * Registry.simulatedJitterPercent / 100
                 jitter = random.uniform(-1 * maxDeviation, maxDeviation)
-                sleepTime = rtpGeneratorInstance.txPeriod + jitter - rtpGeneratorInstance.meanCalculationTime
-
+                sleepTime = 0
+                try:
+                    sleepTime = rtpGeneratorInstance.txPeriod + jitter #  - rtpGeneratorInstance.meanCalculationTime
+                except Exception as e:
+                    Utils.Message.addMessage("ERR: jitter sleepTime " + str(sleepTime) + ", " + str(e))
                 if sleepTime < 0:
                     return 0
                 else:
@@ -3268,8 +3311,10 @@ class RtpGenerator(object):
             # pkt = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=33434)
             pkt_fallback = IP(dst=self.UDP_TX_IP, ttl=hopNo + 1) / UDP(dport=33434)
             # Send the packet and get a reply (with a timeout of 1 second)
+
             try:
                 reply = sr1(pkt, verbose=0, timeout=1)
+                # reply = None
                 # If timeToLive has decremented to zero, break out of the while loop (an therefore kill the object)
                 if self.timeToLive == 0:
                     break
@@ -3280,6 +3325,7 @@ class RtpGenerator(object):
                     # Retry the same test, but using the standard traceroute port
 
                     reply = sr1(pkt_fallback, verbose=0, timeout=1)
+                    pass
                 # If reply is still None
                 if reply is None:
                     hopAddr = [0,0,0,0]
