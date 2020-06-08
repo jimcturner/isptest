@@ -764,6 +764,14 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Create private empty list to hold Events for this RtpReceiveStream object. Accessible via a getter method
         self.__eventList = []
 
+        # Running totals updated by __queueReceiverThread()
+        self.__packetCounterReceivedTotal = 0
+        self.__packetDataReceivedTotalBytes = 0
+        self.__receivePeriodRunningTotal = 0
+        self.__jitterRunningtotal = 0
+
+
+
         # Counter to be used by __calculateJitter()
         self.sumOfJitter_1s = 0
 
@@ -1283,12 +1291,79 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Initialise variables to be used within the loop
         loopCounter = 0
 
+        # Stores the prev packets received count value. Required for calculating averages over particular periods
+        prevPacketsReceivedCount = 0
+
+        # Create circular buffer for rx bytes/sec counter (using 200mS windows, so buffersize of 5
+        rxBpsBuffer = deque(maxlen=5)
+        prevRxdBytesCount = 0
+        meanRxPeriod_1Sec = 0
+
+        # Create a circular buffer for the average receive period
+        rxPeriodBuffer = deque(maxlen=5)
+        prevRxPeriodCount = 0
+
         # Infinite loop
         while self.samplingThreadActiveFlag:
+            # Take snapshots of latest running counter values
+
+            # Snapshot latest count of packets received (for averages)
+            latestPacketsReceivedCount = self.__packetCounterReceivedTotal
+            # Snapshot latest received bytes value (for rx bps calculation)
+            latestRxdBytesCount = self.__packetDataReceivedTotalBytes
+            # Snapshot latest receive period
+            latestReceivePeriodCount = self.__receivePeriodRunningTotal
+
+            ########### Calculate how many packets received in the latest 200mS - required for 'mean' calculations
+            packetsReceivedThisPeriod = latestPacketsReceivedCount - prevPacketsReceivedCount
+            # Store latest count for next time around the loop
+            prevPacketsReceivedCount = latestPacketsReceivedCount
+
+
+            ############ Calculate received bits per second
+            # calculate bytes received since the last count
+            RxdBytesCountThisPeriod = latestRxdBytesCount - prevRxdBytesCount
+            # Snapshot the latest value for next time around the loop
+            prevRxdBytesCount = latestRxdBytesCount
+            # Append the bytes received this period to the rxBpsBuffer circular buffer
+            rxBpsBuffer.append(RxdBytesCountThisPeriod)
+            # Now sum the contents of rxBpsBuffer to get the latest rx bps
+            rxBytesPerSec = 0
+            for bytesPerPeriod in rxBpsBuffer:
+                rxBytesPerSec += bytesPerPeriod
+            rxBps = rxBytesPerSec * 8
+
+            if packetsReceivedThisPeriod > 0:
+                ########## Calculate mean receive period (1 sec)
+                # Calculate difference since last count
+                rxPeriodDiff = latestReceivePeriodCount - prevRxPeriodCount
+                # Snapshot the latest value for next time around the loop
+                prevRxPeriodCount = latestReceivePeriodCount
+                # Calculate mean for this 200mS period
+                meanRxPeriod = rxPeriodDiff / packetsReceivedThisPeriod
+                # Add the calculated mean value to the rxPeriodBuffer
+                rxPeriodBuffer.append(meanRxPeriod)
+                # Calculate a 1 second mean by taking a mean of all the 200mS periods
+                sumOf200msMeanRxPeriods = 0
+                for x in rxPeriodBuffer:
+                    sumOf200msMeanRxPeriods += x
+                meanRxPeriod_1Sec = sumOf200msMeanRxPeriods / 5
+
+
+                ########### Calculate mean jitter (1 sec)
+
+                ########### Calculate mean packet length (1 sec)
+                ## Hint: make use of bytes received this period
+
+                ########### Calculate packets per sec
+
+
+
             time.sleep(0.2)
             ######## 1 second counter
             if loopCounter % 5 == 0:
-                Utils.Message.addMessage("RtpReceiveStream.__samplingThread " + str(loopCounter))
+                Utils.Message.addMessage("RtpReceiveStream.__samplingThread rxBps" + str(Utils.bToMb(rxBps)))
+                Utils.Message.addMessage("meanRxPeriod_1Sec " + str(meanRxPeriod_1Sec))
             ######## 1 second counter end of code ########
             # Increment 1 sec loop counter
             loopCounter += 1
@@ -1297,10 +1372,10 @@ class RtpReceiveStream(RtpReceiveCommon):
         Utils.Message.addMessage("DBUG: __samplingThread ended for stream " + str(self.__stats["stream_syncSource"]))
     # This thread monitors the packet receive Queue
     # To implement:-
-    #   self.__stats["packet_counter_1S"]
-    #   self.__stats["packet_counter_received_total"]
+    #   self.__stats["packet_counter_1S"] 'packets per second'
+    #                   self.__stats["packet_counter_received_total"]
     #   self.__stats["packet_data_received_1S_bytes"]
-    #   self.__stats["packet_data_received_total_bytes"]
+    #                   self.__stats["packet_data_received_total_bytes"]
     #   self.__stats["packet_payload_size_mean_1S_bytes"]
     #   self.__stats["packet_instantaneous_receive_period_uS"]
     #
@@ -1359,13 +1434,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Circular buffer to contine the latest, and previous two packets. This will allow detection of glitches,
         # the receive period and also the jitter (which requires three samples)
         rtpPackets = deque(maxlen=3)
-        # Packet counters
-        packet_counter_received_total = 0
-        packet_data_received_total_bytes = 0
 
         # Create timedelta objects for jitter variables
-        receivePeriod = datetime.timedelta()
-        prevReceivePeriod = datetime.timedelta()
+        prevReceivePeriod = 0
 
         while self.queueReceiverThreadActiveFlag:
             # Now wait for items to appear in the queue (with a timeout)
@@ -1374,9 +1445,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                 rtpPacketData = self.rtpStreamQueue.get(timeout=0.2)
 
                 # Increment packet received counter
-                packet_counter_received_total += 1
+                self.__packetCounterReceivedTotal += 1
                 # Update total bytes received
-                packet_data_received_total_bytes += rtpPacketData.payloadSize
+                self.__packetDataReceivedTotalBytes += rtpPacketData.payloadSize
+
 
                 # Add the packet to the circular packet buffer
                 rtpPackets.append(rtpPacketData)
@@ -1392,10 +1464,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("Glitch!")
 
                 # Calculate receive period of latest packet
-                receivePeriod = rtpPackets[2].timestamp - rtpPackets[1].timestamp
+                receivePeriod = (rtpPackets[2].timestamp - rtpPackets[1].timestamp).microseconds
+                # Add latest receive period value to running total, for averaging
+                self.__receivePeriodRunningTotal += receivePeriod
 
                 # Calculate jitter of latest packet by calcuating the difference in receive periods
                 jitter = abs(receivePeriod - prevReceivePeriod)
+                # Add latest jitter value to running total, for averaging
+                self.__jitterRunningtotal += jitter
                 # Snapshot latest receive period
                 prevReceivePeriod = receivePeriod
 
@@ -1408,7 +1484,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     #          str(rtpPackets[1].rtpSequenceNo) + ", " + \
                     #          str(rtpPackets[2].rtpSequenceNo) + ", "
                     # Utils.Message.addMessage(seqNos)
-                    Utils.Message.addMessage("receivePeriod " + str(receivePeriod) + ", jitter " + str(jitter))
+                    Utils.Message.addMessage("receivePeriod " + str(receivePeriod) +\
+                                             ", jitter " + str(self.__jitterRunningtotal))
 
             except Empty:
             # Will be raised if there is a queue timeout (i.e no data in the queue)
