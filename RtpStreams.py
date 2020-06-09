@@ -1290,6 +1290,12 @@ class RtpReceiveStream(RtpReceiveCommon):
         Utils.Message.addMessage("DBUG: __samplingThread started for stream " + str(self.__stats["stream_syncSource"]))
         # Initialise variables to be used within the loop
         loopCounter = 0
+        # Initialise variables to hold final calculated values
+        meanRxPeriod_1Sec = 0
+        meanJitter_1Sec = 0
+        rxBps = 0
+        meanPacketLengthBytes = 0
+        packetsRxdPerSecond = 0
 
         # Stores the prev packets received count value. Required for calculating averages over particular periods
         prevPacketsReceivedCount = 0
@@ -1297,11 +1303,20 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Create circular buffer for rx bytes/sec counter (using 200mS windows, so buffersize of 5
         rxBpsBuffer = deque(maxlen=5)
         prevRxdBytesCount = 0
-        meanRxPeriod_1Sec = 0
+
+
 
         # Create a circular buffer for the average receive period
         rxPeriodBuffer = deque(maxlen=5)
         prevRxPeriodCount = 0
+
+        # Create circular buffer for the no of packets per second
+        packetsPerSecondBuffer = deque(maxlen=5)
+        prevPacketsPeriodCount = 0
+
+        # Create circular buffer for jitter calculations
+        jitterPerSecBuffer = deque(maxlen=5)
+        prevJitterPeriodCount = 0
 
         # Infinite loop
         while self.samplingThreadActiveFlag:
@@ -1311,59 +1326,88 @@ class RtpReceiveStream(RtpReceiveCommon):
             latestPacketsReceivedCount = self.__packetCounterReceivedTotal
             # Snapshot latest received bytes value (for rx bps calculation)
             latestRxdBytesCount = self.__packetDataReceivedTotalBytes
-            # Snapshot latest receive period
+            # Snapshot latest receive period count
             latestReceivePeriodCount = self.__receivePeriodRunningTotal
+            # Snapshot latest jitter count
+            latestJitterPeriodCount = self.__jitterRunningtotal
 
-            ########### Calculate how many packets received in the latest 200mS - required for 'mean' calculations
-            packetsReceivedThisPeriod = latestPacketsReceivedCount - prevPacketsReceivedCount
-            # Store latest count for next time around the loop
-            prevPacketsReceivedCount = latestPacketsReceivedCount
+            try:
+                ########### Calculate how many packets received in the latest 200mS period - required for 'mean' calculations
+                packetsReceivedThisPeriod = latestPacketsReceivedCount - prevPacketsReceivedCount
+                # Store latest count for next time around the loop
+                prevPacketsReceivedCount = latestPacketsReceivedCount
+
+                ########### Calculate packets received per sec
+                # Add the latest count of packets received (this period) to the buffer
+                packetsPerSecondBuffer.append(packetsReceivedThisPeriod)
+                # Sum the buffer to get packets received for the last second
+                packetsRxdPerSecond = 0
+                for x in packetsPerSecondBuffer:
+                    packetsRxdPerSecond += x
 
 
-            ############ Calculate received bits per second
-            # calculate bytes received since the last count
-            RxdBytesCountThisPeriod = latestRxdBytesCount - prevRxdBytesCount
-            # Snapshot the latest value for next time around the loop
-            prevRxdBytesCount = latestRxdBytesCount
-            # Append the bytes received this period to the rxBpsBuffer circular buffer
-            rxBpsBuffer.append(RxdBytesCountThisPeriod)
-            # Now sum the contents of rxBpsBuffer to get the latest rx bps
-            rxBytesPerSec = 0
-            for bytesPerPeriod in rxBpsBuffer:
-                rxBytesPerSec += bytesPerPeriod
-            rxBps = rxBytesPerSec * 8
-
-            if packetsReceivedThisPeriod > 0:
-                ########## Calculate mean receive period (1 sec)
-                # Calculate difference since last count
-                rxPeriodDiff = latestReceivePeriodCount - prevRxPeriodCount
+                ############ Calculate received bits per second
+                # calculate bytes received since the last count
+                RxdBytesCountThisPeriod = latestRxdBytesCount - prevRxdBytesCount
                 # Snapshot the latest value for next time around the loop
-                prevRxPeriodCount = latestReceivePeriodCount
-                # Calculate mean for this 200mS period
-                meanRxPeriod = rxPeriodDiff / packetsReceivedThisPeriod
-                # Add the calculated mean value to the rxPeriodBuffer
-                rxPeriodBuffer.append(meanRxPeriod)
-                # Calculate a 1 second mean by taking a mean of all the 200mS periods
-                sumOf200msMeanRxPeriods = 0
-                for x in rxPeriodBuffer:
-                    sumOf200msMeanRxPeriods += x
-                meanRxPeriod_1Sec = sumOf200msMeanRxPeriods / 5
+                prevRxdBytesCount = latestRxdBytesCount
+                # Append the bytes received this period to the rxBpsBuffer circular buffer
+                rxBpsBuffer.append(RxdBytesCountThisPeriod)
+                # Now sum the contents of rxBpsBuffer to get the latest rx bps
+                rxBytesPerSec = 0
+                for bytesPerPeriod in rxBpsBuffer:
+                    rxBytesPerSec += bytesPerPeriod
+                rxBps = rxBytesPerSec * 8
+
+                if packetsReceivedThisPeriod > 0:
+                    ########### Calculate mean packet length (1 sec)
+                    meanPacketLengthBytes = int(RxdBytesCountThisPeriod / packetsReceivedThisPeriod)
+
+                    ########## Calculate mean receive period (1 sec)
+                    # Calculate difference since last count
+                    rxPeriodDiff = latestReceivePeriodCount - prevRxPeriodCount
+                    # Snapshot the latest value for next time around the loop
+                    prevRxPeriodCount = latestReceivePeriodCount
+                    # Calculate mean for this 200mS period
+                    meanRxPeriod = rxPeriodDiff / packetsReceivedThisPeriod
+                    # Add the calculated mean value to the rxPeriodBuffer
+                    rxPeriodBuffer.append(meanRxPeriod)
+                    # Calculate a 1 second mean by taking a mean of all the 200mS periods
+                    sumOf200msMeanRxPeriods = 0
+                    for x in rxPeriodBuffer:
+                        sumOf200msMeanRxPeriods += x
+                    meanRxPeriod_1Sec = int(sumOf200msMeanRxPeriods / 5)
 
 
-                ########### Calculate mean jitter (1 sec)
+                    ########### Calculate mean jitter (1 sec)
+                    # Calculate difference since last count
+                    jitterPeriodDiff = latestJitterPeriodCount -  prevJitterPeriodCount
+                    # Snapshot the latest value for next time around the loop
+                    prevJitterPeriodCount = latestJitterPeriodCount
+                    # Calculate the mean jitter for this 200mS period
+                    meanJitterPeriod = jitterPeriodDiff / packetsReceivedThisPeriod
+                    # Add the calculated mean value to the jitterPerSecBuffer buffer
+                    jitterPerSecBuffer.append(meanJitterPeriod)
+                    # Calculate a 1 second mean by taking a mean of all the 200mS periods
+                    sumOf200msMeanJitter = 0
+                    for x in jitterPerSecBuffer:
+                        sumOf200msMeanJitter += x
+                    meanJitter_1Sec = int(sumOf200msMeanJitter / 5)
 
-                ########### Calculate mean packet length (1 sec)
-                ## Hint: make use of bytes received this period
 
-                ########### Calculate packets per sec
 
+            except Exception as e:
+                Utils.Message.addMessage("ERR: RtpReceiveStream.__samplingThread " + str(e))
 
 
             time.sleep(0.2)
             ######## 1 second counter
             if loopCounter % 5 == 0:
-                Utils.Message.addMessage("RtpReceiveStream.__samplingThread rxBps" + str(Utils.bToMb(rxBps)))
-                Utils.Message.addMessage("meanRxPeriod_1Sec " + str(meanRxPeriod_1Sec))
+                Utils.Message.addMessage("RtpReceiveStream.__samplingThread rxBps " + str(Utils.bToMb(rxBps)))
+                Utils.Message.addMessage("meanRxPeriod_1Sec " + str(meanRxPeriod_1Sec) +\
+                                         ", meanPacketLengthBytes " + str(meanPacketLengthBytes) +\
+                                         ", pps " + str(packetsRxdPerSecond) +\
+                                         ", jitter " + str(meanJitter_1Sec))
             ######## 1 second counter end of code ########
             # Increment 1 sec loop counter
             loopCounter += 1
