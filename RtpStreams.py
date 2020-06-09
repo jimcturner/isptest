@@ -769,7 +769,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__packetDataReceivedTotalBytes = 0
         self.__receivePeriodRunningTotal = 0
         self.__jitterRunningtotal = 0
-
+        self.__streamAllEventsCounter = 0
 
 
         # Counter to be used by __calculateJitter()
@@ -780,8 +780,10 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["glitch_Event_Trigger_Threshold_packets"]= glitchEventTriggerThreshold
         self.__stats["glitch_glitches_ignored_counter"] = 0
 
-        self.__stats["packet_first_packet_received_timestamp"] = datetime.timedelta()
-        self.__stats["packet_last_seen_received_timestamp"] = datetime.timedelta()
+        self.__packet_first_packet_received_timestamp = datetime.timedelta()
+        self.__stats["packet_first_packet_received_timestamp"] = self.__packet_first_packet_received_timestamp
+        self.__packet_last_seen_received_timestamp = datetime.timedelta()
+        self.__stats["packet_last_seen_received_timestamp"] = self.__packet_last_seen_received_timestamp
         self.__stats["packet_counter_1S"] = 0
         self.__stats["packet_data_received_1S_bytes"] = 0
         self.__stats["packet_data_received_total_bytes"] = 0
@@ -1296,9 +1298,15 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Initialise variables to hold final calculated values
         meanRxPeriod_1Sec = 0
         meanJitter_1Sec = 0
+        meanJitter_10Sec = 0
         rxBps = 0
         meanPacketLengthBytes = 0
         packetsRxdPerSecond = 0
+        elapsedTime = datetime.timedelta()
+        lastPacketReceivedTimestamp = datetime.timedelta()
+
+        # Stores the previous long-term jitter value.
+        jitterLongterm_uS = 0
 
         # Stores the prev packets received count value. Required for calculating averages over particular periods
         prevPacketsReceivedCount = 0
@@ -1318,13 +1326,16 @@ class RtpReceiveStream(RtpReceiveCommon):
         prevPacketsPeriodCount = 0
 
         # Create circular buffer for jitter calculations
+        # For 1 sec jitter calculation
         jitterPerSecBuffer = deque(maxlen=5)
         prevJitterPeriodCount = 0
+        # For 10 sec jitter calculation
+        jitter10SecBuffer = deque(maxlen=10)
 
         # Infinite loop
         while self.samplingThreadActiveFlag:
-            # Take snapshots of latest running counter values
-
+            time.sleep(0.2)
+            ## Take snapshots of latest running counter values
             # Snapshot latest count of packets received (for averages)
             latestPacketsReceivedCount = self.__packetCounterReceivedTotal
             # Snapshot latest received bytes value (for rx bps calculation)
@@ -1333,6 +1344,8 @@ class RtpReceiveStream(RtpReceiveCommon):
             latestReceivePeriodCount = self.__receivePeriodRunningTotal
             # Snapshot latest jitter count
             latestJitterPeriodCount = self.__jitterRunningtotal
+            # Snapshot last packet seen timestamp
+            lastPacketReceivedTimestamp = self.__packet_last_seen_received_timestamp
 
             try:
                 ########### Calculate how many packets received in the latest 200mS period - required for 'mean' calculations
@@ -1361,6 +1374,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                 for bytesPerPeriod in rxBpsBuffer:
                     rxBytesPerSec += bytesPerPeriod
                 rxBps = rxBytesPerSec * 8
+
+                ########### Calculate elapsed time
+                elapsedTime = datetime.datetime.now() - self.__packet_first_packet_received_timestamp
 
                 if packetsReceivedThisPeriod > 0:
                     ########### Calculate mean packet length (1 sec)
@@ -1397,34 +1413,44 @@ class RtpReceiveStream(RtpReceiveCommon):
                         sumOf200msMeanJitter += x
                     meanJitter_1Sec = int(sumOf200msMeanJitter / 5)
 
-                    ########## Calculate jitter_mean_10S_uS
-                    # self.__stats["jitter_mean_10S_uS"] = 0
-
-                    ########## jitter_mean_10S_uS
-                    # self.__stats["jitter_long_term_uS"] = 0
+                    ########## Calculate long-term jitter -- self.__stats["jitter_long_term_uS"]
+                    jitterLongterm_uS = int(self.__jitterRunningtotal / self.__packetCounterReceivedTotal)
 
                     ########## calculate jitter range (in receive queue, not here)
                     # self.jitter_min_uS = 0
                     # self.jitter_max_uS = 0
                     # self.jitter_range_uS = 0
 
-                    # Calculate elapsed time
-
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpReceiveStream.__samplingThread " + str(e))
 
-
-            time.sleep(0.2)
-            ######## 1 second counter
             if loopCounter % 5 == 0:
-                Utils.Message.addMessage("RtpReceiveStream.__samplingThread rxBps " + str(Utils.bToMb(rxBps)))
+                ######## 1 second counter
+                ########### Calculate 10sec jitter mean -- self.__stats["jitter_mean_10S_uS"] = 0
+                # Add the latest 1sec jitter mean to the meanJitter_1Sec circular buffer
+                jitter10SecBuffer.append(meanJitter_1Sec)
+                # Calculate mean value of jitter10SecBuffer contents
+                sumOfjitter10SecBuffer = 0
+                for x in jitter10SecBuffer:
+                    sumOfjitter10SecBuffer += x
+                meanJitter_10Sec = int(sumOfjitter10SecBuffer / 10)
+
+                Utils.Message.addMessage("RtpReceiveStream.__samplingThread rxBps " + str(Utils.bToMb(rxBps)) +\
+                                         ", Elapsed: " + str(elapsedTime.seconds))
                 Utils.Message.addMessage("meanRxPeriod_1Sec " + str(meanRxPeriod_1Sec) +\
                                          ", meanPacketLengthBytes " + str(meanPacketLengthBytes) +\
                                          ", pps " + str(packetsRxdPerSecond) +\
-                                         ", jitter " + str(meanJitter_1Sec))
-            ######## 1 second counter end of code ########
+                                         ", jitter_1s " + str(meanJitter_1Sec) +\
+                                         ", jitter_10s " + str(meanJitter_10Sec) +\
+                                         ", jitter long term " + str(jitterLongterm_uS))
+                ######## 1 second counter end of code ########
             # Increment 1 sec loop counter
             loopCounter += 1
+
+            ########## Update __stats[] dictionary for this stream
+
+
+
         ########### 0.2 sec timed loop ends
 
         Utils.Message.addMessage("DBUG: __samplingThread ended for stream " + str(self.__stats["stream_syncSource"]))
@@ -1485,6 +1511,13 @@ class RtpReceiveStream(RtpReceiveCommon):
     #   Other
     #   Housekeep eventsList
     #   Test for dead stream --> Save report to disk --> kill itself
+
+    # This is the main receiver thread for the incoming Rtp stream. It employs a 'non-busy wait' for RtpData objects
+    # to become available. It will detect events, and it will alse update the relevant instance variables with the
+    # latest data.
+    # NOTE: Ideally This thread shouldn't update the __ stats[] dictionary directly (for the purposes of speed and risk
+    # of being blocked by other processes that might want to access __stats[])
+    # The __samplingThread is responsible for populating the __stats[] dictionary
     def __queueReceiverThread(self):
         Utils.Message.addMessage("DBUG: Starting __queueReceiverThread for stream " + \
                                  str(self.__stats["stream_syncSource"]))
@@ -1502,13 +1535,30 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Wait for a packet to arrive in the receive queue
                 rtpPacketData = self.rtpStreamQueue.get(timeout=0.2)
 
+                # Set initial values
+                if self.__packetCounterReceivedTotal == 0:
+                    # If this is the first packet, set the 'packet first seen' timestamp
+                    self.__packet_first_packet_received_timestamp = datetime.datetime.now()
+                    # Create a 'stream started' event
+                    streamStartedEvent = StreamStarted(self.__stats, rtpPacketData)
+                    # Append the event to the events list
+                    self.__eventList.append(streamStartedEvent)
+                    # Increment the Event counter
+                    self.__streamAllEventsCounter += 1
+                    # Display a message
+                    Utils.Message.addMessage(streamStartedEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
+
+                # Update 'last seen packet' timestamp
+                self.__packet_last_seen_received_timestamp = datetime.datetime.now()
+
+
                 # Increment packet received counter
                 self.__packetCounterReceivedTotal += 1
                 # Update total bytes received
                 self.__packetDataReceivedTotalBytes += rtpPacketData.payloadSize
 
 
-                # Add the packet to the circular packet buffer
+                # Add the packet to the circular packet buffer (for glitch, receive period and jitter analysis)
                 rtpPackets.append(rtpPacketData)
 
                 # Detect sequence no. anomoly (i.e a glitch)
@@ -1559,8 +1609,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                     #          str(rtpPackets[1].rtpSequenceNo) + ", " + \
                     #          str(rtpPackets[2].rtpSequenceNo) + ", "
                     # Utils.Message.addMessage(seqNos)
-                    Utils.Message.addMessage("jitter " + str(self.jitter_min_uS) +">" + str(self.jitter_range_uS) +\
-                                             ">" + str(self.jitter_max_uS))
+                    # Utils.Message.addMessage("jitter " + str(self.jitter_min_uS) +">" + str(self.jitter_range_uS) +\
+                    #                          ">" + str(self.jitter_max_uS))
+                    pass
 
 
             except Empty:
