@@ -838,6 +838,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["jitter_mean_1S_uS"] = 0
         self.__stats["jitter_mean_10S_uS"] = 0
         self.__stats["jitter_long_term_uS"] = 0
+        self.jitter_min_uS = 0
+        self.jitter_max_uS = 0
+        self.jitter_range_uS = 0
 
         self.__stats["stream_processor_utilisation_percent"] = 0
 
@@ -1394,7 +1397,18 @@ class RtpReceiveStream(RtpReceiveCommon):
                         sumOf200msMeanJitter += x
                     meanJitter_1Sec = int(sumOf200msMeanJitter / 5)
 
+                    ########## Calculate jitter_mean_10S_uS
+                    # self.__stats["jitter_mean_10S_uS"] = 0
 
+                    ########## jitter_mean_10S_uS
+                    # self.__stats["jitter_long_term_uS"] = 0
+
+                    ########## calculate jitter range (in receive queue, not here)
+                    # self.jitter_min_uS = 0
+                    # self.jitter_max_uS = 0
+                    # self.jitter_range_uS = 0
+
+                    # Calculate elapsed time
 
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpReceiveStream.__samplingThread " + str(e))
