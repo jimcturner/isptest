@@ -1527,11 +1527,28 @@ class RtpReceiveStream(RtpReceiveCommon):
                 self.__receivePeriodRunningTotal += receivePeriod
 
                 # Calculate jitter of latest packet by calcuating the difference in receive periods
-                jitter = abs(receivePeriod - prevReceivePeriod)
-                # Add latest jitter value to running total, for averaging
-                self.__jitterRunningtotal += jitter
+                # Note: Jitter might be -ve if the received packet is 'early'
+                jitter = receivePeriod - prevReceivePeriod
+                # Add absolute (+ve) latest jitter value to running total, for averaging
+                self.__jitterRunningtotal += abs(jitter)
                 # Snapshot latest receive period
                 prevReceivePeriod = receivePeriod
+
+                # Update min/max jitter stats
+                if self.jitter_min_uS == 0:
+                    # Set initial value
+                    self.jitter_min_uS = jitter
+                elif jitter < self.jitter_min_uS:
+                    # Update if latest value is less
+                    self.jitter_min_uS = jitter
+                if self.jitter_max_uS == 0:
+                    # Set initial value
+                    self.jitter_max_uS = jitter
+                elif jitter > self.jitter_max_uS:
+                    # Update max jitter
+                    self.jitter_max_uS = jitter
+                # Update jitter range stat
+                self.jitter_range_uS = self.jitter_max_uS - self.jitter_min_uS
 
                 x = rtpPackets[2].rtpSequenceNo
                 if x % 20 == 0:
@@ -1542,8 +1559,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                     #          str(rtpPackets[1].rtpSequenceNo) + ", " + \
                     #          str(rtpPackets[2].rtpSequenceNo) + ", "
                     # Utils.Message.addMessage(seqNos)
-                    Utils.Message.addMessage("receivePeriod " + str(receivePeriod) +\
-                                             ", jitter " + str(self.__jitterRunningtotal))
+                    Utils.Message.addMessage("jitter " + str(self.jitter_min_uS) +">" + str(self.jitter_range_uS) +\
+                                             ">" + str(self.jitter_max_uS))
+
 
             except Empty:
             # Will be raised if there is a queue timeout (i.e no data in the queue)
