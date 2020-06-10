@@ -1339,6 +1339,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             ## Take snapshots of latest running counter values
             # Snapshot latest count of packets received (for averages)
             latestPacketsReceivedCount = self.__packetCounterReceivedTotal
+            self.__stats["packet_counter_received_total"] = latestPacketsReceivedCount
             # Snapshot latest received bytes value (for rx bps calculation)
             latestRxdBytesCount = self.__packetDataReceivedTotalBytes
             self.__stats["packet_data_received_total_bytes"] = latestRxdBytesCount
@@ -1479,8 +1480,16 @@ class RtpReceiveStream(RtpReceiveCommon):
                         (self.sumOfTimeElapsedSinceLastGlitch + self.__stats["glitch_time_elapsed_since_last_glitch"]) / \
                         self.__stats["glitch_counter_total_glitches"]
 
+                ######### Calculate % packet loss
+                if self.__stats["packet_counter_received_total"] > 0:
+                    totalExpectedPackets = self.__stats["packet_counter_received_total"] + \
+                                           self.__stats["glitch_packets_lost_total_count"]
+                    # Guard against divide by zero errors
+                    if totalExpectedPackets > 0:
+                        self.__stats["glitch_packets_lost_total_percent"] = \
+                            self.__stats["glitch_packets_lost_total_count"] * 100 / totalExpectedPackets
 
-                ######### Now calculate moving glitch counters by iterating over the self.movingGlitchCounters array
+                ######### Now update moving glitch counters by iterating over the self.movingGlitchCounters array
                 # firstly recalculate, then generate stats keys automatically for any moving totals counters
                 # within self.movingGlitchCounters
                 for x in self.movingGlitchCounters:
