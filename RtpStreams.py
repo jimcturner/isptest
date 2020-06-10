@@ -1569,16 +1569,30 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Attempts to add new Jitter Event
         def addJitterEvent(qrtInstance, latestPacket, jitter, excessiveJitterThreshold):
-            # If jitter alarms not inhibited, add a new jitter event
+            # If time since last jitter event exceeds the rate-limit threshold, add a new jitter event
             # Take diff between time.now() and the time of the last event
-            if qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >= \
-                    qrtInstance.__stats["jitter_alarm_event_timeout_S"] or \
-                    qrtInstance.__stats["jitter_excess_jitter_events_total"] == 0:
+            # Allow the stream to settle into a steady state by waiting for 5 seconds and also verify that
+            # a non-zero excessiveJitterThreshold has been supplied
+            if (qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >\
+                    qrtInstance.__stats["jitter_alarm_event_timeout_S"] or\
+                    qrtInstance.__stats["jitter_excess_jitter_events_total"] == 0) and excessiveJitterThreshold > 0 and\
+                    qrtInstance.__stats["stream_time_elapsed_total"].total_seconds() > 5:
+
+                # Utils.Message.addMessage("Excessive jitter Event Creation. Timeout " + \
+                #              str(qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds()) + \
+                #              ", threshold " + str(qrtInstance.__stats["jitter_alarm_event_timeout_S"]) + \
+                #              ", no of events: " + str(qrtInstance.__stats["jitter_excess_jitter_events_total"]))
+
+                # Create an Excessive Jitter event
                 excessiveJitterEvent = ExcessiveJitter(qrtInstance.__stats, latestPacket, jitter, excessiveJitterThreshold)
                 # Add the event to the event list
                 qrtInstance.__eventList.append(excessiveJitterEvent)
                 # Increment the all_events counter
                 qrtInstance.__stats["stream_all_events_counter"] += 1
+                # Reset the inhibit counter
+                self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
+                    datetime.datetime.now() - excessiveJitterEvent.timeCreated
+                # Post a message
                 Utils.Message.addMessage(excessiveJitterEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                 # Update the event counter for Excess Jitter
@@ -1590,6 +1604,12 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                 # Take timestamp for this (the most recent) Excess Jitter event
                 qrtInstance.__stats["jitter_time_of_last_excess_jitter_event"] = excessiveJitterEvent.timeCreated
+            else:
+                # Utils.Message.addMessage("Excessive jitter Event inhibited. Timeout " +\
+                #     str(qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds()) +\
+                #                          ", threshold " + str(qrtInstance.__stats["jitter_alarm_event_timeout_S"]) +\
+                #                          ", no of events: " + str(qrtInstance.__stats["jitter_excess_jitter_events_total"]))
+                pass
 
         # Circular buffer to contine the latest, and previous two packets. This will allow detection of glitches,
         # the receive period and also the jitter (which requires three samples)
@@ -1597,6 +1617,10 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Create timedelta objects for jitter variables
         prevReceivePeriod = 0
+
+        # Flag to permit detection of jitter
+        # jitter detection is disabled the first time around
+        jitterDetectionEnabledFlag = False
 
         while self.queueReceiverThreadActiveFlag:
             # Now wait for items to appear in the queue (with a timeout)
@@ -1631,92 +1655,105 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                 # Add the packet to the circular packet buffer (for glitch, receive period and jitter analysis)
                 rtpPackets.append(rtpPacketData)
+                # We need to have received at least two packets before we can detect a glitch
+                # and three packets before we can calculate the jitter
+                if len(rtpPackets) > 2:
+                    ### Detect sequence no. anomoly (i.e a glitch)
+                    # Test the latest seq no against the previous
+                    # Detect against false glitches when the seq no wraps around
+                    if rtpPackets[1].rtpSequenceNo == 65535:
+                        rtpPackets[1].rtpSequenceNo = -1
 
-                ### Detect sequence no. anomoly (i.e a glitch)
-                # Test the latest seq no against the previous
-                # Detect against false glitches when the seq no wraps around
-                if rtpPackets[1].rtpSequenceNo == 65535:
-                    rtpPackets[1].rtpSequenceNo = -1
 
-                sequenceNoGap = rtpPackets[2].rtpSequenceNo - rtpPackets[1].rtpSequenceNo
-                if sequenceNoGap > 1:
-                    # Discontinuous sequence numbers detected
-                    # Create a Glitch Event
-                    glitch = Glitch(self.__stats, rtpPackets[1], rtpPackets[2])
-                    # Test to see how many packets have been lost
-                    if glitch.packetsLost > self.__stats["glitch_Event_Trigger_Threshold_packets"]:
-                        # Significant glitch detected, add it to the eventList[]
-                        self.__eventList.append(glitch)
-                        # Take timestamp of most recent glitch
-                        self.__stats["glitch_most_recent_timestamp"] = glitch.timeCreated
-                        # Increment the all_events counter
-                        self.__stats["stream_all_events_counter"] += 1
-                        # Post a message
-                        Utils.Message.addMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'])
+                    sequenceNoGap = rtpPackets[2].rtpSequenceNo - rtpPackets[1].rtpSequenceNo
+                    if sequenceNoGap > 1:
+                        # Discontinuous sequence numbers detected
+                        # Create a Glitch Event
+                        glitch = Glitch(self.__stats, rtpPackets[1], rtpPackets[2])
+                        # Test to see how many packets have been lost
+                        if glitch.packetsLost > self.__stats["glitch_Event_Trigger_Threshold_packets"]:
+                            # Significant glitch detected, add it to the eventList[]
+                            self.__eventList.append(glitch)
+                            # Take timestamp of most recent glitch
+                            self.__stats["glitch_most_recent_timestamp"] = glitch.timeCreated
+                            # Increment the all_events counter
+                            self.__stats["stream_all_events_counter"] += 1
+                            # Post a message
+                            Utils.Message.addMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'])
+
+                        else:
+                            # Glitch is below the threshold. Acknowledge it with a message but don't add an Event
+                            # Post a message
+                            Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + ", " +\
+                                                     str(sequenceNoGap) + " packets lost. (<=" +\
+                                                     str(self.__stats["glitch_Event_Trigger_Threshold_packets"]) +\
+                                                     ", minor loss)")
+                        # update glitch stats
+                        self.__updateGlitchStats(glitch)
+                        # Temporarily disable the jitter detection immediately after a glitch
+                        jitterDetectionEnabledFlag = False
+
+                    # Calculate receive period of latest packet
+                    receivePeriod = (rtpPackets[2].timestamp - rtpPackets[1].timestamp).microseconds
+                    # Add latest receive period value to running total, for averaging
+                    self.__receivePeriodRunningTotal += receivePeriod
+
+                    # Perform jitter calculation if detection is enabled (it will be disabled immediately after a glitch)
+                    # and also when we have enough data points (3 packets)
+                    if jitterDetectionEnabledFlag:
+                        # Calculate jitter of latest packet by calculating the difference in receive periods
+                        # Note: Jitter might be -ve if the received packet is 'early'
+                        jitter = receivePeriod - prevReceivePeriod
+                        # Add absolute (+ve) latest jitter value to running total, for averaging
+                        self.__jitterRunningtotal += abs(jitter)
+                        # Snapshot latest receive period
+                        prevReceivePeriod = receivePeriod
+
+                        # Update min/max jitter stats
+                        if self.jitter_min_uS == 0:
+                            # Set initial value
+                            self.jitter_min_uS = jitter
+                        elif jitter < self.jitter_min_uS:
+                            # Update if latest value is less
+                            self.jitter_min_uS = jitter
+                        if self.jitter_max_uS == 0:
+                            # Set initial value
+                            self.jitter_max_uS = jitter
+                        elif jitter > self.jitter_max_uS:
+                            # Update max jitter
+                            self.jitter_max_uS = jitter
+                        # Update jitter range stats
+                        self.jitter_range_uS = self.jitter_max_uS - self.jitter_min_uS
+
+                        # Now detect an excessive jitter event
+                        if jitterDetectionEnabledFlag:
+                            excessiveJitterThreshold = Registry.rtpReceiveStreamJitterExcessiveAlarmThreshold *\
+                                                       self.__stats["packet_mean_receive_period_uS"]
+                            if jitter > excessiveJitterThreshold:
+                                # Utils.Message.addMessage("Excessive jitter " + str(jitter) + ", threshold " + str(excessiveJitterThreshold) +\
+                                #                          ", packet_mean_receive_period_uS " + str(self.__stats["packet_mean_receive_period_uS"]))
+                                # calculated jitter exceeds threshold, so add event and update the stats
+                                addJitterEvent(self, rtpPacketData, jitter, excessiveJitterThreshold)
+
                     else:
-                        # Glitch is below the threshold. Acknowledge it with a message but don't add an Event
-                        # Post a message
-                        Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + ", " +\
-                                                 str(sequenceNoGap) + " packets lost. (<" +\
-                                                 str(self.__stats["glitch_Event_Trigger_Threshold_packets"]) +\
-                                                 ", minor loss)")
-                    # update glitch stats
-                    self.__updateGlitchStats(glitch)
+                        # re-enable jitter detection
+                        jitterDetectionEnabledFlag = True
 
-                # Calculate receive period of latest packet
-                receivePeriod = (rtpPackets[2].timestamp - rtpPackets[1].timestamp).microseconds
-                # Add latest receive period value to running total, for averaging
-                self.__receivePeriodRunningTotal += receivePeriod
+                    ########### Extract isptest header from most recent packet
+                    self.__extractIsptestHeaderData(rtpPackets[2].isptestHeaderData)
 
-                # Calculate jitter of latest packet by calculating the difference in receive periods
-                # Note: Jitter might be -ve if the received packet is 'early'
-                jitter = receivePeriod - prevReceivePeriod
-                # Add absolute (+ve) latest jitter value to running total, for averaging
-                self.__jitterRunningtotal += abs(jitter)
-                # Snapshot latest receive period
-                prevReceivePeriod = receivePeriod
-
-                # Update min/max jitter stats
-                if self.jitter_min_uS == 0:
-                    # Set initial value
-                    self.jitter_min_uS = jitter
-                elif jitter < self.jitter_min_uS:
-                    # Update if latest value is less
-                    self.jitter_min_uS = jitter
-                if self.jitter_max_uS == 0:
-                    # Set initial value
-                    self.jitter_max_uS = jitter
-                elif jitter > self.jitter_max_uS:
-                    # Update max jitter
-                    self.jitter_max_uS = jitter
-                # Update jitter range stats
-                self.jitter_range_uS = self.jitter_max_uS - self.jitter_min_uS
-
-                # Now detect an excessive jitter event
-                # excessiveJitterThreshold = self.excessJitterThresholdFactor * self.__stats["packet_mean_receive_period_uS"]
-                excessiveJitterThreshold = Registry.rtpReceiveStreamJitterExcessiveAlarmThreshold *\
-                                           self.__stats["packet_mean_receive_period_uS"]
-                if jitter > excessiveJitterThreshold:
-                    Utils.Message.addMessage("Excessive jitter " + str(jitter) + ", threshold " + str(excessiveJitterThreshold) +\
-                                             ", packet_mean_receive_period_uS " + str(self.__stats["packet_mean_receive_period_uS"]))
-                    # calculated jitter exceeds threshold, so add event and update the stats
-                    addJitterEvent(self, rtpPacketData, jitter, excessiveJitterThreshold)
-
-                # Extract isptest header using data from first packet in this batch
-                self.__extractIsptestHeaderData(rtpPacketData.isptestHeaderData)
-
-                x = rtpPackets[2].rtpSequenceNo
-                if x % 20 == 0:
-                    # Utils.Message.addMessage("__queueReceiverThread " + str(x) + " Packets Rx'd: " +\
-                    #                          str(packet_counter_received_total) +\
-                    #                          ", bytes rx'd " + str(packet_data_received_total_bytes))
-                    # seqNos = str(rtpPackets[0].rtpSequenceNo) + ", " + \
-                    #          str(rtpPackets[1].rtpSequenceNo) + ", " + \
-                    #          str(rtpPackets[2].rtpSequenceNo) + ", "
-                    # Utils.Message.addMessage(seqNos)
-                    # Utils.Message.addMessage("jitter " + str(self.jitter_min_uS) +">" + str(self.jitter_range_uS) +\
-                    #                          ">" + str(self.jitter_max_uS))
-                    pass
+                    x = rtpPackets[2].rtpSequenceNo
+                    if x % 20 == 0:
+                        # Utils.Message.addMessage("__queueReceiverThread " + str(x) + " Packets Rx'd: " +\
+                        #                          str(packet_counter_received_total) +\
+                        #                          ", bytes rx'd " + str(packet_data_received_total_bytes))
+                        # seqNos = str(rtpPackets[0].rtpSequenceNo) + ", " + \
+                        #          str(rtpPackets[1].rtpSequenceNo) + ", " + \
+                        #          str(rtpPackets[2].rtpSequenceNo) + ", "
+                        # Utils.Message.addMessage(seqNos)
+                        # Utils.Message.addMessage("jitter " + str(self.jitter_min_uS) +">" + str(self.jitter_range_uS) +\
+                        #                          ">" + str(self.jitter_max_uS))
+                        pass
 
 
             except Empty:

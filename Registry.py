@@ -40,7 +40,7 @@ class Registry(object):
     # A value of '2' means that if the packet jitter >= 2x receivePeriod (uS) (or rather, the packet is late by the
     # two receive periods worth of time) an Event will be created
     # then an Event will be generated
-    rtpReceiveStreamJitterExcessiveAlarmThreshold = 1
+    rtpReceiveStreamJitterExcessiveAlarmThreshold = 0.1
 
 
     # RtpGenerator
