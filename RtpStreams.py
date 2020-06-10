@@ -163,7 +163,7 @@ class StreamStarted(Event):
 # Define an event that represents a loss of rtpStream
 class StreamLost(Event):
 
-    def __init__(self, stats, lastPacketReceived):
+    def __init__(self, stats):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
         # Take local copy of stats dictionary
@@ -172,11 +172,10 @@ class StreamLost(Event):
         self.eventNo = self.stats["stream_all_events_counter"] + 1
         # By default, take the name of the class as the 'type'. This could be overwritten
         self.type = self.__class__.__name__
-        # Add additional instance variables as required
-        self.lastPacketReceived = lastPacketReceived
+
 
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
-        optionalFields = ", Most recent rtp sequence no: "+str(self.lastPacketReceived.rtpSequenceNo)
+        optionalFields = ", Last packet seen at " + str(self.stats["packet_last_seen_received_timestamp"].strftime("%d/%m/%Y %H:%M:%S"))
         summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
@@ -188,7 +187,7 @@ class StreamLost(Event):
 
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
-        optionalFields = "lastRtpSequenceNo,"+str(self.lastPacketReceived.rtpSequenceNo)
+        optionalFields = ",Last packet seen at," + str(self.stats["packet_last_seen_received_timestamp"].strftime("%d/%m/%Y %H:%M:%S"))
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
               ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
               ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
@@ -199,8 +198,7 @@ class StreamLost(Event):
         # Add additional keys as required
         data = {'type': self.type, 'timeCreated': self.timeCreated,
                 'eventNo': self.eventNo,
-                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
-                'lastRtpSequenceNo': self.lastPacketReceived.rtpSequenceNo}
+                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
         return json.dumps(data, sort_keys=True, indent=4, default=str)
 
 # Define an event object that represents a excessive jitter event
@@ -1127,10 +1125,10 @@ class RtpReceiveStream(RtpReceiveCommon):
         # to the current time
         self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.datetime.now()
 
-        # Finally, reset min/max/range jitter values as they're corrupted by a glitch
-        self.__stats["jitter_min_uS"] = 0
-        self.__stats["jitter_max_uS"] = 0
-        self.__stats["jitter_range_uS"] = 0
+        # # Finally, reset min/max/range jitter values as they're corrupted by a glitch
+        # self.__stats["jitter_min_uS"] = 0
+        # self.__stats["jitter_max_uS"] = 0
+        # self.__stats["jitter_range_uS"] = 0
 
     def __detectGlitches(self, lastReceivedRtpPacket):
 
@@ -1307,6 +1305,10 @@ class RtpReceiveStream(RtpReceiveCommon):
         meanPacketLengthBytes = 0
         packetsRxdPerSecond = 0
         elapsedTime = datetime.timedelta()
+        # Counter used to determine whether a stream has been lost or should be purged (because it has been lost forever)
+        secondsWithNoBytesRxdTimer = 0
+        # This flag will go high once a stream is believed lost
+        lossOfStreamFlag = False
 
         # Stores the previous long-term jitter value.
         jitterLongterm_uS = 0
@@ -1429,7 +1431,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__stats["jitter_min_uS"] = self.jitter_min_uS
                     self.__stats["jitter_max_uS"] = self.jitter_max_uS
                     self.__stats["jitter_range_uS"] = self.jitter_range_uS
-                    ############### <<<<<<<<GOT THIS FAR UPDATING STATS DICT
 
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpReceiveStream.__samplingThread " + str(e))
@@ -1454,12 +1455,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                 #                          ", jitter_10s " + str(meanJitter_10Sec) +\
                 #                          ", jitter long term " + str(jitterLongterm_uS))
 
-                # Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
+                ########### Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
                 if self.__stats["jitter_excess_jitter_events_total"] > 0:
                     self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
                         datetime.datetime.now() - self.__stats["jitter_time_of_last_excess_jitter_event"]
 
-                # Calculate meanTimeBetweenExcessJitterEvents (requires at least two jitter events)
+                ########### Calculate meanTimeBetweenExcessJitterEvents (requires at least two jitter events)
                 if self.__stats["jitter_excess_jitter_events_total"] > 1:
                     self.__stats["jitter_mean_time_between_excess_jitter_events"] = \
                         (self.sumOfTimeElapsedSinceLastExcessJitterEvents + self.__stats[
@@ -1500,7 +1501,31 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__stats[name] = movingTotal
                     self.__stats[name + "_events"] = events
 
+                ######## Confirm that some packets have been received this second (used for the loss of signal alarm)
+                # If not, increment the timer
+                if packetsRxdPerSecond > 0:
+                    # Packets have been received so clear the timer
+                    secondsWithNoBytesRxdTimer = 0
+                    # Clear the flag so another StreamLost Event can be generated
+                    lossOfStreamFlag = False
+                else:
+                    # No packets received this period so increment the timer
+                    secondsWithNoBytesRxdTimer += 1
+
+                ######## Check to see if we've lost the stream (but only do this once, via the lossOfStreamFlag)
+                if secondsWithNoBytesRxdTimer >= Registry.lossOfStreamAlarmThreshold_s and not lossOfStreamFlag:
+                    # Set flag (this Event can only fire again if the flag is subsequently cleared)
+                    lossOfStreamFlag = True
+                    # Add event to the list (but only do this once)
+                    streamLostEvent = StreamLost(self.__stats)
+                    self.__eventList.append(streamLostEvent)
+                    # Increment the all_events counter
+                    self.__stats["stream_all_events_counter"] += 1
+                    Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
+
+
                 ######### Now housekeep
+
                 # Purge __eventList[] to remove the oldest events
                 self.__houseKeepEventList()
 
