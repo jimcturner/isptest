@@ -723,7 +723,8 @@ class UI(object):
                        ["1Hr\n", "historic_glitch_counter_last_1Hr"],
                        ["10Min\n", "historic_glitch_counter_last_10Min"],
                        ["1Min\n", "historic_glitch_counter_last_1Min"],
-                       ["10Sec\n", "historic_glitch_counter_last_10Sec"]
+                       ["10Sec\n", "historic_glitch_counter_last_10Sec"],
+                       ["Time since\nlast glitch", "glitch_time_elapsed_since_last_glitch"]
                        # ["", ""],
                        ], self.streamResultsDataSet])
 
@@ -2165,6 +2166,8 @@ class UI(object):
             if type(self.selectedStream) == RtpReceiveStream:
                 try:
                     # This will only work if the selected stream type is an RtpreceiveStream object
+                    # Query the RtpReceiveStream receive Queue. If this no > 1 then it suggests that
+                    # the receiver is struggling to empty the queue fast enough
                     debugInfo.append(["Rx queue size ", str(self.selectedStream.rtpStreamQueue.qsize())])
                 except:
                     pass

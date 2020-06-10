@@ -1465,12 +1465,20 @@ class RtpReceiveStream(RtpReceiveCommon):
                             "jitter_time_elapsed_since_last_excess_jitter_event"]) / \
                         self.__stats["jitter_excess_jitter_events_total"]
 
-                # Calculate elapsed since last glitch
+                ########## Calculate elapsed since last glitch
                 # But only if there has actually been a glitch in the past to measure against
                 if self.__stats["glitch_counter_total_glitches"] > 0:
                     # Calculate new value
                     self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats[
                         "glitch_most_recent_timestamp"]
+
+                ########## Calculate mean time between glitches (glitch period)
+                if self.__stats["glitch_counter_total_glitches"] > 1:
+                    # Calculate mean of new and prev value
+                    self.__stats["glitch_mean_time_between_glitches"] = \
+                        (self.sumOfTimeElapsedSinceLastGlitch + self.__stats["glitch_time_elapsed_since_last_glitch"]) / \
+                        self.__stats["glitch_counter_total_glitches"]
+
 
                 ######### Now calculate moving glitch counters by iterating over the self.movingGlitchCounters array
                 # firstly recalculate, then generate stats keys automatically for any moving totals counters
