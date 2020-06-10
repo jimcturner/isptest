@@ -1441,14 +1441,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                     sumOfjitter10SecBuffer += x
                 meanJitter_10Sec = int(sumOfjitter10SecBuffer / 10)
 
-                Utils.Message.addMessage("RtpReceiveStream.__samplingThread rxBps " + str(Utils.bToMb(rxBps)) +\
-                                         ", Elapsed: " + str(elapsedTime.seconds))
-                Utils.Message.addMessage("meanRxPeriod_1Sec " + str(meanRxPeriod_1Sec) +\
-                                         ", meanPacketLengthBytes " + str(meanPacketLengthBytes) +\
-                                         ", pps " + str(packetsRxdPerSecond) +\
-                                         ", jitter_1s " + str(meanJitter_1Sec) +\
-                                         ", jitter_10s " + str(meanJitter_10Sec) +\
-                                         ", jitter long term " + str(jitterLongterm_uS))
+                # Utils.Message.addMessage("RtpReceiveStream.__samplingThread rxBps " + str(Utils.bToMb(rxBps)) +\
+                #                          ", Elapsed: " + str(elapsedTime.seconds))
+                # Utils.Message.addMessage("meanRxPeriod_1Sec " + str(meanRxPeriod_1Sec) +\
+                #                          ", meanPacketLengthBytes " + str(meanPacketLengthBytes) +\
+                #                          ", pps " + str(packetsRxdPerSecond) +\
+                #                          ", jitter_1s " + str(meanJitter_1Sec) +\
+                #                          ", jitter_10s " + str(meanJitter_10Sec) +\
+                #                          ", jitter long term " + str(jitterLongterm_uS))
 
                 # Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
                 if self.__stats["jitter_excess_jitter_events_total"] > 0:
@@ -1468,6 +1468,22 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Calculate new value
                     self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats[
                         "glitch_most_recent_timestamp"]
+
+                ######### Now calculate moving glitch counters by iterating over the self.movingGlitchCounters array
+                # firstly recalculate, then generate stats keys automatically for any moving totals counters
+                # within self.movingGlitchCounters
+                for x in self.movingGlitchCounters:
+                    # Force the moving counters to increment their timers and recalculate totals
+                    x.recalculate()
+                    name, movingTotal, events = x.getResults()
+                    # Dynamically create new stats keys using the name field of the moving glitch counter
+                    self.__stats[name] = movingTotal
+                    self.__stats[name + "_events"] = events
+
+                ######### Now housekeep
+                # Purge __eventList[] to remove the oldest events
+                self.__houseKeepEventList()
+
                 ######## 1 second counter end of code ########
             # Increment 1 sec loop counter
             loopCounter += 1
@@ -1637,7 +1653,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     else:
                         # Glitch is below the threshold. Acknowledge it with a message but don't add an Event
                         # Post a message
-                        Utils.Message.addMessage("Stream " + str(self.__stats["stream_srcAddress"]) + ", " +\
+                        Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + ", " +\
                                                  str(sequenceNoGap) + " packets lost. (<" +\
                                                  str(self.__stats["glitch_Event_Trigger_Threshold_packets"]) +\
                                                  ", minor loss)")
@@ -1674,10 +1690,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                 self.jitter_range_uS = self.jitter_max_uS - self.jitter_min_uS
 
                 # Now detect an excessive jitter event
-                if jitter > (self.excessJitterThresholdFactor * self.__stats["packet_mean_receive_period_uS"]):
+                excessiveJitterThreshold = self.excessJitterThresholdFactor * self.__stats["packet_mean_receive_period_uS"]
+                if jitter > excessiveJitterThreshold:
+                    Utils.Message.addMessage("Excessive jitter " + str(jitter) + ", threshold " + str(excessiveJitterThreshold))
                     # calculated jitter exceeds threshold, so add event and update the stats
-                    addJitterEvent(self, rtpPackets[2])
+                    addJitterEvent(self, rtpPacketData)
 
+                # Extract isptest header using data from first packet in this batch
+                self.__extractIsptestHeaderData(rtpPacketData.isptestHeaderData)
 
                 x = rtpPackets[2].rtpSequenceNo
                 if x % 20 == 0:
@@ -1800,7 +1820,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Take timestamp of last packet in this batch
                 self.__stats["packet_last_seen_received_timestamp"] = lastReceivedRtpPacket.timestamp
 
-                # # Extract isptest header using data from first packet in this batch
+                # Extract isptest header using data from first packet in this batch
                 self.__extractIsptestHeaderData(self.rtpStream[0].isptestHeaderData)
 
             else:
@@ -2654,7 +2674,7 @@ class RtpGenerator(object):
         self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
         self.tracerouteThread.daemon = False
         self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":traceroute")
-        self.tracerouteThread.start()
+        # self.tracerouteThread.start()
 
         # create a stream results receiver object for this tx stream
         self.rtpStreamResultsReceiver = ResultsReceiver(self)
@@ -2958,10 +2978,12 @@ class RtpGenerator(object):
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread to end")
         self.rtpGeneratorThread.join()
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread has ended")
-        # Wait for __tracerouteThread to end
-        Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  Waiting for __tracerouteThread has ended")
-        self.tracerouteThread.join()
-        Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  __tracerouteThread has ended")
+        # Check to see if __tracerouteThread exists (it may have been intentionally disabled)
+        if self.tracerouteThread.is_alive():
+            # Wait for __tracerouteThread to end
+            Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  Waiting for __tracerouteThread has ended")
+            self.tracerouteThread.join()
+            Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  __tracerouteThread has ended")
         # Wait for __samplingThread to end
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread to end")
         self.samplingThread.join()
