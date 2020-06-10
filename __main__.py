@@ -2150,16 +2150,24 @@ class UI(object):
         # Create some debug information to append to the end of the help list
         debugInfo = [["",""],["Debug info",""]]
         debugInfo.append(["Process ID ", str(os.getpid())])
-        try:
-            # This will only work if the stream type is an RtpGenerator object
-            debugInfo.append(["sleep time ",
-                              str("%0.20f" %self.selectedStream.getRtpStreamStatsByKey('Sleep Time mean')) + "S"])
-            # debugInfo.append(["calc time",\
-                        # str(int(self.selectedStream.getRtpStreamStatsByKey('Calculation time mean')*100000)) + "uS"])
-            debugInfo.append(["Tx period ",
-                              str("%0.10f" %self.selectedStream.getRtpStreamStatsByKey('Tx period')) + "S"])
-        except Exception as e:
-            Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
+        if self.selectedStream is not None:
+            if type(self.selectedStream) == RtpGenerator:
+                try:
+                    # This will only work if the stream type is an RtpGenerator object
+                    debugInfo.append(["sleep time ",
+                                      str("%0.20f" %self.selectedStream.getRtpStreamStatsByKey('Sleep Time mean')) + "S"])
+                    # debugInfo.append(["calc time",\
+                                # str(int(self.selectedStream.getRtpStreamStatsByKey('Calculation time mean')*100000)) + "uS"])
+                    debugInfo.append(["Tx period ",
+                                      str("%0.10f" %self.selectedStream.getRtpStreamStatsByKey('Tx period')) + "S"])
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
+            if type(self.selectedStream) == RtpReceiveStream:
+                try:
+                    # This will only work if the selected stream type is an RtpreceiveStream object
+                    debugInfo.append(["Rx queue size ", str(self.selectedStream.rtpStreamQueue.qsize())])
+                except:
+                    pass
         try:
             # Get list of running threads
             runningThreads = Utils.listCurrentThreads(asList=True)

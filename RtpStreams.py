@@ -1487,6 +1487,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Purge __eventList[] to remove the oldest events
                 self.__houseKeepEventList()
 
+
+                # Utilsself.rtpStreamQueue.qsize()
+
                 ######## 1 second counter end of code ########
             # Increment 1 sec loop counter
             loopCounter += 1
