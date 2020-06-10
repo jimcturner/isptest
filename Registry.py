@@ -33,6 +33,12 @@ class Registry(object):
     rtpReceiveStreamHistoricEventsLimit = 50
     rtpReceiveStreamJitterExcessiveAlarmThresholdPercent = 100 # The amount of jitter in the received packet arrival time
     # before an excessive jitter event is registered
+    # The threshold before an Excessive Jitter Event is generated
+    # NOTE: This is a whole number in multiples of the 'mean receive period' for the incoming stream. Therefore the
+    # 'lateness' threshold time depends upon the incoming bitrate.
+    # A value of '2' means that if the packet jitter >= 2x receivePeriod (uS) then an Event will be generated
+    rtpReceiveStreamJitterExcessiveAlarmThreshold = 2
+
 
     # RtpGenerator
     tracerouteMaxHops = 28  # The maximum no of hops traceroute will consider before resetting

@@ -1690,9 +1690,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                 self.jitter_range_uS = self.jitter_max_uS - self.jitter_min_uS
 
                 # Now detect an excessive jitter event
-                excessiveJitterThreshold = self.excessJitterThresholdFactor * self.__stats["packet_mean_receive_period_uS"]
+                # excessiveJitterThreshold = self.excessJitterThresholdFactor * self.__stats["packet_mean_receive_period_uS"]
+                excessiveJitterThreshold = Registry.rtpReceiveStreamJitterExcessiveAlarmThreshold *\
+                                           self.__stats["packet_mean_receive_period_uS"]
                 if jitter > excessiveJitterThreshold:
-                    Utils.Message.addMessage("Excessive jitter " + str(jitter) + ", threshold " + str(excessiveJitterThreshold))
+                    Utils.Message.addMessage("Excessive jitter " + str(jitter) + ", threshold " + str(excessiveJitterThreshold) +\
+                                             ", packet_mean_receive_period_uS " + str(self.__stats["packet_mean_receive_period_uS"]))
                     # calculated jitter exceeds threshold, so add event and update the stats
                     addJitterEvent(self, rtpPacketData)
 
@@ -3321,6 +3324,10 @@ class RtpGenerator(object):
                 else:
                     # Otherwise, deliberately get a jittery sleep value
                     sleepTime = calculateJitterySleepPeriod()
+                    # Now recreate the calculateSleepPeriod() function in order to reset its counter
+                    # Otherwise, when we exit 'jitter generation' mode, we end up with a burst of packets
+                    # as the generator function tries to catch up
+                    g = calculateSleepPeriod()
                 # sleep
                 time.sleep(sleepTime)
                 # start timer
