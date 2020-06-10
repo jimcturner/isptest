@@ -31,13 +31,16 @@ class Registry(object):
     allowProcessorOverloadEventGeneration = False
     # No of historic events to keep in memory (before events are purged)
     rtpReceiveStreamHistoricEventsLimit = 50
-    rtpReceiveStreamJitterExcessiveAlarmThresholdPercent = 100 # The amount of jitter in the received packet arrival time
-    # before an excessive jitter event is registered
+    rtpReceiveStreamJitterExcessiveAlarmThresholdPercent = 100 # **REDUNDANT ** The amount of jitter in the
+    # received packet arrival time before an excessive jitter event is registered
+
     # The threshold before an Excessive Jitter Event is generated
     # NOTE: This is a whole number in multiples of the 'mean receive period' for the incoming stream. Therefore the
     # 'lateness' threshold time depends upon the incoming bitrate.
-    # A value of '2' means that if the packet jitter >= 2x receivePeriod (uS) then an Event will be generated
-    rtpReceiveStreamJitterExcessiveAlarmThreshold = 2
+    # A value of '2' means that if the packet jitter >= 2x receivePeriod (uS) (or rather, the packet is late by the
+    # two receive periods worth of time) an Event will be created
+    # then an Event will be generated
+    rtpReceiveStreamJitterExcessiveAlarmThreshold = 1
 
 
     # RtpGenerator

@@ -2517,16 +2517,16 @@ class UI(object):
 
         if key.find('percent') > 0:
             # Convert % value to an integer
-            value = int(value)
+            value = math.ceil(value)
             return value
 
         if key.find('_uS') > 0:
             # If > 1000uS, express as a mS
             if int(value) > 1000 or int(value) < -1000:
-                value = str(int(value / 1000)) + "mS"
+                value = str(math.ceil(value / 1000.0)) + "mS"
             else:
                 # Append _uS to the value
-                value = str(int(value)) + "uS"
+                value = str(math.ceil(value)) + "uS"
             return value
 
         if key == 'Time to live':

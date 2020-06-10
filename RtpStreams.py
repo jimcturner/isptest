@@ -206,7 +206,7 @@ class StreamLost(Event):
 # Define an event object that represents a excessive jitter event
 class ExcessiveJitter(Event):
 
-    def __init__(self, stats, lastPacketReceived):
+    def __init__(self, stats, lastPacketReceived, jitter, threshold):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
         # Take local copy of stats dictionary
@@ -217,8 +217,10 @@ class ExcessiveJitter(Event):
         self.type = self.__class__.__name__
         # Add additional instance variables as required
         self.lastPacketReceived = lastPacketReceived
+        self.jitter = jitter
+        self.threshold = threshold
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
-        optionalFields = " "+str(int(self.stats["jitter_mean_1S_uS"])) + "/" + str(int(self.stats["jitter_long_term_uS"])) + "uS"
+        optionalFields = " "+str(int(self.jitter)) + "/" + str(int(self.threshold)) + "uS"
         summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
@@ -229,11 +231,11 @@ class ExcessiveJitter(Event):
 
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
-        optionalFields = "jitter_mean_1S_uS,"+str(int(self.stats["jitter_mean_1S_uS"]))+\
-            ",jitter_long_term_uS,"+str(int(self.stats["jitter_long_term_uS"]))
+        optionalFields = "jitter_uS,"+str(int(self.jitter))+\
+            ",threshold_uS,"+str(int(self.threshold))
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
               ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
+              ",friendlyName," +self.stats["stream_friendly_name"]+ "," + optionalFields
         return csv
 
     def getJSON(self):
@@ -241,7 +243,8 @@ class ExcessiveJitter(Event):
         # Add additional keys as required
         data = {'type': self.type, 'timeCreated': self.timeCreated,
                 'eventNo': self.eventNo,
-                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
+                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats, 'jitter': self.jitter,
+                'threshold': self.threshold}
         return json.dumps(data, sort_keys=True, indent=4, default=str)
 
 # Define an event object that represents a processor overload. This might happen if the calculateThread can't process
@@ -1565,13 +1568,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                                  str(self.__stats["stream_syncSource"]))
 
         # Attempts to add new Jitter Event
-        def addJitterEvent(qrtInstance, latestPacket):
+        def addJitterEvent(qrtInstance, latestPacket, jitter, excessiveJitterThreshold):
             # If jitter alarms not inhibited, add a new jitter event
             # Take diff between time.now() and the time of the last event
             if qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >= \
                     qrtInstance.__stats["jitter_alarm_event_timeout_S"] or \
                     qrtInstance.__stats["jitter_excess_jitter_events_total"] == 0:
-                excessiveJitterEvent = ExcessiveJitter(qrtInstance.__stats, latestPacket)
+                excessiveJitterEvent = ExcessiveJitter(qrtInstance.__stats, latestPacket, jitter, excessiveJitterThreshold)
                 # Add the event to the event list
                 qrtInstance.__eventList.append(excessiveJitterEvent)
                 # Increment the all_events counter
@@ -1697,7 +1700,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("Excessive jitter " + str(jitter) + ", threshold " + str(excessiveJitterThreshold) +\
                                              ", packet_mean_receive_period_uS " + str(self.__stats["packet_mean_receive_period_uS"]))
                     # calculated jitter exceeds threshold, so add event and update the stats
-                    addJitterEvent(self, rtpPacketData)
+                    addJitterEvent(self, rtpPacketData, jitter, excessiveJitterThreshold)
 
                 # Extract isptest header using data from first packet in this batch
                 self.__extractIsptestHeaderData(rtpPacketData.isptestHeaderData)
