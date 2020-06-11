@@ -2168,7 +2168,10 @@ class UI(object):
                     # This will only work if the selected stream type is an RtpreceiveStream object
                     # Query the RtpReceiveStream receive Queue. If this no > 1 then it suggests that
                     # the receiver is struggling to empty the queue fast enough
-                    debugInfo.append(["Rx queue size ", str(self.selectedStream.rtpStreamQueue.qsize())])
+                    debugInfo.append(["Rx Q size ", str(self.selectedStream.rtpStreamQueueCurrentSize)])
+                    debugInfo.append(["Rx max Q  ", str(self.selectedStream.rtpStreamQueueMaxSize)])
+                    debugInfo.append(["Rx Q in ", str(self.selectedStream.packetsAddedToRxQueueCount)])
+                    debugInfo.append(["Rx Q out ", str(self.selectedStream.packetCounterReceivedTotal)])
                 except:
                     pass
         try:

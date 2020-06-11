@@ -719,6 +719,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         super().__init__()
         # Create Queue to accept the received packets
         self.rtpStreamQueue = Queue()
+        self.rtpStreamQueueCurrentSize = 0  # Tracks the current size of the receive queue
+        self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
+        self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
 
         self.rtpRxStreamsDict = rtpRxStreamsDict
         self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
@@ -766,7 +769,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__eventList = []
 
         # Running totals updated by __queueReceiverThread()
-        self.__packetCounterReceivedTotal = 0
+        # Notes: These running counters are updated very frequently (with every packet received) so they are kept
+        # seperate from the (identical) counters in the stats[] dict
+        self.packetCounterReceivedTotal = 0 # Note: This is made public to aid debugging. It's queried by the help table
         self.__packetCounterTotalLost = 0
         self.__packetDataReceivedTotalBytes = 0
         self.__receivePeriodRunningTotal = 0
@@ -925,8 +930,8 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Kill the __samplingThread associated with this stream
         self.samplingThreadActiveFlag = False
-        self.samplingThread.join()
-        Utils.Message.addMessage("DBUG: self.samplingThread.join() complete")
+        # self.samplingThread.join()
+        # Utils.Message.addMessage("DBUG: self.samplingThread.join() complete")
 
         # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
         self.rtpRxStreamsDictMutex.acquire()
@@ -1340,7 +1345,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             time.sleep(0.2)
             ## Take snapshots of latest running counter values
             # Snapshot latest count of packets received (for averages)
-            latestPacketsReceivedCount = self.__packetCounterReceivedTotal
+            latestPacketsReceivedCount = self.packetCounterReceivedTotal
             self.__stats["packet_counter_received_total"] = latestPacketsReceivedCount
             # Snapshot latest received bytes value (for rx bps calculation)
             latestRxdBytesCount = self.__packetDataReceivedTotalBytes
@@ -1424,7 +1429,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__stats["jitter_mean_1S_uS"] = meanJitter_1Sec
 
                     ########## Calculate long-term jitter -- self.__stats["jitter_long_term_uS"]
-                    jitterLongterm_uS = int(self.__jitterRunningtotal / self.__packetCounterReceivedTotal)
+                    jitterLongterm_uS = int(self.__jitterRunningtotal / self.packetCounterReceivedTotal)
                     self.__stats["jitter_long_term_uS"] = jitterLongterm_uS
 
                     ########## calculate jitter range (in receive queue, not here)
@@ -1524,24 +1529,32 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
 
+
                 ######### Now housekeep
 
                 # Purge __eventList[] to remove the oldest events
                 self.__houseKeepEventList()
 
 
-                # Utilsself.rtpStreamQueue.qsize()
-
                 ######## 1 second counter end of code ########
+
+
+            ######## Check to see if the stream is dead (has been permanently lost). If so, kill
+            if secondsWithNoBytesRxdTimer >= Registry.streamIsDeadThreshold_s and lossOfStreamFlag:
+                Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
+                                         "(" + str(self.__stats["stream_friendly_name"]).rstrip() + \
+                                         ") believed dead, removing from list")
+
+                # Generate and save a report
+                # Retrieve the auto-generated filename
+                _filename = self.createFilenameForReportExport()
+                # Write a report to disk
+                self.writeReportToDisk(fileName=_filename)
+                # Kill itself
+                self.killStream()
+
             # Increment 1 sec loop counter
             loopCounter += 1
-
-            ########## Update __stats[] dictionary for this stream
-
-
-
-        ########### 0.2 sec timed loop ends
-
         Utils.Message.addMessage("DBUG: __samplingThread ended for stream " + str(self.__stats["stream_syncSource"]))
     # This thread monitors the packet receive Queue
     # To implement:-
@@ -1673,8 +1686,16 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Wait for a packet to arrive in the receive queue
                 rtpPacketData = self.rtpStreamQueue.get(timeout=0.2)
 
+                # Monitor the size of the queue
+                # If the queue size starts creeping up, this suggests the CPU csan't can't keep up with the rate
+                # of incoming packets
+                self.rtpStreamQueueCurrentSize = self.rtpStreamQueue.qsize()
+                if self.rtpStreamQueueCurrentSize > self.rtpStreamQueueMaxSize:
+                    # Keep track of the maximum queue size
+                    self.rtpStreamQueueMaxSize = self.rtpStreamQueueCurrentSize
+
                 # Set initial values
-                if self.__packetCounterReceivedTotal == 0:
+                if self.packetCounterReceivedTotal == 0:
                     # If this is the first packet, set the 'packet first seen' timestamp
                     self.__stats["packet_first_packet_received_timestamp"] = datetime.datetime.now()
                     # Create a 'stream started' event
@@ -1693,7 +1714,7 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
                 # Increment packet received counter
-                self.__packetCounterReceivedTotal += 1
+                self.packetCounterReceivedTotal += 1
                 # Update total bytes received
                 self.__packetDataReceivedTotalBytes += rtpPacketData.payloadSize
 
@@ -2293,20 +2314,22 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Create a new rtp data object to hold the rtp packet data
         newData = RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData)
 
-        # NOW ADD DATA TO A LIST
-
-        # Lock the access mutex
-        self.__accessRtpDataMutex.acquire()
-        # Add the  RtpData object containing the latest packet info, to the rtpStreamData[] list
-        self.rtpStreamData.append(newData)
-        # Release the mutex
-        self.__accessRtpDataMutex.release()
-        # Now we've added the newData object to the list rtpStreamData[] we can delete the newData object
-        del newData
+        # # NOW ADD DATA TO A LIST
+        #
+        # # Lock the access mutex
+        # self.__accessRtpDataMutex.acquire()
+        # # Add the  RtpData object containing the latest packet info, to the rtpStreamData[] list
+        # self.rtpStreamData.append(newData)
+        # # Release the mutex
+        # self.__accessRtpDataMutex.release()
+        # # Now we've added the newData object to the list rtpStreamData[] we can delete the newData object
+        # del newData
 
         # Add the new data to the queue
         try:
             self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData))
+            # Increment the counter. Packets out should equal packets in
+            self.packetsAddedToRxQueueCount += 1
         except Exception as e:
             Utils.Message.addMessage("RtpReceiveStream.addData() " + str(e))
 
