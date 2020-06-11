@@ -766,7 +766,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpStreamData = []
 
         # Create private empty list to hold Events for this RtpReceiveStream object. Accessible via a getter method
-        self.__eventList = []
+        # self.__eventList = []
+        self.__eventList = deque(maxlen=Registry.rtpReceiveStreamHistoricEventsLimit)
 
         # Running totals updated by __queueReceiverThread()
         # Notes: These running counters are updated very frequently (with every packet received) so they are kept
@@ -1548,7 +1549,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 ######### Now housekeep
 
                 # Purge __eventList[] to remove the oldest events
-                self.__houseKeepEventList()
+                # self.__houseKeepEventList()
 
 
                 ######## 1 second counter end of code ########
