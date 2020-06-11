@@ -1481,12 +1481,22 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats[
                         "glitch_most_recent_timestamp"]
 
-                ########## Calculate mean time between glitches (glitch period)
+                ########## Calculate Glitch mean averages - Need at least two glitches for these calculations
+
                 if self.__stats["glitch_counter_total_glitches"] > 1:
-                    # Calculate mean of new and prev value
+                    ########## Calculate mean time between glitches (glitch period)
                     self.__stats["glitch_mean_time_between_glitches"] = \
                         (self.sumOfTimeElapsedSinceLastGlitch + self.__stats["glitch_time_elapsed_since_last_glitch"]) / \
-                        self.__stats["glitch_counter_total_glitches"]
+                        (self.__stats["glitch_counter_total_glitches"] -1)
+
+                    ########## Calculate mean glitch duration
+                    self.__stats["glitch_mean_glitch_duration"] = \
+                        self.__stats["glitch_length_total_time"] / self.__stats[
+                            "glitch_counter_total_glitches"]
+                    ########## Calculate mean packet loss per glitch
+                    self.__stats["glitch_packets_lost_per_glitch_mean"] = \
+                        math.ceil(self.__stats["glitch_packets_lost_total_count"] / self.__stats[
+                            "glitch_counter_total_glitches"])
 
                 ######### Calculate % packet loss
                 if self.__stats["packet_counter_received_total"] > 0:
@@ -1507,6 +1517,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Dynamically create new stats keys using the name field of the moving glitch counter
                     self.__stats[name] = movingTotal
                     self.__stats[name + "_events"] = events
+
+                ######## Get latest version of the worst glitches list (as text), and update to the __stats[] dict
+                self.__stats["glitch_worst_glitches_list"] = self.getWorstGlitches(returnSummaries=True)
 
                 ######## Confirm that some packets have been received this second (used for the loss of signal alarm)
                 # If not, increment the timer
@@ -1628,71 +1641,44 @@ class RtpReceiveStream(RtpReceiveCommon):
                                  str(self.__stats["stream_syncSource"]))
 
         def updateGlitchStats(qrtInstance, latestGlitch):
-            # This method takes code out of __detectGlitches to reduce duplication
-            # It's primary purpose is to update __stats keys relating to glitches (depending upon whether the
-            # size of the glitch exceeds self.__stats["glitch_Event_Trigger_Threshold_packets"] or not)
+            # update running total glitch stats
+            # qrtInstance.__stats["glitch_packets_lost_total_count"] += latestGlitch.packetsLost
+            qrtInstance.__stats["glitch_length_total_time"] += latestGlitch.glitchLength
+            qrtInstance.__stats["glitch_counter_total_glitches"] += 1
 
-            # Update packets lost counter
-            qrtInstance.__stats["glitch_packets_lost_total_count"] += latestGlitch.packetsLost
+            # Add event to moving counters
+            for x in qrtInstance.movingGlitchCounters:
+                x.addEvent(1)
 
-            # If the glitch is insignificant, increment the 'ignored' counter so we record that it happened
-            if latestGlitch.packetsLost <= qrtInstance.__stats["glitch_Event_Trigger_Threshold_packets"]:
-                qrtInstance.__stats["glitch_glitches_ignored_counter"] += 1
+            # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
+            qrtInstance.sumOfTimeElapsedSinceLastGlitch += qrtInstance.__stats["glitch_time_elapsed_since_last_glitch"]
 
-            # If the glitch is significant then it's worth updating the stats
-            # if latestGlitch.packetsLost > qrtInstance.__stats["glitch_Event_Trigger_Threshold_packets"]:
-            else:
-                # update running total glitch stats
-                qrtInstance.__stats["glitch_length_total_time"] += latestGlitch.glitchLength
-                qrtInstance.__stats["glitch_counter_total_glitches"] += 1
+            # Update glitch min/max packet loss stats
+            if qrtInstance.__stats["glitch_packets_lost_per_glitch_min"] < 1:
+                qrtInstance.__stats["glitch_packets_lost_per_glitch_min"] = latestGlitch.packetsLost
 
-                # Add event to moving counters
-                for x in qrtInstance.movingGlitchCounters:
-                    x.addEvent(1)
+            # Update min/max counters
+            if latestGlitch.packetsLost < qrtInstance.__stats["glitch_packets_lost_per_glitch_min"]:
+                qrtInstance.__stats["glitch_packets_lost_per_glitch_min"] = latestGlitch.packetsLost
 
-                # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
-                qrtInstance.sumOfTimeElapsedSinceLastGlitch += qrtInstance.__stats["glitch_time_elapsed_since_last_glitch"]
+            if latestGlitch.packetsLost > qrtInstance.__stats["glitch_packets_lost_per_glitch_max"]:
+                qrtInstance.__stats["glitch_packets_lost_per_glitch_max"] = latestGlitch.packetsLost
 
-                # Update running total
-                # Calculate aggregate mean glitch stats
-                if qrtInstance.__stats["glitch_counter_total_glitches"] > 1:
-                    qrtInstance.__stats["glitch_mean_glitch_duration"] = \
-                        qrtInstance.__stats["glitch_length_total_time"] / qrtInstance.__stats["glitch_counter_total_glitches"]
-                    qrtInstance.__stats["glitch_packets_lost_per_glitch_mean"] = \
-                        math.ceil(qrtInstance.__stats["glitch_packets_lost_total_count"] / qrtInstance.__stats[
-                            "glitch_counter_total_glitches"])
+            # update glitch min/max duration stats
+            # Test for 'zero' duration (the initial value)
+            if qrtInstance.__stats["glitch_min_glitch_duration"] == datetime.timedelta():
+                qrtInstance.__stats["glitch_min_glitch_duration"] = latestGlitch.glitchLength
 
-                # Update glitch min/max packet loss stats
-                if qrtInstance.__stats["glitch_packets_lost_per_glitch_min"] < 1:
-                    qrtInstance.__stats["glitch_packets_lost_per_glitch_min"] = latestGlitch.packetsLost
+            if latestGlitch.glitchLength < qrtInstance.__stats["glitch_min_glitch_duration"]:
+                qrtInstance.__stats["glitch_min_glitch_duration"] = latestGlitch.glitchLength
 
-                # Update min/max counters
-                if latestGlitch.packetsLost < qrtInstance.__stats["glitch_packets_lost_per_glitch_min"]:
-                    qrtInstance.__stats["glitch_packets_lost_per_glitch_min"] = latestGlitch.packetsLost
+            if latestGlitch.glitchLength > qrtInstance.__stats["glitch_max_glitch_duration"]:
+                qrtInstance.__stats["glitch_max_glitch_duration"] = latestGlitch.glitchLength
 
-                if latestGlitch.packetsLost > qrtInstance.__stats["glitch_packets_lost_per_glitch_max"]:
-                    qrtInstance.__stats["glitch_packets_lost_per_glitch_max"] = latestGlitch.packetsLost
-
-                # update glitch min/max duration stats
-                # Test for 'zero' duration (the initial value)
-                if qrtInstance.__stats["glitch_min_glitch_duration"] == datetime.timedelta():
-                    qrtInstance.__stats["glitch_min_glitch_duration"] = latestGlitch.glitchLength
-
-                if latestGlitch.glitchLength < qrtInstance.__stats["glitch_min_glitch_duration"]:
-                    qrtInstance.__stats["glitch_min_glitch_duration"] = latestGlitch.glitchLength
-
-                if latestGlitch.glitchLength > qrtInstance.__stats["glitch_max_glitch_duration"]:
-                    qrtInstance.__stats["glitch_max_glitch_duration"] = latestGlitch.glitchLength
-
-                # Add the glitch to the worstGlitches leaderboard Where it will be analysed to see if it's in the top 'n')
-                qrtInstance.addToWorstGlitchesList(latestGlitch)
-                # Get a text version of the worst glitches, and copy to the __stats[] dict
-                qrtInstance.__stats["glitch_worst_glitches_list"] = qrtInstance.getWorstGlitches(returnSummaries=True)
-
-            # Inhibit immediate jitter-event triggering by setting qrtInstance.__stats["jitter_time_of_last_excess_jitter_event"]
-            # to the current time
-            qrtInstance.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.datetime.now()
-
+            # Add the glitch to the worstGlitches leaderboard Where it will be analysed to see if it's in the top 'n')
+            qrtInstance.addToWorstGlitchesList(latestGlitch)
+            # # Get a text version of the worst glitches, and copy to the __stats[] dict
+            # qrtInstance.__stats["glitch_worst_glitches_list"] = qrtInstance.getWorstGlitches(returnSummaries=True)
 
         # Attempts to add new Jitter Event
         def addJitterEvent(qrtInstance, latestPacket, jitter, excessiveJitterThreshold):
@@ -1805,10 +1791,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Discontinuous sequence numbers detected
                         # Create a Glitch Event
                         glitch = Glitch(self.__stats, rtpPackets[1], rtpPackets[2])
+                        # Update the packets lost count
+                        self.__stats["glitch_packets_lost_total_count"] += glitch.packetsLost
                         # Test to see how many packets have been lost
                         if glitch.packetsLost > self.__stats["glitch_Event_Trigger_Threshold_packets"]:
                             # Significant glitch detected, add it to the eventList[]
                             self.__eventList.append(glitch)
+                            # update glitch stats
+                            updateGlitchStats(self, glitch)
                             # Take timestamp of most recent glitch
                             self.__stats["glitch_most_recent_timestamp"] = glitch.timeCreated
                             # Increment the all_events counter
@@ -1818,15 +1808,19 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                         else:
                             # Glitch is below the threshold. Acknowledge it with a message but don't add an Event
+                            # increment the 'ignored' counter so that we know that it happened
+                            self.__stats["glitch_glitches_ignored_counter"] += 1
                             # Post a message
                             Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + ", " +\
                                                      str(sequenceNoGap) + " packets lost. (<=" +\
                                                      str(self.__stats["glitch_Event_Trigger_Threshold_packets"]) +\
                                                      ", minor loss)")
-                        # update glitch stats
-                        updateGlitchStats(self, glitch)
+
                         # Temporarily disable the jitter detection immediately after a glitch
                         jitterDetectionEnabledFlag = False
+                        # Inhibit immediate jitter-event triggering by setting __stats["jitter_time_of_last_excess_jitter_event"]
+                        # to the current time
+                        self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.datetime.now()
 
                     # Calculate receive period of latest packet
                     receivePeriod = (rtpPackets[2].timestamp - rtpPackets[1].timestamp).microseconds
