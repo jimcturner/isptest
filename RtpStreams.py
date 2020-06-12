@@ -2784,6 +2784,7 @@ class RtpGenerator(object):
         self.txPeriod = 0  # Calculated from self.txRate and set by RtpGenerator.calculateTxPeriod()
         self.payloadLength = int(payloadLength)
         self.txCounter_bytes = 0
+        self.txCounter_packets = 0
         self.txActualTxRate_bps = 0 # Used to 'sample' the actual tx rate
         self.syncSourceIdentifier = int(syncSourceID)
         self.regeneratePayloadFlag = True   # A flag to specify the the 'dummy data' should be recalculated during the
@@ -2802,12 +2803,13 @@ class RtpGenerator(object):
                                             # in the isptest header (in RtpGenerator.generateIsptestHeader()
 
         self.isptestHeaderMessageIndex = 0 # Keeps track of which type of message we are sending in the header
-        self.noOfMessageTypes = 5 # The current message types are:
+        self.noOfMessageTypes = 6 # The current message types are:
                                     # 0 Traceroute
                                     # 1 private LAN Address of the local interface used for transmitting
                                     # 2 The 'public' destination address
                                     # 3 The current version of isptest
                                     # 4 The specified TX rate
+                                    # 5 The transmitted packet count
 
         self.uiInstance = uiInstance   # This allows access to the methods of the UI class
         # self.minSleepTime = None
@@ -3136,7 +3138,27 @@ class RtpGenerator(object):
 
             elif self.isptestHeaderMessageIndex == 5:
                 # Transmitter tx total packets sent
-                pass
+                try:
+                    # Split txRate into a series of bytes
+                    txdPackets = struct.pack("!L", self.txCounter_packets & 0xFFFFFFFF)
+                    messageData = [5 & 0xFF,  # Message type 5: Transmitter total packets sent
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   txdPackets[0] & 0xFF,  # MSB
+                                   txdPackets[1] & 0xFF,  #
+                                   txdPackets[2] & 0xFF,  #
+                                   txdPackets[3] & 0xFF]  # LSB
+
+                except Exception as e:
+                    messageData = [5 & 0xFF,  # Message type 5: Transmit rate (the specified rate)
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF]  # not used
+                    Utils.Message.addMessage(
+                        "DBUG:RtpGenerator.generateIsptestHeader(): Message type 5: Transmit total packets " + str(e))
 
             # Now That the message data list has been created, increment the message type index
             self.isptestHeaderMessageIndex += 1
@@ -3502,6 +3524,8 @@ class RtpGenerator(object):
                                                              rtpGeneratorInstance.UDP_TX_PORT))
                     # Update tx bytes counter (taking packet headers into account)
                     rtpGeneratorInstance.txCounter_bytes += sentBytes
+                    # Update tx packets counter
+                    rtpGeneratorInstance.txCounter_packets += 1
 
                 except Exception as e:
                     Utils.Message.addMessage("\x1B[31 RtpGenerator.__newImprovedRtpGeneratorThread() sendto().   \x1B[0m " + str(e))
