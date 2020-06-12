@@ -676,7 +676,6 @@ class UI(object):
                        ["Last\nglitch", "glitch_most_recent_timestamp"],
                        ["glitch\nperiod", "glitch_mean_time_between_glitches"],
                        ["Count", "glitch_counter_total_glitches"]
-                       # ["CPU\n %","stream_processor_utilisation_percent"]
                        ], self.streamResultsDataSet])
 
         self.views.append(["Stream",
@@ -698,8 +697,7 @@ class UI(object):
                        ["pack\np/s", "packet_counter_1S"],
                        ["Length\n(bytes)", "packet_payload_size_mean_1S_bytes"],
                        ["Recv\nperiod", "packet_mean_receive_period_uS"],
-                       ["Bytes\nRcvd", "packet_data_received_total_bytes"],
-                       ["CPU\n %", "stream_processor_utilisation_percent"]
+                       ["Bytes\nRcvd", "packet_data_received_total_bytes"]
                        # ["",""],
                        ], self.streamResultsDataSet])
 
