@@ -857,10 +857,10 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # % ratio of 1S Jitter_uS to packet_mean_receive_period_uS that will trigger an excessJitterEvent
 
-        self.__stats["jitter_excessive_alarm_threshold_percent"] = \
-            Registry.rtpReceiveStreamJitterExcessiveAlarmThresholdPercent
+        # self.__stats["jitter_excessive_alarm_threshold_percent"] = \
+        #     Registry.rtpReceiveStreamJitterExcessiveAlarmThresholdPercent
 
-        self.excessJitterThresholdFactor = (self.__stats["jitter_excessive_alarm_threshold_percent"] / 100.0)
+        # self.excessJitterThresholdFactor = (self.__stats["jitter_excessive_alarm_threshold_percent"] / 100.0)
 
         # No of seconds to inhibit an excessive jitter alarm
         self.__stats["jitter_alarm_event_timeout_S"] = 2
@@ -1687,10 +1687,12 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Take diff between time.now() and the time of the last event
             # Allow the stream to settle into a steady state by waiting for 5 seconds and also verify that
             # a non-zero excessiveJitterThreshold has been supplied
+            # and. Jitter Event generation is enabled Registry.rtpReceiveStreamEnableExcessiveJitterEventGeneration
             if (qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >\
                     qrtInstance.__stats["jitter_alarm_event_timeout_S"] or\
                     qrtInstance.__stats["jitter_excess_jitter_events_total"] == 0) and excessiveJitterThreshold > 0 and\
-                    qrtInstance.__stats["stream_time_elapsed_total"].total_seconds() > 5:
+                    qrtInstance.__stats["stream_time_elapsed_total"].total_seconds() > 5 and\
+                    Registry.rtpReceiveStreamEnableExcessiveJitterEventGeneration:
 
                 # Utils.Message.addMessage("Excessive jitter Event Creation. Timeout " + \
                 #              str(qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds()) + \
