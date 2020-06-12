@@ -2863,8 +2863,24 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                         if not currentRtpStream[0] in lastWrittenEventNoDict:
                             lastWrittenEventNoDict[currentRtpStream[0]] = 0
 
-                        # Calculate how many new (i.e not yet written to disk) events there in are in this RtpStream object
-                        newEvents = allEvents[-1].eventNo - lastWrittenEventNoDict[currentRtpStream[0]]
+                        # Determine the last event no for this stream written to disk
+                        lastWrittenEventNo = lastWrittenEventNoDict[currentRtpStream[0]]
+                        # Determine the latest event no present in the allEvents list
+                        latestEventNo = allEvents[-1].eventNo
+
+                        # Check to see if the eventsList has been reset in the mean time. This could happen if the
+                        # Receiver resets its stats/deletes a receive stream. In which case the event no's would restart
+                        if latestEventNo < lastWrittenEventNo:
+                            Utils.Message.addMessage("DBUG__diskLoggerThread: list has gone backwards. Restarting list")
+                            # If so, we'll need to re-add all the events from the events list
+                            newEvents = len(allEvents)
+
+                        else:
+                            # This is the default case, where the most recent events in allEvents are likely to have
+                            # not been written to disk yet
+                            # Calculate how many new (i.e not yet written to disk) events there in are in this
+                            # RtpStream object
+                            newEvents = latestEventNo - lastWrittenEventNo
 
                         if newEvents > 0:
                             # There are outstanding events to be written
