@@ -1264,10 +1264,20 @@ class RtpReceiveStream(RtpReceiveCommon):
             elif isptestHeaderData[1] == 4:
                 # This is a message containing the intended tx rate of the stream (as an unsigned long, 4 bytes)
                 try:
+                    # Convert the 4 bytes back to an int
                     specifiedTxRate = struct.unpack_from("!L", bytes(isptestHeaderData[4:]))[0]
                     Utils.Message.addMessage("specifiedTxRate " + str(specifiedTxRate))
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 4 " + str(e))
+
+            elif isptestHeaderData[1] == 5:
+                # This is a message containing a count of the tx'd packets (as an unsigned long, 4 bytes)
+                try:
+                    # Convert the 4 bytes back to an int
+                    txdPackets = struct.unpack_from("!L", bytes(isptestHeaderData[4:]))[0]
+                    Utils.Message.addMessage("txdPackets " + str(txdPackets))
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 5 " + str(e))
 
         except Exception as e:
             Utils.Message.addMessage("DBUG:__RtpReceiveStream.__pasrseIsptestHeader " + str(e))
