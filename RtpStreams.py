@@ -1261,6 +1261,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                 txVersionNo = str(isptestHeaderData[2]) + "." + str(isptestHeaderData[3])
                 self.__stats["stream_transmitterVersion"] = float(txVersionNo)
 
+            elif isptestHeaderData[1] == 4:
+                # This is a message containing the intended tx rate of the stream (as an unsigned long, 4 bytes)
+                try:
+                    specifiedTxRate = struct.unpack_from("!L", bytes(isptestHeaderData[4:]))[0]
+                    Utils.Message.addMessage("specifiedTxRate " + str(specifiedTxRate))
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 4 " + str(e))
+
         except Exception as e:
             Utils.Message.addMessage("DBUG:__RtpReceiveStream.__pasrseIsptestHeader " + str(e))
 
@@ -2784,11 +2792,12 @@ class RtpGenerator(object):
                                             # in the isptest header (in RtpGenerator.generateIsptestHeader()
 
         self.isptestHeaderMessageIndex = 0 # Keeps track of which type of message we are sending in the header
-        self.noOfMessageTypes = 4 # The current message types are:
+        self.noOfMessageTypes = 5 # The current message types are:
                                     # 0 Traceroute
                                     # 1 private LAN Address of the local interface used for transmitting
                                     # 2 The 'public' destination address
                                     # 3 The current version of isptest
+                                    # 4 The specified TX rate
 
         self.uiInstance = uiInstance   # This allows access to the methods of the UI class
         # self.minSleepTime = None
@@ -2967,7 +2976,19 @@ class RtpGenerator(object):
         #         # [byte4][byte5][byte6][byte7] all 0/not used
         #         # [friendlyName] 10 bytes
 
+        # OR
+        # [byte1] Message type (4: Transmitter tx bitrate.
+        #         # [byte2]
+        #         # [byte3]
+        #         # [byte4][byte5][byte6][byte7] tx bitrate as an unsigned long (4 bytes)
+        #         # [friendlyName] 10 bytes
 
+        # OR
+        # [byte1] Message type (5: Transmitter tx total packets sent.
+        #         # [byte2]
+        #         # [byte3]
+        #         # [byte4][byte5][byte6][byte7] all 0/not used
+        #         # [friendlyName] 10 bytes
 
         header = b""  # Specify byte string
         # Initialise messageData to zero
@@ -3078,6 +3099,34 @@ class RtpGenerator(object):
                                    0 & 0xFF,  # not used
                                    0 & 0xFF]  # not used
                     Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx version info " + str(e))
+
+            elif self.isptestHeaderMessageIndex == 4:
+                # Transmitter tx bitrate message
+                # encode rate as a series of four bytes (unsigned long, 4 bytes)
+                try:
+                    # Split txRate into a series of bytes
+                    txRateAsBytes = struct.pack("!L", self.txRate & 0xFFFFFFFF)
+                    messageData = [4 & 0xFF,  # Message type 4: Transmit rate (the specified rate)
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   txRateAsBytes[0] & 0xFF,  # MSB
+                                   txRateAsBytes[1] & 0xFF,  #
+                                   txRateAsBytes[2] & 0xFF,  #
+                                   txRateAsBytes[3] & 0xFF]  # LSB
+
+                except Exception as e:
+                    messageData = [4 & 0xFF,  # Message type 4: Transmit rate (the specified rate)
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF]  # not used
+                    Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): Message type 4: Transmit rate " + str(e))
+
+            elif self.isptestHeaderMessageIndex == 5:
+                # Transmitter tx total packets sent
+                pass
 
             # Now That the message data list has been created, increment the message type index
             self.isptestHeaderMessageIndex += 1
