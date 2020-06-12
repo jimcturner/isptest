@@ -4089,7 +4089,9 @@ class ResultsReceiver(object):
                         try:
                             # Utils.Message.addMessage("DBUG: **latestEventsList: " + str(latestEventsList[-1].eventNo))
                             # Get handle on an (existing) rtpStreamResults object
-                            rtpStreamResults = self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
+                            syncSourceID = stats["stream_syncSource"]
+                            rtpStreamResults = self.rtpTxStreamResultsDict[syncSourceID]
+
                             # Work out whether the eventList contains any new events that we haven't already seen
                             firstEventNoInNewList = latestEventsList[0].eventNo
                             lastEventNoInNewList = latestEventsList[-1].eventNo
@@ -4111,7 +4113,8 @@ class ResultsReceiver(object):
                                     # event no. This could be because the stats at the Receiver were reset mid test.
                                     # If this is the case, delete the existing stored event list and restart the list
                                     if lastEventNoInNewList < lastKnownEventNo:
-                                        Utils.Message.addMessage("Events list has gone backwards. Replacing list")
+                                        Utils.Message.addMessage("Stats/Event list for stream " + str(syncSourceID) +\
+                                                                 " has been reset by receiver")
                                         # Remove the old events list and start again
                                         rtpStreamResults.updateEventsList(latestEventsList, replaceExistingList=True)
 

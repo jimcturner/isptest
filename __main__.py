@@ -2871,7 +2871,8 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                         # Check to see if the eventsList has been reset in the mean time. This could happen if the
                         # Receiver resets its stats/deletes a receive stream. In which case the event no's would restart
                         if latestEventNo < lastWrittenEventNo:
-                            Utils.Message.addMessage("DBUG__diskLoggerThread: list has gone backwards. Restarting list")
+                            Utils.Message.addMessage("DBUG:__diskLoggerThread()Stats/Events for stream " +\
+                                                     str(currentRtpStream[0]) + " reset by Receiver")
                             # If so, we'll need to re-add all the events from the events list
                             newEvents = len(allEvents)
 
