@@ -98,6 +98,7 @@ class Event():
     # This is the master method to generate a csv string containing the info common to all events
     def createCommonCSVString(self):
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
+                ",timeElapsed," + str(self.stats["stream_time_elapsed_total"]) + \
               ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
               ","
         return csv
