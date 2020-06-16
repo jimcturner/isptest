@@ -94,6 +94,14 @@ class Event():
         data = {'timeCreated': self.timeCreated, 'summary': summary}
         return data
 
+    # This is the master method to generate a csv string containing the info common to all events
+    def createCommonCSVString(self):
+        csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
+              ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
+              ","
+        return csv
+
+    # This method is expected to be overridden by all Event subclasses
     @abstractmethod
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
@@ -147,9 +155,12 @@ class StreamStarted(Event):
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
         optionalFields = "firstRtpSequenceNo,"+str(self.firstPacketReceived.rtpSequenceNo)
-        csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-              ",Event no," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
+        # csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
+        #       ",Event no," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
+        #       ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
+
+
+        csv = Event.createCommonCSVString() + optionalFields
         return csv
 
     def getJSON(self):
