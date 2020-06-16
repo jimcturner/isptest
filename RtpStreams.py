@@ -224,22 +224,12 @@ class StreamLost(Event):
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
         optionalFields = "Last packet seen at," + str(self.stats["packet_last_seen_received_timestamp"].strftime("%d/%m/%Y %H:%M:%S"))
-        # csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-        #       ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-        #       ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
-        # return csv
         csv = Event.createCommonCSVString(self) + optionalFields
         return csv
 
 
     def getJSON(self):
         # # Returns a json object representation of the event as a string
-        # # Add additional keys as required
-        # data = {'type': self.type, 'timeCreated': self.timeCreated,
-        #         'eventNo': self.eventNo,
-        #         'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
-        # return json.dumps(data, sort_keys=True, indent=4, default=str)
-        # Create the json object
         jsonRepresentation = Event.createJsonRepresentationOfEvent(self)
         return jsonRepresentation
 
@@ -273,63 +263,59 @@ class ExcessiveJitter(Event):
         # returns a CSV formatted string suitable for import into Excel
         optionalFields = "jitter_uS,"+str(int(self.jitter))+\
             ",threshold_uS,"+str(int(self.threshold))
-        csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-              ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              ",friendlyName," +self.stats["stream_friendly_name"]+ "," + optionalFields
+        csv = Event.createCommonCSVString(self) + optionalFields
         return csv
 
     def getJSON(self):
         # Returns a json object representation of the event as a string
         # Add additional keys as required
-        data = {'type': self.type, 'timeCreated': self.timeCreated,
-                'eventNo': self.eventNo,
-                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats, 'jitter': self.jitter,
-                'threshold': self.threshold}
-        return json.dumps(data, sort_keys=True, indent=4, default=str)
-
+        additionalData = {'jitter': self.jitter, 'threshold': self.threshold}
+        # Create the json object
+        jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
+        return jsonRepresentation
 # Define an event object that represents a processor overload. This might happen if the calculateThread can't process
 # incoming packets fast enough
-class ProcessorOverload(Event):
-    def __init__(self, stats, lastPacketReceived):
-        # Create timestamp of event
-        self.timeCreated = datetime.datetime.now()
-        # Take local copy of stats dictionary
-        self.stats = dict(stats)
-        # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
-        self.eventNo = self.stats["stream_all_events_counter"] + 1
-        # By default, take the name of the class as the 'type'. This could be overwritten
-        self.type = self.__class__.__name__
-        # Add additional instance variables as required
-        self.lastPacketReceived = lastPacketReceived
-
-    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
-        optionalFields =  " "+str(int(self.stats["stream_processor_utilisation_percent"])) + "% cpu usage. "
-        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
-                                                includeEventNo=includeEventNo,
-                                                includeType=includeType,
-                                                includeFriendlyName=includeFriendlyName)
-
-        summary += optionalFields
-        data = {'timeCreated': self.timeCreated, 'summary': summary}
-        return data
-
-    def getCSV(self):
-        # returns a CSV formatted string suitable for import into Excel
-        optionalFields = "stream_processor_utilisation_percent,"+ str(self.stats["stream_processor_utilisation_percent"])+\
-            ",lastRtpSequenceNo," + str(self.lastPacketReceived.rtpSequenceNo)
-        csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-              ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
-        return csv
-
-    def getJSON(self):
-        # Returns a json object representation of the event as a string
-        # Add additional keys as required
-        data = {'type': self.type, 'timeCreated': self.timeCreated,
-                'eventNo': self.eventNo,
-                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
-                'lastRtpSequenceNo': self.lastPacketReceived.rtpSequenceNo}
-        return json.dumps(data, sort_keys=True, indent=4, default=str)
+# class ProcessorOverload(Event):
+#     def __init__(self, stats, lastPacketReceived):
+#         # Create timestamp of event
+#         self.timeCreated = datetime.datetime.now()
+#         # Take local copy of stats dictionary
+#         self.stats = dict(stats)
+#         # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
+#         self.eventNo = self.stats["stream_all_events_counter"] + 1
+#         # By default, take the name of the class as the 'type'. This could be overwritten
+#         self.type = self.__class__.__name__
+#         # Add additional instance variables as required
+#         self.lastPacketReceived = lastPacketReceived
+#
+#     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
+#         optionalFields =  " "+str(int(self.stats["stream_processor_utilisation_percent"])) + "% cpu usage. "
+#         summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+#                                                 includeEventNo=includeEventNo,
+#                                                 includeType=includeType,
+#                                                 includeFriendlyName=includeFriendlyName)
+#
+#         summary += optionalFields
+#         data = {'timeCreated': self.timeCreated, 'summary': summary}
+#         return data
+#
+#     def getCSV(self):
+#         # returns a CSV formatted string suitable for import into Excel
+#         optionalFields = "stream_processor_utilisation_percent,"+ str(self.stats["stream_processor_utilisation_percent"])+\
+#             ",lastRtpSequenceNo," + str(self.lastPacketReceived.rtpSequenceNo)
+#         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
+#               ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
+#               ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
+#         return csv
+#
+#     def getJSON(self):
+#         # Returns a json object representation of the event as a string
+#         # Add additional keys as required
+#         data = {'type': self.type, 'timeCreated': self.timeCreated,
+#                 'eventNo': self.eventNo,
+#                 'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
+#                 'lastRtpSequenceNo': self.lastPacketReceived.rtpSequenceNo}
+#         return json.dumps(data, sort_keys=True, indent=4, default=str)
 
 # Define an event that represent a glitch
 # This will be in the form of the packets (RtpData objects) either side of the 'hole' in received data
@@ -376,24 +362,21 @@ class Glitch(Event):
         # returns a CSV formatted string suitable for import into Excel
         optionalFields = "Duration,"+str(self.glitchLength)+", packet(s) lost,"+str(self.packetsLost)+\
             ",Expected seq no,"+str(self.expectedSequenceNo)+",Actual received seq no,"+ str(self.actualReceivedSequenceNo)
-        csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-              ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
+        csv = Event.createCommonCSVString(self) + optionalFields
         return csv
 
     def getJSON(self):
         # Returns a json object representation of the event as a string
-        # Add additional keys as required
-        data = {'type': self.type, 'timeCreated': self.timeCreated,
-                'eventNo': self.eventNo,
-                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
-                'packetsLost': self.packetsLost, 'duration': self.glitchLength,
+
+        # Create dictionary with any additional keys specific to this type of event
+        additionalData = {'packetsLost': self.packetsLost, 'duration': self.glitchLength,
                 'lastReceivedPacketBeforeGap.rtpSequenceNo': self.startOfGap.rtpSequenceNo,
                 'firstPackedReceivedAfterGap.rtpSequenceNo': self.endOfGap.rtpSequenceNo,
                 'expectedSequenceNo': self.expectedSequenceNo,
                 'actualReceivedSequenceNo': self.actualReceivedSequenceNo}
-        return json.dumps(data, sort_keys=True, indent=4, default=str)
-
+        # Create the json object
+        jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
+        return jsonRepresentation
 
 # Stores a running total of events that happened within the last x seconds with y granularity
 class MovingTotalEventCounter(object):
