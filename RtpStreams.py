@@ -142,12 +142,6 @@ class Event():
     # This method is expected to be overridden by all Event subclasses
     @abstractmethod
     def getJSON(self):
-        # # Returns a json object representation of the event as a string
-        # # Add additional keys as required
-        # data = {'type': self.type, 'timeCreated': self.timeCreated,
-        #         'eventNo': self.eventNo,
-        #         'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
-        # return json.dumps(data, sort_keys=True, indent=4, default=str)
         pass
 
 # Now define the 'events' that can happen to a stream
