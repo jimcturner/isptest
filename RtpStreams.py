@@ -76,23 +76,24 @@ class Event():
             summary += "Event.createCommonSummaryText: " + str(e)
         return summary
 
-    # Returns a string summary of the event, with optional fields
+    # This method is expected to be overridden by all Event subclasses
     @abstractmethod
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
-        # Returns a dictionary containing a timestamp and a concise description of the event as a string
-        # It invokes the method from the parent class (Event) Event.createCommonSummaryText() to allow
-        # some control over the construction of the string (i.e how much detail it contains) via the optional args
-        # By default, all the optional args are set to True, so the Summary will actually be quite detailed!
-        optionalFields = ""
-        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
-                                                includeEventNo=includeEventNo,
-                                                includeType=includeType,
-                                                includeFriendlyName=includeFriendlyName)
-        summary += optionalFields
-
-
-        data = {'timeCreated': self.timeCreated, 'summary': summary}
-        return data
+        # # Returns a dictionary containing a timestamp and a concise description of the event as a string
+        # # It invokes the method from the parent class (Event) Event.createCommonSummaryText() to allow
+        # # some control over the construction of the string (i.e how much detail it contains) via the optional args
+        # # By default, all the optional args are set to True, so the Summary will actually be quite detailed!
+        # optionalFields = ""
+        # summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+        #                                         includeEventNo=includeEventNo,
+        #                                         includeType=includeType,
+        #                                         includeFriendlyName=includeFriendlyName)
+        # summary += optionalFields
+        #
+        #
+        # data = {'timeCreated': self.timeCreated, 'summary': summary}
+        # return data
+        pass
 
     # This is the master method to generate a csv string containing the info common to all events
     def createCommonCSVString(self):
@@ -104,22 +105,49 @@ class Event():
     # This method is expected to be overridden by all Event subclasses
     @abstractmethod
     def getCSV(self):
-        # returns a CSV formatted string suitable for import into Excel
-        optionalFields = ""
-        csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-              ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              "," + optionalFields
-        return csv
+        # # returns a CSV formatted string suitable for import into Excel
+        # optionalFields = ""
+        # csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
+        #       ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
+        #       "," + optionalFields
+        # return csv
+        pass
 
-    @abstractmethod
-    def getJSON(self):
-        # Returns a json object representation of the event as a string
-        # Add additional keys as required
-        data = {'type': self.type, 'timeCreated': self.timeCreated,
+    # Returns a dictionary containing the elements common to all events - to be used in the json export
+    def __createCommonJsonDataDictObject(self):
+        eventCommonDetailsDict = {'type': self.type, 'timeCreated': self.timeCreated,
                 'eventNo': self.eventNo,
                 'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
-        return json.dumps(data, sort_keys=True, indent=4, default=str)
+        return eventCommonDetailsDict
 
+    # Creates a json object representation of the event.
+    # The additionalKeysDict argument allows additional dict keys to be appended to the default keys set up by
+    # the call to createCommonJsonDataDictObject
+    def createJsonRepresentationOfEvent(self, additionalKeysDict=None):
+        # Create initial dictonary of Event data
+        jsonData = self.__createCommonJsonDataDictObject()
+        if additionalKeysDict is not None:
+            # If additional keys are supplied, append them to jsonData
+            try:
+                jsonData.update(additionalKeysDict)
+            except Exception as e:
+                # If the data can't be appended, append an error code to the dict
+                jsonData.update({"ERROR_createJsonRepresentationOfEvent":str(e)})
+        # Create the actual json object
+        return json.dumps(jsonData, sort_keys=True, indent=4, default=str)
+
+
+
+    # This method is expected to be overridden by all Event subclasses
+    @abstractmethod
+    def getJSON(self):
+        # # Returns a json object representation of the event as a string
+        # # Add additional keys as required
+        # data = {'type': self.type, 'timeCreated': self.timeCreated,
+        #         'eventNo': self.eventNo,
+        #         'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
+        # return json.dumps(data, sort_keys=True, indent=4, default=str)
+        pass
 
 # Now define the 'events' that can happen to a stream
 class StreamStarted(Event):
@@ -155,21 +183,18 @@ class StreamStarted(Event):
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
         optionalFields = "firstRtpSequenceNo,"+str(self.firstPacketReceived.rtpSequenceNo)
-        # csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-        #       ",Event no," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-        #       ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
-
-
-        csv = Event.createCommonCSVString() + optionalFields
+        csv = Event.createCommonCSVString(self) + optionalFields
         return csv
 
     def getJSON(self):
         # Returns a json object representation of the event as a string
-        data = {'type': self.type, 'timeCreated': self.timeCreated,
-                'eventNo': self.eventNo,
-                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats,
-                'rtpSequenceNo': self.firstPacketReceived.rtpSequenceNo}
-        return json.dumps(data, sort_keys=True, indent=4, default=str)
+
+        # Create dictionary with any additional keys specific to this type of event
+        additionalData = {'rtpSequenceNo': self.firstPacketReceived.rtpSequenceNo}
+        # Create the json object
+        jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
+        return jsonRepresentation
+
 
 # Define an event that represents a loss of rtpStream
 class StreamLost(Event):
@@ -198,19 +223,25 @@ class StreamLost(Event):
 
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
-        optionalFields = ",Last packet seen at," + str(self.stats["packet_last_seen_received_timestamp"].strftime("%d/%m/%Y %H:%M:%S"))
-        csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-              ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
+        optionalFields = "Last packet seen at," + str(self.stats["packet_last_seen_received_timestamp"].strftime("%d/%m/%Y %H:%M:%S"))
+        # csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
+        #       ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
+        #       ",friendlyName," +self.stats["stream_friendly_name"]+ "," +optionalFields
+        # return csv
+        csv = Event.createCommonCSVString(self) + optionalFields
         return csv
 
+
     def getJSON(self):
-        # Returns a json object representation of the event as a string
-        # Add additional keys as required
-        data = {'type': self.type, 'timeCreated': self.timeCreated,
-                'eventNo': self.eventNo,
-                'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
-        return json.dumps(data, sort_keys=True, indent=4, default=str)
+        # # Returns a json object representation of the event as a string
+        # # Add additional keys as required
+        # data = {'type': self.type, 'timeCreated': self.timeCreated,
+        #         'eventNo': self.eventNo,
+        #         'syncSource': self.stats["stream_syncSource"], 'stats': self.stats}
+        # return json.dumps(data, sort_keys=True, indent=4, default=str)
+        # Create the json object
+        jsonRepresentation = Event.createJsonRepresentationOfEvent(self)
+        return jsonRepresentation
 
 # Define an event object that represents a excessive jitter event
 class ExcessiveJitter(Event):
