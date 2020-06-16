@@ -737,6 +737,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_transmitter_local_srcPort"] = 0  # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_destAddress"] = "" # Will be populated by incoming isptest header data
         self.__stats["stream_transmitterVersion"] = 0
+        self.__stats["stream_transmitter_txRate_bps"] = 0 # Will be populated by incoming isptest header data
+
         Utils.Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
 
         # This is a reference to the UDP listening socket created in main() (to receive all incoming streams)
@@ -777,7 +779,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__receivePeriodRunningTotal = 0
         self.__jitterRunningtotal = 0
         self.__packet_last_seen_received_timestamp = datetime.timedelta()
-
+        self.__packetCounterTransmittedTotal = 0# Will be populated by incoming isptest header data
+        self.__streamTransmitterTxRateBps = 0  # Will be populated by incoming isptest header data
 
         # Counter to be used by __calculateJitter()
         # self.sumOfJitter_1s = 0
@@ -792,6 +795,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["packet_data_received_total_bytes"] = 0
         self.__stats["packet_payload_size_mean_1S_bytes"] = 0
         self.__stats["packet_counter_received_total"] = 0
+        self.__stats["packet_counter_transmitted_total"] = 0 # Will be populated by incoming isptest header data
         self.__stats["stream_time_elapsed_total"] = datetime.timedelta()
         self.__stats["packet_instantaneous_receive_period_uS"] = 0
         self.__stats["packet_mean_receive_period_uS"] = 0
@@ -1265,8 +1269,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # This is a message containing the intended tx rate of the stream (as an unsigned long, 4 bytes)
                 try:
                     # Convert the 4 bytes back to an int
-                    specifiedTxRate = struct.unpack_from("!L", bytes(isptestHeaderData[4:]))[0]
-                    Utils.Message.addMessage("specifiedTxRate " + str(specifiedTxRate))
+                    self.__streamTransmitterTxRateBps = struct.unpack_from("!L", bytes(isptestHeaderData[4:]))[0]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 4 " + str(e))
 
@@ -1274,8 +1277,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # This is a message containing a count of the tx'd packets (as an unsigned long, 4 bytes)
                 try:
                     # Convert the 4 bytes back to an int
-                    txdPackets = struct.unpack_from("!L", bytes(isptestHeaderData[4:]))[0]
-                    Utils.Message.addMessage("txdPackets " + str(txdPackets))
+                    self.__packetCounterTransmittedTotal = struct.unpack_from("!L", bytes(isptestHeaderData[4:]))[0]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 5 " + str(e))
 
@@ -1376,6 +1378,10 @@ class RtpReceiveStream(RtpReceiveCommon):
             latestJitterPeriodCount = self.__jitterRunningtotal
             # Snapshot last packet seen timestamp
             self.__stats["packet_last_seen_received_timestamp"] = self.__packet_last_seen_received_timestamp
+            # Snapshot packetCounterTransmittedTotal (packets Tx'd according to the transmitter
+            self.__stats["packet_counter_transmitted_total"] = self.__packetCounterTransmittedTotal
+            # Snapshot streamTransmitterTxRateBps (intended tx rate, according to the transmitter)
+            self.__stats["stream_transmitter_txRate_bps"] = self.__streamTransmitterTxRateBps
 
             try:
                 ########### Calculate how many packets received in the latest 200mS period - required for 'mean' calculations

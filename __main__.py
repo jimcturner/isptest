@@ -2150,6 +2150,8 @@ class UI(object):
         debugInfo = [["",""],["Debug info",""]]
         debugInfo.append(["Process ID ", str(os.getpid())])
         if self.selectedStream is not None:
+            # Get copy of latest stats
+            stats = self.selectedStream.getRtpStreamStats()
             if type(self.selectedStream) == RtpGenerator:
                 try:
                     # This will only work if the stream type is an RtpGenerator object
@@ -2170,6 +2172,8 @@ class UI(object):
                     debugInfo.append(["Rx max Q  ", str(self.selectedStream.rtpStreamQueueMaxSize)])
                     debugInfo.append(["Rx Q in ", str(self.selectedStream.packetsAddedToRxQueueCount)])
                     debugInfo.append(["Rx Q out ", str(self.selectedStream.packetCounterReceivedTotal)])
+                    debugInfo.append(["Tx'd packets ", str(stats["packet_counter_transmitted_total"])])
+                    debugInfo.append(["Tx bps ", str(Utils.bToMb(stats["stream_transmitter_txRate_bps"]))])
                 except:
                     pass
         try:
