@@ -70,6 +70,7 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import textwrap
 import pickle
+import psutil   #Used for CPU Usage
 # import cgitb
 # cgitb.enable(format='text')
 
@@ -2667,6 +2668,25 @@ class UI(object):
             self.__updateClock()
             # draw the stream table
             self.__drawStreamsTable()
+
+            # print CPU usage
+            # test_list = []
+            # for i in range(10):
+            #     p = psutil.Process()
+            #     p_cpu = p.cpu_percent(interval=0.1)
+            #     test_list.append(p_cpu)
+            # cpuUsage = float(sum(test_list)) / len(test_list)
+
+            def getSystemUsage():
+                p = psutil.Process()
+                unusedButNecessary = p.cpu_percent()
+                time.sleep(0.1)
+                cpuUsage = p.cpu_percent()
+                return cpuUsage
+
+            cpuUsage = getSystemUsage()
+
+            Utils.Message.addMessage("CPU " + str(cpuUsage))
 
             # Utils.Message.addMessage(str(listCurrentThreads()))
             # draw the messages table
