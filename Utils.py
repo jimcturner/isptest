@@ -7,10 +7,8 @@ import socket
 import threading
 import platform
 # psutil seems to be broken on Linux
-try:
-    import psutil
-except:
-    pass
+# import psutil
+
 
 from Registry import Registry
 from ipwhois import IPWhois, exceptions
