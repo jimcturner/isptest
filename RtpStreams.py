@@ -1850,7 +1850,9 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
                     sequenceNoGap = rtpPackets[2].rtpSequenceNo - rtpPackets[1].rtpSequenceNo
-                    if sequenceNoGap > 1:
+                    # Take the absolute difference because if the sequence nos have wrapped around, we'll get a
+                    # negative difference value
+                    if abs(sequenceNoGap) > 1:
                         # Discontinuous sequence numbers detected
                         # Create a Glitch Event
                         glitch = Glitch(self.__stats, rtpPackets[1], rtpPackets[2])

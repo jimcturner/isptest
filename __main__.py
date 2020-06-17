@@ -2180,6 +2180,7 @@ class UI(object):
                     debugInfo.append(["0 len ", str(zeroLengthPacketCounter)])
                     debugInfo.append(["<12 len ", str(insufficientLengthPacketCounter)])
                     debugInfo.append(["dec err ", str(rtpDecodingErrorCounter)])
+                    debugInfo.append(["Tot Rx ", str(packetsReceivedByRxThreadCount)])
                 except:
                     pass
         try:
@@ -2992,6 +2993,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     insufficientLengthPacketCounter = 0
     global rtpDecodingErrorCounter    # Counts the no. of rtpDecoding errors
     rtpDecodingErrorCounter = 0
+    global packetsReceivedByRxThreadCount
+    packetsReceivedByRxThreadCount = 0
 
     while True:
         # Create receive UDP socket
@@ -3063,6 +3066,10 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     # Utils.Message.addMessage("ERR:__main.__receiveRtpThread() 0 bytes received")
                     # Increment the error counter
                     zeroLengthPacketCounter += 1
+                else:
+                    # Increment the total Rx'd packet counter
+                    packetsReceivedByRxThreadCount += 1
+
                 if len(data) >= RTP_HEADER_SIZE:
                     # Get timestamp at the point the packet was received
                     timeNow = datetime.datetime.now()
