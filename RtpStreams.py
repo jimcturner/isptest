@@ -1535,7 +1535,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                             "jitter_time_elapsed_since_last_excess_jitter_event"]) / \
                         self.__stats["jitter_excess_jitter_events_total"]
 
-                ########## Calculate elapsed since last glitch
+                ########## Calculate time elapsed since last glitch
                 # But only if there has actually been a glitch in the past to measure against
                 if self.__stats["glitch_counter_total_glitches"] > 0:
                     # Calculate new value
@@ -1544,11 +1544,11 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                 ########## Calculate Glitch mean averages - Need at least two glitches for these calculations
 
-                if self.__stats["glitch_counter_total_glitches"] > 1:
+                if self.__stats["glitch_counter_total_glitches"] > 0:
                     ########## Calculate mean time between glitches (glitch period)
                     self.__stats["glitch_mean_time_between_glitches"] = \
                         (self.sumOfTimeElapsedSinceLastGlitch + self.__stats["glitch_time_elapsed_since_last_glitch"]) / \
-                        (self.__stats["glitch_counter_total_glitches"] -1)
+                        (self.__stats["glitch_counter_total_glitches"]  + 1)
 
                     ########## Calculate mean glitch duration
                     self.__stats["glitch_mean_glitch_duration"] = \
@@ -1714,12 +1714,11 @@ class RtpReceiveStream(RtpReceiveCommon):
             if qrtInstance.__stats["glitch_counter_total_glitches"] == 1:
                 # Special case: If this is the first glitch, add the time elapsed *before* the first glitch to the
                 # sumOfTimeElapsedSinceLastGlitch running total
-                pass
+                qrtInstance.sumOfTimeElapsedSinceLastGlitch += qrtInstance.__stats["stream_time_elapsed_total"]
 
-            else:
-                # This is a subsequent glitch
-                # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
-                qrtInstance.sumOfTimeElapsedSinceLastGlitch += qrtInstance.__stats["glitch_time_elapsed_since_last_glitch"]
+
+            # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
+            qrtInstance.sumOfTimeElapsedSinceLastGlitch += qrtInstance.__stats["glitch_time_elapsed_since_last_glitch"]
 
 
 

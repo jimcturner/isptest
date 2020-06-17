@@ -2151,9 +2151,21 @@ class UI(object):
         # Create some debug information to append to the end of the help list
         debugInfo = [["",""],["Debug info",""]]
         debugInfo.append(["Process ID ", str(os.getpid())])
+        if self.operationMode == "RECEIVE":
+            # Display aggregate socket receive stats
+            try:
+                # NOTE: These are all global vars declared in __receiveRtpThread
+                debugInfo.append(["0 len ", str(zeroLengthPacketCounter)])
+                debugInfo.append(["<12 len ", str(insufficientLengthPacketCounter)])
+                debugInfo.append(["dec err ", str(rtpDecodingErrorCounter)])
+                debugInfo.append(["Tot Rx ", str(packetsReceivedByRxThreadCount)])
+            except:
+                pass
+
         if self.selectedStream is not None:
             # Get copy of latest stats
             stats = self.selectedStream.getRtpStreamStats()
+            # Determine what type of stream this is, and display stats accordingly
             if type(self.selectedStream) == RtpGenerator:
                 try:
                     # This will only work if the stream type is an RtpGenerator object
@@ -2171,16 +2183,12 @@ class UI(object):
                     # This will only work if the selected stream type is an RtpreceiveStream object
                     # Query the RtpReceiveStream receive Queue. If this no > 1 then it suggests that
                     # the receiver is struggling to empty the queue fast enough
+                    debugInfo.append(["Tx'd packets ", str(stats["packet_counter_transmitted_total"])])
+                    debugInfo.append(["Tx bps ", str(Utils.bToMb(stats["stream_transmitter_txRate_bps"]))])
                     debugInfo.append(["Rx Q size ", str(self.selectedStream.rtpStreamQueueCurrentSize)])
                     debugInfo.append(["Rx max Q  ", str(self.selectedStream.rtpStreamQueueMaxSize)])
                     debugInfo.append(["Rx Q in ", str(self.selectedStream.packetsAddedToRxQueueCount)])
                     debugInfo.append(["Rx Q out ", str(self.selectedStream.packetCounterReceivedTotal)])
-                    debugInfo.append(["Tx'd packets ", str(stats["packet_counter_transmitted_total"])])
-                    debugInfo.append(["Tx bps ", str(Utils.bToMb(stats["stream_transmitter_txRate_bps"]))])
-                    debugInfo.append(["0 len ", str(zeroLengthPacketCounter)])
-                    debugInfo.append(["<12 len ", str(insufficientLengthPacketCounter)])
-                    debugInfo.append(["dec err ", str(rtpDecodingErrorCounter)])
-                    debugInfo.append(["Tot Rx ", str(packetsReceivedByRxThreadCount)])
                 except:
                     pass
         try:
