@@ -2434,13 +2434,9 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
         try:
-            self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData),
-                                    block=True)
+            self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData))
             # Increment the counter. Packets out should equal packets in
             self.packetsAddedToRxQueueCount += 1
-        except Full as e:
-            Utils.Message.addMessage("RtpReceiveStream.addData() Queue full " + str(e))
-
         except Exception as e:
             Utils.Message.addMessage("RtpReceiveStream.addData() " + str(e))
 
@@ -2845,6 +2841,7 @@ class RtpGenerator(object):
         # self.minCalculationTime = None
         # self.maxCalculationTime = None
         # self.meanCalculationTime = None
+        self.txErrorCounter = 0 # Counts the no. of transmit errors reported by the transmit thread
 
         # Query the routing table to determine the address of the Ethernet interface that will be used to transmit
         self.SRC_IP_ADDR = Utils.get_ip(self.UDP_TX_IP)
@@ -3549,10 +3546,18 @@ class RtpGenerator(object):
                     sentBytes = rtpGeneratorInstance.udpTxSocket.sendto(rtpGeneratorInstance.udpTxData,
                                                             (rtpGeneratorInstance.UDP_TX_IP,
                                                              rtpGeneratorInstance.UDP_TX_PORT))
-                    # Update tx bytes counter (taking packet headers into account)
-                    rtpGeneratorInstance.txCounter_bytes += sentBytes
-                    # Update tx packets counter
-                    rtpGeneratorInstance.txCounter_packets += 1
+                    # Confirm that we appear to have sent the correct no. of bytes
+                    if sentBytes == len(rtpGeneratorInstance.udpTxData):
+                        # Update tx bytes counter (taking packet headers into account)
+                        rtpGeneratorInstance.txCounter_bytes += sentBytes
+                        # Update tx packets counter
+                        rtpGeneratorInstance.txCounter_packets += 1
+                    else:
+                        # Increment the error counter
+                        rtpGeneratorInstance.txErrorCounter += 1
+                        Utils.Message.addMessage("ERR:RtpGenerator.__rtpGeneratorThread incorrect bytes sent. Tx'd: " +\
+                                            str(sentBytes) + ", Expected: " + str(len(rtpGeneratorInstance.udpTxData)))
+
 
                 except Exception as e:
                     Utils.Message.addMessage("\x1B[31 RtpGenerator.__newImprovedRtpGeneratorThread() sendto().   \x1B[0m " + str(e))

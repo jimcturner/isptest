@@ -2163,6 +2163,7 @@ class UI(object):
                                 # str(int(self.selectedStream.getRtpStreamStatsByKey('Calculation time mean')*100000)) + "uS"])
                     debugInfo.append(["Tx period ",
                                       str("%0.10f" %stats['Tx period']) + "S"])
+                    debugInfo.append(["Tx err ", str(self.selectedStream.txErrorCounter)])
                 except Exception as e:
                     Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
             if type(self.selectedStream) == RtpReceiveStream:
@@ -2176,6 +2177,9 @@ class UI(object):
                     debugInfo.append(["Rx Q out ", str(self.selectedStream.packetCounterReceivedTotal)])
                     debugInfo.append(["Tx'd packets ", str(stats["packet_counter_transmitted_total"])])
                     debugInfo.append(["Tx bps ", str(Utils.bToMb(stats["stream_transmitter_txRate_bps"]))])
+                    debugInfo.append(["0 len ", str(zeroLengthPacketCounter)])
+                    debugInfo.append(["<12 len ", str(insufficientLengthPacketCounter)])
+                    debugInfo.append(["dec err ", str(rtpDecodingErrorCounter)])
                 except:
                     pass
         try:
@@ -2980,6 +2984,14 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     # diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
     # diskLoggerThread.setName("__diskLoggerThread")
     # diskLoggerThread.start()
+    # Running total o
+    # Create and initialise some global variables used for debugging -tracing lost packets
+    global zeroLengthPacketCounter # Counts the no of zero length packets received
+    zeroLengthPacketCounter = 0
+    global insufficientLengthPacketCounter # Counts the no of packets received that are too short (i.e size<rtp header)
+    insufficientLengthPacketCounter = 0
+    global rtpDecodingErrorCounter    # Counts the no. of rtpDecoding errors
+    rtpDecodingErrorCounter = 0
 
     while True:
         # Create receive UDP socket
@@ -3049,7 +3061,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 # Confirm that we have some data (RTP header is 12 bytes long)
                 if len(data) == 0:
                     # Utils.Message.addMessage("ERR:__main.__receiveRtpThread() 0 bytes received")
-                    pass
+                    # Increment the error counter
+                    zeroLengthPacketCounter += 1
                 if len(data) >= RTP_HEADER_SIZE:
                     # Get timestamp at the point the packet was received
                     timeNow = datetime.datetime.now()
@@ -3113,15 +3126,18 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
 
                     except Exception as e:
                         # Problem decoding RTP headers
+                        rtpDecodingErrorCounter += 1
                         message = Fore.RED + "Cannot decode RTP headers. Is this an RTP packet? " + str(
                             e) + " Length:" + str(len(data)) + \
                                   " bytes received\r"
                         # print (message)
                         Utils.Message.addMessage(message)
                 else:
+                    # Received packet is too short - not ling enough to hold an rtp header
                     # message = Fore.RED + "ERR: Invalid data received: " + str(addr) + ", " + str(data)
                     # print (message)
                     # Utils.Message.addMessage(message)
+                    insufficientLengthPacketCounter += 1
                     pass
 
                 # Now delete contents of data[]
