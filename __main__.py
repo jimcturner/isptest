@@ -2677,14 +2677,15 @@ class UI(object):
             #     test_list.append(p_cpu)
             # cpuUsage = float(sum(test_list)) / len(test_list)
 
-            def getSystemUsage():
-                p = psutil.Process()
-                unusedButNecessary = p.cpu_percent()
-                time.sleep(0.1)
-                cpuUsage = p.cpu_percent()
-                return cpuUsage
-
-            cpuUsage = getSystemUsage()
+            # def getSystemUsage():
+            #     p = psutil.Process()
+            #     unusedButNecessary = p.cpu_percent()
+            #     time.sleep(0.1)
+            #     cpuUsage = p.cpu_percent()
+            #     return cpuUsage
+            #
+            # cpuUsage = getSystemUsage()
+            cpuUsage = Utils.CPU.getUsage()
 
             Utils.Message.addMessage("CPU " + str(cpuUsage))
 
