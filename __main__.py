@@ -1146,8 +1146,9 @@ class UI(object):
                          str(self.UDP_RX_PORT), 1, 1, Term.BLACK, Term.WHITE)
 
     def __updateClock(self):
-        # Update clock on top RHS of screen
-        Term.printRightJustified(str(datetime.datetime.now().strftime("%H:%M:%S")), 1, Term.BLACK, Term.WHITE)
+        # Update clock and CPU mon on top RHS of screen
+        clockString = datetime.datetime.now().strftime("%H:%M:%S") + " " + str(round(Utils.CPU.getUsage())) + "%"
+        Term.printRightJustified(clockString, 1, Term.BLACK, Term.WHITE)
 
     def __renderBottomToolbar(self):
         Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 1), Term.WHITE)
@@ -2669,27 +2670,6 @@ class UI(object):
             # draw the stream table
             self.__drawStreamsTable()
 
-            # print CPU usage
-            # test_list = []
-            # for i in range(10):
-            #     p = psutil.Process()
-            #     p_cpu = p.cpu_percent(interval=0.1)
-            #     test_list.append(p_cpu)
-            # cpuUsage = float(sum(test_list)) / len(test_list)
-
-            # def getSystemUsage():
-            #     p = psutil.Process()
-            #     unusedButNecessary = p.cpu_percent()
-            #     time.sleep(0.1)
-            #     cpuUsage = p.cpu_percent()
-            #     return cpuUsage
-            #
-            # cpuUsage = getSystemUsage()
-            cpuUsage = Utils.CPU.getUsage()
-
-            Utils.Message.addMessage("CPU " + str(cpuUsage))
-
-            # Utils.Message.addMessage(str(listCurrentThreads()))
             # draw the messages table
             self.__drawMessageTable() # Should only take effect if there are any new messages/or self.redrawScreen is True
 
