@@ -70,7 +70,7 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import textwrap
 import pickle
-import psutil   #Used for CPU Usage - doesn't seem to work on Linux
+
 # import cgitb
 # cgitb.enable(format='text')
 

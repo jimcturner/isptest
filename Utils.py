@@ -161,9 +161,10 @@ def uTom(value):
 # Defines a class to measure CPU usage
 class CPU(object):
     try:
-        __process = psutil.Process()
-        # Take initial CPU usage sample
-        __cpuUsage = __process.cpu_percent()
+        # __process = psutil.Process()
+        # # Take initial CPU usage sample
+        # __cpuUsage = __process.cpu_percent()
+        pass
     except:
         pass
     # Class method to return CPU usage
@@ -171,6 +172,7 @@ class CPU(object):
     def getUsage(cls):
         try:
             return cls.__process.cpu_percent()
+            pass
         except:
             return 0
 
