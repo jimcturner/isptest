@@ -206,7 +206,12 @@ class StreamLost(Event):
 
 
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True, includeFriendlyName=True):
-        optionalFields = ", Last packet seen at " + str(self.stats["packet_last_seen_received_timestamp"].strftime("%d/%m/%Y %H:%M:%S"))
+        try:
+            optionalFields = ", Last packet seen at " +\
+                             str(self.stats["packet_last_seen_received_timestamp"].strftime("%d/%m/%Y %H:%M:%S"))
+        except:
+            optionalFields = ", Invalid packet_last_seen_received_timestamp"
+
         summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
                                                 includeEventNo=includeEventNo,
                                                 includeType=includeType,
@@ -218,7 +223,11 @@ class StreamLost(Event):
 
     def getCSV(self):
         # returns a CSV formatted string suitable for import into Excel
-        optionalFields = "Last packet seen at," + str(self.stats["packet_last_seen_received_timestamp"].strftime("%d/%m/%Y %H:%M:%S"))
+        try:
+            optionalFields = "Last packet seen at," + \
+                             str(self.stats["packet_last_seen_received_timestamp"].strftime("%d/%m/%Y %H:%M:%S"))
+        except:
+            optionalFields = "Invalid packet_last_seen_received_timestamp"
         csv = Event.createCommonCSVString(self) + optionalFields
         return csv
 
