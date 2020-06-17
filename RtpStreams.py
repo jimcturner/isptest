@@ -12,7 +12,7 @@ import threading
 import random
 import string
 import platform
-from queue import Queue, Empty, Full
+from queue import SimpleQueue, Queue, Empty, Full
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 import json
@@ -746,7 +746,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Call super constructor
         super().__init__()
         # Create Queue to accept the received packets
-        self.rtpStreamQueue = Queue()
+        self.rtpStreamQueue = SimpleQueue()
         self.rtpStreamQueueCurrentSize = 0  # Tracks the current size of the receive queue
         self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
         self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
