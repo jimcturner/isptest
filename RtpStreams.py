@@ -12,7 +12,7 @@ import threading
 import random
 import string
 import platform
-from queue import Queue, Empty
+from queue import Queue, Empty, Full
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 import json
@@ -2432,22 +2432,15 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Create a new rtp data object to hold the rtp packet data
         newData = RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData)
 
-        # # NOW ADD DATA TO A LIST
-        #
-        # # Lock the access mutex
-        # self.__accessRtpDataMutex.acquire()
-        # # Add the  RtpData object containing the latest packet info, to the rtpStreamData[] list
-        # self.rtpStreamData.append(newData)
-        # # Release the mutex
-        # self.__accessRtpDataMutex.release()
-        # # Now we've added the newData object to the list rtpStreamData[] we can delete the newData object
-        # del newData
 
-        # Add the new data to the queue
         try:
-            self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData))
+            self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData),
+                                    block=True)
             # Increment the counter. Packets out should equal packets in
             self.packetsAddedToRxQueueCount += 1
+        except Full as e:
+            Utils.Message.addMessage("RtpReceiveStream.addData() Queue full " + str(e))
+
         except Exception as e:
             Utils.Message.addMessage("RtpReceiveStream.addData() " + str(e))
 
