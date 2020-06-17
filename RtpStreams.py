@@ -1711,8 +1711,18 @@ class RtpReceiveStream(RtpReceiveCommon):
             for x in qrtInstance.movingGlitchCounters:
                 x.addEvent(1)
 
-            # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
-            qrtInstance.sumOfTimeElapsedSinceLastGlitch += qrtInstance.__stats["glitch_time_elapsed_since_last_glitch"]
+            if qrtInstance.__stats["glitch_counter_total_glitches"] == 1:
+                # Special case: If this is the first glitch, add the time elapsed *before* the first glitch to the
+                # sumOfTimeElapsedSinceLastGlitch running total
+                pass
+
+            else:
+                # This is a subsequent glitch
+                # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
+                qrtInstance.sumOfTimeElapsedSinceLastGlitch += qrtInstance.__stats["glitch_time_elapsed_since_last_glitch"]
+
+
+
 
             # Update glitch min/max packet loss stats
             if qrtInstance.__stats["glitch_packets_lost_per_glitch_min"] < 1:
