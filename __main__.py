@@ -3536,7 +3536,7 @@ def main(argv):
         client.sendto(b'include some message', (destination, 44343))
         # sockName = socket.gethostname()
 
-        output.bind(('192.168.3.18', 0))
+        output.bind((Utils.get_ip(), 0))
         print('receiving')
 
         data, addr = output.recvfrom(5012)
