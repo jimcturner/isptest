@@ -1523,17 +1523,18 @@ class RtpReceiveStream(RtpReceiveCommon):
                 #                          ", jitter_10s " + str(meanJitter_10Sec) +\
                 #                          ", jitter long term " + str(jitterLongterm_uS))
 
-                ########### Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
+                ########### Update Mean Jitter averages
+
                 if self.__stats["jitter_excess_jitter_events_total"] > 0:
+                    ########### Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
                     self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
                         datetime.datetime.now() - self.__stats["jitter_time_of_last_excess_jitter_event"]
 
-                ########### Calculate meanTimeBetweenExcessJitterEvents (requires at least two jitter events)
-                if self.__stats["jitter_excess_jitter_events_total"] > 1:
+                    ########### Calculate meanTimeBetweenExcessJitterEvents (jitter Period)
                     self.__stats["jitter_mean_time_between_excess_jitter_events"] = \
                         (self.sumOfTimeElapsedSinceLastExcessJitterEvents + self.__stats[
                             "jitter_time_elapsed_since_last_excess_jitter_event"]) / \
-                        self.__stats["jitter_excess_jitter_events_total"]
+                        (self.__stats["jitter_excess_jitter_events_total"] + 1 )
 
                 ########## Calculate time elapsed since last glitch
                 # But only if there has actually been a glitch in the past to measure against
@@ -1542,7 +1543,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats[
                         "glitch_most_recent_timestamp"]
 
-                ########## Calculate Glitch mean averages - Need at least two glitches for these calculations
+                ########## Calculate Glitch mean averages -
 
                 if self.__stats["glitch_counter_total_glitches"] > 0:
                     ########## Calculate mean time between glitches (glitch period)
@@ -1720,9 +1721,6 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
             qrtInstance.sumOfTimeElapsedSinceLastGlitch += qrtInstance.__stats["glitch_time_elapsed_since_last_glitch"]
 
-
-
-
             # Update glitch min/max packet loss stats
             if qrtInstance.__stats["glitch_packets_lost_per_glitch_min"] < 1:
                 qrtInstance.__stats["glitch_packets_lost_per_glitch_min"] = latestGlitch.packetsLost
@@ -1774,14 +1772,21 @@ class RtpReceiveStream(RtpReceiveCommon):
                 qrtInstance.__eventList.append(excessiveJitterEvent)
                 # Increment the all_events counter
                 qrtInstance.__stats["stream_all_events_counter"] += 1
-                # Reset the inhibit counter
-                self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
+                # Update jitter_time_elapsed_since_last_excess_jitter_event
+                qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
                     datetime.datetime.now() - excessiveJitterEvent.timeCreated
                 # Post a message
                 Utils.Message.addMessage(excessiveJitterEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                 # Update the event counter for Excess Jitter
                 qrtInstance.__stats["jitter_excess_jitter_events_total"] += 1
+
+                # Special case: if this is the first Excesive Jitter event, add the time elapsed *before* the first
+                # jitter event to the sumOfTimeElapsedSinceLastExcessJitterEvents running total
+                if qrtInstance.__stats["jitter_excess_jitter_events_total"] == 1:
+                    qrtInstance.sumOfTimeElapsedSinceLastExcessJitterEvents += \
+                        qrtInstance.__stats["stream_time_elapsed_total"]
+
 
                 # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean period between events)
                 qrtInstance.sumOfTimeElapsedSinceLastExcessJitterEvents += qrtInstance.__stats[

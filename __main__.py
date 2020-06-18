@@ -1147,7 +1147,8 @@ class UI(object):
 
     def __updateClock(self):
         # Update clock and CPU mon on top RHS of screen
-        clockString = datetime.datetime.now().strftime("%H:%M:%S") + " " + str(round(Utils.CPU.getUsage())) + "%"
+        # clockString = datetime.datetime.now().strftime("%H:%M:%S") + " " + str(round(Utils.CPU.getUsage())) + "%"
+        clockString = datetime.datetime.now().strftime("%H:%M:%S")
         Term.printRightJustified(clockString, 1, Term.BLACK, Term.WHITE)
 
     def __renderBottomToolbar(self):
