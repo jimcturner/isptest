@@ -1605,13 +1605,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__stats["stream_all_events_counter"] += 1
                     Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
-
-
-                ######### Now housekeep
-
-                # Purge __eventList[] to remove the oldest events
-                # self.__houseKeepEventList()
-
+                Utils.Message.addMessage("jitter_period " + \
+                                         str(self.__stats["jitter_mean_time_between_excess_jitter_events"]) + ", " +\
+                                         "no of jitter events " + \
+                                         str(self.__stats["jitter_excess_jitter_events_total"]))
 
                 ######## 1 second counter end of code ########
 

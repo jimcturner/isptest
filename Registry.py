@@ -34,7 +34,7 @@ class Registry(object):
     # rtpReceiveStreamJitterExcessiveAlarmThresholdPercent = 100 # **REDUNDANT ** The amount of jitter in the
     # received packet arrival time before an excessive jitter event is registered
     # The jitter events are a bit annoying as they clog the log. Therefore disable them by default
-    rtpReceiveStreamEnableExcessiveJitterEventGeneration = False
+    rtpReceiveStreamEnableExcessiveJitterEventGeneration = True
 
     # The threshold before an Excessive Jitter Event is generated
     # NOTE: This is a whole number in multiples of the 'mean receive period' for the incoming stream. Therefore the
@@ -42,7 +42,7 @@ class Registry(object):
     # A value of '2' means that if the packet jitter >= 2x receivePeriod (uS) (or rather, the packet is late by the
     # two receive periods worth of time) an Event will be created
     # then an Event will be generated
-    rtpReceiveStreamJitterExcessiveAlarmThreshold = 2
+    rtpReceiveStreamJitterExcessiveAlarmThreshold = 1
 
 
     # RtpGenerator
