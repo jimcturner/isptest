@@ -3380,7 +3380,8 @@ class RtpGenerator(object):
         # Initialise variables to be used within the loop
         loopCounter = 0
         # The tx bps counter is a 1 second moving average with 0.2 sec accuracy
-        bpsCounterList = []
+        # bpsCounterList = []
+        bpsCounterList = deque(maxlen=5)
         # Snapshot current value
         prevTxCounter_Bytes = self.txCounter_bytes
 
@@ -3393,10 +3394,9 @@ class RtpGenerator(object):
             # Take snapshot of current tx byte counter
             currentTxCounter_Bytes = self.txCounter_bytes
             # Append the latest bytes transmitted (during the last 0.2 seconds) to the list
+            # bpsCounterList is a Collections.deque() circuklar buffer object so will auto-housekeep
             bpsCounterList.append(currentTxCounter_Bytes - prevTxCounter_Bytes)
-            # If we have more than 5 historic samples, remove the oldest item from the list
-            if len(bpsCounterList) > 5:
-                del bpsCounterList[0]
+
             # Store current value of currentTxCounter_Bytes for next time around the loop
             prevTxCounter_Bytes = currentTxCounter_Bytes
 
@@ -3404,10 +3404,8 @@ class RtpGenerator(object):
             bytesPerSec = 0
             # Wait until we have all our data points
             if len(bpsCounterList) >= 5:
-                for x in range(0, 5):
-                    # Sum the entire list to calculate the bytes per sec tx rate
-                    bytesPerSec += bpsCounterList[x]
-
+                # Sum the entire list to calculate the bytes per sec tx rate
+                bytesPerSec = sum(bpsCounterList)
 
                 # Calculate the transmitted bits per second
                 self.txActualTxRate_bps = bytesPerSec * 8
