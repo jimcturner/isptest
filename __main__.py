@@ -3527,8 +3527,32 @@ def main(argv):
 
             time.sleep(1)
 
-    # icmpTests()
-    # exit()
+    def icmpTests2():
+        client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        output = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+        ttl = 1
+        destination = socket.gethostbyname("www.youtube.com")
+        client.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl)
+        client.sendto(b'include some message', (destination, 44343))
+        # sockName = socket.gethostname()
+
+        output.bind(('192.168.3.18', 0))
+        print('receiving')
+
+        data, addr = output.recvfrom(5012)
+
+        icmp_header = data[20:28]
+        type, code, checksum, p_id, sequence = struct.unpack('bbHHh', icmp_header)
+        print ("type: [" + str(type) + "] code: [" + str(code) + "] checksum: [" + str(checksum) + "] p_id: [" + str(
+            p_id) + "] sequence: [" + str(sequence) + "]")
+
+        print(str(data))
+        print(str(addr))
+        client.close()
+        output.close()
+
+    icmpTests2()
+    exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
