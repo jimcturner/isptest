@@ -734,7 +734,8 @@ class UI(object):
                        ["Min", "jitter_min_uS"],
                        ["Max", "jitter_max_uS"],
                        ["Range", "jitter_range_uS"],
-                       ["1S \nmean", "jitter_mean_1S_uS"]
+                       ["1S \nmean", "jitter_mean_1S_uS"],
+                       ["10S \nmean", "jitter_mean_10S_uS"]
                        ], self.streamResultsDataSet])
 
         self.views.append(["NAT",
