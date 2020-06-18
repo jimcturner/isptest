@@ -1523,8 +1523,36 @@ class RtpReceiveStream(RtpReceiveCommon):
                 #                          ", jitter_10s " + str(meanJitter_10Sec) +\
                 #                          ", jitter long term " + str(jitterLongterm_uS))
 
-                ########### Update Mean Jitter averages
+                # This function attempts to calculate the mean period between events (such as glitch, or jitter)
+                # to provide a value of how often, on average, the event has occurred
+                # To give a glimpse into the future, it will also take into account the time elapsed since the
+                # last event happened. Once this elapsed time is greater than the calculated mean of the time
+                # between the events, it will also take this time period into account - in effect increasing the
+                # average time between events
+                def calculateMeanPeriodBetweenEvents(sumOfTimePeriodsBetweenEvents,
+                                                     timeElapsedSinceMostRecentEvent,
+                                                     totalNoOfEvents):
+                    try:
+                        # Calculate mean period between the events that have already happened
+                        actualPeriodBetweenEvents = sumOfTimePeriodsBetweenEvents / totalNoOfEvents
+                        # Now look to see if time elapsed since the last event is longer than the mean between events
+                        if timeElapsedSinceMostRecentEvent > actualPeriodBetweenEvents:
+                            # This 'pretends' that a event has 'just happened' which will have the effect of increasing
+                            # the apparent time between events. Therefore as time moves on, with no more events
+                            # recorded, the 'mean period between events' will improve (i.e get larger)
+                            meanPeriodBetweenEvents = (sumOfTimePeriodsBetweenEvents + timeElapsedSinceMostRecentEvent)/\
+                                                      (totalNoOfEvents + 1)
+                            return meanPeriodBetweenEvents
+                        else:
+                            # The time elapsed since the last event is less than the calculated actual mean.
+                            # Therefore we ignore the effect of it, as it will only worsen the mean period
+                            return actualPeriodBetweenEvents
+                    except Exception as e:
+                        Utils.Message.addMessage("RtpReceiveStream.__samplingThread.calculateMeanPeriodBetweenEvents() " +\
+                                                 str(e))
+                        return None
 
+                ########### Update Mean Jitter averages
                 if self.__stats["jitter_excess_jitter_events_total"] > 0:
                     ########### Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
                     self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
@@ -1532,25 +1560,24 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                     ########### Calculate meanTimeBetweenExcessJitterEvents (jitter Period)
                     self.__stats["jitter_mean_time_between_excess_jitter_events"] = \
-                        (self.sumOfTimeElapsedSinceLastExcessJitterEvents + self.__stats[
-                            "jitter_time_elapsed_since_last_excess_jitter_event"]) / \
-                        (self.__stats["jitter_excess_jitter_events_total"] + 1 )
+                        calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastExcessJitterEvents,
+                                                         self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"],
+                                                         self.__stats["jitter_excess_jitter_events_total"])
 
-                ########## Calculate time elapsed since last glitch
-                # But only if there has actually been a glitch in the past to measure against
+                ########## Calculate Glitch stats
+                # (But only if there has actually been a glitch in the past to measure against)
                 if self.__stats["glitch_counter_total_glitches"] > 0:
+                    ########## Calculate time elapsed since last glitch
                     # Calculate new value
                     self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats[
                         "glitch_most_recent_timestamp"]
 
-                ########## Calculate Glitch mean averages -
-
-                if self.__stats["glitch_counter_total_glitches"] > 0:
+                    ########## Calculate Glitch mean averages -
                     ########## Calculate mean time between glitches (glitch period)
                     self.__stats["glitch_mean_time_between_glitches"] = \
-                        (self.sumOfTimeElapsedSinceLastGlitch + self.__stats["glitch_time_elapsed_since_last_glitch"]) / \
-                        (self.__stats["glitch_counter_total_glitches"]  + 1)
-
+                        calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastGlitch,
+                                                         self.__stats["glitch_time_elapsed_since_last_glitch"],
+                                                         self.__stats["glitch_counter_total_glitches"])
                     ########## Calculate mean glitch duration
                     self.__stats["glitch_mean_glitch_duration"] = \
                         self.__stats["glitch_length_total_time"] / self.__stats[
@@ -2829,7 +2856,8 @@ class RtpGenerator(object):
         self.txPeriod = 0  # Calculated from self.txRate and set by RtpGenerator.calculateTxPeriod()
         self.payloadLength = int(payloadLength)
         self.txCounter_bytes = 0
-        self.txCounter_packets = 0
+        self.txCounter_packets = 1 # Start this counter at '1' so the message payload data counter will reflect what's
+                                    # been sent (otherwise the Rx'd data counter will always be one packet short)
         self.txActualTxRate_bps = 0 # Used to 'sample' the actual tx rate
         self.syncSourceIdentifier = int(syncSourceID)
         self.regeneratePayloadFlag = True   # A flag to specify the the 'dummy data' should be recalculated during the
