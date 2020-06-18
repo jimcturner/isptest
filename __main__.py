@@ -5,6 +5,10 @@
 # 
 from __future__ import unicode_literals # Required for prompt_toolkit
 import sys
+
+from icmplib import ICMPv4Socket, TimeoutExceeded, ICMPRequest
+from Custom_icmplib import customICMPv4Socket
+
 from Registry import Registry # This class contains constants/defaults used throughout the program
 
 # Tests the current Python interpreter version
@@ -3489,106 +3493,43 @@ def shutdownApplicationSignalHandler(signum, frame):
 #         print ("x=0")
 
 def main(argv):
-    # def scheduler(period):
-    #     # Calculate the sleep period based on the last time this function was called (this is a 'Generator' function
-    #     # so it has 'memory'
-    #     def calculateSleepPeriod():
-    #         t = time.time()
-    #         count = 0
-    #         while True:
-    #             count += 1
-    #             yield max(t + count * period - time.time(), 0)
-    #
-    #     # Infinite loop.
-    #     # 'functionToBeScheduled will be called indefintely, with a sleep interval calculated by calculateSleepPeriod()
-    #     g = calculateSleepPeriod()
-    #     maxLoops = 5
-    #     loopCounter = 0
-    #     while loopCounter < maxLoops:
-    #         time.sleep(next(g))
-    #         sendPacket("foobar")
-    #         loopCounter += 1
-    #
-    #
-    # def sendPacket(s):
-    #     print('hello {} ({:.4f})'.format(s, time.time()))
-    #     time.sleep(.9)
-    #
-    # scheduler(1)
-    # print("Ending")
-    # try:
-    #     x = WhoisResolver.whoisLookup("192.168.0.0")
-    #     # print(str(x))
-    #     for k in x:
-    #         print(str(k) + ": " + str(x[k]) + "\r")
-    # except Exception as e:
-    #     print ("error: " + str(type(e)) + ", " + str(e))
-    # exit()
-
-    # y=str(x).splitlines()
-    # print(y)
-    # Create new instance of WhoisResolver
-    # whoIsResolver = WhoisResolver()
-    # while True:
-    #     query = whoIsResolver.queryWhoisCache("90.248.2.233")
-    #     if query is not None:
-    #         print (query[0]["netname"] + " : " + query[1].strftime("%H%M%S") + " : " + query[2].strftime("%H%M%S"))
-    #     else:
-    #         print("waiting")
-    #     # print ("pending: " + str(WhoisResolver.getPendingQueries()))
-    #     # print ("whoisCache: " + str(WhoisResolver.getWhoisCache()))
-    #     time.sleep(1)
+    def icmpTests():
+        # Create icmp socket
+        try:
+            sock = customICMPv4Socket()
+        except Exception as e:
+            print(str(e))
+            exit()
 
 
-    # z = WhoisResolver.whoisLookup("90.248.2.233")
-    # if z is not None:
-    #     for item in z:
-    #         # print(z["netname"])
-    #         print (item + ": " + z[item])
-    #
-    # else:
-    #     print ("nowt found")
-    # # for k,v in z.items():
-    # #     print(k + ": " + v)
-    # exit()
-    # def reverseDNSUsingSCAPY(ipAddr, dnsServer="8.8.8.8"):
-    #     from scapy.layers.inet import IP, UDP
-    #     from scapy.layers.dns import DNS, DNSQR
-    #     from scapy.sendrecv import sr1
-    #     # Reverse the IP address and append .in-addr.arpa
-    #     ipAddr = ipAddr.split('.')
-    #     ipAddr.reverse()
-    #     ipAddr = '.'.join(ipAddr) + ".in-addr.arpa"
-    #
-    #     reply = sr1(IP(dst=dnsServer) / UDP() / DNS(rd=1, qd=DNSQR(qname=ipAddr, qtype='PTR')), timeout=1)
-    #     # reply = sr1(IP(dst="192.168.3.1") / UDP() / DNS(rd=1, qd=DNSQR(qname="8.8.8.8.in-addr.arpa", qtype='PTR')), timeout=1)
-    #     try:
-    #         return reply["DNS"].an.rdata[:-1]
-    #         # return reply.summary()
-    #     except:
-    #         return None
-    # # print(str(reverseDNSUsingSCAPY("132.185.161.1", dnsServer="8.8.8.8"))) # , dnsServer="192.168.3.1"
-    # def reverseDNSUsingDnsPython(ipAddr):
-    #     import dns.reversename, dns.resolver
-    #     # Convert IPv4 and IPv6 addresses to its corresponding DNS reverse map names (backwards, and with ".in-addr.arpa" appended)
-    #     address = dns.reversename.from_address(ipAddr)
-    #     name = dns.resolver.query(address, "PTR")
-    #     return name
-    #
-    # # reply = reverseDNSUsingDnsPython("212.58.231.1")
-    # # for rr in reply:
-    # #     print(str(rr))
+        while True:
+            try:
+                # Seed the socket by sending an outgoing packet. Otherwise you won't get any replies
+                sock.send(ICMPRequest("127.0.0.1", 1, 1, payload=None, payload_size=56, timeout=2, ttl=64))
+                while True:
+                    try:
+                        reply = sock.receiveAny()
+                        try:
+                            reply.raise_for_status()
+                        except Exception as e:
+                            print("status: " + str(e))
 
+                        print("reply: id:" + str(reply.id) + ", source: " + str(reply.source) + \
+                              ", type: " + str(reply.type) + ", code: " + str(reply.code))
+                    except TimeoutExceeded:
+                        pass
+                    except Exception as e:
+                        print(str(e))
+                        exit()
+            except Exception as e:
+                print(str(e))
+                exit()
 
-    # import socket
-    # try:
-    #     # x = socket.gethostbyaddr("90.248.2.233")
-    #     x = socket.gethostbyaddr("212.58.231.1")
-    # except Exception as e:
-    #     x = e
-    #
-    # print(str(x))
-    # exit()
+            time.sleep(1)
+
+    icmpTests()
+    exit()
+
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
 
