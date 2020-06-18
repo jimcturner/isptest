@@ -1873,17 +1873,17 @@ class RtpReceiveStream(RtpReceiveCommon):
                     ### Detect sequence no. anomoly (i.e a glitch)
                     # Test the latest seq no against the previous
                     # Detect against false glitches when the seq no wraps around
-                    if rtpPackets[1].rtpSequenceNo == 65535:
-                        rtpPackets[1].rtpSequenceNo = -1
+                    if rtpPackets[-2].rtpSequenceNo == 65535:
+                        rtpPackets[-2].rtpSequenceNo = -1
 
 
-                    sequenceNoGap = rtpPackets[2].rtpSequenceNo - rtpPackets[1].rtpSequenceNo
+                    sequenceNoGap = rtpPackets[-1].rtpSequenceNo - rtpPackets[-2].rtpSequenceNo
                     # Take the absolute difference because if the sequence nos have wrapped around, we'll get a
                     # negative difference value
                     if abs(sequenceNoGap) > 1:
                         # Discontinuous sequence numbers detected
                         # Create a Glitch Event
-                        glitch = Glitch(self.__stats, rtpPackets[1], rtpPackets[2])
+                        glitch = Glitch(self.__stats, rtpPackets[-2], rtpPackets[-1])
                         # Update the packets lost count
                         self.__stats["glitch_packets_lost_total_count"] += glitch.packetsLost
                         # Test to see how many packets have been lost
@@ -1916,7 +1916,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.datetime.now()
 
                     # Calculate receive period of latest packet
-                    receivePeriod = (rtpPackets[2].timestamp - rtpPackets[1].timestamp).microseconds
+                    receivePeriod = (rtpPackets[-1].timestamp - rtpPackets[-2].timestamp).microseconds
                     # Add latest receive period value to running total, for averaging
                     self.__receivePeriodRunningTotal += receivePeriod
 
@@ -1962,20 +1962,20 @@ class RtpReceiveStream(RtpReceiveCommon):
                         jitterDetectionEnabledFlag = True
 
                     ########### Extract isptest header from most recent packet
-                    self.__extractIsptestHeaderData(rtpPackets[2].isptestHeaderData)
+                    self.__extractIsptestHeaderData(rtpPackets[-1].isptestHeaderData)
 
-                    x = rtpPackets[2].rtpSequenceNo
-                    if x % 20 == 0:
-                        # Utils.Message.addMessage("__queueReceiverThread " + str(x) + " Packets Rx'd: " +\
-                        #                          str(packet_counter_received_total) +\
-                        #                          ", bytes rx'd " + str(packet_data_received_total_bytes))
-                        # seqNos = str(rtpPackets[0].rtpSequenceNo) + ", " + \
-                        #          str(rtpPackets[1].rtpSequenceNo) + ", " + \
-                        #          str(rtpPackets[2].rtpSequenceNo) + ", "
-                        # Utils.Message.addMessage(seqNos)
-                        # Utils.Message.addMessage("jitter " + str(self.jitter_min_uS) +">" + str(self.jitter_range_uS) +\
-                        #                          ">" + str(self.jitter_max_uS))
-                        pass
+                    # x = rtpPackets[-1].rtpSequenceNo
+                    # if x % 20 == 0:
+                    #     # Utils.Message.addMessage("__queueReceiverThread " + str(x) + " Packets Rx'd: " +\
+                    #     #                          str(packet_counter_received_total) +\
+                    #     #                          ", bytes rx'd " + str(packet_data_received_total_bytes))
+                    #     # seqNos = str(rtpPackets[0].rtpSequenceNo) + ", " + \
+                    #     #          str(rtpPackets[1].rtpSequenceNo) + ", " + \
+                    #     #          str(rtpPackets[2].rtpSequenceNo) + ", "
+                    #     # Utils.Message.addMessage(seqNos)
+                    #     # Utils.Message.addMessage("jitter " + str(self.jitter_min_uS) +">" + str(self.jitter_range_uS) +\
+                    #     #                          ">" + str(self.jitter_max_uS))
+                    #     pass
 
 
             except Empty:

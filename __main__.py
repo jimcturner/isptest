@@ -3527,8 +3527,8 @@ def main(argv):
 
             time.sleep(1)
 
-    icmpTests()
-    exit()
+    # icmpTests()
+    # exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
