@@ -3527,7 +3527,39 @@ def main(argv):
 
             time.sleep(1)
 
-    def icmpTests2(destination = '8.8.8.8'):
+    def icmpListener():
+        # Set up icmp receiving socket
+        try:
+            reply = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+            reply.settimeout(1)
+            reply.bind((Utils.get_ip(), 0))
+        except Exception as e:
+            print("reply socket setup error " + str(e))
+            exit()
+        # Now listen
+        print ("Waiting for incoming icmp packets to address " + str(Utils.get_ip()))
+        while True:
+            try:
+                data, addr = reply.recvfrom(5012)
+                icmp_header = data[20:28]
+                type, code, checksum, p_id, sequence = struct.unpack('bbHHh', icmp_header)
+                print(str(addr) + ", type: [" + str(type) + "] code: [" + \
+                      str(code) + "] checksum: [" + str(checksum) + "] p_id: [" + str( \
+                    p_id) + "] sequence: [" + str(sequence) + "]")
+            except socket.timeout:
+                pass
+            except KeyboardInterrupt:
+                print("Exiting. Closing socket")
+                reply.close()
+                break
+            except Exception as e:
+                print("Receive error " + str(e))
+                reply.close()
+                break
+
+
+
+    def tracerouteSockRaw(destination = '8.8.8.8'):
         # Set up udp transmit socket
         try:
             client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -3590,7 +3622,8 @@ def main(argv):
         client.close()
         reply.close()
 
-    icmpTests2(argv[0])
+    # tracerouteSockRaw(argv[0])
+    icmpListener()
     exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)
