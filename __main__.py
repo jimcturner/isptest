@@ -3546,38 +3546,46 @@ def main(argv):
             exit()
 
         # Set initial ttl
-        ttl = 1
+        ttl = 0
+        noOfRetries = 3
         # Get destination address ip from hostname
-        destination = socket.gethostbyname("www.google.com")
-
-
-        print('traceroute to ' + str(destination))
+        destAddr = socket.gethostbyname(destination)
+        print('traceroute to ' + str(destination) + "/" + str(destAddr))
         # Perform the traceroute
         while ttl < 16:
-            # Send UDP packet
-            try:
-                # Update socket with latest ttl value
-                client.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl)
-                client.sendto(b'include some message', (destination, 33434))
-            except Exception as e:
-                print("Send error " + str(e))
-
-            # sockName = socket.gethostname()
-            # Receive ICMP packet
-            try:
-                data, addr = reply.recvfrom(5012)
-                icmp_header = data[20:28]
-                type, code, checksum, p_id, sequence = struct.unpack('bbHHh', icmp_header)
-                print (str(ttl) + ":" + str(addr) + ", type: [" + str(type) + "] code: [" + \
-                       str(code) + "] checksum: [" + str(checksum) + "] p_id: [" + str(\
-                    p_id) + "] sequence: [" + str(sequence) + "]")
-                # print(str(data))
-                # print(str(addr))
-            except socket.timeout:
-                print (str(ttl) + ":*")
-            except Exception as e:
-                print ("Receive error " + str(e))
+            attemptsCount = 1
             ttl += 1
+            while True:
+                # Send UDP packet
+                try:
+                    # Update socket with latest ttl value
+                    client.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl)
+                    client.sendto(b'include some message', (destAddr, 33434))
+                except Exception as e:
+                    print("Send error " + str(e))
+
+                # sockName = socket.gethostname()
+                # Receive ICMP packet
+                try:
+                    data, addr = reply.recvfrom(5012)
+                    icmp_header = data[20:28]
+                    type, code, checksum, p_id, sequence = struct.unpack('bbHHh', icmp_header)
+                    print (str(ttl) + ":" + "attempt " + str(attemptsCount) + ", " + str(addr) + ", type: [" + str(type) + "] code: [" + \
+                           str(code) + "] checksum: [" + str(checksum) + "] p_id: [" + str(\
+                        p_id) + "] sequence: [" + str(sequence) + "]")
+                    # print(str(data))
+                    # print(str(addr))
+                    # Successful reply, so break out of loop so we can increase the ttl
+                    break
+                except socket.timeout:
+                    # Check to see if we've run out of retries
+                    if attemptsCount >= noOfRetries:
+                        print (str(ttl) + ":*")
+                        break
+                except Exception as e:
+                    print ("Receive error " + str(e))
+                    break
+                attemptsCount += 1
         client.close()
         reply.close()
 
