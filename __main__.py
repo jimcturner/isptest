@@ -3528,28 +3528,58 @@ def main(argv):
             time.sleep(1)
 
     def icmpTests2():
-        client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        output = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+        # Set up udp transmit socket
+        try:
+            client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            client.settimeout(1)
+        except Exception as e:
+            print("client socket setup error " + str(e))
+            exit()
+
+        # Set up icmp receiving socket
+        try:
+            reply = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+            reply.settimeout(1)
+            reply.bind((Utils.get_ip(), 0))
+        except Exception as e:
+            print("reply socket setup error " + str(e))
+            exit()
+
+        # Set initial ttl
         ttl = 1
-        destination = socket.gethostbyname("www.youtube.com")
-        client.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl)
-        client.sendto(b'include some message', (destination, 44343))
-        # sockName = socket.gethostname()
+        # Get destination address ip from hostname
+        # destination = socket.gethostbyname("www.youtube.com")
+        destination = "8.8.8.8"
 
-        output.bind((Utils.get_ip(), 0))
         print('receiving')
+        # Perform the traceroute
+        while ttl < 16:
+            # Send UDP packet
+            try:
+                # Update socket with latest ttl value
+                client.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl)
+                client.sendto(b'include some message', (destination, 5000))
+            except Exception as e:
+                print("Send error " + str(e))
 
-        data, addr = output.recvfrom(5012)
-
-        icmp_header = data[20:28]
-        type, code, checksum, p_id, sequence = struct.unpack('bbHHh', icmp_header)
-        print ("type: [" + str(type) + "] code: [" + str(code) + "] checksum: [" + str(checksum) + "] p_id: [" + str(
-            p_id) + "] sequence: [" + str(sequence) + "]")
-
-        print(str(data))
-        print(str(addr))
+            # sockName = socket.gethostname()
+            # Receive ICMP packet
+            try:
+                data, addr = reply.recvfrom(5012)
+                icmp_header = data[20:28]
+                type, code, checksum, p_id, sequence = struct.unpack('bbHHh', icmp_header)
+                print (str(ttl) + ":" + str(addr) + ", type: [" + str(type) + "] code: [" + \
+                       str(code) + "] checksum: [" + str(checksum) + "] p_id: [" + str(\
+                    p_id) + "] sequence: [" + str(sequence) + "]")
+                # print(str(data))
+                # print(str(addr))
+            except socket.timeout:
+                print (str(ttl) + ":*")
+            except Exception as e:
+                print ("Receive error " + str(e))
+            ttl += 1
         client.close()
-        output.close()
+        reply.close()
 
     icmpTests2()
     exit()
