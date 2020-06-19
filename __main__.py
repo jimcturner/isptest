@@ -3563,6 +3563,7 @@ def main(argv):
                     client.sendto(b'include some message', (destAddr, 33434))
                 except Exception as e:
                     print("Send error " + str(e))
+                    break
 
                 # sockName = socket.gethostname()
                 # Receive ICMP packet
