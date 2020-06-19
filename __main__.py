@@ -3527,7 +3527,7 @@ def main(argv):
 
             time.sleep(1)
 
-    def icmpTests2():
+    def icmpTests2(destination = '8.8.8.8'):
         # Set up udp transmit socket
         try:
             client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -3548,10 +3548,10 @@ def main(argv):
         # Set initial ttl
         ttl = 1
         # Get destination address ip from hostname
-        # destination = socket.gethostbyname("www.youtube.com")
-        destination = "8.8.8.8"
+        destination = socket.gethostbyname("www.google.com")
 
-        print('receiving')
+
+        print('traceroute to ' + str(destination))
         # Perform the traceroute
         while ttl < 16:
             # Send UDP packet
@@ -3581,7 +3581,7 @@ def main(argv):
         client.close()
         reply.close()
 
-    icmpTests2()
+    icmpTests2(argv[0])
     exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)
