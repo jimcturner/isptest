@@ -3493,7 +3493,7 @@ def shutdownApplicationSignalHandler(signum, frame):
 #         print ("x=0")
 
 def main(argv):
-    def icmpTests():
+    def icmplibTraceroute():
         # Create icmp socket
         try:
             sock = customICMPv4Socket()
@@ -3556,8 +3556,6 @@ def main(argv):
                 print("Receive error " + str(e))
                 reply.close()
                 break
-
-
 
     def tracerouteSockRaw(destination = '8.8.8.8'):
         # Set up udp transmit socket
@@ -3623,7 +3621,8 @@ def main(argv):
         reply.close()
 
     # tracerouteSockRaw(argv[0])
-    icmpListener()
+    # icmpListener()
+    icmplibTraceroute()
     exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)
