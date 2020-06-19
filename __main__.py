@@ -3558,7 +3558,7 @@ def main(argv):
             try:
                 # Update socket with latest ttl value
                 client.setsockopt(socket.SOL_IP, socket.IP_TTL, ttl)
-                client.sendto(b'include some message', (destination, 5000))
+                client.sendto(b'include some message', (destination, 33434))
             except Exception as e:
                 print("Send error " + str(e))
 
