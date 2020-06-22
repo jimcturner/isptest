@@ -3658,13 +3658,13 @@ def main(argv):
                 return None
 
 
-        # Utility function to tidy up the main loop. Sends a UDP message, allowing TTL to be specified
+        # Utility function to tidy up the main loop. Sends a UDP message, allowing IP Header TTL parameter to be set
         def sendUDP(txSock, txTTL, payload, destIPAddr, destUDPPort):
             try:
                 # Update socket with latest ttl value
                 txSock.setsockopt(socket.SOL_IP, socket.IP_TTL, txTTL)
                 # Send the UDP message
-                bytesSent = txSock.sendto(payload, (destIPAddr, udpTxPort))
+                bytesSent = txSock.sendto(payload, (destIPAddr, destUDPPort))
                 return bytesSent
             except Exception as e:
                 raise UDPTxError("UDPTxError " + str(e))
@@ -3814,13 +3814,13 @@ def main(argv):
 
     # Get ip address of interface to be used to send/receive
     ipAddrOfInterface = Utils.get_ip()
-    try:
-        hops=tracerouteLinuxOSX(ipAddrOfInterface, "www.google.com", 5000)
-        for x in range(len(hops)):
-            print(str(x) + ": " + str(hops[x]))
-    except Exception as e:
-        print ("Error tracerouteLinuxOSX() " + str(e))
-
+    # try:
+    #     hops=tracerouteLinuxOSX(ipAddrOfInterface, "www.google.com", 5000)
+    #     for x in range(len(hops)):
+    #         print(str(x) + ": " + str(hops[x]))
+    # except Exception as e:
+    #     print ("Error tracerouteLinuxOSX() " + str(e))
+    # print(str(Utils.getOperatingSystem()))
     # icmpListener()
     # icmplibTraceroute()
     exit()

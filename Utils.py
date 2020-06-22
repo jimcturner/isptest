@@ -37,6 +37,11 @@ def get_ip(ipAddrToTest = '10.255.255.255'):
         s.close()
     return IP
 
+# Attempts to determine what flavour of operating system is running
+# Should return 'Windows' for Windows, or
+def getOperatingSystem():
+    current_os = platform.system()
+    return current_os
 # Returns a string listing the names of the currently running threads
 # if asList = True, will return as a list of strings
 def listCurrentThreads(asList = False):
