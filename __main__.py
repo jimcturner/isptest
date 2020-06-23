@@ -3813,7 +3813,7 @@ def main(argv):
         icmpRx.close()
 
     # Get ip address of interface to be used to send/receive
-    ipAddrOfInterface = Utils.get_ip()
+    # ipAddrOfInterface = Utils.get_ip()
     # try:
     #     hops=tracerouteLinuxOSX(ipAddrOfInterface, "www.google.com", 5000)
     #     for x in range(len(hops)):
@@ -3823,7 +3823,7 @@ def main(argv):
     # print(str(Utils.getOperatingSystem()))
     # icmpListener()
     # icmplibTraceroute()
-    exit()
+    # exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
