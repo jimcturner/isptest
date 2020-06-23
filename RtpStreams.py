@@ -2940,20 +2940,21 @@ class RtpGenerator(object):
         self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
         self.rtpGeneratorThread.start()
 
-        # Start the Linux/OSX traceroute thread
-        # self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
-        # self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
-        # self.tracerouteThread.daemon = False
-        # self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinux")
-        # self.tracerouteThread.start()
+        # Query the OS to determine which traceroute routine to run
+        os = Utils.getOperatingSystem()
+        if (os == "Windows"):
+            # Start the Windows (Scapy-based) traceroute thread
+            self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindows, args=())
+            self.tracerouteThread.daemon = False
+            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteScapy (" + str(os) + ")")
+            self.tracerouteThread.start()
 
-        # Start the Windows (Scapy-based) traceroute thread
-        self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindows, args=())
-        self.tracerouteThread.daemon = False
-        self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteScapy")
-        self.tracerouteThread.start()
-
-
+        else:
+            # Start the Linux/OSX traceroute thread
+            self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
+            self.tracerouteThread.daemon = False
+            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinuxOSX ("+ str(os) + ")")
+            self.tracerouteThread.start()
 
         # create a stream results receiver object for this tx stream
         self.rtpStreamResultsReceiver = ResultsReceiver(self)
@@ -3965,6 +3966,8 @@ class RtpGenerator(object):
             pass
         class ICMPRxError(Exception):
             pass
+        class TracerouteLinuxOSXThreadError(Exception):
+            pass
 
         # Creates and returns two seperate sockets, one for tx (udp) and one for rx (icmp)
         # Returns a UDPTxSocketSetupError or ICMPRxSocketSetupError Exception
@@ -3974,8 +3977,8 @@ class RtpGenerator(object):
                 # Create UDP socket
                 udpTx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 udpTx.settimeout(timeOut)
-            except Exception as e:
-                raise UDPTxSocketSetupError(str(e))
+            except Exception as createSocketsError:
+                raise UDPTxSocketSetupError(str(createSocketsError))
                 # print("udpTxSocket socket setup error " + str(e))
                 # exit()
 
@@ -3986,8 +3989,8 @@ class RtpGenerator(object):
                 icmpRx.settimeout(timeOut)
                 # Bind to the ip address of the interface specified by ipAddrofInterface
                 icmpRx.bind((ipAddrofInterface, 0))
-            except Exception as e:
-                raise ICMPRxSocketSetupError
+            except Exception as createSocketsError:
+                raise ICMPRxSocketSetupError(str(createSocketsError))
                 # print("reply socket setup error " + str(e))
                 # exit()
             # Return the rx and tx sockets
@@ -4082,17 +4085,36 @@ class RtpGenerator(object):
         maxNoOfNoResponse = 5
         # Counts the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
         noResponseCounter = 0
-        # # Get destination address ip from hostname
-        # destIPAddr = socket.gethostbyname(destHost)
+        # Flagf to signal that the tx udp and icmp rx flags were created successfully
+        socketsCreatedSuccesfullyFlag = False
+
+        Utils.Message.addMessage("DBUG:__tracerouteLinuxOSXThread starting for stream " + str(self.syncSourceIdentifier))
         try:
             # Create tx (udp) and rx (icmp) sockets, specifying the ip address we will be transmitting from
             udpTx, icmpRx = createSockets(self.SRC_IP_ADDR)
+            # Set the 'sockets okay' flag so that the main while loop will start
+            socketsCreatedSuccesfullyFlag = True
+        except Exception as e:
+            Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread.createSockets() " + str(e))
+            Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
+            # If a UI instance (user interface) reference was supplied, display an error message on the UI
+            maxWidth = 60
+            errorText = "Insufficient rights to enable traceroute functionality.".center(maxWidth) + \
+                        "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) + \
+                        "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
+                        "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
+                        "\n\n" + "<Press any key to continue>".center(maxWidth)
+            if self.uiInstance is not None:
+                try:
+                    self.uiInstance.showErrorDialogue("Traceroute error", errorText)
+                except Exception as e:
+                    Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
+                                             str(e))
 
-            # print('traceroute to ' + str(destHost) + "/" + str(destIPAddr))
-            # Perform the traceroute in an infinite loop
-            Utils.Message.addMessage("DBUG:__tracerouteLinuxOSXThread starting for stream " + \
-                                     str(self.syncSourceIdentifier))
-            while self.timeToLive != 0:
+
+        try:
+            # Perform the traceroute in an infinite loop as long as the transmit stream is alive
+            while self.timeToLive != 0 and socketsCreatedSuccesfullyFlag:
                 # This is the main outer traceroute loop and counts the hops
                 # Set initial ttl
                 ttl = 0
@@ -4114,7 +4136,10 @@ class RtpGenerator(object):
                             udpTxPort = self.UDP_TX_PORT
                         else:
                             udpTxPort = fallbackPort
-                        sendUDP(udpTx, ttl, b'isptest', self.UDP_TX_IP, udpTxPort)
+                        try:
+                            sendUDP(udpTx, ttl, b'isptest', self.UDP_TX_IP, udpTxPort)
+                        except Exception as e:
+                            Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread.sendUDP() . Aborting" + str(e))
                         # Increment the attempts counter
                         attemptsCount += 1
 
@@ -4256,10 +4281,17 @@ class RtpGenerator(object):
                 # Sleep for 2 sec between completed traceroutes
                 time.sleep(2)
         except Exception as e:
-            Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread couldn't start thread. " + str(type(e) + str(e)))
-            # Thread is ending. Close sockets
-            udpTx.close()
-            icmpRx.close()
+            Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread outer loop error. " + str(type(e)) + ", " + str(e))
+
+        finally:
+            try:
+                if socketsCreatedSuccesfullyFlag:
+                    # Thread is ending. Close sockets
+                    udpTx.close()
+                    icmpRx.close()
+            except Exception as e:
+                Utils.Message.addMessage(
+                    "ERR: __tracerouteLinuxOSXThread couldn't close sockets. " + str(type(e)) + ", " + str(e))
 
         Utils.Message.addMessage("DBUG:__tracerouteLinuxOSXThread ending ")
 
