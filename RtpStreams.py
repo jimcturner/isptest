@@ -2940,12 +2940,18 @@ class RtpGenerator(object):
         self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
         self.rtpGeneratorThread.start()
 
-        # Start the traceroute thread
+        # Start the Linux/OSX traceroute thread
         # self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
-        self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
-        self.tracerouteThread.daemon = False
-        self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinux")
+        # self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
+        # self.tracerouteThread.daemon = False
+        # self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinux")
         # self.tracerouteThread.start()
+
+        # Start the Windows (Scapy-based) traceroute thread
+        self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindows, args=())
+        self.tracerouteThread.daemon = False
+        self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteScapy")
+        self.tracerouteThread.start()
 
 
 
