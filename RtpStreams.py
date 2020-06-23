@@ -2945,7 +2945,7 @@ class RtpGenerator(object):
         self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
         self.tracerouteThread.daemon = False
         self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinux")
-        self.tracerouteThread.start()
+        # self.tracerouteThread.start()
 
 
 
