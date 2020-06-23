@@ -2942,9 +2942,11 @@ class RtpGenerator(object):
 
         # Query the OS to determine which traceroute routine to run
         os = Utils.getOperatingSystem()
+        os = "Windows"
         if (os == "Windows"):
             # Start the Windows (Scapy-based) traceroute thread
-            self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindows, args=())
+            # self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindows, args=())
+            self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindowsRewrite, args=())
             self.tracerouteThread.daemon = False
             self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteScapy (" + str(os) + ")")
             self.tracerouteThread.start()
@@ -4085,7 +4087,7 @@ class RtpGenerator(object):
         maxNoOfNoResponse = 5
         # Counts the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
         noResponseCounter = 0
-        # Flagf to signal that the tx udp and icmp rx flags were created successfully
+        # Flag to signal that the tx udp and icmp rx flags were created successfully
         socketsCreatedSuccesfullyFlag = False
 
         Utils.Message.addMessage("DBUG:__tracerouteLinuxOSXThread starting for stream " + str(self.syncSourceIdentifier))
@@ -4226,7 +4228,7 @@ class RtpGenerator(object):
                                 udpTx.close()
                                 icmpRx.close()
                                 raise ICMPRxError("ICMPRxError " + str(e))
-                    # At the end of each attempts count per hop, append the address the hops list
+                    # At the end of each attempts count per hop, append the address to the hops list
                     # To remain comptibilty with the original traceroute, break the address into a list of octets
 
                     ############# The 'result' (if there was a response) of the current hop is in var icmpSrcAddr.
@@ -4257,7 +4259,7 @@ class RtpGenerator(object):
                         # Utils.Message.addMessage(str(noResponseCounter) + " None's in a row or hop limit reached. Aborting")
                         # Cause the outer-outer hops counter loop to break
                         ttl = maxNoOfHops
-                        # Break out ofd this (attempts) loop
+                        # Break out ofd this (hops) loop
                         break
 
                 # copy the new tracerouteHopsList back into the instance variable version
@@ -4294,6 +4296,135 @@ class RtpGenerator(object):
                     "ERR: __tracerouteLinuxOSXThread couldn't close sockets. " + str(type(e)) + ", " + str(e))
 
         Utils.Message.addMessage("DBUG:__tracerouteLinuxOSXThread ending ")
+
+    # This is a rewrite of the original __tracerouteThreadScapyWindows using Scapy to send/receive packets still, but
+    # based on the logic/mechanics of __tracerouteLinuxOSXThread (which was my own design)
+    def __tracerouteThreadScapyWindowsRewrite(self):
+        # Define a socket timeout value
+        timeOut = 0.5
+        # Define the number of times the traceroute will attempt to illicit a response from the router.
+        # This is becuse some routers will fail to respond due to rate limiting of requests.
+        # Note: Each subsquent attempt alternates between two possible ports
+        # The first attempt will be to use the destination port for the stream
+        # If that fails, a fallback port specified in the Registry will be used. Routers are more likely to respond
+        # on this other port (33434)
+        noOfRetries = 4
+        # Get the max no of hops before traceroute gives up
+        maxNoOfHops = Registry.tracerouteMaxHops
+        # Get the UDP 'fallback' port
+        fallbackPort = Registry.tracerouteFallbackUDPDestPort
+        # The no. of consecqutive 'no response from router' requests we'll tolerate before giving up
+        maxNoOfNoResponse = 5
+        # Counts the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
+        noResponseCounter = 0
+
+        Utils.Message.addMessage(\
+            "DBUG:__tracerouteThreadScapyWindowsRewrite starting for stream " + str(self.syncSourceIdentifier))
+        try:
+            # Perform the traceroute in an infinite loop as long as the transmit stream is alive
+            while self.timeToLive != 0:
+                # This is the main outer traceroute loop and counts the hops
+                # Set initial ttl
+                ttl = 0
+                # This list will be populated with the results of the traceroute
+                hopsList = []
+                Utils.Message.addMessage("Starting traceroute....ttl = 1")
+                while ttl < maxNoOfHops and self.timeToLive != 0:
+                    attemptsCount = 1
+                    ttl += 1
+                    # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
+                    icmpSrcAddr = None
+                    Utils.Message.addMessage("hop counter starting: ttl: " + str(ttl))
+                    # This loop counts the attempts for each hop
+                    while (attemptsCount < noOfRetries) and self.timeToLive != 0:
+                        # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
+                        # Send UDP packet
+                        # determine which destination port we should be using (based on the no of attempts so far)
+                        # and create a packet accordingly
+                        if attemptsCount % 2 == 1:
+                            pkt = IP(dst=self.UDP_TX_IP, ttl=ttl) / UDP(dport=self.UDP_TX_PORT)
+                        else:
+                            pkt = IP(dst=self.UDP_TX_IP, ttl=ttl) / UDP(dport=fallbackPort)
+
+                        # Now send the packet and wait for a reply
+                        reply = sr1(pkt, verbose=0, timeout=timeOut)
+
+                        # Increment the attempts counter
+                        attemptsCount += 1
+                        # Test the reply (should be an ICMP message, or None if the router doesn't respond)
+                        if reply is not None:
+                            Utils.Message.addMessage("Message reply type " + str(reply.type))
+                            # Detect TTL Expired messages (icmp type 11, code 0)
+                            if reply.type == 11:
+                                # This is a TTL expired in transit message, for us - snapshot the address
+                                icmpSrcAddr = reply.src
+                            # Detect Destination Host Port unreachable, destination reached
+                            if reply.type == 3 or reply.src == self.UDP_TX_IP:
+                                icmpSrcAddr = reply.src
+                                # Cause the outer-outer hops counter loop to break. The traceroute is complete
+                                ttl = maxNoOfHops
+                            # Reset the 'no response' counter
+                            noResponseCounter = 0
+                            # We have a reply for this hop, so break out of the attempts loop
+                            # This will cause the ttl to increment (to the next hop value)
+                            break
+                    # Has icmpSrcAddr been populated with an address?
+                    if icmpSrcAddr is not None:
+                        # It has - the upstream router did respond
+                        # Query the WhoisResolver to find the owner of the domain
+                        Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
+                        # If so, break the address up into a list of octets - this is how they're stored in self.tracerouteHopsList
+                        icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
+                        hopsList.append(
+                            [int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]), int(icmpSrcAddrOctets[2]),
+                             int(icmpSrcAddrOctets[3])])
+                    else:
+                        # icmpSrcAddr has not been overwritten with an addres so the upstream did not respond
+                        # Increment the 'no response' counter
+                        noResponseCounter += 1
+                        # As there was no router response for this hop, add 0.0.0.0 as the hop address
+                        hopsList.append([0, 0, 0, 0])
+
+                    # Now check to see if we've received five 'no replies' in a row, if so, give up
+                    # Or else, if we've reached the max no of hops, give up
+                    if (noResponseCounter > maxNoOfNoResponse) or (ttl == maxNoOfHops):
+                        # print ("5 in a row, aborting")
+                        # Utils.Message.addMessage(str(noResponseCounter) + " None's in a row or hop limit reached. Aborting")
+                        # Cause the outer-outer hops counter loop to break
+                        ttl = maxNoOfHops
+                        # Break out of this (hops) loop
+                        break
+
+                # copy the new tracerouteHopsList back into the instance variable version
+                self.tracerouteHopsListMutex.acquire()
+                self.tracerouteHopsList = hopsList
+                self.tracerouteHopsListMutex.release()
+
+                # Sleep for 2 sec between completed traceroutes
+                time.sleep(2)
+
+
+        except Exception as e:
+            # If the traceroute routine fails, this is mostly because the program was started without admin rights
+            # Put up an error message on screen to warn the user
+            Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThreadScapyWindows.sr1() " + str(e))
+            Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
+            # If a UI instance (user interface) reference was supplied, display an error message on the UI
+            maxWidth = 60
+            errorText = "Insufficient rights to enable traceroute functionality.".center(maxWidth) + \
+                        "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) + \
+                        "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
+                        "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
+                        "\n\n" + "<Press any key to continue>".center(maxWidth)
+            if self.uiInstance is not None:
+                try:
+                    self.uiInstance.showErrorDialogue("Traceroute error", errorText)
+                except Exception as e:
+                    Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThreadScapyWindows: display error message on UI " + \
+                                             str(e))
+        Utils.Message.addMessage("DBUG:__tracerouteThreadScapyWindows ending for stream " + str(self.syncSourceIdentifier))
+
+
 
     # Define a seperate thread to run a traceroute.
     # Note. There are two seperate versions of the traceroute routine in this thread....

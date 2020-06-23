@@ -2308,7 +2308,7 @@ class UI(object):
                     # Clear the tableRow list ready for next time around the loop
                     tableRow = []
             else:
-                tableContents.append(["", "", "No traceroute data to display".ljust(maxWidth)])
+                tableContents.append(["", "", "No traceroute data to display yet. Please wait".ljust(maxWidth)])
             # Now actually display the paged table list
             title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ") " +\
                     str(len(tracerouteHopsList)) + " hops"
