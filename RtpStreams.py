@@ -2942,13 +2942,13 @@ class RtpGenerator(object):
 
         # Query the OS to determine which traceroute routine to run
         os = Utils.getOperatingSystem()
-        os = "Windows"
+        # os = "Windows"
         if (os == "Windows"):
             # Start the Windows (Scapy-based) traceroute thread
             # self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindows, args=())
             self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindowsRewrite, args=())
             self.tracerouteThread.daemon = False
-            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteScapy (" + str(os) + ")")
+            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteScapyRewrite (" + str(os) + ")")
             self.tracerouteThread.start()
 
         else:
@@ -4328,13 +4328,13 @@ class RtpGenerator(object):
                 ttl = 0
                 # This list will be populated with the results of the traceroute
                 hopsList = []
-                Utils.Message.addMessage("Starting traceroute....ttl = 1")
+                # Utils.Message.addMessage("Starting traceroute....ttl = 1")
                 while ttl < maxNoOfHops and self.timeToLive != 0:
                     attemptsCount = 1
                     ttl += 1
                     # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
                     icmpSrcAddr = None
-                    Utils.Message.addMessage("hop counter starting: ttl: " + str(ttl))
+                    # Utils.Message.addMessage("hop counter starting: ttl: " + str(ttl))
                     # This loop counts the attempts for each hop
                     while (attemptsCount < noOfRetries) and self.timeToLive != 0:
                         # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
@@ -4353,7 +4353,7 @@ class RtpGenerator(object):
                         attemptsCount += 1
                         # Test the reply (should be an ICMP message, or None if the router doesn't respond)
                         if reply is not None:
-                            Utils.Message.addMessage("Message reply type " + str(reply.type))
+                            # Utils.Message.addMessage("Message reply type " + str(reply.type))
                             # Detect TTL Expired messages (icmp type 11, code 0)
                             if reply.type == 11:
                                 # This is a TTL expired in transit message, for us - snapshot the address
@@ -4399,6 +4399,19 @@ class RtpGenerator(object):
                 self.tracerouteHopsListMutex.acquire()
                 self.tracerouteHopsList = hopsList
                 self.tracerouteHopsListMutex.release()
+
+                # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
+                # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
+                # So has to be updated manually here
+                try:
+                    # get the instance of the corresponding RtpStreamResults object
+                    rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                    # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+                    rtpStreamResults.setTraceRouteHopsList(hopsList)
+
+                except Exception as e:
+                    # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThreadScapyWindowsRewrite() update RtpStreamResults tracerouteHopList " + str(e))
+                    pass
 
                 # Sleep for 2 sec between completed traceroutes
                 time.sleep(2)
