@@ -1930,7 +1930,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                             Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + ", " +\
                                                      str(sequenceNoGap) + " packets lost. (<=" +\
                                                      str(self.__stats["glitch_Event_Trigger_Threshold_packets"]) +\
-                                                     ", minor loss)")
+                                                     ", minor loss " + str(rtpPackets[-2].rtpSequenceNo) + ":" +\
+                                                     str(rtpPackets[-1].rtpSequenceNo) + ")" )
 
                         # Temporarily disable the jitter detection immediately after a glitch
                         jitterDetectionEnabledFlag = False
