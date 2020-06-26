@@ -7,7 +7,7 @@ from __future__ import unicode_literals # Required for prompt_toolkit
 import sys
 
 # from icmplib import ICMPv4Socket, TimeoutExceeded, ICMPRequest
-from Custom_icmplib import customICMPv4Socket
+# from Custom_icmplib import customICMPv4Socket
 
 from Registry import Registry # This class contains constants/defaults used throughout the program
 
