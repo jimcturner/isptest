@@ -1886,8 +1886,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                     #     rtpPackets[-2].rtpSequenceNo = -1
                     sequenceNoGap = rtpPackets[-1].rtpSequenceNo - rtpPackets[-2].rtpSequenceNo
 
-                    if sequenceNoGap < 1:
-                        Utils.Message.addMessage("PKT: 0 or -ve sequenceNoGap " + str(sequenceNoGap))
+                    # if sequenceNoGap < 1:
+                    #     Utils.Message.addMessage("PKT: 0 or -ve sequenceNoGap " + str(sequenceNoGap))
+                    #
                     # Detect sequence no wrapping around to zero
                     if sequenceNoGap < -32768:
                         # If diff < -32768, add 65536 // Turns diff into a +ve no.
@@ -1899,10 +1900,12 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                     # Detect out-of-order packet receipt (i.e received seq numbers going backwards!)
                     # This should manifest itself as a -ve sequenceNoGap between -32768 and 0
-                    elif sequenceNoGap < 0 and sequenceNoGap > -32768:
+                    elif (sequenceNoGap < 0) and (sequenceNoGap > -32768):
                         Utils.Message.addMessage("PKT:Out of order packet: current seq " + str(rtpPackets[-1].rtpSequenceNo) +\
                                       ", prev " + str(rtpPackets[-2].rtpSequenceNo) + ", diff " +\
                                                  str(sequenceNoGap))
+                    elif sequenceNoGap == 0:
+                        Utils.Message.addMessage("Duplicate seq no received " + str(str(rtpPackets[-1].rtpSequenceNo)))
 
                     # A seq no gap of > 1 suggests a glitch
                     if sequenceNoGap > 1:
@@ -3716,6 +3719,16 @@ class RtpGenerator(object):
                 # if rtpGeneratorInstance.rtpSequenceNo == 65530:
                 #     Utils.Message.addMessage("seq no = 65530, insert 100 packet glitch")
                 #     rtpGeneratorInstance.packetsToSkip = 100
+
+                # # Deliberately cause a duplicate seq no every 10000 packets
+                # if rtpGeneratorInstance.txCounter_packets % 10000 == 0:
+                #     Utils.Message.addMessage("Cause duplicate sequence no error")
+                #     rtpGeneratorInstance.rtpSequenceNo -= 1
+
+                # # Deliberately cause an out of seq packet every 10000 packets
+                # if rtpGeneratorInstance.txCounter_packets % 10000 == 0:
+                #     Utils.Message.addMessage("Cause out of sequence error")
+                #     rtpGeneratorInstance.rtpSequenceNo -= 2
 
                 # Update sleepTime stats
                 updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
