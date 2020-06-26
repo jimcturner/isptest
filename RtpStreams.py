@@ -1826,11 +1826,18 @@ class RtpReceiveStream(RtpReceiveCommon):
         # jitter detection is disabled the first time around
         jitterDetectionEnabledFlag = False
 
+        # # Store the current and previous rtp sequence nos. - replaces the deque
+        # latestRtpSeqNo = 0
+        # prevRtpSeqNo = 0 # 'n-1' seq no
+        # oldestSeqNo = 0 # the 'n-2' seq
+
         while self.queueReceiverThreadActiveFlag:
             # Now wait for items to appear in the queue (with a timeout)
             try:
                 # Wait for a packet to arrive in the receive queue
                 rtpPacketData = self.rtpStreamQueue.get(timeout=0.2)
+                # Take a copy of the latest sequence no.
+                latestSeqNo = rtpPacketData.rtpSequenceNo
 
                 # Monitor the size of the queue
                 # If the queue size starts creeping up, this suggests the CPU csan't can't keep up with the rate
@@ -1873,14 +1880,28 @@ class RtpReceiveStream(RtpReceiveCommon):
                     ### Detect sequence no. anomoly (i.e a glitch)
                     # Test the latest seq no against the previous
                     # Detect against false glitches when the seq no wraps around
-                    if rtpPackets[-2].rtpSequenceNo == 65535:
-                        rtpPackets[-2].rtpSequenceNo = -1
-
-
+                    # if rtpPackets[-2].rtpSequenceNo == 65535:
+                    #     rtpPackets[-2].rtpSequenceNo = -1
                     sequenceNoGap = rtpPackets[-1].rtpSequenceNo - rtpPackets[-2].rtpSequenceNo
-                    # Take the absolute difference because if the sequence nos have wrapped around, we'll get a
-                    # negative difference value
-                    if abs(sequenceNoGap) > 1:
+
+                    # Detect sequence no wrapping around to zero
+                    if sequenceNoGap < -32768:
+                        # If diff < -32768, add 65536 // Turns diff into a +ve no.
+                        modifiedSequenceNoGap = sequenceNoGap + 65536
+                        Utils.Message.addMessage("PKT:Seq no wrapping to zero. old diff " +\
+                                                 str(sequenceNoGap) + " new diff " + str(modifiedSequenceNoGap))
+                        # Copy new seq no
+                        sequenceNoGap = modifiedSequenceNoGap
+
+                    # Detect out-of-order packet receipt (i.e received seq numbers going backwards!)
+                    # This should manifest itself as a -ve sequenceNoGap between -32768 and 0
+                    elif sequenceNoGap < 0 and sequenceNoGap > -32768:
+                        Utils.Message.addMessage("PKT:Out of order packet: current seq " + str(rtpPackets[-1].rtpSequenceNo) +\
+                                      ", prev " + str(rtpPackets[-2].rtpSequenceNo) + ", diff " +\
+                                                 str(sequenceNoGap))
+
+                    # A seq no gap of > 1 suggests a glitch
+                    if sequenceNoGap > 1:
                         # Discontinuous sequence numbers detected
                         # Create a Glitch Event
                         glitch = Glitch(self.__stats, rtpPackets[-2], rtpPackets[-1])
