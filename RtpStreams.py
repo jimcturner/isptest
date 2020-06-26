@@ -1884,6 +1884,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     #     rtpPackets[-2].rtpSequenceNo = -1
                     sequenceNoGap = rtpPackets[-1].rtpSequenceNo - rtpPackets[-2].rtpSequenceNo
 
+                    if sequenceNoGap < 1:
+                        Utils.Message.addMessage("PKT: 0 or -ve sequenceNoGap " + str(sequenceNoGap))
                     # Detect sequence no wrapping around to zero
                     if sequenceNoGap < -32768:
                         # If diff < -32768, add 65536 // Turns diff into a +ve no.
