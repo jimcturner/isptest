@@ -3710,6 +3710,7 @@ class RtpGenerator(object):
 
                 # Deliberately cause a glitch
                 if rtpGeneratorInstance.rtpSequenceNo == 65530:
+                    Utils.Message.addMessage("seq no = 65530, insert 100 packet glitch")
                     rtpGeneratorInstance.packetsToSkip == 100
 
                 # Update sleepTime stats
