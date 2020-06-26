@@ -3708,6 +3708,10 @@ class RtpGenerator(object):
                 # Prepare the next packet
                 rtpGeneratorInstance.prepareNextRtpPacket()
 
+                # Deliberately cause a glitch
+                if rtpGeneratorInstance.rtpSequenceNo == 65530:
+                    rtpGeneratorInstance.packetsToSkip == 100
+
                 # Update sleepTime stats
                 updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
 
