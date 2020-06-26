@@ -324,7 +324,7 @@ class ExcessiveJitter(Event):
 # Define an event that represent a glitch
 # This will be in the form of the packets (RtpData objects) either side of the 'hole' in received data
 class Glitch(Event):
-    def __init__(self, stats, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap):
+    def __init__(self, stats, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap, packetsLost):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
         # Take local copy of stats dictionary
@@ -337,13 +337,15 @@ class Glitch(Event):
         self.startOfGap = lastReceivedPacketBeforeGap
         self.endOfGap = firstPackedReceivedAfterGap
 
-        # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
-        # The '-1' is because it's fences and fenceposts
-        self.packetsLost = abs(
-            firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo) - 1
-        # Guard against the possibility of a -ve packetsLost value
-        if self.packetsLost < 0:
-            self.packetsLost =0
+        self.packetsLost = packetsLost
+        # # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
+        # # The '-1' is because it's fences and fenceposts
+        # self.packetsLost = abs(
+        #     firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo) - 1
+        # # Guard against the possibility of a -ve packetsLost value
+        # if self.packetsLost < 0:
+        #     self.packetsLost =0
+
         # Calculate length of this glitch
         self.glitchLength = firstPackedReceivedAfterGap.timestamp - lastReceivedPacketBeforeGap.timestamp
         # Calculate useful values showing expected and actual rtpSequence no
@@ -1906,7 +1908,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                     if sequenceNoGap > 1:
                         # Discontinuous sequence numbers detected
                         # Create a Glitch Event
-                        glitch = Glitch(self.__stats, rtpPackets[-2], rtpPackets[-1])
+                        # Calculate packets lost
+                        packetslost = sequenceNoGap - 1
+                        glitch = Glitch(self.__stats, rtpPackets[-2], rtpPackets[-1], packetslost)
                         # Update the packets lost count
                         self.__stats["glitch_packets_lost_total_count"] += glitch.packetsLost
                         # Test to see how many packets have been lost
@@ -3708,10 +3712,10 @@ class RtpGenerator(object):
                 # Prepare the next packet
                 rtpGeneratorInstance.prepareNextRtpPacket()
 
-                # Deliberately cause a glitch
-                if rtpGeneratorInstance.rtpSequenceNo == 65530:
-                    Utils.Message.addMessage("seq no = 65530, insert 100 packet glitch")
-                    rtpGeneratorInstance.packetsToSkip = 100
+                # # Deliberately cause a glitch
+                # if rtpGeneratorInstance.rtpSequenceNo == 65530:
+                #     Utils.Message.addMessage("seq no = 65530, insert 100 packet glitch")
+                #     rtpGeneratorInstance.packetsToSkip = 100
 
                 # Update sleepTime stats
                 updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
