@@ -2877,8 +2877,9 @@ class RtpGenerator(object):
         self.txPeriod = 0  # Calculated from self.txRate and set by RtpGenerator.calculateTxPeriod()
         self.payloadLength = int(payloadLength)
         self.txCounter_bytes = 0
-        self.txCounter_packets = 1 # Start this counter at '1' so the message payload data counter will reflect what's
-                                    # been sent (otherwise the Rx'd data counter will always be one packet short)
+        self.txCounter_packets = 0 # Counts the number of successful transmissions. Note. the 'bytes tx'd message'
+                                    # embedded within the isptest header will always be at least less by one because
+                                    # this value is incremented after a successul transmission by socket.sendto()
         self.txActualTxRate_bps = 0 # Used to 'sample' the actual tx rate
         self.syncSourceIdentifier = int(syncSourceID)
         self.regeneratePayloadFlag = True   # A flag to specify the the 'dummy data' should be recalculated during the
