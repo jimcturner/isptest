@@ -1632,8 +1632,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                 ######## 1 second counter end of code ########
 
 
-            ######## Check to see if the stream is dead (has been permanently lost). If so, kill
-            if secondsWithNoBytesRxdTimer >= Registry.streamIsDeadThreshold_s and lossOfStreamFlag:
+            ######## Check to see if the stream is dead (has been permanently lost). If auto-remove enabled, kill it
+            if secondsWithNoBytesRxdTimer >= Registry.streamIsDeadThreshold_s and lossOfStreamFlag and\
+                    Registry.autoRemoveDeadRxStreamsEnable:
                 Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
                                          "(" + str(self.__stats["stream_friendly_name"]).rstrip() + \
                                          ") believed dead, removing from list")
@@ -3270,9 +3271,10 @@ class RtpGenerator(object):
                         "DBUG:RtpGenerator.generateIsptestHeader(): Message type 5: Transmit total packets " + str(e))
 
             # Now That the message data list has been created, increment the message type index
-            # self.isptestHeaderMessageIndex += 1
-            # Only tx packets sent
-            self.isptestHeaderMessageIndex =5
+            self.isptestHeaderMessageIndex += 1
+            # Send only the specific 'tx packets sent' (message type #5)
+            # self.isptestHeaderMessageIndex =5
+
             # Bounds check isptestHeaderMessageIndex
             if self.isptestHeaderMessageIndex >=self.noOfMessageTypes:
                 self.isptestHeaderMessageIndex = 0

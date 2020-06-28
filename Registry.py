@@ -6,7 +6,7 @@ class Registry(object):
     streamReportFilename = "Stream_report_"
     version = "2.0"
     pythonMinimumVersionRequired_Major = 3  # Specfify the minimum version of the Python interpreter required
-    pythonMinimumVersionRequired_Minor = 6  # This equates to Python version 3.6
+    pythonMinimumVersionRequired_Minor = 7  # This equates to Python version 3.7
 
     resultsSubfolder = "results/"        # Specifies the subfolder where exported files will be saved
     receiverLogFilename = "isptest_Receiver_Events_Log"
@@ -27,8 +27,10 @@ class Registry(object):
     ######### RtpReceiveStream
     lossOfStreamAlarmThreshold_s = 10 # Specifies how long before a loss of stream Event is triggered by RtpReceiveStream
     streamIsDeadThreshold_s = 60 # Specifies how long to wait with no incoming rtp packets before a stream is presumed dead
+    autoRemoveDeadRxStreamsEnable = False # Determines whether dead streams should automaticaslly be removed from the
+                                            # list of received streams
     # Getting false positives at the moment (because the CPU can keep up!) so creating lots of unhelpful events
-    allowProcessorOverloadEventGeneration = False
+    # allowProcessorOverloadEventGeneration = False
     # No of historic events to keep in memory (before events are purged)
     rtpReceiveStreamHistoricEventsLimit = 50
     # rtpReceiveStreamJitterExcessiveAlarmThresholdPercent = 100 # **REDUNDANT ** The amount of jitter in the
