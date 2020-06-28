@@ -2980,13 +2980,14 @@ class RtpGenerator(object):
             self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindowsRewrite, args=())
             self.tracerouteThread.daemon = False
             self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteScapyRewrite (" + str(os) + ")")
-            self.tracerouteThread.start()
 
         else:
             # Start the Linux/OSX traceroute thread
             self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
             self.tracerouteThread.daemon = False
             self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinuxOSX ("+ str(os) + ")")
+        # Test the Registry var. If traceroute is enabled, start the thread
+        if Registry.rtpGeneratorEnableTraceroute:
             self.tracerouteThread.start()
 
         # create a stream results receiver object for this tx stream
