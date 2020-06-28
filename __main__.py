@@ -2555,8 +2555,12 @@ class UI(object):
             return value
 
         if key.find('percent') > 0:
-            # Convert % value to an integer
-            value = math.ceil(value)
+            # Round % values to 2 dec place if less than 10.0
+            if value < 10:
+                value = "%0.2f" % value
+            # Othewise round to 1 decimal place (so that the value fixes into a screen space 4 chars wide)
+            else:
+                value = "%0.1f" % value
             return value
 
         if key.find('_uS') > 0:
