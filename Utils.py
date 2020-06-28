@@ -121,7 +121,15 @@ def unfragmentString(fragments):
 # Utility function convert a value in bytes to kB or MB with a suffix
 def bToMb(value):
     # Utility function convert a value in bytes to kB or MB with a suffix
-    if value >= 1048576:
+    if value >= 1099511627776:
+        # Convert value to Tb
+        value = round(value / 1099511627776.0, 1)
+        return str(value) + "T"
+    elif value >= 1073741824:
+        # Convert value to Gb
+        value = round(value / 1073741824.0, 1)
+        return str(value) + "G"
+    elif value >= 1048576:
         # Convert bytes to Mb
         value = round(value / 1048576.0, 1)
         return str(value) + "M"
