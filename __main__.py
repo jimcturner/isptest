@@ -2181,7 +2181,9 @@ class UI(object):
                                 # str(int(self.selectedStream.getRtpStreamStatsByKey('Calculation time mean')*100000)) + "uS"])
                     debugInfo.append(["Tx period ",
                                       str("%0.10f" %stats['Tx period']) + "S"])
+                    debugInfo.append(["Tx'd packets ", str(self.selectedStream.txCounter_packets)])
                     debugInfo.append(["Tx err ", str(self.selectedStream.txErrorCounter)])
+
                 except Exception as e:
                     Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
             if type(self.selectedStream) == RtpReceiveStream:
