@@ -41,13 +41,22 @@ class Foo(object):
 # This class defines a template for event classes (because Python doesn;t support interfaces like Java)
 # Note all Python abstract classes inherit from 'ABC'
 class Event():
-    # NOTE: The following line may/may not be necessary for Python 2.7. Python 3 should use the class declaration
-    # class Event(ABC) but this causes an error in Python 2.7
-    __metaclass__ = ABCMeta
-    @abstractmethod
+    # define class variables
+    timestampOfLastEvent = None
+    totalEventCount = 0
+
+    # # NOTE: The following line may/may not be necessary for Python 2.7. Python 3 should use the class declaration
+    # # class Event(ABC) but this causes an error in Python 2.7
+    # __metaclass__ = ABCMeta
+    # @abstractmethod
     def __init__(self, stats):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
+        # Update the 'global' 'all-events' class timestamp
+        Event.timestampOfLastEvent = self.timeCreated
+        # Increment the 'global' 'all Events' class counter
+        Event.totalEventCount += 1
+
         # Take local copy of stats dictionary
         self.stats = dict(stats)
         # This is a new event, so set eventNo to be an increment of the current self.stats["stream_all_events_counter"] value
@@ -1695,7 +1704,8 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                     # Snapshot latest values
                     prevSumOfHopsList = sumOfHopsList
-                    # Utils.Message.addMessage("Sum of hopslist " + str(sumOfHopsList))
+                    Utils.Message.addMessage("Events class vars " + str(Event.totalEventCount) + ", " + \
+                                             str(Event.timestampOfLastEvent))
                 else:
                     Utils.Message.addMessage("empty hopslist")
 
