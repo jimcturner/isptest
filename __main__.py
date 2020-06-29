@@ -678,7 +678,7 @@ class UI(object):
                        ["bps", "packet_data_received_1S_bytes"],
                        ["Pkts\nlost", "glitch_packets_lost_total_count"],
                        [" %\nloss", "glitch_packets_lost_total_percent"],
-                       ["Last\nglitch", "glitch_most_recent_timestamp"],
+                       ["Time since\nlast glitch", "glitch_time_elapsed_since_last_glitch"],
                        ["glitch\nperiod", "glitch_mean_time_between_glitches"],
                        ["Count", "glitch_counter_total_glitches"]
                        ], self.streamResultsDataSet])
@@ -727,7 +727,7 @@ class UI(object):
                        ["10Min\n", "historic_glitch_counter_last_10Min"],
                        ["1Min\n", "historic_glitch_counter_last_1Min"],
                        ["10Sec\n", "historic_glitch_counter_last_10Sec"],
-                       ["Time since\nlast glitch", "glitch_time_elapsed_since_last_glitch"]
+                       [" Time of\nlast glitch", "glitch_most_recent_timestamp"]
                        # ["", ""],
                        ], self.streamResultsDataSet])
 
