@@ -645,6 +645,8 @@ class RtpReceiveCommon(object):
         labelWidth = 33
         streamPerformance = \
             "Duration of test: ".rjust(labelWidth) + str(Utils.dtstrft(stats["stream_time_elapsed_total"])) + "\r\n" + \
+        "Total bytes received: ".rjust(labelWidth) + str(Utils.bToMb(stats["packet_data_received_total_bytes"])) + "B" +\
+            "\r\n" + \
         "Packet loss: ".rjust(labelWidth) + str("%0.2f" % stats["glitch_packets_lost_total_percent"]) + "%" + "\r\n" + \
         "Total packets lost: ".rjust(labelWidth) + str(int(stats["glitch_packets_lost_total_count"])) + "\r\n" + \
             "Maximum glitch dur: ".rjust(labelWidth) + str(Utils.dtstrft(stats["glitch_max_glitch_duration"])) + "\r\n" + \
