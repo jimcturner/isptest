@@ -25,8 +25,8 @@ class Registry(object):
                          ]
 
     ######### RtpReceiveStream
-    lossOfStreamAlarmThreshold_s = 10 # Specifies how long before a loss of stream Event is triggered by RtpReceiveStream
-    streamIsDeadThreshold_s = 60 # Specifies how long to wait with no incoming rtp packets before a stream is presumed dead
+    lossOfStreamAlarmThreshold_s = 5 # Specifies how long before a loss of stream Event is triggered by RtpReceiveStream
+    streamIsDeadThreshold_s = 10 # Specifies how long to wait with no incoming rtp packets before a stream is presumed dead
     autoRemoveDeadRxStreamsEnable = False # Determines whether dead streams should automaticaslly be removed from the
                                             # list of received streams
     # Getting false positives at the moment (because the CPU can keep up!) so creating lots of unhelpful events

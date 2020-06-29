@@ -914,11 +914,6 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["jitter_mean_time_between_excess_jitter_events"] = datetime.timedelta()
         self.sumOfTimeElapsedSinceLastExcessJitterEvents = datetime.timedelta()
 
-        # # Initially, __CalculateThread loop will execute every 1mS (but will then be modified dynamically
-        # # based on the packet Rx period)
-        # self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL = 0.001
-        # self.__stats["calculate_thread_sampling_interval_S"] = self.DEFAULT_CALCULATE_THREAD_SAMPLING_INTERVAL
-
         # Amount of time to elapse before a lossOfStream alarm event is triggered
         self.lossOfStreamAlarmThreshold_s = Registry.lossOfStreamAlarmThreshold_s
 
@@ -1378,6 +1373,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         # This flag will go high once a stream is believed lost
         lossOfStreamFlag = False
 
+        # This flag will go high when a stream is declared dead
+        streamIsDeadFlag = False
+
         # Stores the previous long-term jitter value.
         jitterLongterm_uS = 0
 
@@ -1547,7 +1545,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         return None
 
                 ########### Update Mean Jitter averages
-                if self.__stats["jitter_excess_jitter_events_total"] > 0:
+                if (self.__stats["jitter_excess_jitter_events_total"] > 0) and (streamIsDeadFlag is False):
                     ########### Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
                     self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
                         datetime.datetime.now() - self.__stats["jitter_time_of_last_excess_jitter_event"]
@@ -1559,8 +1557,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                          self.__stats["jitter_excess_jitter_events_total"])
 
                 ########## Calculate Glitch stats
-                # (But only if there has actually been a glitch in the past to measure against)
-                if self.__stats["glitch_counter_total_glitches"] > 0:
+                # (But only if there has actually been a glitch in the past to measure against) AND stream is alive
+                if (self.__stats["glitch_counter_total_glitches"] > 0) and (streamIsDeadFlag is False):
                     ########## Calculate time elapsed since last glitch
                     # Calculate new value
                     self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats[
@@ -1634,13 +1632,17 @@ class RtpReceiveStream(RtpReceiveCommon):
                 ######## 1 second counter end of code ########
 
 
-            ######## Check to see if the stream is dead (has been permanently lost). If auto-remove enabled, kill it
+            ######## Check to see if the stream is dead (has been permanently lost). If so, set streamIsDeadFlag
+            # but only do this once, so need to check that the flag has not already been set
             if secondsWithNoBytesRxdTimer >= Registry.streamIsDeadThreshold_s and lossOfStreamFlag and\
-                    Registry.autoRemoveDeadRxStreamsEnable:
+                    streamIsDeadFlag is False:
+                streamIsDeadFlag = True
                 Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
                                          "(" + str(self.__stats["stream_friendly_name"]).rstrip() + \
-                                         ") believed dead, removing from list")
+                                         ") believed dead")
 
+            ######## If the stream has been declared 'dead' and auto-remove is enabled, kill it
+            if streamIsDeadFlag and Registry.autoRemoveDeadRxStreamsEnable:
                 # Generate and save a report
                 # Retrieve the auto-generated filename
                 _filename = self.createFilenameForReportExport()
