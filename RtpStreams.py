@@ -384,6 +384,49 @@ class Glitch(Event):
         jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
         return jsonRepresentation
 
+# Define an event to represent a change in the IP routing yielded by the Traceroute thread
+class IPRoutingChange(Event):
+
+    def __init__(self, stats, latestHopsList):
+        # Call Constructor of parent class. This will set parameters such as timeCreated etc
+        super().__init__(stats)
+        # Declare specific instance variables
+        self.latestHopsList = latestHopsList
+
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True,
+                   includeFriendlyName=True):
+        try:
+            optionalFields = ", No of hops changed to " + str(len(self.latestHopsList))
+        except:
+            optionalFields = ""
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo=includeEventNo,
+                                                includeType=includeType,
+                                                includeFriendlyName=includeFriendlyName)
+
+        summary += optionalFields
+        data = {'timeCreated': self.timeCreated, 'summary': summary}
+        return data
+
+    def getCSV(self):
+        optionalFields = "Hops,"
+        try:
+            # Firstly, write the no of hops
+            optionalFields += str(len(self.latestHopsList)) + ", "
+            # Iterate over the hops list, formatting each list of Octets as a string
+            for hop in self.latestHopsList:
+                optionalFields += (str(hop[0]) + "." + str(hop[1]) + "." + str(hop[2]) + "." + str(hop[3]) + ",")
+        except:
+            optionalFields += "No hops to display,"
+        csv = Event.createCommonCSVString(self) + optionalFields
+        return csv
+
+    def getJSON(self):
+        # # Returns a json object representation of the event as a string
+        jsonRepresentation = Event.createJsonRepresentationOfEvent(self)
+        return jsonRepresentation
+
+
 # Stores a running total of events that happened within the last x seconds with y granularity
 class MovingTotalEventCounter(object):
     # Stores a running total of events that happened within the last x seconds with y granularity
@@ -1401,6 +1444,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         # For 10 sec jitter calculation
         jitter10SecBuffer = deque(maxlen=10)
 
+        # Records the sum of the octets within the traceroute hops list. Used to detect route changes
+        prevSumOfHopsList = 0
+
         # Infinite loop
         while self.samplingThreadActiveFlag:
             time.sleep(0.2)
@@ -1624,10 +1670,34 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__stats["stream_all_events_counter"] += 1
                     Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
-                # Utils.Message.addMessage("jitter_period " + \
-                #                          str(self.__stats["jitter_mean_time_between_excess_jitter_events"]) + ", " +\
-                #                          "no of jitter events " + \
-                #                          str(self.__stats["jitter_excess_jitter_events_total"]))
+                ######## Detect route changes
+                # Compare the sum of the current traceroute hops list to the previous sum. If it has changed,
+                # generate a route changed event
+                # Get the current hops list
+                hopsList = self.getTraceRouteHopsList()
+                # Calculate the sum of the Octets that make up each IP address. If the overall sum changes,
+                # interpret this as a route change
+                if len(hopsList) > 0:
+                    sumOfHopsList = 0
+                    for hop in hopsList:
+                        sumOfHopsList += sum(hop)
+                    # Compare latest and previous sumOfHopsList
+                    if sumOfHopsList != prevSumOfHopsList:
+                        # Route change detected, create a new IPRoutingChange event
+                        iPRoutingChange = IPRoutingChange(self.__stats, hopsList)
+                        # # Add the event to the event list
+                        self.__eventList.append(iPRoutingChange)
+                        # # Increment the all_events counter
+                        self.__stats["stream_all_events_counter"] += 1
+                        # # Post a message
+                        Utils.Message.addMessage(iPRoutingChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+                        pass
+
+                    # Snapshot latest values
+                    prevSumOfHopsList = sumOfHopsList
+                    # Utils.Message.addMessage("Sum of hopslist " + str(sumOfHopsList))
+                else:
+                    Utils.Message.addMessage("empty hopslist")
 
                 ######## 1 second counter end of code ########
 
