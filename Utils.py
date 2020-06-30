@@ -8,7 +8,7 @@ import threading
 import platform
 # psutil seems to be broken on Linux
 # import psutil
-
+from queue import SimpleQueue
 
 from Registry import Registry
 from ipwhois import IPWhois, exceptions
@@ -197,6 +197,12 @@ class Message(object):
     messages = []
     # No. of messages to keep before they're discarded
     historicMessagesToKeep = 50
+    # Private flag to control the operation of the disk writing thread
+    __writeMessagesToDiskThreadIsActive = False
+    # A class object that will (when started) be the disk writing thread
+    writeMessagesToDiskThread = None
+    # FIFO queue to hold the messages to be written to disk
+    __diskWriteQueue = SimpleQueue()
 
     # Determines which messages will be revealed by getMessages
     # 0 = no warning messages, > 0 = warning messages displayed
@@ -207,24 +213,37 @@ class Message(object):
         cls.verbosityLevel = verbosity
 
     # Class method to add a new message to the list
+    # Additionally, this method checks to see if the disk writing thread is active. If it is not, it will start it
     @classmethod
     def addMessage(cls, message):
+        # Check status of disk writing thread. If it has not yet been started, it will be
+        if cls.__writeMessagesToDiskThreadIsActive is False:
+            try:
+                # Set the flag to signal that the thread has been (or is being) started
+                cls.__writeMessagesToDiskThreadIsActive = True
+                # Create the thread object
+                cls.writeMessagesToDiskThread = threading.Thread(target=cls.__writeMessagesToDiskThread, args=())
+                # The daemon will automatically shut down one the main app ends
+                cls.writeMessagesToDiskThread.daemon = True
+                cls.writeMessagesToDiskThread.setName("____writeMessagesToDiskThread")
+                cls.writeMessagesToDiskThread.start()
+
+            except Exception as e:
+                Message.addMessage("Message.addMessage() Couldn't start disk writing thread " + str(e))
+                # Thread failed to start, so clear the flag
+                cls.__writeMessagesToDiskThreadIsActive = False
+
+
         # Add the supplied message to the messages list as a tuple containing a timestamp
-        cls.messages.append([datetime.datetime.now().strftime("%H:%M:%S"), message])
+        newMessage = [datetime.datetime.now().strftime("%H:%M:%S"), message]
+        cls.messages.append(newMessage)
         # Test length of messages list. Longer than historicMessagesToKeep?
         if len(cls.messages) > cls.historicMessagesToKeep:
             # Remove first (oldest) message
             del cls.messages[:1]
-        # Now log the message to disk
-        try:
 
-            fh = open(Registry.messageLogFilename,"a+")
-            logString = datetime.datetime.now().strftime("%H:%M:%S") + ": " + str(message) + "\n"
-            fh.write(logString)
-            fh.close()
-        except Exception as e:
-            pass
-
+        # Now put the new message in the queue, to be picked up by the disk writer thread
+        cls.__diskWriteQueue.put(newMessage)
 
     # class method to filter cls.messages[] based on the message prefix and cls.verbosityLevel and return a sublist
     @classmethod
@@ -284,6 +303,36 @@ class Message(object):
         else:
             # if no args supplied, return complete list
             return list (filteredMessages)
+
+
+    # Background thread to write messages to disk (in batches, every second)
+    @classmethod
+    def __writeMessagesToDiskThread(cls):
+        Message.addMessage("Message.__writeMessagesToDiskThread starting")
+        while cls.__writeMessagesToDiskThreadIsActive:
+            # Test the message queue size. If there are messages, write them to disk
+            if cls.__diskWriteQueue.qsize() > 0:
+                # Create the file object for appending
+                # Now log the message to disk
+                try:
+                    fh = open(Registry.messageLogFilename, "a+")
+                    # Keep pulling messages from the queue and writing them until the queue is empty
+                    while cls.__diskWriteQueue.qsize() > 0:
+                        # Get the message item from the queue
+                        latestItem = cls.__diskWriteQueue.get(timeout=0.2)
+                        # Check the length of the item matches what we expect (a tuple)
+                        if len(latestItem) > 0:
+                            # Format the string to be written to the file
+                            logString = latestItem[0] + ":" + latestItem[1] + "\n"
+                            # Append to the file
+                            fh.write(logString)
+                    fh.close()
+                except Exception as e:
+                    Message.addMessage("Message.__writeMessagesToDiskThread couldn't write " + str(e))
+            # Sleep for 1 second
+            time.sleep(1)
+        Message.addMessage("Message.__writeMessagesToDiskThread ending")
+
 
 # class GetchWithTimeout(object):
 #     """Gets a single character from standard input.  Does not echo to the
