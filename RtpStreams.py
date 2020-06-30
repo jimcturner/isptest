@@ -1793,14 +1793,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                          self.__stats["route_time_elapsed_since_last_route_change_event"],
                                                          (self.__stats["route_change_events_total"] - 1))
 
-                Utils.Message.addMessage("Route changes " + str(self.__stats["route_change_events_total"]) + ", " + \
-                                         "Time elapsed since last " + str(
-                    self.__stats["route_time_elapsed_since_last_route_change_event"].seconds) + ", " + \
-                                         "time of last change " + str(
-                    self.__stats["route_time_of_last_route_change_event"]) + ", " + \
-                                         "Mean time between changes " + str(
-                    self.__stats["route_mean_time_between_route_change_events"].seconds) + ", " + \
-                                         "sumElapsed " + str(self.sumOfTimeElapsedSinceLastRouteChange))
+                # Utils.Message.addMessage("Route changes " + str(self.__stats["route_change_events_total"]) + ", " + \
+                #                          "Time elapsed since last " + str(
+                #     self.__stats["route_time_elapsed_since_last_route_change_event"].seconds) + ", " + \
+                #                          "time of last change " + str(
+                #     self.__stats["route_time_of_last_route_change_event"]) + ", " + \
+                #                          "Mean time between changes " + str(
+                #     self.__stats["route_mean_time_between_route_change_events"].seconds) + ", " + \
+                #                          "sumElapsed " + str(self.sumOfTimeElapsedSinceLastRouteChange))
 
                 ######## 1 second counter end of code ########
 
