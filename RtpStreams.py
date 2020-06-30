@@ -52,10 +52,6 @@ class Event():
     def __init__(self, stats):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
-        # Update the 'global' 'all-events' class timestamp
-        Event.timestampOfLastEvent = self.timeCreated
-        # Increment the 'global' 'all Events' class counter
-        Event.totalEventCount += 1
 
         # Take local copy of stats dictionary
         self.stats = dict(stats)
@@ -966,6 +962,13 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["jitter_mean_time_between_excess_jitter_events"] = datetime.timedelta()
         self.sumOfTimeElapsedSinceLastExcessJitterEvents = datetime.timedelta()
 
+        # IPRoutingChange stats
+        self.__stats["route_time_elapsed_since_last_route_change_event"] = datetime.timedelta()
+        self.__stats["route_time_of_last_route_change_event"] = datetime.timedelta()
+        self.__stats["route_change_events_total"] = 0
+        self.__stats["route_mean_time_between_route_change_events"] = datetime.timedelta()
+        self.sumOfTimeElapsedSinceLastRouteChange = datetime.timedelta()
+
         # Amount of time to elapse before a lossOfStream alarm event is triggered
         self.lossOfStreamAlarmThreshold_s = Registry.lossOfStreamAlarmThreshold_s
 
@@ -1679,6 +1682,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__stats["stream_all_events_counter"] += 1
                     Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
+
                 ######## Detect route changes
                 # Compare the sum of the current traceroute hops list to the previous sum. If it has changed,
                 # generate a route changed event
@@ -1694,20 +1698,53 @@ class RtpReceiveStream(RtpReceiveCommon):
                     if sumOfHopsList != prevSumOfHopsList:
                         # Route change detected, create a new IPRoutingChange event
                         iPRoutingChange = IPRoutingChange(self.__stats, hopsList)
-                        # # Add the event to the event list
+                        # Add the event to the event list
                         self.__eventList.append(iPRoutingChange)
                         # # Increment the all_events counter
                         self.__stats["stream_all_events_counter"] += 1
+                        # Update the routeChange stats
+                        self.__stats["route_change_events_total"] += 1
+                        self.__stats["route_time_of_last_route_change_event"] = iPRoutingChange.timeCreated
+
+                        # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
+                        self.sumOfTimeElapsedSinceLastRouteChange \
+                                += self.__stats["route_time_elapsed_since_last_route_change_event"]
+
                         # # Post a message
                         Utils.Message.addMessage(iPRoutingChange.getSummary(includeStreamSyncSourceID=False)['summary'])
                         pass
 
                     # Snapshot latest values
                     prevSumOfHopsList = sumOfHopsList
-                    Utils.Message.addMessage("Events class vars " + str(Event.totalEventCount) + ", " + \
-                                             str(Event.timestampOfLastEvent))
                 else:
                     Utils.Message.addMessage("empty hopslist")
+
+                ########## Calculate route change stats
+                # (But only if there has actually been a second route change in the past to measure against)
+                # AND stream is alive
+                # Note: The initial route is considered as 'change 1' therefore is ignored and threshold is >=1
+                ####### Now update the self.__stats["route_time_elapsed_since_last_route_change_event"] timer
+                if (self.__stats["route_change_events_total"] > 0) and (streamIsDeadFlag is False):
+
+                    self.__stats["route_time_elapsed_since_last_route_change_event"] = \
+                        datetime.datetime.now() - self.__stats["route_time_of_last_route_change_event"]
+
+                ########### Calculate mean time between route changes.
+                # Note: Ignore the first route change, because it's not really a 'change', just the initial value
+                if (self.__stats["route_change_events_total"] > 1) and (streamIsDeadFlag is False):
+                    self.__stats["route_mean_time_between_route_change_events"] = \
+                        calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastRouteChange,
+                                                         self.__stats["route_time_elapsed_since_last_route_change_event"],
+                                                         (self.__stats["route_change_events_total"] - 1))
+
+                Utils.Message.addMessage("Route changes " + str(self.__stats["route_change_events_total"]) + ", " + \
+                                         "Time elapsed since last " + str(
+                    self.__stats["route_time_elapsed_since_last_route_change_event"].seconds) + ", " + \
+                                         "time of last change " + str(
+                    self.__stats["route_time_of_last_route_change_event"]) + ", " + \
+                                         "Mean time between changes " + str(
+                    self.__stats["route_mean_time_between_route_change_events"].seconds) + ", " + \
+                                         "sumElapsed " + str(self.sumOfTimeElapsedSinceLastRouteChange))
 
                 ######## 1 second counter end of code ########
 
@@ -3819,6 +3856,12 @@ class RtpGenerator(object):
                 # if rtpGeneratorInstance.txCounter_packets % 10000 == 0:
                 #     Utils.Message.addMessage("Cause out of sequence error")
                 #     rtpGeneratorInstance.rtpSequenceNo -= 2
+
+                # Deliberately modify the traceroute hops list every 500 packets
+                if rtpGeneratorInstance.txCounter_packets % 500 == 0:
+                    newOctet = rtpGeneratorInstance.txCounter_packets % 255
+                    Utils.Message.addMessage("new tr octet " + str(newOctet))
+                    rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,newOctet]]
 
                 # Update sleepTime stats
                 updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
