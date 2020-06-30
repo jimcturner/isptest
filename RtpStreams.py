@@ -389,6 +389,62 @@ class Glitch(Event):
         jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
         return jsonRepresentation
 
+
+# Define an generic event to represent an unexpected sequence no
+# This can be inherited, and the daughter events will automatically take on the name of the inherited class
+class UnexpectedSeqNo(Event):
+    def __init__(self, stats, prevReceivedPacket, lastReceivedPacket):
+        super().__init__(stats)
+        # Define instance variable
+        self.lastReceivedPacket = lastReceivedPacket
+        self.prevReceivedPacket = prevReceivedPacket
+
+
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True,
+                   includeFriendlyName=True):
+        try:
+            optionalFields = ", Expected seq no " + str(self.prevReceivedPacket.rtpSequenceNo + 1) + ", got " +\
+                str(self.lastReceivedPacket.rtpSequenceNo)
+        except:
+            optionalFields = ""
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo=includeEventNo,
+                                                includeType=includeType,
+                                                includeFriendlyName=includeFriendlyName)
+
+        summary += optionalFields
+        data = {'timeCreated': self.timeCreated, 'summary': summary}
+        return data
+
+    def getCSV(self):
+        # returns a CSV formatted string suitable for import into Excel
+        optionalFields = "Expected seq no," + str(self.prevReceivedPacket.rtpSequenceNo + 1) +\
+                         ",Actual received seq no," + str(self.lastReceivedPacket.rtpSequenceNo)
+        csv = Event.createCommonCSVString(self) + optionalFields
+        return csv
+
+    def getJSON(self):
+        # Returns a json object representation of the event as a string
+
+        # Create dictionary with any additional keys specific to this type of event
+        additionalData = {'expectedSequenceNo': self.prevReceivedPacket.rtpSequenceNo + 1,
+                          'actualReceivedSequenceNo': self.lastReceivedPacket.rtpSequenceNo}
+        # Create the json object
+        jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
+        return jsonRepresentation
+
+# Define an event to represent an out of order packet O(where the received rtp sequence no appears to go backwards)
+class OutOfOrderPacket(UnexpectedSeqNo):
+    def __init__(self, stats, prevReceivedPacket, lastReceivedPacket):
+        # Invoke Constructor method of super class (UnexpectedSeqNo)
+        super().__init__(stats, prevReceivedPacket, lastReceivedPacket)
+
+
+class DuplicateSequenceNo(UnexpectedSeqNo):
+    def __init__(self, stats, prevReceivedPacket, lastReceivedPacket):
+        # Invoke Constructor method of super class (UnexpectedSeqNo)
+        super().__init__(stats, prevReceivedPacket, lastReceivedPacket)
+
 # Define an event to represent a change in the IP routing yielded by the Traceroute thread
 class IPRoutingChange(Event):
 
@@ -2015,19 +2071,37 @@ class RtpReceiveStream(RtpReceiveCommon):
                     if sequenceNoGap < -32768:
                         # If diff < -32768, add 65536 // Turns diff into a +ve no.
                         modifiedSequenceNoGap = sequenceNoGap + 65536
-                        Utils.Message.addMessage("PKT:Seq no wrapping to zero. old diff " +\
-                                                 str(sequenceNoGap) + " new diff " + str(modifiedSequenceNoGap))
+                        # Utils.Message.addMessage("PKT:Seq no wrapping to zero. old diff " +\
+                        #                          str(sequenceNoGap) + " new diff " + str(modifiedSequenceNoGap))
                         # Copy new seq no
                         sequenceNoGap = modifiedSequenceNoGap
 
                     # Detect out-of-order packet receipt (i.e received seq numbers going backwards!)
                     # This should manifest itself as a -ve sequenceNoGap between -32768 and 0
                     elif (sequenceNoGap < 0) and (sequenceNoGap > -32768):
-                        Utils.Message.addMessage("PKT:Out of order packet: current seq " + str(rtpPackets[-1].rtpSequenceNo) +\
-                                      ", prev " + str(rtpPackets[-2].rtpSequenceNo) + ", diff " +\
-                                                 str(sequenceNoGap))
+                        # Utils.Message.addMessage("PKT:Out of order packet: current seq " + str(rtpPackets[-1].rtpSequenceNo) +\
+                        #               ", prev " + str(rtpPackets[-2].rtpSequenceNo) + ", diff " +\
+                        #                          str(sequenceNoGap))
+                        # Create an OutOfOrderPacket Event
+                        outOfOrderPacket = OutOfOrderPacket(self.__stats, rtpPackets[-2], rtpPackets[-1])
+                        # Append the event to the eventList
+                        self.__eventList.append(outOfOrderPacket)
+                        # Increment the all_events counter
+                        self.__stats["stream_all_events_counter"] += 1
+                        # Post a message
+                        Utils.Message.addMessage(outOfOrderPacket.getSummary(includeStreamSyncSourceID=False)['summary'])
+
+                    # Detect duplicate sequence no. This shouldn't be possible because the sequence no.s should increment
                     elif sequenceNoGap == 0:
-                        Utils.Message.addMessage("Duplicate seq no received " + str(str(rtpPackets[-1].rtpSequenceNo)))
+                        # Utils.Message.addMessage("Duplicate seq no received " + str(str(rtpPackets[-1].rtpSequenceNo)))
+                        # Create a DuplicateSequenceNo event
+                        duplicateSequenceNo = DuplicateSequenceNo(self.__stats, rtpPackets[-2], rtpPackets[-1])
+                        # Append the event to the eventList
+                        self.__eventList.append(duplicateSequenceNo)
+                        # Increment the all_events counter
+                        self.__stats["stream_all_events_counter"] += 1
+                        # Post a message
+                        Utils.Message.addMessage(duplicateSequenceNo.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                     # A seq no gap of > 1 suggests a glitch
                     if sequenceNoGap > 1:
@@ -3847,21 +3921,21 @@ class RtpGenerator(object):
                 #     Utils.Message.addMessage("seq no = 65530, insert 100 packet glitch")
                 #     rtpGeneratorInstance.packetsToSkip = 100
 
-                # # Deliberately cause a duplicate seq no every 10000 packets
-                # if rtpGeneratorInstance.txCounter_packets % 10000 == 0:
+                # # Deliberately cause a duplicate seq no every 500 packets
+                # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
                 #     Utils.Message.addMessage("Cause duplicate sequence no error")
                 #     rtpGeneratorInstance.rtpSequenceNo -= 1
 
-                # # Deliberately cause an out of seq packet every 10000 packets
-                # if rtpGeneratorInstance.txCounter_packets % 10000 == 0:
+                # # Deliberately cause an out of seq packet every 500 packets
+                # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
                 #     Utils.Message.addMessage("Cause out of sequence error")
                 #     rtpGeneratorInstance.rtpSequenceNo -= 2
 
-                # Deliberately modify the traceroute hops list every 500 packets
-                if rtpGeneratorInstance.txCounter_packets % 500 == 0:
-                    newOctet = rtpGeneratorInstance.txCounter_packets % 255
-                    Utils.Message.addMessage("new tr octet " + str(newOctet))
-                    rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,newOctet]]
+                # # Deliberately modify the traceroute hops list every 500 packets
+                # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
+                #     newOctet = rtpGeneratorInstance.txCounter_packets % 255
+                #     Utils.Message.addMessage("new tr octet " + str(newOctet))
+                #     rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,newOctet]]
 
                 # Update sleepTime stats
                 updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
