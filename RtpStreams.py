@@ -2834,10 +2834,7 @@ class RtpStreamResults(RtpReceiveCommon):
         # Create private empty list to hold Events for this RtpStream object. Accessible via a getter method
         # self.__eventList = []
         # __eventList is a collections.deque object so will auto-housekeep
-        self.__eventList = deque(maxlen=Registry.rtpStreamResultsistoricEventsLimit)
-
-        # # No of historic events to keep in memory (before housekeeping)
-        # self.historicEventsLimit = Registry.rtpStreamResultsistoricEventsLimit
+        self.__eventList = deque(maxlen=Registry.rtpStreamResultsHistoricEventsLimit)
 
         # Create mutex locks for data access
         self.__accessRtpStreamStatsMutex = threading.Lock()         # for the stats dictionary

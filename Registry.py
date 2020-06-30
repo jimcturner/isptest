@@ -29,10 +29,9 @@ class Registry(object):
     streamIsDeadThreshold_s = 10 # Specifies how long to wait with no incoming rtp packets before a stream is presumed dead
     autoRemoveDeadRxStreamsEnable = True # Determines whether dead streams should automaticaslly be removed from the
                                             # list of received streams
-    # Getting false positives at the moment (because the CPU can keep up!) so creating lots of unhelpful events
-    # allowProcessorOverloadEventGeneration = False
+
     # No of historic events to keep in memory (before events are purged)
-    rtpReceiveStreamHistoricEventsLimit = 50
+    rtpReceiveStreamHistoricEventsLimit = 250
     # rtpReceiveStreamJitterExcessiveAlarmThresholdPercent = 100 # **REDUNDANT ** The amount of jitter in the
     # received packet arrival time before an excessive jitter event is registered
     # The jitter events are a bit annoying as they clog the log. Therefore disable them by default
@@ -56,7 +55,7 @@ class Registry(object):
 
     # RtpStreamResults
     # No of historic events to keep in memory (before events are purged)
-    rtpStreamResultsistoricEventsLimit = 250
+    rtpStreamResultsHistoricEventsLimit = 250
 
     # Utils
     historicMessagesToKeepInMemory = 50
