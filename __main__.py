@@ -2154,6 +2154,14 @@ class UI(object):
         # Calculate the maximum no. of lines that will fit within the table, given the terminal height
         maxLines = termH - 20
 
+        # Display filenames of log files in the help table
+        outputFileNames = [["",""],["Filenames",""]]
+        if self.operationMode == "RECEIVE":
+            outputFileNames.append(["events list", Registry.receiverLogFilename + ".txt"])
+        elif self.operationMode == "TRANSMIT":
+            outputFileNames.append(["events list", Registry.transmitterLogFilename + ".txt"])
+        outputFileNames.append(["results path", str(os.path.abspath((Registry.resultsSubfolder)))])
+
         # Create some debug information to append to the end of the help list
         debugInfo = [["",""],["Debug info",""]]
         debugInfo.append(["Process ID ", str(os.getpid())])
@@ -2213,7 +2221,7 @@ class UI(object):
 
         # Get help table contents from Registry
         # append the two lists to create a single list
-        tableContents = Registry.helpTableContents + debugInfo
+        tableContents = Registry.helpTableContents + outputFileNames + debugInfo
         # Now actually display the paged table list
         title = "Help"
         footer = ["", "[<][>]page, [h]exit"]
