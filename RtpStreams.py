@@ -1617,16 +1617,19 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__stats["jitter_range_uS"] = self.jitter_range_uS
 
             except Exception as e:
-                Utils.Message.addMessage("ERR: RtpReceiveStream.__samplingThread " + str(e))
+                Utils.Message.addMessage("ERR: RtpReceiveStream.__samplingThread 0.2 sec loop" + str(e))
 
             if loopCounter % 5 == 0:
                 ######## 1 second counter
-                ########### Calculate 10sec jitter mean -- self.__stats["jitter_mean_10S_uS"] = 0
-                # Add the latest 1sec jitter mean to the meanJitter_1Sec circular buffer
-                jitter10SecBuffer.append(meanJitter_1Sec)
-                # Calculate mean value of jitter10SecBuffer contents
-                sumOfjitter10SecBuffer = sum(jitter10SecBuffer)
-                self.__stats["jitter_mean_10S_uS"] = int(sumOfjitter10SecBuffer / 10)
+                try:
+                    ########### Calculate 10sec jitter mean -- self.__stats["jitter_mean_10S_uS"] = 0
+                    # Add the latest 1sec jitter mean to the meanJitter_1Sec circular buffer
+                    jitter10SecBuffer.append(meanJitter_1Sec)
+                    # Calculate mean value of jitter10SecBuffer contents
+                    sumOfjitter10SecBuffer = sum(jitter10SecBuffer)
+                    self.__stats["jitter_mean_10S_uS"] = int(sumOfjitter10SecBuffer / 10)
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread calc 10 sec jitter " + str(e))
 
 
                 # This function attempts to calculate the mean period between events (such as glitch, or jitter)
@@ -1658,172 +1661,197 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                  str(e))
                         return None
 
-                ########### Update Mean Jitter averages
-                if (self.__stats["jitter_excess_jitter_events_total"] > 0) and (streamIsDeadFlag is False):
-                    ########### Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
-                    self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
-                        datetime.datetime.now() - self.__stats["jitter_time_of_last_excess_jitter_event"]
+                try:
+                    ########### Update Mean Jitter averages
+                    if (self.__stats["jitter_excess_jitter_events_total"] > 0) and (streamIsDeadFlag is False):
+                        ########### Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
+                        self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
+                            datetime.datetime.now() - self.__stats["jitter_time_of_last_excess_jitter_event"]
 
-                    ########### Calculate meanTimeBetweenExcessJitterEvents (jitter Period)
-                    self.__stats["jitter_mean_time_between_excess_jitter_events"] = \
-                        calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastExcessJitterEvents,
-                                                         self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"],
-                                                         self.__stats["jitter_excess_jitter_events_total"])
+                        ########### Calculate meanTimeBetweenExcessJitterEvents (jitter Period)
+                        self.__stats["jitter_mean_time_between_excess_jitter_events"] = \
+                            calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastExcessJitterEvents,
+                                                             self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"],
+                                                             self.__stats["jitter_excess_jitter_events_total"])
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread Jitter means " + str(e))
 
-                ########## Calculate Glitch stats
-                # (But only if there has actually been a glitch in the past to measure against) AND stream is alive
-                if (self.__stats["glitch_counter_total_glitches"] > 0) and (streamIsDeadFlag is False):
-                    ########## Calculate time elapsed since last glitch
-                    # Calculate new value
-                    self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats[
-                        "glitch_most_recent_timestamp"]
+                try:
+                    ########## Calculate Glitch stats
+                    # (But only if there has actually been a glitch in the past to measure against) AND stream is alive
+                    if (self.__stats["glitch_counter_total_glitches"] > 0) and (streamIsDeadFlag is False):
+                        ########## Calculate time elapsed since last glitch
+                        # Calculate new value
+                        self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats[
+                            "glitch_most_recent_timestamp"]
 
-                    ########## Calculate Glitch mean averages -
-                    ########## Calculate mean time between glitches (glitch period)
-                    self.__stats["glitch_mean_time_between_glitches"] = \
-                        calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastGlitch,
-                                                         self.__stats["glitch_time_elapsed_since_last_glitch"],
-                                                         self.__stats["glitch_counter_total_glitches"])
-                    ########## Calculate mean glitch duration
-                    self.__stats["glitch_mean_glitch_duration"] = \
-                        self.__stats["glitch_length_total_time"] / self.__stats[
-                            "glitch_counter_total_glitches"]
-                    ########## Calculate mean packet loss per glitch
-                    self.__stats["glitch_packets_lost_per_glitch_mean"] = \
-                        math.ceil(self.__stats["glitch_packets_lost_total_count"] / self.__stats[
-                            "glitch_counter_total_glitches"])
+                        ########## Calculate Glitch mean averages -
+                        ########## Calculate mean time between glitches (glitch period)
+                        self.__stats["glitch_mean_time_between_glitches"] = \
+                            calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastGlitch,
+                                                             self.__stats["glitch_time_elapsed_since_last_glitch"],
+                                                             self.__stats["glitch_counter_total_glitches"])
+                        ########## Calculate mean glitch duration
+                        self.__stats["glitch_mean_glitch_duration"] = \
+                            self.__stats["glitch_length_total_time"] / self.__stats[
+                                "glitch_counter_total_glitches"]
+                        ########## Calculate mean packet loss per glitch
+                        self.__stats["glitch_packets_lost_per_glitch_mean"] = \
+                            math.ceil(self.__stats["glitch_packets_lost_total_count"] / self.__stats[
+                                "glitch_counter_total_glitches"])
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread Glitch stats " + str(e))
 
-                ######### Calculate % packet loss
-                if self.__stats["packet_counter_received_total"] > 0:
-                    totalExpectedPackets = self.__stats["packet_counter_received_total"] + \
-                                           self.__stats["glitch_packets_lost_total_count"]
-                    # Guard against divide by zero errors
-                    if totalExpectedPackets > 0:
-                        self.__stats["glitch_packets_lost_total_percent"] = \
-                            self.__stats["glitch_packets_lost_total_count"] * 100 / totalExpectedPackets
+                try:
+                    ######### Calculate % packet loss
+                    if self.__stats["packet_counter_received_total"] > 0:
+                        totalExpectedPackets = self.__stats["packet_counter_received_total"] + \
+                                               self.__stats["glitch_packets_lost_total_count"]
+                        # Guard against divide by zero errors
+                        if totalExpectedPackets > 0:
+                            self.__stats["glitch_packets_lost_total_percent"] = \
+                                self.__stats["glitch_packets_lost_total_count"] * 100 / totalExpectedPackets
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread % packet loss " + str(e))
 
-                ######### Now update moving glitch counters by iterating over the self.movingGlitchCounters array
-                # firstly recalculate, then generate stats keys automatically for any moving totals counters
-                # within self.movingGlitchCounters
-                for x in self.movingGlitchCounters:
-                    # Force the moving counters to increment their timers and recalculate totals
-                    x.recalculate()
-                    name, movingTotal, events = x.getResults()
-                    # Dynamically create new stats keys using the name field of the moving glitch counter
-                    self.__stats[name] = movingTotal
-                    self.__stats[name + "_events"] = events
+                try:
+                    ######### Now update moving glitch counters by iterating over the self.movingGlitchCounters array
+                    # firstly recalculate, then generate stats keys automatically for any moving totals counters
+                    # within self.movingGlitchCounters
+                    for x in self.movingGlitchCounters:
+                        # Force the moving counters to increment their timers and recalculate totals
+                        x.recalculate()
+                        name, movingTotal, events = x.getResults()
+                        # Dynamically create new stats keys using the name field of the moving glitch counter
+                        self.__stats[name] = movingTotal
+                        self.__stats[name + "_events"] = events
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread update moving glitch counters " + str(e))
 
-                ######## Get latest version of the worst glitches list (as text), and update to the __stats[] dict
-                self.__stats["glitch_worst_glitches_list"] = self.getWorstGlitches(returnSummaries=True)
+                try:
+                    ######## Get latest version of the worst glitches list (as text), and update to the __stats[] dict
+                    self.__stats["glitch_worst_glitches_list"] = self.getWorstGlitches(returnSummaries=True)
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread get worst glitches list " + str(e))
 
-                ######## Confirm that some packets have been received this second (used for the loss of signal alarm)
-                # If not, increment the timer
-                if packetsRxdPerSecond > 0:
-                    # Packets have been received so clear the timer
-                    secondsWithNoBytesRxdTimer = 0
-                    # Clear the flag so another StreamLost Event can be generated
-                    lossOfStreamFlag = False
-                else:
-                    # No packets received this period so increment the timer
-                    secondsWithNoBytesRxdTimer += 1
+                try:
+                    ######## Confirm that some packets have been received this second (used for the loss of signal alarm)
+                    # If not, increment the timer
+                    if packetsRxdPerSecond > 0:
+                        # Packets have been received so clear the timer
+                        secondsWithNoBytesRxdTimer = 0
+                        # Clear the flag so another StreamLost Event can be generated
+                        lossOfStreamFlag = False
+                    else:
+                        # No packets received this period so increment the timer
+                        secondsWithNoBytesRxdTimer += 1
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread check packets per sec " + str(e))
 
-                ######## Check to see if we've lost the stream (but only do this once, via the lossOfStreamFlag)
-                if secondsWithNoBytesRxdTimer >= Registry.lossOfStreamAlarmThreshold_s and not lossOfStreamFlag:
-                    # Set flag (this Event can only fire again if the flag is subsequently cleared)
-                    lossOfStreamFlag = True
-                    # Add event to the list (but only do this once)
-                    streamLostEvent = StreamLost(self.__stats)
-                    self.__eventList.append(streamLostEvent)
-                    # Increment the all_events counter
-                    self.__stats["stream_all_events_counter"] += 1
-                    Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
-
-
-                ######## Detect route changes
-                # Compare the sum of the current traceroute hops list to the previous sum. If it has changed,
-                # generate a route changed event
-                # Get the current hops list
-                hopsList = self.getTraceRouteHopsList()
-                # Calculate the sum of the Octets that make up each IP address. If the overall sum changes,
-                # interpret this as a route change
-                if len(hopsList) > 0:
-                    sumOfHopsList = 0
-                    for hop in hopsList:
-                        sumOfHopsList += sum(hop)
-                    # Compare latest and previous sumOfHopsList
-                    if sumOfHopsList != prevSumOfHopsList:
-                        # Route change detected, create a new IPRoutingChange event
-                        iPRoutingChange = IPRoutingChange(self.__stats, hopsList)
-                        # Add the event to the event list
-                        self.__eventList.append(iPRoutingChange)
-                        # # Increment the all_events counter
+                try:
+                    ######## Check to see if we've lost the stream (but only do this once, via the lossOfStreamFlag)
+                    if secondsWithNoBytesRxdTimer >= Registry.lossOfStreamAlarmThreshold_s and not lossOfStreamFlag:
+                        # Set flag (this Event can only fire again if the flag is subsequently cleared)
+                        lossOfStreamFlag = True
+                        # Add event to the list (but only do this once)
+                        streamLostEvent = StreamLost(self.__stats)
+                        self.__eventList.append(streamLostEvent)
+                        # Increment the all_events counter
                         self.__stats["stream_all_events_counter"] += 1
-                        # Update the routeChange stats
-                        self.__stats["route_change_events_total"] += 1
-                        self.__stats["route_time_of_last_route_change_event"] = iPRoutingChange.timeCreated
+                        Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect loss of stream " + str(e))
 
-                        # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
-                        self.sumOfTimeElapsedSinceLastRouteChange \
-                                += self.__stats["route_time_elapsed_since_last_route_change_event"]
+                try:
+                    ######## Detect route changes
+                    # Compare the sum of the current traceroute hops list to the previous sum. If it has changed,
+                    # generate a route changed event
+                    # Get the current hops list
+                    hopsList = self.getTraceRouteHopsList()
+                    # Calculate the sum of the Octets that make up each IP address. If the overall sum changes,
+                    # interpret this as a route change.
+                    # Wait until all the traceroute hops have been populated with values before calculating
+                    if len(hopsList) > 0 and None not in hopsList:
+                        sumOfHopsList = 0
+                        for hop in hopsList:
+                                sumOfHopsList += sum(hop)
 
-                        # # Post a message
-                        Utils.Message.addMessage(iPRoutingChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+                        # Compare latest and previous sumOfHopsList
+                        if sumOfHopsList != prevSumOfHopsList:
+                            # Route change detected, create a new IPRoutingChange event
+                            iPRoutingChange = IPRoutingChange(self.__stats, hopsList)
+                            # Add the event to the event list
+                            self.__eventList.append(iPRoutingChange)
+                            # # Increment the all_events counter
+                            self.__stats["stream_all_events_counter"] += 1
+                            # Update the routeChange stats
+                            self.__stats["route_change_events_total"] += 1
+                            self.__stats["route_time_of_last_route_change_event"] = iPRoutingChange.timeCreated
+
+                            # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
+                            self.sumOfTimeElapsedSinceLastRouteChange \
+                                    += self.__stats["route_time_elapsed_since_last_route_change_event"]
+
+                            # # Post a message
+                            Utils.Message.addMessage(iPRoutingChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+                            pass
+
+                        # Snapshot latest values
+                        prevSumOfHopsList = sumOfHopsList
+                    else:
+                        # Utils.Message.addMessage("empty hopslist")
                         pass
-
-                    # Snapshot latest values
-                    prevSumOfHopsList = sumOfHopsList
-                else:
-                    # Utils.Message.addMessage("empty hopslist")
-                    pass
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect route changes " + str(e))
 
                 ########## Calculate route change stats
-                # (But only if there has actually been a second route change in the past to measure against)
-                # AND stream is alive
-                # Note: The initial route is considered as 'change 1' therefore is ignored and threshold is >=1
-                ####### Now update the self.__stats["route_time_elapsed_since_last_route_change_event"] timer
-                if (self.__stats["route_change_events_total"] > 0) and (streamIsDeadFlag is False):
+                try:
+                    # (But only if there has actually been a second route change in the past to measure against)
+                    # AND stream is alive
+                    # Note: The initial route is considered as 'change 1' therefore is ignored and threshold is >=1
+                    ####### Now update the self.__stats["route_time_elapsed_since_last_route_change_event"] timer
+                    if (self.__stats["route_change_events_total"] > 0) and (streamIsDeadFlag is False):
 
-                    self.__stats["route_time_elapsed_since_last_route_change_event"] = \
-                        datetime.datetime.now() - self.__stats["route_time_of_last_route_change_event"]
+                        self.__stats["route_time_elapsed_since_last_route_change_event"] = \
+                            datetime.datetime.now() - self.__stats["route_time_of_last_route_change_event"]
 
-                ########### Calculate mean time between route changes.
-                # Note: Ignore the first route change, because it's not really a 'change', just the initial value
-                if (self.__stats["route_change_events_total"] > 1) and (streamIsDeadFlag is False):
-                    self.__stats["route_mean_time_between_route_change_events"] = \
-                        calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastRouteChange,
-                                                         self.__stats["route_time_elapsed_since_last_route_change_event"],
-                                                         (self.__stats["route_change_events_total"] - 1))
+                    ########### Calculate mean time between route changes.
+                    # Note: Ignore the first route change, because it's not really a 'change', just the initial value
+                    if (self.__stats["route_change_events_total"] > 1) and (streamIsDeadFlag is False):
+                        self.__stats["route_mean_time_between_route_change_events"] = \
+                            calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastRouteChange,
+                                                             self.__stats["route_time_elapsed_since_last_route_change_event"],
+                                                             (self.__stats["route_change_events_total"] - 1))
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Route Change stats " + str(e))
 
-                # Utils.Message.addMessage("Route changes " + str(self.__stats["route_change_events_total"]) + ", " + \
-                #                          "Time elapsed since last " + str(
-                #     self.__stats["route_time_elapsed_since_last_route_change_event"].seconds) + ", " + \
-                #                          "time of last change " + str(
-                #     self.__stats["route_time_of_last_route_change_event"]) + ", " + \
-                #                          "Mean time between changes " + str(
-                #     self.__stats["route_mean_time_between_route_change_events"].seconds) + ", " + \
-                #                          "sumElapsed " + str(self.sumOfTimeElapsedSinceLastRouteChange))
 
                 ######## 1 second counter end of code ########
 
+            try:
+                ######## Check to see if the stream is dead (has been permanently lost). If so, set streamIsDeadFlag
+                # but only do this once, so need to check that the flag has not already been set
+                if secondsWithNoBytesRxdTimer >= Registry.streamIsDeadThreshold_s and lossOfStreamFlag and\
+                        streamIsDeadFlag is False:
+                    streamIsDeadFlag = True
+                    Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
+                                             "(" + str(self.__stats["stream_friendly_name"]).rstrip() + \
+                                             ") believed dead")
+            except Exception as e:
+                Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect dead stream " + str(e))
 
-            ######## Check to see if the stream is dead (has been permanently lost). If so, set streamIsDeadFlag
-            # but only do this once, so need to check that the flag has not already been set
-            if secondsWithNoBytesRxdTimer >= Registry.streamIsDeadThreshold_s and lossOfStreamFlag and\
-                    streamIsDeadFlag is False:
-                streamIsDeadFlag = True
-                Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
-                                         "(" + str(self.__stats["stream_friendly_name"]).rstrip() + \
-                                         ") believed dead")
-
-            ######## If the stream has been declared 'dead' and auto-remove is enabled, kill it
-            if streamIsDeadFlag and Registry.autoRemoveDeadRxStreamsEnable:
-                # Generate and save a report
-                # Retrieve the auto-generated filename
-                _filename = self.createFilenameForReportExport()
-                # Write a report to disk
-                self.writeReportToDisk(fileName=_filename)
-                # Kill itself
-                self.killStream()
+            try:
+                ######## If the stream has been declared 'dead' and auto-remove is enabled, kill it
+                if streamIsDeadFlag and Registry.autoRemoveDeadRxStreamsEnable:
+                    # Generate and save a report
+                    # Retrieve the auto-generated filename
+                    _filename = self.createFilenameForReportExport()
+                    # Write a report to disk
+                    self.writeReportToDisk(fileName=_filename)
+                    # Kill itself
+                    self.killStream()
+            except Exception as e:
+                Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread auto remove stream " + str(e))
 
             # Increment 1 sec loop counter
             loopCounter += 1
