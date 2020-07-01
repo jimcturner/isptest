@@ -425,7 +425,6 @@ class UnexpectedSeqNo(Event):
 
     def getJSON(self):
         # Returns a json object representation of the event as a string
-
         # Create dictionary with any additional keys specific to this type of event
         additionalData = {'expectedSequenceNo': self.prevReceivedPacket.rtpSequenceNo + 1,
                           'actualReceivedSequenceNo': self.lastReceivedPacket.rtpSequenceNo}
@@ -484,7 +483,9 @@ class IPRoutingChange(Event):
 
     def getJSON(self):
         # # Returns a json object representation of the event as a string
-        jsonRepresentation = Event.createJsonRepresentationOfEvent(self)
+        # Create dictionary with any additional keys specific to this type of event
+        additionalData = {'hoplist': self.latestHopsList}
+        jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
         return jsonRepresentation
 
 
