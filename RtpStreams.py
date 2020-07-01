@@ -1773,7 +1773,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Snapshot latest values
                     prevSumOfHopsList = sumOfHopsList
                 else:
-                    Utils.Message.addMessage("empty hopslist")
+                    # Utils.Message.addMessage("empty hopslist")
+                    pass
 
                 ########## Calculate route change stats
                 # (But only if there has actually been a second route change in the past to measure against)
@@ -3068,6 +3069,12 @@ class RtpGenerator(object):
         self.UDP_TX_SRC_PORT = 0
         self.txRate = int(txRate)
         self.txPeriod = 0  # Calculated from self.txRate and set by RtpGenerator.calculateTxPeriod()
+        self.resetSleepPeriodFlag = False # Used to force __rtpGeneratorThread.txScheduler.CalculateSleepPeriod() to reset
+                                        # it's initial time calculation. This seems to be required if the ssh connection
+                                        # to the transmitter fails, or the transmitter laptop/PC goes to 'sleep'
+                                        # in which  case, when the transmitter wakes up again, the calculateSleepPeriod()
+                                        # function attempts to 'catch up' leading to excessive tx rates way beyond
+                                        # that specified
         self.payloadLength = int(payloadLength)
         self.txCounter_bytes = 0
         self.txCounter_packets = 0 # Counts the number of successful transmissions. Note. the 'bytes tx'd message'
@@ -3640,13 +3647,30 @@ class RtpGenerator(object):
 
                 # Calculate the transmitted bits per second
                 self.txActualTxRate_bps = bytesPerSec * 8
-                # Check to see if actual Tx rate is > 12.5% higher than the rate specified by txRate
-                # For the sake of speed, shift txRate by '3 bits' to divide by 8 rather than using division
-                if self.txActualTxRate_bps > (self.txRate + (self.txRate >> 3)):
-                    Utils.Message.addMessage("Warning: Stream " + str (self.syncSourceIdentifier) +\
+                # Check to see if actual TX rate is exceeding the specified rate
+                if self.txActualTxRate_bps > self.txRate:
+                    # If actual tx rate is > 25% higher than the rate specified by txRate, force the txScheduler to
+                    # restart its timing calculations
+                    # For the sake of speed, shift txRate by '2 bits' to divide by 4 rather than using division
+                    if self.txActualTxRate_bps > (self.txRate + (self.txRate >> 2)):
+                        # Set the flag to cause the txScheduler timer to reset
+                        self.resetSleepPeriodFlag = True
+                        # Put up a warning
+                        Utils.Message.addMessage("Warning: Stream " + str(self.syncSourceIdentifier) + \
+                                                 " tx rate exceeding " + \
+                                                 str(Utils.bToMb(self.txRate)) + "(" + \
+                                                 str(Utils.bToMb(self.txActualTxRate_bps)) + ")bps. Resyncing tx timer")
+
+
+                    # If actual Tx rate is > 12.5% higher than the rate specified by txRate put up a warning
+                    # For the sake of speed, shift txRate by '3 bits' to divide by 8 rather than using division
+                    elif self.txActualTxRate_bps > (self.txRate + (self.txRate >> 3)):
+                        Utils.Message.addMessage("Warning: Stream " + str (self.syncSourceIdentifier) +\
                                              " tx rate exceeding " +\
                                              str(Utils.bToMb(self.txRate)) + "(" +\
                                              str(Utils.bToMb(self.txActualTxRate_bps)) + ")bps")
+
+
 
             ######## 1 second counter
             if loopCounter % 5 == 0:
@@ -3862,7 +3886,10 @@ class RtpGenerator(object):
                     count += 1
                     txPeriod = rtpGeneratorInstance.txPeriod
                     # If the txPeriod has changed (which it will, if the tx rate is changed), reset the counter
-                    if prevTxPeriod != txPeriod:
+                    if prevTxPeriod != txPeriod or rtpGeneratorInstance.resetSleepPeriodFlag:
+                        # Clear the flag
+                        rtpGeneratorInstance.resetSleepPeriodFlag = False
+                        Utils.Message.addMessage("INFO: RtpGenerator.calculateSleepPeriod() timing reset")
                         # Reset the initial time reference
                         t = time.time()
                         # Reset the counter
@@ -3903,7 +3930,13 @@ class RtpGenerator(object):
                     # Now recreate the calculateSleepPeriod() function in order to reset its counter
                     # Otherwise, when we exit 'jitter generation' mode, we end up with a burst of packets
                     # as the generator function tries to catch up
-                    g = calculateSleepPeriod()
+                    # g = calculateSleepPeriod()
+
+                    # Now reset the calculateSleepPeriod() function by setting resetSleepPeriodFlag
+                    # Otherwise, when we exit 'jitter generation' mode, we end up with a burst of packets
+                    # as the generator function tries to catch up
+                    rtpGeneratorInstance.resetSleepPeriodFlag = True
+
                 # sleep
                 time.sleep(sleepTime)
                 # start timer

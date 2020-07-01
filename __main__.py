@@ -2153,14 +2153,20 @@ class UI(object):
         termW, termH = Term.getTerminalSize()
         # Calculate the maximum no. of lines that will fit within the table, given the terminal height
         maxLines = termH - 20
+        # Calculate max width of the second table column given the current screen size
+        maxWidth = 80 - 18
+        if termW > 80:
+            maxWidth = maxWidth + (termW - 80)
 
         # Display filenames of log files in the help table
         outputFileNames = [["",""],["Filenames",""]]
+        outputFileNames.append(["results path ",
+                                textwrap.fill(str(os.path.abspath((Registry.resultsSubfolder))), width=maxWidth)])
         if self.operationMode == "RECEIVE":
-            outputFileNames.append(["events list", Registry.receiverLogFilename + ".txt"])
+            outputFileNames.append(["event list ", Registry.receiverLogFilename + ".csv"])
         elif self.operationMode == "TRANSMIT":
-            outputFileNames.append(["events list", Registry.transmitterLogFilename + ".txt"])
-        outputFileNames.append(["results path", str(os.path.abspath((Registry.resultsSubfolder)))])
+            outputFileNames.append(["events ", Registry.transmitterLogFilename + ".csv"])
+        outputFileNames.append(["logfile ", Registry.messageLogFilename])
 
         # Create some debug information to append to the end of the help list
         debugInfo = [["",""],["Debug info",""]]
