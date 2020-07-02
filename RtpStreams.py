@@ -4102,19 +4102,19 @@ class RtpGenerator(object):
                 #     rtpGeneratorInstance.rtpSequenceNo -= 2
 
                 # # Deliberately modify the traceroute hops list every 500 packets
-                if rtpGeneratorInstance.txCounter_packets % 500 == 0:
-                    newOctet = rtpGeneratorInstance.txCounter_packets % 255
-                    # Utils.Message.addMessage("new tr octet " + str(newOctet))
-                    try:
-                        if sum(rtpGeneratorInstance.tracerouteHopsList[0]) == 0:
-                            Utils.Message.addMessage("new tr octet 0.0.0." + str(newOctet))
-                            rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,newOctet]]
-                        else:
-                            Utils.Message.addMessage("new tr octet 0.0.0.0")
-                            rtpGeneratorInstance.tracerouteHopsList[0] = [0, 0, 0, 0]
-                    except Exception as e:
-                        Utils.Message.addMessage("TR test " + str(e))
-                        rtpGeneratorInstance.tracerouteHopsList.append([0, 0, 0, 0])
+                # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
+                #     newOctet = rtpGeneratorInstance.txCounter_packets % 255
+                #     # Utils.Message.addMessage("new tr octet " + str(newOctet))
+                #     try:
+                #         if sum(rtpGeneratorInstance.tracerouteHopsList[0]) == 0:
+                #             Utils.Message.addMessage("new tr octet 0.0.0." + str(newOctet))
+                #             rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,newOctet]]
+                #         else:
+                #             Utils.Message.addMessage("new tr octet 0.0.0.0")
+                #             rtpGeneratorInstance.tracerouteHopsList[0] = [0, 0, 0, 0]
+                #     except Exception as e:
+                #         Utils.Message.addMessage("TR test " + str(e))
+                #         rtpGeneratorInstance.tracerouteHopsList.append([0, 0, 0, 0])
 
                 # Update sleepTime stats
                 updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
