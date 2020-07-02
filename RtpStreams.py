@@ -1825,9 +1825,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Set initial value for prevHopsList
                         if len(prevHopsList) == 0:
                             prevHopsList = hopsList
+                            hopsListHasChanged = True
+                            Utils.Message.addMessage("Initial traceroute received for stream " +\
+                                                     str(self.__stats["stream_syncSource"]))
 
                         # Test If length of list has changed then set hopsListHasChanged flag
-                        if len(hopsList) != len(prevHopsList):
+                        elif len(hopsList) != len(prevHopsList):
                             hopsListHasChanged = True
 
                         # If the lenths of the two lists are the same, test the contents
@@ -1885,7 +1888,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                     # Utils.Message.addMessage(
                                     # "Don't know" + str(prevHopsList[hopNo]) + "-->" + \
                                     # str(hopsList[hopNo]))
-                                    hopsListHasChanged = False
+                                    hopsListHasChanged = True
 
 
                         if hopsListHasChanged:
@@ -5043,6 +5046,11 @@ class ResultsReceiver(object):
         self.rtpTxStreamResultsDict = rtpGeneratorObject.rtpTxStreamResultsDict
         self.rtpTxStreamResultsDictMutex = rtpGeneratorObject.rtpTxStreamResultsDictMutex
 
+        # This counts the receive errors reported by the unpickler routine in __resultsReceiverThread()
+        # (normally caused by UDP transmission errors. Better than generating an error message and clogging
+        # up the log file)
+        self.receiveDecodeErrorCounter = 0
+
         # Used a signal flag to shut the __resultsReceiverThread down
         self.receiverActiveFlag = True
 
@@ -5140,7 +5148,9 @@ class ResultsReceiver(object):
                                         "ERR: __resultsReceiverThread (error unpacking stats and eventList): " + str(e))
 
                             except Exception as e:
-                                Utils.Message.addMessage("ERR: __resultsReceiverThread(pickle.loads(all fragments)): "+str(e))
+                                # Utils.Message.addMessage("ERR: __resultsReceiverThread(pickle.loads(all fragments)): " + str(e))
+                                # Increment the receive error counter
+                                self.receiveDecodeErrorCounter += 1
 
                         # Detect too many fragments
                         if fragment[0] > (fragment[1] - 1):

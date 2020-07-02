@@ -2189,14 +2189,12 @@ class UI(object):
             if type(self.selectedStream) == RtpGenerator:
                 try:
                     # This will only work if the stream type is an RtpGenerator object
-                    debugInfo.append(["sleep time ",
-                                      str("%0.20f" %stats['Sleep Time mean']) + "S"])
-                    # debugInfo.append(["calc time",\
-                                # str(int(self.selectedStream.getRtpStreamStatsByKey('Calculation time mean')*100000)) + "uS"])
-                    debugInfo.append(["Tx period ",
-                                      str("%0.10f" %stats['Tx period']) + "S"])
+                    debugInfo.append(["sleep time ", str("%0.20f" %stats['Sleep Time mean']) + "S"])
+                    debugInfo.append(["Tx period ", str("%0.10f" %stats['Tx period']) + "S"])
                     debugInfo.append(["Tx'd packets ", str(self.selectedStream.txCounter_packets)])
                     debugInfo.append(["Tx err ", str(self.selectedStream.txErrorCounter)])
+                    debugInfo.append(["Rx error ",
+                                      str(self.selectedStream.rtpStreamResultsReceiver.receiveDecodeErrorCounter)])
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
