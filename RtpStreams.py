@@ -1763,48 +1763,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect loss of stream " + str(e))
 
-                # try:
-                #     ######## Detect route changes
-                #     # Compare the sum of the current traceroute hops list to the previous sum. If it has changed,
-                #     # generate a route changed event
-                #     # Get the current hops list
-                #     hopsList = self.getTraceRouteHopsList()
-                #     # Calculate the sum of the Octets that make up each IP address. If the overall sum changes,
-                #     # interpret this as a route change.
-                #     # Wait until all the traceroute hops have been populated with values before calculating
-                #     if len(hopsList) > 0 and None not in hopsList:
-                #         sumOfHopsList = 0
-                #         for hop in hopsList:
-                #                 sumOfHopsList += sum(hop)
-                #
-                #         # Compare latest and previous sumOfHopsList
-                #         if sumOfHopsList != prevSumOfHopsList:
-                #             # Route change detected, create a new IPRoutingChange event
-                #             iPRoutingChange = IPRoutingChange(self.__stats, hopsList)
-                #             # Add the event to the event list
-                #             self.__eventList.append(iPRoutingChange)
-                #             # # Increment the all_events counter
-                #             self.__stats["stream_all_events_counter"] += 1
-                #             # Update the routeChange stats
-                #             self.__stats["route_change_events_total"] += 1
-                #             self.__stats["route_time_of_last_route_change_event"] = iPRoutingChange.timeCreated
-                #
-                #             # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
-                #             self.sumOfTimeElapsedSinceLastRouteChange \
-                #                     += self.__stats["route_time_elapsed_since_last_route_change_event"]
-                #
-                #             # # Post a message
-                #             Utils.Message.addMessage(iPRoutingChange.getSummary(includeStreamSyncSourceID=False)['summary'])
-                #             pass
-                #
-                #         # Snapshot latest values
-                #         prevSumOfHopsList = sumOfHopsList
-                #     else:
-                #         # Utils.Message.addMessage("empty hopslist")
-                #         pass
-                # except Exception as e:
-                #     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect route changes " + str(e))
-
                 try:
                     ######## Detect route changes
                     # Compare the diff of the sum of the each of the traceroute hops to the previous value for that hop
@@ -1859,17 +1817,17 @@ class RtpReceiveStream(RtpReceiveCommon):
                                     else:
                                         # The hop value has changed. New route
                                         hopsListHasChanged = True
-                                        Utils.Message.addMessage(
-                                            "Change" + str(prevHopsList[hopNo]) + "-->" + \
-                                            str(hopsList[hopNo]))
+                                        # Utils.Message.addMessage(
+                                        #     "Change" + str(prevHopsList[hopNo]) + "-->" + \
+                                        #     str(hopsList[hopNo]))
 
                                 # Now check to see if we previously had a zero hop value but we now have a non zero value
                                 # If so, this suggests a route change
                                 elif sumCurrentHop != 0 and sumPrevHop == 0:
                                     hopsListHasChanged = True
-                                    Utils.Message.addMessage(
-                                        "Change" + str(prevHopsList[hopNo]) + "-->" + \
-                                        str(hopsList[hopNo]))
+                                    # Utils.Message.addMessage(
+                                    #     "Change" + str(prevHopsList[hopNo]) + "-->" + \
+                                    #     str(hopsList[hopNo]))
 
                                 # Now check to see if we previously had a non-zero value for this hop. If so, make
                                 # an educated guess and carry the prev hop value into the current hop value
