@@ -456,7 +456,7 @@ class IPRoutingChange(Event):
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True,
                    includeFriendlyName=True):
         try:
-            optionalFields = ", No of hops changed to " + str(len(self.latestHopsList))
+            optionalFields = ", No of hops: " + str(len(self.latestHopsList))
         except:
             optionalFields = ""
         summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
@@ -1513,8 +1513,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         # For 10 sec jitter calculation
         jitter10SecBuffer = deque(maxlen=10)
 
-        # Records the sum of the octets within the traceroute hops list. Used to detect route changes
-        prevSumOfHopsList = 0
+        # Stores the previous traceroute hops list. Used to detect route changes
+        prevHopsList = []
 
         # Infinite loop
         while self.samplingThreadActiveFlag:
@@ -1763,22 +1763,85 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect loss of stream " + str(e))
 
+                # try:
+                #     ######## Detect route changes
+                #     # Compare the sum of the current traceroute hops list to the previous sum. If it has changed,
+                #     # generate a route changed event
+                #     # Get the current hops list
+                #     hopsList = self.getTraceRouteHopsList()
+                #     # Calculate the sum of the Octets that make up each IP address. If the overall sum changes,
+                #     # interpret this as a route change.
+                #     # Wait until all the traceroute hops have been populated with values before calculating
+                #     if len(hopsList) > 0 and None not in hopsList:
+                #         sumOfHopsList = 0
+                #         for hop in hopsList:
+                #                 sumOfHopsList += sum(hop)
+                #
+                #         # Compare latest and previous sumOfHopsList
+                #         if sumOfHopsList != prevSumOfHopsList:
+                #             # Route change detected, create a new IPRoutingChange event
+                #             iPRoutingChange = IPRoutingChange(self.__stats, hopsList)
+                #             # Add the event to the event list
+                #             self.__eventList.append(iPRoutingChange)
+                #             # # Increment the all_events counter
+                #             self.__stats["stream_all_events_counter"] += 1
+                #             # Update the routeChange stats
+                #             self.__stats["route_change_events_total"] += 1
+                #             self.__stats["route_time_of_last_route_change_event"] = iPRoutingChange.timeCreated
+                #
+                #             # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
+                #             self.sumOfTimeElapsedSinceLastRouteChange \
+                #                     += self.__stats["route_time_elapsed_since_last_route_change_event"]
+                #
+                #             # # Post a message
+                #             Utils.Message.addMessage(iPRoutingChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+                #             pass
+                #
+                #         # Snapshot latest values
+                #         prevSumOfHopsList = sumOfHopsList
+                #     else:
+                #         # Utils.Message.addMessage("empty hopslist")
+                #         pass
+                # except Exception as e:
+                #     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect route changes " + str(e))
+
                 try:
                     ######## Detect route changes
-                    # Compare the sum of the current traceroute hops list to the previous sum. If it has changed,
+                    # Compare the diff of the sum of the each of the traceroute hops to the previous value for that hop
+                    #  If it has changed, signal a route change.
+                    # Note: some routers don't always respond (so that hgop value oscillates between a valid IP addres
+                    # and 0.0.0.0. Even though the rest of the hops have stayed the same, this could look like a
+                    # route change
+                    # Therefore, if we take the abs() of the diff, we can ignore that false positive
                     # generate a route changed event
                     # Get the current hops list
                     hopsList = self.getTraceRouteHopsList()
-                    # Calculate the sum of the Octets that make up each IP address. If the overall sum changes,
-                    # interpret this as a route change.
+                    # Flag to signal the detection of a route change
+                    hopsListHasChanged = False
+
+
                     # Wait until all the traceroute hops have been populated with values before calculating
                     if len(hopsList) > 0 and None not in hopsList:
-                        sumOfHopsList = 0
-                        for hop in hopsList:
-                                sumOfHopsList += sum(hop)
+                        # Test If length of list has changed then set hopsListHasChanged flag
+                        if len(hopsList) != len(prevHopsList):
+                            hopsListHasChanged = True
 
-                        # Compare latest and previous sumOfHopsList
-                        if sumOfHopsList != prevSumOfHopsList:
+                        # If the lenths of the two lists are the same, test the contents
+                        else:
+                            # Otherwise, if list length is the same compare sums of latest and previous sumOfHopsList members
+                            for hopNo in range(len(hopsList)):
+                                # Iterate over hopsList, comparing the sums of the individual hops
+                                diff = abs(sum(hopsList[hopNo]) - sum(prevHopsList[hopNo]))
+                                if diff > 0:
+                                    hopsListHasChanged = True
+                                    break
+                                else:
+                                    hopsListHasChanged = False
+                                    Utils.Message.addMessage("hop " + str(prevHopsList[hopNo]) + "-->" +\
+                                                             str(hopsList[hopNo]))
+
+
+                        if hopsListHasChanged:
                             # Route change detected, create a new IPRoutingChange event
                             iPRoutingChange = IPRoutingChange(self.__stats, hopsList)
                             # Add the event to the event list
@@ -1797,13 +1860,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                             Utils.Message.addMessage(iPRoutingChange.getSummary(includeStreamSyncSourceID=False)['summary'])
                             pass
 
-                        # Snapshot latest values
-                        prevSumOfHopsList = sumOfHopsList
+                        # Snapshot latest hopsList
+                        prevHopsList = hopsList
                     else:
                         # Utils.Message.addMessage("empty hopslist")
                         pass
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect route changes " + str(e))
+
 
                 ########## Calculate route change stats
                 try:
@@ -3991,10 +4055,16 @@ class RtpGenerator(object):
                 #     rtpGeneratorInstance.rtpSequenceNo -= 2
 
                 # # Deliberately modify the traceroute hops list every 500 packets
-                # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
-                #     newOctet = rtpGeneratorInstance.txCounter_packets % 255
-                #     Utils.Message.addMessage("new tr octet " + str(newOctet))
-                #     rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,newOctet]]
+                if rtpGeneratorInstance.txCounter_packets % 500 == 0:
+                    # newOctet = rtpGeneratorInstance.txCounter_packets % 255
+                    # Utils.Message.addMessage("new tr octet " + str(newOctet))
+                    if sum(rtpGeneratorInstance.tracerouteHopsList[0]) == 0:
+                        Utils.Message.addMessage("new tr octet 0.0.0.10")
+                        rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,10]]
+                    else:
+                        Utils.Message.addMessage("new tr octet 0.0.0.0")
+                        rtpGeneratorInstance.tracerouteHopsList[0] = [0, 0, 0, 0]
+
 
                 # Update sleepTime stats
                 updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
