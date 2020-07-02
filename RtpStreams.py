@@ -103,20 +103,16 @@ class Event():
     # This is the master method to generate a csv string containing the info common to all events
     def createCommonCSVString(self):
         csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-                ",timeElapsed," + str(self.stats["stream_time_elapsed_total"]) + \
-              ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-              ","
+              ",syncSource," + str(self.stats["stream_syncSource"]) +\
+                ",friendlyName," + str(self.stats["stream_friendly_name"]) + \
+              ",timeElapsed," + str(self.stats["stream_time_elapsed_total"]) + \
+              ",eventNo," + str(self.eventNo) + ","
+
         return csv
 
     # This method is expected to be overridden by all Event subclasses
     @abstractmethod
     def getCSV(self):
-        # # returns a CSV formatted string suitable for import into Excel
-        # optionalFields = ""
-        # csv = self.type + ",timeCreated," + self.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + \
-        #       ",eventNo," + str(self.eventNo) + ",syncSource," + str(self.stats["stream_syncSource"]) + \
-        #       "," + optionalFields
-        # return csv
         pass
 
     # Returns a dictionary containing the elements common to all events - to be used in the json export
