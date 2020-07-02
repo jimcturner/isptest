@@ -764,7 +764,7 @@ class RtpReceiveCommon(object):
         else:
             worstGlitchesListAsString += "No glitches to report\r\n"
 
-        # Create a traceroute list of hops
+        # Create a traceroute list of hops.
         tracerouteHopsListAsString = "Traceroute:\r\n"
         tracerouteHopsListAsString += "No. of route changes: ".rjust(labelWidth) + \
                                       str(stats["route_change_events_total"]) + "\r\n"
