@@ -1809,7 +1809,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     ######## Detect route changes
                     # Compare the diff of the sum of the each of the traceroute hops to the previous value for that hop
                     #  If it has changed, signal a route change.
-                    # Note: some routers don't always respond (so that hgop value oscillates between a valid IP addres
+                    # Note: some routers don't always respond (so that hop value oscillates between a valid IP address
                     # and 0.0.0.0. Even though the rest of the hops have stayed the same, this could look like a
                     # route change
                     # Therefore, if we take the abs() of the diff, we can ignore that false positive
@@ -1822,6 +1822,10 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                     # Wait until all the traceroute hops have been populated with values before calculating
                     if len(hopsList) > 0 and None not in hopsList:
+                        # Set initial value for prevHopsList
+                        if len(prevHopsList) == 0:
+                            prevHopsList = hopsList
+
                         # Test If length of list has changed then set hopsListHasChanged flag
                         if len(hopsList) != len(prevHopsList):
                             hopsListHasChanged = True
@@ -1830,15 +1834,58 @@ class RtpReceiveStream(RtpReceiveCommon):
                         else:
                             # Otherwise, if list length is the same compare sums of latest and previous sumOfHopsList members
                             for hopNo in range(len(hopsList)):
-                                # Iterate over hopsList, comparing the sums of the individual hops
-                                diff = abs(sum(hopsList[hopNo]) - sum(prevHopsList[hopNo]))
-                                if diff > 0:
+                                # Iterate over hopsList, comparing the sums of the octets of the individual hops
+                                # Subtract abs(current_value - prev_value) from current value
+                                # If the result is 0, the hop hasn't changed
+                                sumPrevHop = sum(prevHopsList[hopNo])
+                                sumCurrentHop = sum(hopsList[hopNo])
+
+                                # If the sum of the current and prev hops are different, the route may have changed
+                                # But if that change is to/from a value of '0.0.0.0' (i.e the sum is 0) then the
+                                # change doesn't
+
+                                # Check to see if either the current or previous values are zero. If so, ignore
+                                if sumPrevHop != 0 and sumCurrentHop != 0:
+                                    if sumCurrentHop == sumPrevHop:
+                                        # The hop value has remained the same, no route change
+                                        hopsListHasChanged = False
+                                        # Utils.Message.addMessage(
+                                        #     "No Change" + str(prevHopsList[hopNo]) + "-->" + \
+                                        #     str(hopsList[hopNo]))
+
+                                    else:
+                                        # The hop value has changed. New route
+                                        hopsListHasChanged = True
+                                        Utils.Message.addMessage(
+                                            "Change" + str(prevHopsList[hopNo]) + "-->" + \
+                                            str(hopsList[hopNo]))
+
+                                # Now check to see if we previously had a zero hop value but we now have a non zero value
+                                # If so, this suggests a route change
+                                elif sumCurrentHop != 0 and sumPrevHop == 0:
                                     hopsListHasChanged = True
-                                    break
-                                else:
+                                    Utils.Message.addMessage(
+                                        "Change" + str(prevHopsList[hopNo]) + "-->" + \
+                                        str(hopsList[hopNo]))
+
+                                # Now check to see if we previously had a non-zero value for this hop. If so, make
+                                # an educated guess and carry the prev hop value into the current hop value
+                                # This means that we might have something to compare this hop value to if it changes
+                                # to another non-zero value
+                                elif sumCurrentHop == 0 and sumPrevHop != 0:
+                                    hopsList[hopNo] = prevHopsList[hopNo]
+                                    # Utils.Message.addMessage(
+                                    #     "Copy prev value forward " + str(prevHopsList[hopNo]) + "-->" + \
+                                    #     str(hopsList[hopNo]))
                                     hopsListHasChanged = False
-                                    Utils.Message.addMessage("hop " + str(prevHopsList[hopNo]) + "-->" +\
-                                                             str(hopsList[hopNo]))
+
+                                else:
+                                    # We don't know if the route has changed or not, because either the current or
+                                    # prev sum value was/is zero
+                                    # Utils.Message.addMessage(
+                                    # "Don't know" + str(prevHopsList[hopNo]) + "-->" + \
+                                    # str(hopsList[hopNo]))
+                                    hopsListHasChanged = False
 
 
                         if hopsListHasChanged:
@@ -4056,15 +4103,18 @@ class RtpGenerator(object):
 
                 # # Deliberately modify the traceroute hops list every 500 packets
                 if rtpGeneratorInstance.txCounter_packets % 500 == 0:
-                    # newOctet = rtpGeneratorInstance.txCounter_packets % 255
+                    newOctet = rtpGeneratorInstance.txCounter_packets % 255
                     # Utils.Message.addMessage("new tr octet " + str(newOctet))
-                    if sum(rtpGeneratorInstance.tracerouteHopsList[0]) == 0:
-                        Utils.Message.addMessage("new tr octet 0.0.0.10")
-                        rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,10]]
-                    else:
-                        Utils.Message.addMessage("new tr octet 0.0.0.0")
-                        rtpGeneratorInstance.tracerouteHopsList[0] = [0, 0, 0, 0]
-
+                    try:
+                        if sum(rtpGeneratorInstance.tracerouteHopsList[0]) == 0:
+                            Utils.Message.addMessage("new tr octet 0.0.0." + str(newOctet))
+                            rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,newOctet]]
+                        else:
+                            Utils.Message.addMessage("new tr octet 0.0.0.0")
+                            rtpGeneratorInstance.tracerouteHopsList[0] = [0, 0, 0, 0]
+                    except Exception as e:
+                        Utils.Message.addMessage("TR test " + str(e))
+                        rtpGeneratorInstance.tracerouteHopsList.append([0, 0, 0, 0])
 
                 # Update sleepTime stats
                 updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
