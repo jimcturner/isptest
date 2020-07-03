@@ -66,7 +66,7 @@ def rawReceive():
     print("rawSocket :" + str(rawSocket))
     while True:
         try:
-            r, w, x = select.select([rawSocket, udpSocket], [], [])
+            r, w, x = select.select([rawSocket], [], [])
             for rxSock in r:
                 data, addr = rxSock.recvfrom(131072)
                 if rxSock == udpSocket:
