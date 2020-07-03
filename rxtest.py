@@ -18,7 +18,7 @@ def rawReceive():
     print ("udpSocket :" +str(udpSocket))
     print("rawSocket :" + str(rawSocket))
     while True:
-        r, w, x = select.select([rawSocket], [], [])
+        r, w, x = select.select([rawSocket, udpSocket], [], [])
         for i in r:
             receiveSocket = i
             data, addr = receiveSocket.recvfrom(131072)
