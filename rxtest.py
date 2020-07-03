@@ -2,27 +2,34 @@ def rawReceive():
     import select
     import socket
     UDP_RX_PORT = 5000
-    UDP_RX_IP = "127.0.0.1"
+    UDP_RX_IP = "192.168.3.27"
     # create UDP socket
     udpSocket = socket.socket(socket.AF_INET,  # Internet
                               socket.SOCK_DGRAM)  # UDP
 
     # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
+    # rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
     rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
     rawSocket.setblocking(0)
 
-
     udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
-    # rawSocket.settimeout(1)
     rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
     print ("udpSocket :" +str(udpSocket))
     print("rawSocket :" + str(rawSocket))
     while True:
-        r, w, x = select.select([rawSocket, udpSocket], [], [])
-        for i in r:
-            receiveSocket = i
-            data, addr = receiveSocket.recvfrom(131072)
-            print(str(receiveSocket.type) + ", " + str(data))
+        data, addr = udpSocket.recvfrom(131072)
+        print(str(udpSocket.type) + ", " + str(data))
+        try:
+            rawData, rawAddr = rawSocket.recvfrom(131072)
+            print("raw " + str(rawData))
+        except Exception as e:
+            print (str(e))
+
+        # r, w, x = select.select([rawSocket], [], [])
+        # for i in r:
+        #     receiveSocket = i
+        #     data, addr = receiveSocket.recvfrom(131072)
+        #     print(str(receiveSocket.type) + ", " + str(data))
         # rawData, rawAddr = rawSocket.recvfrom(131072)
         # print("raw " + str(rawData))
 
