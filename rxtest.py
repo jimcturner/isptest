@@ -56,7 +56,7 @@ def rawReceive():
     # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
     # rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
     rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-    rawSocket.setblocking(0)
+    # rawSocket.setblocking(0)
 
     udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
     rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
