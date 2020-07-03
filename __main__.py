@@ -4,6 +4,8 @@
 #
 # 
 from __future__ import unicode_literals # Required for prompt_toolkit
+
+import select
 import sys
 
 # from icmplib import ICMPv4Socket, TimeoutExceeded, ICMPRequest
@@ -3029,15 +3031,26 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     packetsReceivedByRxThreadCount = 0
 
     while True:
-        # Create receive UDP socket
+        # Create receive UDP socket and raw socket
+        # The raw socket is so that the TTL value of the received packet can be read
+        # In theory, there's no reason why I should need a seperate UDP socket, but I do. See below
+        # See here: https://stackoverflow.com/questions/9969259/python-raw-socket-listening-for-udp-packets-only-half-of-the-packets-received
+
         try:
+            # create UDP socket
             udpSocket = socket.socket(socket.AF_INET,  # Internet
                                  socket.SOCK_DGRAM)  # UDP
+
+            # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
+            rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
 
             # Set a timeout of 1 second. This should mean that socket.recvfrom() only blocks for a maximum
             # of 1 second if there's no data incoming
             udpSocket.settimeout(1)
             udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+            rawSocket.settimeout(1)
+            rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+
 
             # If this a 'regeneration' of the existing socket, we need to inform all the existing RtpStream objects of the change
             if refreshRtpStreamSocketsFlag == True:
@@ -3092,7 +3105,12 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
             try:
                 # Wait for data (blocking function call)
-                data, addr = udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
+                # data, addr = udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
+                rawData, rawAddr = rawSocket.recvfrom(4096)  # buffer size is 4096 bytes
+
+                ipHeader = Utils.IPHeader(rawData[:20])
+                Utils.Message.addMessage("TTL " + str(ipHeader.ttl))
+
                 # Confirm that we have some data (RTP header is 12 bytes long)
                 if len(data) == 0:
                     # Utils.Message.addMessage("ERR:__main.__receiveRtpThread() 0 bytes received")
@@ -3244,220 +3262,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     Utils.Message.addMessage("DBUG:__receiveRTPThread exiting")
     # print("__receiveRTPThread exiting\r")
 
-# # This class continually monitors the getTraceRouteHopsList() method of an Rtp transmit/receive/results object
-# # and quietly queries the IP address it finds in the background.
-# # It then provides a dictionary where the IP addresses are the Keys and domnain names are the values.
-# # These can then be used to populate the Traceroute tables/reports
-# class WhoisResolver(object):
-#     # A dictionary to hold the results of the whois query
-#     # The key is the IP address, the Value is a tuple ['dictionary of details',  timeCreatedTimestamp, lastAccessedTimestamp,]
-#     whoisCache = {}
-#
-#     # A list of ip addresses in the process of being looked up (by the __whoisReolverThread)
-#     pendingQueries = {}
-#
-#     whoisAuthorities = ["whois.ripe.net", "whois.iana.org"]
-#
-#     # Self-rolled whois querier based on scapy.utils.whois
-#     # It will return a dictionary of the whois information
-#     # 'netname' seems to be the most useful parameter to me - this holds
-#     # Example usage:
-#     # z = WhoisResolver.whoisLookup("212.58.231.0", "whois.ripe.net")
-#     # print(z["netname"])
-#     # In theory, it should be able to do a reverse lookup (by supplying domain name as an argument, although this doesn't
-#     # seem to work terribly well
-#     # Note: this is a blocking method
-#     # example whoisAuthorities are ["whois.ripe.net", "whois.iana.org"]
-#     # Note: Each authority only looks a geographic region. If they don't know about a domain, then they should be
-#     # able to redirect you to an authority that does know
-#     # In practice, I decided it would just be easier to make use of the IPWhois library becasuse this already takes
-#     # redirections (and probably may other things that I haven't thought about)
-#     @classmethod
-#     def simpleWhoisLookup(cls, ip_address, authorityHostname):
-#         """Whois client for Python"""
-#         whois_ip = str(ip_address)
-#         try:
-#             query = socket.gethostbyname(whois_ip)
-#             # print ("result from socket.gethostbyname() " + str(query))
-#         except Exception:
-#             query = whois_ip
-#         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#         # s.connect(("whois.ripe.net", 43))
-#         s.connect(("whois.iana.org", 43))
-#         s.send(query.encode("utf8") + b"\r\n")
-#         answer = b""
-#         while True:
-#             d = s.recv(4096)
-#             answer += d
-#             if not d:
-#                 break
-#         s.close()
-#         ignore_tag = b"remarks:"
-#         # ignore all lines starting with the ignore_tag
-#         # This will create a list with each new line as an element
-#         lines = [line for line in answer.split(b"\n") if
-#                  not line or (line and not line.startswith(ignore_tag))]  # noqa: E501
-#         # remove empty lines at the bottom
-#         for i in range(1, len(lines)):
-#             if not lines[-i].strip():
-#                 del lines[-i]
-#             else:
-#                 break
-#         # return lines[3:]
-#         # Now convert lines[] into a dictionary (as this is more useful)
-#         # Headings are always proceeded with a colon, so use this as the indicator for a heading. This will become the key
-#         # The next list entry will be presumed to be the value
-#         # The first three lines can be ignored as they contain Ts and Cs text
-#         whoisDict = {}
-#         try:
-#             if len(lines) > 3:
-#                 for line in range(3, len(lines)):
-#                     # isolate individual line as a string. Remove newline char from end
-#                     x = str(lines[line],'utf-8').split("\n")[0]
-#                     # Does the array element contain a colon? If so, split into a list
-#                     splitLine = x.split(":")
-#                     if len(splitLine) > 1:
-#                         key = splitLine[0]
-#                         value = splitLine[1].lstrip()
-#                         # Create new dictionary element
-#                         whoisDict[key] = value
-#         except:
-#             whoisDict = None
-#         return whoisDict
-#         # return b"\n".join(lines[3:])
-#
-#     # This is non-blocking method to query the cls.whoisCache{} dict.
-#     # If the entry exists it will return it, otherwise it will add the request to pendingQueries{} to be picked up
-#     # by __whoisResolverThread
-#     @classmethod
-#     def queryWhoisCache(cls, ip_address):
-#         # Is there already an entry for this address in whoisCache?
-#         if ip_address in cls.whoisCache:
-#             # Update the 'last accessed' timestamp
-#             cls.whoisCache[ip_address][2] = datetime.datetime.now()
-#             return cls.whoisCache[ip_address]
-#         else:
-#             # There doesn't yet exist an entry, so add to the pending list (and in the mean time, return None
-#             cls.pendingQueries[ip_address] = None
-#             return None
-#
-#     # Returns the current whoisCache dict
-#     @classmethod
-#     def getWhoisCache(cls):
-#         return cls.whoisCache
-#
-#     # Returns the current pendingQueries dict
-#     @classmethod
-#     def getPendingQueries(cls):
-#         return cls.pendingQueries
-#
-#
-#     # This constructor method sets running a background thread to maintain a cache of the previously queried domains
-#     def __init__(self):
-#         self.whoisLookupThreadActive = True
-#
-#         # Create a background thread to do the querying
-#         self.whoisLookupThread = threading.Thread(target=self.__whoisLookupThread, args=())
-#         self.whoisLookupThread.daemon = False
-#         self.whoisLookupThread.setName("__whoisLookupThread")
-#         self.whoisLookupThread.start()
-#
-#     # This method queries the internet whois servers to determine thw owner (ASN_Description) of the IP address
-#     @classmethod
-#     def whoisLookup(cls, addr, retries=1):
-#         # See here for docs: https://ipwhois.readthedocs.io/en/latest/index.html
-#         # Create an IPWhois object
-#         obj = IPWhois(addr)
-#         # The function for retrieving and parsing whois information for an IP address via port 43
-#         # lookup
-#         whoisInfo = obj.lookup_whois(retry_count=retries)
-#
-#         # return ret['asn_description'] # This is probably the most useful field
-#         return whoisInfo
-#
-#     # Blocking method to cause the object to die (by killing the thread)
-#     def kill(self):
-#         # Set the flag to false
-#         self.whoisLookupThreadActive = False
-#         # Block until the thread ends
-#         Utils.Message.addMessage("Waiting for whoisLookupThread to timeout. Please be patient....")
-#         self.whoisLookupThread.join()
-#         Utils.Message.addMessage("DBUG:WhoisResolver. whoisLookupThread has ended")
-#
-#     # This method will examine the lastAccessedTimestamp of the entries in the self.whoIsCache{} dict
-#     # and automatically re-check or purge old entries
-#     def __houseKeep(self):
-#         pass
-#
-#
-#     # Background thread to continually monitor the lists of IP addresses picked added to pendingQueries{}
-#     # and determine the owner of that address
-#     # Once the address has been looked up, it's details will be added to whoisCache{} and thus removed from the
-#     # pendingQueries{} dict because it has been dealt with
-#     def __whoisLookupThread(self):
-#         Utils.Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread started")
-#         while self.whoisLookupThreadActive:
-#             address = None
-#
-#             if len(WhoisResolver.pendingQueries) > 0:
-#                 # Take a snapshot of the class var WhoisResolver.pendingQueries{}
-#                 # This may be modified outside of this thread so can't use original
-#                 #Iterate over pendingQueries dict
-#                 addressesToQuery = dict(WhoisResolver.pendingQueries)
-#                 for address in addressesToQuery:
-#                     # Check status of thread controller flag (otherwise we'd have to wait for the entire  loop to iterate)
-#                     if self.whoisLookupThreadActive is False:
-#                         break
-#                     dateCreated = datetime.datetime.now()
-#                     lastAccessed = dateCreated
-#                     try:
-#                         # Query the supplied ip address
-#                         whoisDetails = WhoisResolver.whoisLookup(address)
-#                         # Add the the ip details and time created entry to whoisCache{}
-#                         WhoisResolver.whoisCache[address] = [whoisDetails, dateCreated, lastAccessed]
-#                     except exceptions.IPDefinedError as e:
-#                         # This exception will occur if a non-public address is queried (eg 0.0.0.0, 192.168.0.0, 127.0.0.1 etc)
-#                         dateCreated = datetime.datetime.now()
-#                         lastAccessed = dateCreated
-#                         # Create an entry for each address with a useful description by parsing the error message
-#                         # Or by looking at the address itself
-#                         desc = ""
-#                         if address == "127.0.0.1":
-#                             desc = "Loopback"
-#                         elif address == "0.0.0.0":
-#                             desc = "Router didn't respond"
-#                         elif str(e).find('Private') > 0:
-#                             desc = "Local address"
-#                         else:
-#                             desc = str(e)
-#                         # Create a new entry for this address (with a locally generated 'asn_description' key)
-#                         WhoisResolver.whoisCache[address] = [{'asn_description':desc}, dateCreated, lastAccessed]
-#                     except exceptions.WhoisLookupError as e:
-#                         # Create an entry for the address with the error message as the description
-#                         WhoisResolver.whoisCache[address] = [{'asn_description': str(e)}, dateCreated, lastAccessed]
-#
-#                     # Catch all other errors
-#                     except Exception as e:
-#                         # Create an entry for the address with the error message as the description
-#                         WhoisResolver.whoisCache[address] = [{'asn_description': str(e)}, dateCreated, lastAccessed]
-#                         Utils.Message.addMessage("ERR:WhoisResolver.__whoisLookupThread().whoisLookup(" + \
-#                                              str(address) + ") "+ str(type(e)) + ", " + str(e))
-#
-#             # Now check for duplicate addresses in both the whoisCache and pendingQueries dicts.
-#             # If present in both, remove from the pendingQueries as already dealt with
-#             try:
-#                 for address in WhoisResolver.whoisCache:
-#                     if address in WhoisResolver.pendingQueries:
-#                         # Remove from pending dict
-#                         del WhoisResolver.pendingQueries[address]
-#             except Exception as e:
-#                 Utils.Message.addMessage("ERR:WhoisResolver.__whoisLookupThread().del pendingQueries (" + \
-#                                          str(address) + ") " + str(e))
-#
-#             time.sleep(0.5)
-#         Utils.Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread ending")
 
-####################################################################################
 
 class RequestShutdown(Exception):
     """
@@ -3499,6 +3304,41 @@ def shutdownApplicationSignalHandler(signum, frame):
 
 
 #### Experimental functions
+def rawReceive():
+    import select
+    UDP_RX_PORT = 5000
+    UDP_RX_IP = "192.168.3.27"
+    # create UDP socket
+    udpSocket = socket.socket(socket.AF_INET,  # Internet
+                              socket.SOCK_DGRAM)  # UDP
+
+    # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
+    rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+    rawSocket.setblocking(0)
+
+
+    udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+    # rawSocket.settimeout(1)
+    rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+    print ("udpSocket :" +str(udpSocket))
+    print("rawSocket :" + str(rawSocket))
+    while True:
+        r, w, x = select.select([rawSocket], [], [])
+        for i in r:
+            receiveSocket = i
+            data, addr = receiveSocket.recvfrom(131072)
+            print(str(receiveSocket.type) + ", " + str(data))
+        # rawData, rawAddr = rawSocket.recvfrom(131072)
+        # print("raw " + str(rawData))
+
+            # # extract IP Header
+            # ipHeader = Utils.IPHeader(data[:20])
+            # udpHeader = Utils.UDPHeader(data[20:28])
+            # icmpMessage = Utils.ICMPHeader(data[20:28])
+            # message = data[28:]
+            # # print(str(i) + ", " + str(i.recvfrom(131072)))
+            # print(str(ipHeader.d_addr) + ":" + ", " + str(ipHeader.protocol) + ", type:" + str(icmpMessage.type) +\
+            #       ", code:" + str(icmpMessage.code))
 
 
 # Main prog starts here
@@ -3511,6 +3351,7 @@ def shutdownApplicationSignalHandler(signum, frame):
 #         print ("x=0")
 
 def main(argv):
+    rawReceive()
 
 
     # Get ip address of interface to be used to send/receive

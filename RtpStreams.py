@@ -4391,7 +4391,7 @@ class RtpGenerator(object):
             # Return the rx and tx sockets
             return udpTx, icmpRx
 
-        # Decodes the supplied icmp header
+        # Decodes the supplied icmp header (which should be 8 bytes long)
         class ICMPHeader(object):
             # Custom Exception to be raised if the supplied icmpHeader data can't be unpacked
             class DecodeException(Exception):
