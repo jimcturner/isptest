@@ -92,9 +92,7 @@ def rawReceiveWindows():
                               socket.SOCK_DGRAM)  # UDP
     udpSocket.settimeout(1)
     # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
-    # rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
     rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
-    # rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
     # rawSocket.settimeout(1)
     rawSocket.setblocking(0)
 
@@ -102,7 +100,7 @@ def rawReceiveWindows():
     rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
     rawSocket.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
     # Enable promiscuous mode
-    # rawSocket.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+    rawSocket.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
 
     print("udpSocket :" + str(udpSocket))
     print("rawSocket :" + str(rawSocket))
