@@ -1,9 +1,52 @@
+import struct
+import socket
+# Decodes the supplied IP header (which should be 20 bytes long)
+class IPHeader(object):
+    # Custom Exception to be raised if the supplied IP header data can't be unpacked
+    class DecodeException(Exception):
+        pass
 
+    def __init__(self, ip_header):
+        # unpack header
+        try:
+            iph = struct.unpack('!BBHHHBBH4s4s', ip_header)
+            # First byte pf header contains version (bits 4-7) and i[ header length (bits 0-3)
+            version_ihl = iph[0]
+            self.version = version_ihl >> 4
+            self.ipHeaderLength = version_ihl & 0xF
+            self.ttl = iph[5]
+            self.protocol = iph[6]
+            self.s_addr = socket.inet_ntoa(iph[8])
+            self.d_addr = socket.inet_ntoa(iph[9])
+            # print('Version : ' + str(
+            #     self.version) + ' IP Header Length : ' + str(
+            #     self.ipHeaderLength) + ' TTL : ' + str(
+            #     self.ttl) + ' Protocol : ' + str(
+            #     self.protocol) + ' Source Address : ' + str(
+            #     self.s_addr) + ' Destination Address : ' + str(self.d_addr))
+        except Exception as e:
+            raise IPHeader.DecodeException(str(e))
+
+# Decodes the supplied UDP header (which should be 8 bytes long)
+class UDPHeader(object):
+    # Custom Exception to be raised if the supplied header data can't be unpacked
+    class DecodeException(Exception):
+        pass
+    def __init__(self, udp_header):
+        # unpack header
+        try:
+            self.udpHeader = struct.unpack("!HHHH", udp_header)
+            self.sourcePort = self.udpHeader[0]
+            self.destPort = self.udpHeader[1]
+            self.dataLength = self.udpHeader[2]
+            self.checksum = self.udpHeader[3]
+
+        except Exception as e:
+            raise UDPHeader.DecodeException(str(e))
 
 def rawReceive():
     import select
-    import socket
-    from Utils import IPHeader, UDPHeader
+
     UDP_RX_PORT = 5000
     UDP_RX_IP = "127.0.0.1"
     # create UDP socket
@@ -53,11 +96,6 @@ def rawReceive():
 
 # Main prog starts here
 # #####################
-# x =0
-# while True:
-#     time.sleep(0.00006670440)
-#     x+=1
-#     if x % 1000000:
-#         print ("x=0")
+
 
 rawReceive()
