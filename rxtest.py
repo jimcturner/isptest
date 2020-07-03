@@ -1,7 +1,9 @@
+
+
 def rawReceive():
     import select
     import socket
-    import Utils
+    from Utils import IPHeader, UDPHeader
     UDP_RX_PORT = 5000
     UDP_RX_IP = "127.0.0.1"
     # create UDP socket
@@ -24,8 +26,8 @@ def rawReceive():
             rawData, rawAddr = rawSocket.recvfrom(131072)
             # print("raw " + str(rawData))
             # # extract IP Header
-            ipHeader = Utils.IPHeader(rawData[:20])
-            udpHeader = Utils.UDPHeader(rawData[20:28])
+            ipHeader = IPHeader(rawData[:20])
+            udpHeader = UDPHeader(rawData[20:28])
 
             print (str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl))
         except Exception as e:
