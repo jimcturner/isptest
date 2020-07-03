@@ -57,6 +57,7 @@ def rawReceive():
     # rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
     # rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
     rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+    rawSocket.settimeout(1)
     # rawSocket.setblocking(0)
 
     udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
@@ -64,9 +65,10 @@ def rawReceive():
     print ("udpSocket :" +str(udpSocket))
     print("rawSocket :" + str(rawSocket))
     while True:
-        data, addr = udpSocket.recvfrom(131072)
-        print(str(udpSocket.type) + ", " + str(data))
         try:
+            data, addr = udpSocket.recvfrom(131072)
+            print(str(udpSocket.type) + ", " + str(data))
+
             rawData, rawAddr = rawSocket.recvfrom(131072)
             # print("raw " + str(rawData))
             # # extract IP Header
@@ -77,6 +79,7 @@ def rawReceive():
                    str([rawData[28:]]))
         except Exception as e:
             print (str(e))
+            pass
 
         # r, w, x = select.select([rawSocket], [], [])
         # for i in r:
