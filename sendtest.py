@@ -7,6 +7,6 @@ while True:
 
     message = str(counter).encode('ascii')
     print(message)
-    txSocket.sendto(message, ("192.168.3.27",5000))
+    txSocket.sendto(message, ("127.0.0.1",5000))
     counter += 1
     time.sleep(1)
