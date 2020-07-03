@@ -2,7 +2,7 @@ def rawReceive():
     import select
     import socket
     UDP_RX_PORT = 5000
-    UDP_RX_IP = "192.168.3.27"
+    UDP_RX_IP = "127.0.0.1"
     # create UDP socket
     udpSocket = socket.socket(socket.AF_INET,  # Internet
                               socket.SOCK_DGRAM)  # UDP
