@@ -45,5 +45,4 @@ def rawReceive():
 #     if x % 1000000:
 #         print ("x=0")
 
-def main(argv):
-    rawReceive()
+rawReceive()
