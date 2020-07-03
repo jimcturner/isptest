@@ -66,17 +66,17 @@ def rawReceive():
     print("rawSocket :" + str(rawSocket))
     while True:
         try:
-            data, addr = udpSocket.recvfrom(131072)
-            print(str(udpSocket.type) + ", " + str(data))
-
-            rawData, rawAddr = rawSocket.recvfrom(131072)
-            # print("raw " + str(rawData))
-            # # extract IP Header
-            ipHeader = IPHeader(rawData[:20])
-            udpHeader = UDPHeader(rawData[20:28])
-
-            print (str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl) + " " + \
-                   str([rawData[28:]]))
+            r, w, x = select.select([rawSocket, udpSocket], [], [])
+            for rxSock in r:
+                data, addr = rxSock.recvfrom(131072)
+                if rxSock == udpSocket:
+                    print(str(rxSock.type) + ", " + str(data))
+                else:
+                    # extract IP Header
+                    ipHeader = IPHeader(data[:20])
+                    udpHeader = UDPHeader(data[20:28])
+                    print (str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl) + " " + \
+                           str([data[28:]]))
         except Exception as e:
             print (str(e))
             pass
