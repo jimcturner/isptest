@@ -72,7 +72,8 @@ def rawReceive():
             ipHeader = IPHeader(rawData[:20])
             udpHeader = UDPHeader(rawData[20:28])
 
-            print (str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl))
+            print (str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl) + " " + \
+                   str([rawData[28:]]))
         except Exception as e:
             print (str(e))
 
