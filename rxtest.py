@@ -54,6 +54,8 @@ def getOperatingSystem():
     current_os = platform.system()
     return current_os
 
+
+
 def rawReceiveLinux(argv):
     import select
 
@@ -85,7 +87,7 @@ def rawReceiveLinux(argv):
                     # extract IP Header
                     ipHeader = IPHeader(data[:20])
                     udpHeader = UDPHeader(data[20:28])
-                    print (str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl) + " " + \
+                    print(str(rxSock.type) + ", " + str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl) + " " + \
                            str([data[28:]]))
         except Exception as e:
             print (str(e))
@@ -111,7 +113,7 @@ def rawReceiveWindows(argv):
     rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
     rawSocket.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
     # Enable promiscuous mode
-    rawSocket.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+    # rawSocket.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
 
     print("udpSocket :" + str(udpSocket))
     print("rawSocket :" + str(rawSocket))
@@ -126,8 +128,9 @@ def rawReceiveWindows(argv):
                     # extract IP Header
                     ipHeader = IPHeader(data[:20])
                     udpHeader = UDPHeader(data[20:28])
-                    print (str(rxSock.type) + ", " + str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl) + " " + \
-                           str([data[28:]]))
+                    if udpHeader.destPort == UDP_RX_PORT:
+                        print (str(rxSock.type) + ", " + str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl) + " " + \
+                               str([data[28:]]))
         except Exception as e:
             print (str(e))
             pass
