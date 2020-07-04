@@ -113,7 +113,7 @@ def rawReceiveWindows(argv):
     rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
     rawSocket.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
     # Enable promiscuous mode
-    # rawSocket.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+    rawSocket.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
 
     print("udpSocket :" + str(udpSocket))
     print("rawSocket :" + str(rawSocket))
