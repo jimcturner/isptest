@@ -1,3 +1,4 @@
+import platform
 import struct
 import socket
 # Decodes the supplied IP header (which should be 20 bytes long)
@@ -47,11 +48,17 @@ class UDPHeader(object):
         except Exception as e:
             raise UDPHeader.DecodeException(str(e))
 
-def rawReceiveLinux():
+# Attempts to determine what flavour of operating system is running
+# Should return 'Windows' for Windows, or
+def getOperatingSystem():
+    current_os = platform.system()
+    return current_os
+
+def rawReceiveLinux(argv):
     import select
 
-    UDP_RX_PORT = 5000
-    UDP_RX_IP = "127.0.0.1"
+    UDP_RX_IP = argv[0]  # "127.0.0.1"
+    UDP_RX_PORT = int(argv[1])  # 5000
     # create UDP socket
     udpSocket = socket.socket(socket.AF_INET,  # Internet
                               socket.SOCK_DGRAM)  # UDP
@@ -61,7 +68,7 @@ def rawReceiveLinux():
     rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)    # Works on Linux
     # rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
     # rawSocket.settimeout(1)
-    rawSocket.setblocking(0)
+    # rawSocket.setblocking(0)
 
     udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
     rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
@@ -88,9 +95,8 @@ def rawReceiveWindows(argv):
     import select
     import os
 
-
     UDP_RX_IP = argv[0] # "127.0.0.1"
-    UDP_RX_PORT = argv[1]  # 5000
+    UDP_RX_PORT = int(argv[1])  # 5000§§
 
     # create UDP socket
     udpSocket = socket.socket(socket.AF_INET,  # Internet
@@ -138,4 +144,9 @@ def rawReceiveWindows(argv):
 
 if __name__ == "__main__":
     # Call main and pass command line args to it (but ignore the first argument)
-    rawReceiveWindows(sys.argv[1:])
+    os = getOperatingSystem()
+    print("os: " + os)
+    if  os == "Windows":
+        rawReceiveWindows(sys.argv[1:])
+    else:
+        rawReceiveLinux(sys.argv[1:])
