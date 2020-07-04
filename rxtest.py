@@ -1,6 +1,9 @@
 import struct
 import socket
 # Decodes the supplied IP header (which should be 20 bytes long)
+import sys
+
+
 class IPHeader(object):
     # Custom Exception to be raised if the supplied IP header data can't be unpacked
     class DecodeException(Exception):
@@ -81,12 +84,14 @@ def rawReceiveLinux():
             print (str(e))
             pass
 
-def rawReceiveWindows():
+def rawReceiveWindows(argv):
     import select
     import os
 
-    UDP_RX_PORT = 5000
-    UDP_RX_IP = "127.0.0.1"
+
+    UDP_RX_IP = argv[0] # "127.0.0.1"
+    UDP_RX_PORT = argv[1]  # 5000
+
     # create UDP socket
     udpSocket = socket.socket(socket.AF_INET,  # Internet
                               socket.SOCK_DGRAM)  # UDP
@@ -94,7 +99,7 @@ def rawReceiveWindows():
     # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
     rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
     # rawSocket.settimeout(1)
-    rawSocket.setblocking(0)
+    # rawSocket.setblocking(0)
 
     udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
     rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
@@ -106,7 +111,7 @@ def rawReceiveWindows():
     print("rawSocket :" + str(rawSocket))
     while True:
         try:
-            r, w, x = select.select([rawSocket], [], [])
+            r, w, x = select.select([udpSocket, rawSocket], [], [])
             for rxSock in r:
                 data, addr = rxSock.recvfrom(131072)
                 if rxSock == udpSocket:
@@ -115,7 +120,7 @@ def rawReceiveWindows():
                     # extract IP Header
                     ipHeader = IPHeader(data[:20])
                     udpHeader = UDPHeader(data[20:28])
-                    print (str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl) + " " + \
+                    print (str(rxSock.type) + ", " + str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl) + " " + \
                            str([data[28:]]))
         except Exception as e:
             print (str(e))
@@ -130,4 +135,7 @@ def rawReceiveWindows():
 
 
 # rawReceiveLinux()
-rawReceiveWindows()
+
+if __name__ == "__main__":
+    # Call main and pass command line args to it (but ignore the first argument)
+    rawReceiveWindows(sys.argv[1:])
