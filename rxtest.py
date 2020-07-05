@@ -54,7 +54,77 @@ def getOperatingSystem():
     current_os = platform.system()
     return current_os
 
+def rawReceive(argv):
+    # Creates a UDP socket and binding
+    def createUDPSocket(UDP_RX_IP, UDP_RX_PORT, timeout=1):
+        # Custom Exception
+        class CreateUDPSocketError(Exception):
+            pass
+        try:
+            # create UDP socket
+            udpSocket = socket.socket(socket.AF_INET,  # Internet
+                                      socket.SOCK_DGRAM)  # UDP
+            udpSocket.settimeout(1)
+            udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+            return udpSocket
+        except Exception as e:
+            raise CreateUDPSocketError(str(e))
 
+    # Creates a raw socket and initialises it to suit the running OS
+    def createRawSocket(UDP_RX_IP, UDP_RX_PORT):
+        # Custom Exceptions
+        class CreateRawSocketError(Exception):
+            pass
+        class RawSocketNotPossibleForOSXError(Exception):
+            pass
+        try:
+            # Create Raw socket
+            # The socket initialisation for Windows and Linux is different
+            # OSX won't permit Raw sockets to receive UDP or TCP data at all
+            # The aim of this function is to create a raw socket in parallel with the udp socket
+            # For Linux and Windows
+
+            # Determine what OS is running
+            current_os = platform.system()
+            if current_os == 'Windows':
+                # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
+                rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
+                rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+                rawSocket.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+                # Enable promiscuous mode
+                rawSocket.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+                return rawSocket
+            elif current_os == 'Linux':
+                rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)  # Works on Linux
+                rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+                return rawSocket
+
+            elif current_os == 'Darwin':
+                # The raw socket we want isn't possible for OSX, raise an Exception
+                raise RawSocketNotPossibleForOSXError("Not supported on OSX (Darwin)")
+        except RawSocketNotPossibleForOSXError as e:
+            # Pass the error outwards
+            raise RawSocketNotPossibleForOSXError(str(e))
+
+        except Exception as e:
+            # Socket creation failed. Raise an Exception
+            print ("createRawSocket() " + str(e))
+            raise CreateRawSocketError(str(e))
+
+
+    UDP_RX_IP = argv[0]  # "127.0.0.1"
+    UDP_RX_PORT = int(argv[1])  # 5000
+
+    # Attempt to create sockets
+    try:
+        udpSocket = createUDPSocket(UDP_RX_IP, UDP_RX_PORT)
+        rawSocket = createRawSocket(UDP_RX_IP, UDP_RX_PORT)
+        print("udpSocket :" + str(udpSocket))
+        print("rawSocket :" + str(rawSocket))
+
+    except Exception as e:
+        print ("socket creation failed " + str(type(e)) + ", " + str(e))
+        exit()
 
 def rawReceiveLinux(argv):
     import select
@@ -147,9 +217,11 @@ def rawReceiveWindows(argv):
 
 if __name__ == "__main__":
     # Call main and pass command line args to it (but ignore the first argument)
-    os = getOperatingSystem()
-    print("os: " + os)
-    if  os == "Windows":
-        rawReceiveWindows(sys.argv[1:])
-    else:
-        rawReceiveLinux(sys.argv[1:])
+    rawReceive(sys.argv[1:])
+    #
+    # os = getOperatingSystem()
+    # print("os: " + os)
+    # if  os == "Windows":
+    #     rawReceiveWindows(sys.argv[1:])
+    # else:
+    #     rawReceiveLinux(sys.argv[1:])
