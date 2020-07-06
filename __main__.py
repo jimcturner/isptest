@@ -3077,20 +3077,23 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # Split off the various IP, UDP and RTP headers
             ipHeader = _rawData[:IP_HEADER_SIZE]
             udpHeader = _rawData[IP_HEADER_SIZE:(IP_HEADER_SIZE + UDP_HEADER_SIZE)]
-
-            # Extract the ttl from the IP header
-            rxTTL = struct.unpack("!H", ipHeader[8:10])
-            # Extract the src and dest port from the UDP header
-            srcUDPPort, destUDPPort = struct.unpack("!HH", udpHeader[0:4])
-            # Extract the rtp header
-            rtpHeader = _rawData[(IP_HEADER_SIZE + UDP_HEADER_SIZE): \
-                                 (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE)]
-            # If there's any more payload data, strip that off too.
-            if rawBytesReceived > (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
-                payload = _rawData[IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE:]
+            # Extract the Protocol field from the IP header to confirm that this contains a UDP packet.
+            # Also extract the ttl from the IP header (since they're adjacent)
+            rxTTL, ipProtocol = struct.unpack("!BB", ipHeader[8:10])
+            if ipProtocol == 17: # Contains a UDP header
+                # Extract the src and dest port from the UDP header
+                srcUDPPort, destUDPPort = struct.unpack("!HH", udpHeader[0:4])
+                # Extract the rtp header
+                rtpHeader = _rawData[(IP_HEADER_SIZE + UDP_HEADER_SIZE): \
+                                     (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE)]
+                # If there's any more payload data, strip that off too.
+                if rawBytesReceived > (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
+                    payload = _rawData[IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE:]
+                else:
+                    payload = None
+                return rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort
             else:
-                payload = None
-            return rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort
+                return None, None, None, None, None
         else:
             return None, None, None, None, None
 
@@ -3270,7 +3273,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             uiInstance.showErrorDialogue("Network Error", errorText)
             # Cause thread to end by breaking out of while loop
             break
-
+        Utils.Message.addMessage("Using socket " + str(receiveSocket))
 
         # Specify a timeout for select()
         selectTimeout = 1
