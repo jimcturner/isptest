@@ -54,6 +54,12 @@ def getOperatingSystem():
     current_os = platform.system()
     return current_os
 
+# Custom Exceptions
+class CreateRawSocketError(Exception):
+    pass
+class RawSocketNotPossibleForOSXError(Exception):
+    pass
+
 def rawReceive(argv):
     # Creates a UDP socket and binding
     def createUDPSocket(UDP_RX_IP, UDP_RX_PORT, timeout=1):
@@ -72,11 +78,7 @@ def rawReceive(argv):
 
     # Creates a raw socket and initialises it to suit the running OS
     def createRawSocket(UDP_RX_IP, UDP_RX_PORT):
-        # Custom Exceptions
-        class CreateRawSocketError(Exception):
-            pass
-        class RawSocketNotPossibleForOSXError(Exception):
-            pass
+
         try:
             # Create Raw socket
             # The socket initialisation for Windows and Linux is different
@@ -102,13 +104,14 @@ def rawReceive(argv):
             elif current_os == 'Darwin':
                 # The raw socket we want isn't possible for OSX, raise an Exception
                 raise RawSocketNotPossibleForOSXError("Not supported on OSX (Darwin)")
+
         except RawSocketNotPossibleForOSXError as e:
-            # Pass the error outwards
+            # Pass the Exception outwards
             raise RawSocketNotPossibleForOSXError(str(e))
 
         except Exception as e:
             # Socket creation failed. Raise an Exception
-            print ("createRawSocket() " + str(e))
+            # print ("createRawSocket() " + str(e))
             raise CreateRawSocketError(str(e))
 
 
@@ -121,6 +124,7 @@ def rawReceive(argv):
         rawSocket = createRawSocket(UDP_RX_IP, UDP_RX_PORT)
         print("udpSocket :" + str(udpSocket))
         print("rawSocket :" + str(rawSocket))
+
 
     except Exception as e:
         print ("socket creation failed " + str(type(e)) + ", " + str(e))
@@ -159,6 +163,7 @@ def rawReceiveLinux(argv):
                     udpHeader = UDPHeader(data[20:28])
                     print(str(rxSock.type) + ", " + str(ipHeader.d_addr) + ":" + str(udpHeader.destPort) + ", ttl: " + str(ipHeader.ttl) + " " + \
                            str([data[28:]]))
+
         except Exception as e:
             print (str(e))
             pass

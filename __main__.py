@@ -3000,6 +3000,67 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
 # not be available
 def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                        UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, uiInstance):
+    # Custom Exception for createUDPSocket()
+    class CreateUDPSocketError(Exception):
+        pass
+
+    # Creates a UDP socket and binding
+    def createUDPSocket(UDP_RX_IP, UDP_RX_PORT, timeout=1):
+
+        try:
+            # create UDP socket
+            udpSocket = socket.socket(socket.AF_INET,  # Internet
+                                      socket.SOCK_DGRAM)  # UDP
+            udpSocket.settimeout(1)
+            udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+            return udpSocket
+        except Exception as e:
+            raise CreateUDPSocketError(str(e))
+
+    # Custom Exceptions for createRawSocket()
+    class CreateRawSocketError(Exception):
+        pass
+
+    class RawSocketNotPossibleForOSXError(Exception):
+        pass
+    # Creates a raw socket and initialises it to suit the running OS
+    def createRawSocket(UDP_RX_IP, UDP_RX_PORT):
+
+        try:
+            # Create Raw socket
+            # The socket initialisation for Windows and Linux is different
+            # OSX won't permit Raw sockets to receive UDP or TCP data at all
+            # The aim of this function is to create a raw socket in parallel with the udp socket
+            # For Linux and Windows
+
+            # Determine what OS is running
+            current_os = platform.system()
+            if current_os == 'Windows':
+                # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
+                rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
+                rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+                rawSocket.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+                # Enable promiscuous mode
+                rawSocket.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+                return rawSocket
+            elif current_os == 'Linux':
+                rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)  # Works on Linux
+                rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+                return rawSocket
+
+            elif current_os == 'Darwin':
+                # The raw socket we want isn't possible for OSX, raise an Exception
+                raise RawSocketNotPossibleForOSXError("Not supported on OSX (Darwin)")
+
+        except RawSocketNotPossibleForOSXError as e:
+            # Pass the Exception outwards
+            raise RawSocketNotPossibleForOSXError(str(e))
+
+        except Exception as e:
+            # Socket creation failed. Raise an Exception
+            # print ("createRawSocket() " + str(e))
+            raise CreateRawSocketError(str(e))
+
     # An RTP header is 12 bytes long
     RTP_HEADER_SIZE = 12
 
@@ -3037,20 +3098,45 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
         # See here: https://stackoverflow.com/questions/9969259/python-raw-socket-listening-for-udp-packets-only-half-of-the-packets-received
 
         try:
-            # create UDP socket
-            udpSocket = socket.socket(socket.AF_INET,  # Internet
-                                 socket.SOCK_DGRAM)  # UDP
+            # # create UDP socket
+            # udpSocket = socket.socket(socket.AF_INET,  # Internet
+            #                      socket.SOCK_DGRAM)  # UDP
+            #
+            # # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
+            # rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+            #
+            # # Set a timeout of 1 second. This should mean that socket.recvfrom() only blocks for a maximum
+            # # of 1 second if there's no data incoming
+            # udpSocket.settimeout(1)
+            # udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+            # rawSocket.settimeout(1)
+            # rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
 
-            # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
-            rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+            # Create udp and raw sockets
+            # The udp socket is used to receive the incoming udp packets. It is also used by the RtpReceiveStreams to
+            # transmit results back to the transmitter
+            # A RAW socket is also created in parallel with the udp port. This receives copies of the same packets
+            # but also includes the IP header, which allows the TTL value to be read.
+            # See here: for an explanation of why a single RAW socket can't be used:-
+            # https://stackoverflow.com/questions/9969259/python-raw-socket-listening-for-udp-packets-only-half-of-the-packets-received
+            #
+            # Also, OSX won't allow UDP ports to be decoded using a raw socket = the OS strips them away before they]
+            # See here:
+            # https://stackoverflow.com/questions/6878603/strange-raw-socket-on-mac-os-x
+            # reach the socket. The upshot is that getting TTL values from the incoming packets is not possible on OSX
 
-            # Set a timeout of 1 second. This should mean that socket.recvfrom() only blocks for a maximum
-            # of 1 second if there's no data incoming
-            udpSocket.settimeout(1)
-            udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
-            rawSocket.settimeout(1)
-            rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+            try:
+                udpSocket = createUDPSocket(UDP_RX_IP, UDP_RX_PORT)
+                # rawSocket = createRawSocket(UDP_RX_IP, UDP_RX_PORT)
 
+            except CreateUDPSocketError as e:
+                Utils.Message.addMessage("ERR:CreateUDPSocketError " + str(e))
+            except CreateRawSocketError as e:
+                Utils.Message.addMessage("ERR:CreateRawSocketError " + str(e))
+            except RawSocketNotPossibleForOSXError as e:
+                Utils.Message.addMessage("ERR:RawSocketNotPossibleForOSXError " + str(e))
+            except Exception as e:
+                Utils.Message.addMessage("ERR:__rtpReceiveThread create sockets " + str(e))
 
             # If this a 'regeneration' of the existing socket, we need to inform all the existing RtpStream objects of the change
             if refreshRtpStreamSocketsFlag == True:
@@ -3105,11 +3191,11 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
             try:
                 # Wait for data (blocking function call)
-                # data, addr = udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
-                rawData, rawAddr = rawSocket.recvfrom(4096)  # buffer size is 4096 bytes
+                data, addr = udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
+                # rawData, rawAddr = rawSocket.recvfrom(4096)  # buffer size is 4096 bytes
 
-                ipHeader = Utils.IPHeader(rawData[:20])
-                Utils.Message.addMessage("TTL " + str(ipHeader.ttl))
+                # ipHeader = Utils.IPHeader(rawData[:20])
+                # Utils.Message.addMessage("TTL " + str(ipHeader.ttl))
 
                 # Confirm that we have some data (RTP header is 12 bytes long)
                 if len(data) == 0:
@@ -3351,7 +3437,7 @@ def rawReceive():
 #         print ("x=0")
 
 def main(argv):
-    rawReceive()
+    # rawReceive()
 
 
     # Get ip address of interface to be used to send/receive
