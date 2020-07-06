@@ -3005,13 +3005,15 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
         pass
 
     # Creates a UDP socket and binding
-    def createUDPSocket(UDP_RX_IP, UDP_RX_PORT, timeout=1):
+    def createUDPSocket(UDP_RX_IP, UDP_RX_PORT, timeout=1, txTTL=128):
 
         try:
             # create UDP socket
             udpSocket = socket.socket(socket.AF_INET,  # Internet
                                       socket.SOCK_DGRAM)  # UDP
-            udpSocket.settimeout(1)
+            udpSocket.settimeout(timeout)
+            # Update socket with ttl value
+            udpSocket.setsockopt(socket.SOL_IP, socket.IP_TTL, txTTL)
             udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
             return udpSocket
         except Exception as e:
@@ -3061,8 +3063,58 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # print ("createRawSocket() " + str(e))
             raise CreateRawSocketError(str(e))
 
+
     # An RTP header is 12 bytes long
     RTP_HEADER_SIZE = 12
+    UDP_HEADER_SIZE = 8
+    IP_HEADER_SIZE = 20
+
+    # Takes a raw packet and splits off the IP, UDP, RTP headers and Payload
+    def parseRawPacket(_rawData):
+        # Check to see that the supplied bytearray is large enough
+        if len(_rawData) >= (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
+            # Split off the various IP, UDP and RTP headers
+            ipHeader = _rawData[:IP_HEADER_SIZE]
+            udpHeader = _rawData[IP_HEADER_SIZE:(IP_HEADER_SIZE + UDP_HEADER_SIZE)]
+
+            # Extract the ttl from the IP header
+            rxTTL = struct.unpack("!H", ipHeader[8:10])
+            # Extract the src and dest port from the UDP header
+            srcUDPPort, destUDPPort = struct.unpack("!HH", udpHeader[0:4])
+            # Extract the rtp header
+            rtpHeader = _rawData[(IP_HEADER_SIZE + UDP_HEADER_SIZE): \
+                                 (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE)]
+            # If there's any more payload data, strip that off too.
+            if rawBytesReceived > (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
+                payload = _rawData[IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE:]
+            else:
+                payload = None
+            return rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort
+        else:
+            return None, None, None, None, None
+
+    # Takes a udp packet and splits off the RTP header and payload
+    def parseUDPPacket(_rawData):
+        if len(_rawData) >= RTP_HEADER_SIZE:
+            rtpHeader = _rawData[:RTP_HEADER_SIZE]
+            if len(_rawData) > RTP_HEADER_SIZE:
+                payload = _rawData[RTP_HEADER_SIZE:]
+            else:
+                payload = None
+            return rtpHeader, payload
+        else:
+            return None, None
+
+    # Splits out the fields from the supplied rtp header
+    def parseRTPHeader(_rtpHeader):
+        if len(_rtpHeader) == RTP_HEADER_SIZE:
+            version, type, seqNo, timestamp, syncSourceID = struct.unpack("!BBHLL", _rtpHeader)
+            return version, type, seqNo, timestamp, syncSourceID
+        else:
+            return None, None, None, None, None
+
+
+
 
     # Create a dictionary to initially hold the sync source of a potential rx stream
     rtpRxStreamTempDict = {}
@@ -3090,6 +3142,28 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     rtpDecodingErrorCounter = 0
     global packetsReceivedByRxThreadCount
     packetsReceivedByRxThreadCount = 0
+    global udpPacketsReceivedByRxThreadCount
+    udpPacketsReceivedByRxThreadCount = 0
+    global rawPacketsReceivedByRxThreadCount
+    rawPacketsReceivedByRxThreadCount = 0
+    global rawPacketsIgnored
+    rawPacketsIgnored = 0
+
+    # IP Receive sockets
+    udpSocket = None
+    rawSocket = None
+    # This var indicates which of the two sockets has been selected (raw or UDP), to use as the data source
+    receiveSocket = None
+
+    rawTimestamp = datetime.timedelta()
+    udpTimestamp = datetime.timedelta()
+    payload = bytearray()
+    syncSourceID = 0
+    seqNo = 0
+    packetArrivedTimestamp = datetime.timedelta()
+    srcAddress = ""
+    srcPort = 0
+
 
     while True:
         # Create receive UDP socket and raw socket
@@ -3098,20 +3172,6 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
         # See here: https://stackoverflow.com/questions/9969259/python-raw-socket-listening-for-udp-packets-only-half-of-the-packets-received
 
         try:
-            # # create UDP socket
-            # udpSocket = socket.socket(socket.AF_INET,  # Internet
-            #                      socket.SOCK_DGRAM)  # UDP
-            #
-            # # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
-            # rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-            #
-            # # Set a timeout of 1 second. This should mean that socket.recvfrom() only blocks for a maximum
-            # # of 1 second if there's no data incoming
-            # udpSocket.settimeout(1)
-            # udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
-            # rawSocket.settimeout(1)
-            # rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
-
             # Create udp and raw sockets
             # The udp socket is used to receive the incoming udp packets. It is also used by the RtpReceiveStreams to
             # transmit results back to the transmitter
@@ -3143,18 +3203,18 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 #     rtpRxStreamsDict[stream].setSocket(udpSocket)
 
 
-
-
         except CreateRawSocketError as e:
             # Couldn't create raw socket. Most likely because app wasn't run as sudo
+            # Set the data source to be the UDP socket
+            receiveSocket = udpSocket
+            # Post a message
             Utils.Message.addMessage("ERR:CreateRawSocketError " + str(e))
             # Warn the user
             maxWidth = 70
             errorText = textwrap.fill(str(e), width=maxWidth) + \
                         "\n\n" + "'raw' receive socket could not be created therefore ttl values of".center(maxWidth) + \
                         "\n" + "the received rtp packets will not be decoded".center(maxWidth) + \
-                        "\n" + "Note. isptest will run, but the ttl values of the received rtp".center(maxWidth) + \
-                        "\n" + "packets will not be decoded and ttl value changes will not be detected".center(maxWidth) + \
+                        "\n" + "Note. isptest will run, but ttl value changes will not be detected".center(maxWidth) + \
                         "\n" + "All other functionality will remain".center(maxWidth) + \
                         "\n" + "Hint: try running as 'sudo' or 'Administrator'".center(maxWidth) + \
                         "\n\n" + "<Press any key to continue>".center(maxWidth)
@@ -3163,6 +3223,9 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
 
         except RawSocketNotPossibleForOSXError as e:
             # OSX has been detected. Warn the user that ttl values won't be displayed
+            # Set the data source to be the UDP socket
+            receiveSocket = udpSocket
+            # Post a message
             Utils.Message.addMessage("ERR:RawSocketNotPossibleForOSXError " + str(e))
             # Now signal to the user (via the UI object) that there is a problem
             maxWidth = 70
@@ -3180,6 +3243,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
         # isptest can live without a raw socket (all that will be missing is the ttl detection),
         # but without a working udp port socket it can't receive anything
         except (CreateUDPSocketError, Exception) as e:
+            # Indicate no functioning receive socket
+            receiveSocket = None
             Utils.Message.addMessage(Term.FG(Term.RED) + "__receiveRtpThread(): Cannot listen on " + UDP_RX_IP + ":" + str(
                 UDP_RX_PORT) + ", " + str(e) + Term.FG(Term.RESET))
             Utils.Message.addMessage("DBUG:__receiveRtpThread(): " + str(e))
@@ -3206,118 +3271,129 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             break
 
 
-        data = b""  # Will hold the data received - specify a bytestring (i.e an ascii encoded string)
+        # Specify a timeout for select()
+        selectTimeout = 1
+        # Create a list of sockets that select() will monitor
+        socketsToBePolled = [udpSocket]
+        # If rawSocket was sucessfully created, add it to the list
+        if rawSocket is not None:
+            socketsToBePolled.append(rawSocket)
 
+        # Endless UDP/IP receive loop.
+        # Use select() to poll the OS to see if packets have arrived
         while True:
             # Check status of shutdownFlag
             if shutdownFlag.is_set():
                 # If down, break out of the endless while loop
                 break
 
-            # Endless UDP receive loop
+            # select() will return a list of sockets that are ready to have data read from them
             # recvfrom() returns two parameters, the src address:port (addr) and the actual data (data)
+            # Note: Because rawSocket and udpSocket are bound to the same IP:port combination, they should
+            # contain identical data
             try:
                 # Wait for data (blocking function call)
-                data, addr = udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
-                # rawData, rawAddr = rawSocket.recvfrom(4096)  # buffer size is 4096 bytes
 
-                # ipHeader = Utils.IPHeader(rawData[:20])
-                # Utils.Message.addMessage("TTL " + str(ipHeader.ttl))
-
-                # Confirm that we have some data (RTP header is 12 bytes long)
-                if len(data) == 0:
-                    # Utils.Message.addMessage("ERR:__main.__receiveRtpThread() 0 bytes received")
-                    # Increment the error counter
-                    zeroLengthPacketCounter += 1
-                else:
-                    # Increment the total Rx'd packet counter
-                    packetsReceivedByRxThreadCount += 1
-
-                if len(data) >= RTP_HEADER_SIZE:
-                    # Get timestamp at the point the packet was received
-                    timeNow = datetime.datetime.now()
-                    try:
-                        srcAddress = addr[0]
-                        srcPort = addr[1]
-
-                        # Split rtp header into an array of values
-                        # RTP header is 12 bytes long. Unpack it as an array.
-                        # !=big endian, B=unsigned char(1), H=unsigned short(2), L=unsigned long(4)
-                        # This is the size of my own header prefix values (18 bytes)
-                        rtpHeader = struct.unpack("!BBHLL", data[:RTP_HEADER_SIZE])
-
-                        # Calculate the data payload size
-                        payloadSize = len(data)
-
-                        # Take copies of the data values that we need
-                        # 	sequence no=rtpHeader[2]
-                        #	timestamp=rtpHeader[3]
-                        # 	sync-source identifier =rtpHeader[4]
-
-                        rtpSequenceNo = rtpHeader[2]
-                        rtpSyncSourceIdentifier = rtpHeader[4]
-
-                        # Attempt to extract and make sense of the payload (has it been sent by isptest?)
-                        isptestHeaderData = b""
-                        if payloadSize >= ISPTEST_HEADER_SIZE:
-                            # Substring the isptest header part of the payload
-                            isptestHeaderData = data[RTP_HEADER_SIZE:(RTP_HEADER_SIZE + ISPTEST_HEADER_SIZE)]
-
-                        # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
-                        try:
-                            # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
-                            rtpRxStreamsDict[rtpSyncSourceIdentifier].addData(rtpSequenceNo, payloadSize, timeNow,
-                                                                              rtpSyncSourceIdentifier,
-                                                                              isptestHeaderData)
-
-                        except:
-
-                            # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
-
-                            if rtpSyncSourceIdentifier in rtpRxStreamTempDict:
-                                # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
-                                Utils.Message.addMessage(Fore.GREEN + "INFO: " + str(rtpSyncSourceIdentifier) +
-                                                   " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
-                                # Create and add the new stream to the rtpRxStreamsDict
-                                newRtpStream = RtpReceiveStream(rtpSyncSourceIdentifier, srcAddress, srcPort, UDP_RX_IP, \
-                                                                UDP_RX_PORT, glitchEventTriggerThreshold, udpSocket,
-                                                                rtpRxStreamsDict, rtpRxStreamsDictMutex)
-
-                                # Now delete the entry from the temporary dict
-                                rtpRxStreamTempDict.pop(rtpSyncSourceIdentifier, None)
-
-                            else:
-                                # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
-                                # create a entry in the temporary list (with a timestamp)
-                                Utils.Message.addMessage(
-                                    Fore.RED + "INFO: Stream doesn't exist yet, adding to temp list: " + str(
-                                        rtpSyncSourceIdentifier))
-                                rtpRxStreamTempDict[rtpSyncSourceIdentifier] = timer()
-
-                    except Exception as e:
-                        # Problem decoding RTP headers
-                        rtpDecodingErrorCounter += 1
-                        message = Fore.RED + "Cannot decode RTP headers. Is this an RTP packet? " + str(
-                            e) + " Length:" + str(len(data)) + \
-                                  " bytes received\r"
-                        # print (message)
-                        Utils.Message.addMessage(message)
-                else:
-                    # Received packet is too short - not ling enough to hold an rtp header
-                    # message = Fore.RED + "ERR: Invalid data received: " + str(addr) + ", " + str(data)
-                    # print (message)
-                    # Utils.Message.addMessage(message)
-                    insufficientLengthPacketCounter += 1
+                r, w, x = select.select(socketsToBePolled, [], [], selectTimeout)
+                if not r:
+                    # select () timeout reached so returned list will be empty
+                    # Utils.Message.addMessage("select() timeout")
                     pass
+                else:
+                    # Attempt to get data from the raw socket first.
+                    if rawSocket in r:
+                        # The raw socket contains data to be read
+                        rawData, rawAddr = rawSocket.recvfrom(4096)  # buffer size is 4096 bytes
+                        rawTimestamp = datetime.datetime.now()
+                    else:
+                        # If no data to be read, clear the rawData and rawAddr lists
+                        rawData = []
+                        rawAddr = ("",0)
+                    rawBytesReceived = len(rawData)
 
-                # Now delete contents of data[]
-                data = b""
+                    # Next, flush the corresponding UDP port binding (if it contains data, which it should)
+                    if udpSocket in r:
+                        udpSocketData, udpSocketAddr = udpSocket.recvfrom(4096)
+                        udpTimestamp = datetime.datetime.now()
+                    else:
+                        # If no data to be read, clear the udpSocketData and udpSocketAddr lists
+                        udpSocketData = []
+                        udpSocketAddr = ("",0)
+                    udpBytesReceived = len(udpSocketData)
 
-            # Catch timeout exception (and ignore it)
-            except socket.timeout:
-                # Utils.Message.addMessage("DBUG: main() recvfrom. timeout exception")
-                pass
+                    # Now parse the received packet
+                    if receiveSocket is rawSocket:
+                        # If the data has been rx'd via the raw socket, we have to extract the data as a raw packet
+                        rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = parseRawPacket(rawData)
+                        # Note: On Windows, the raw port is running in promiscuous mode. That means it will receive
+                        # ALL incoming packets addressed to that interface.
+                        # Therefore we need to check that this packet is for us, by comparing the udp dest port
+                        # with what we're expecting to receive on
+                        if destUDPPort == UDP_RX_PORT:
+                            # This UDP packet is addressed to us, so continue to process it
+                            # Increment the counter
+                            rawPacketsReceivedByRxThreadCount += 1
+                            version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
+                            # Get the source address
+                            srcAddress = rawAddr[0]
+                            # Get the source port no
+                            srcPort = srcUDPPort
+                            # Store the packet arrival time
+                            packetArrivedTimestamp = rawTimestamp
+                        else:
+                            # packet ignored. Increment the counter
+                            rawPacketsIgnored += 1
 
+                    elif receiveSocket is udpSocket:
+                        # If the data has been rx'd via the udp socket, only the rtp header + payload will be present
+                        rtpHeader, payload = parseUDPPacket(udpSocketData)
+                        # increment the counter
+                        udpPacketsReceivedByRxThreadCount += 1
+                        # Now parse the rtp header
+                        version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
+                        # Get the source address
+                        srcAddress = udpSocketAddr[0]
+                        # Get the source port no
+                        srcPort = udpSocketAddr[1]
+                        # Store the packet arrival time
+                        packetArrivedTimestamp = udpTimestamp
+
+                # create bytestring to hold isptest header data
+                isptestHeaderData = b""
+                # Now process the payload (the bit after the rtp header)
+                payloadLength = len(payload)
+                if payloadLength >= ISPTEST_HEADER_SIZE:
+                    # Substring the isptest header part of the payload
+                    isptestHeaderData = payload[:ISPTEST_HEADER_SIZE]
+
+                # Finally, if we have a valid rtp packet with all meta data extracted, send it to an RtpReceiveStream
+                # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
+                try:
+                    # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
+                    rtpRxStreamsDict[syncSourceID].addData(\
+                        seqNo, payloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData)
+
+                except:
+                    # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
+                    if syncSourceID in rtpRxStreamTempDict:
+                        # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
+                        Utils.Message.addMessage(Fore.GREEN + "INFO: " + str(syncSourceID) +
+                                           " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
+                        # Create and add the new stream to the rtpRxStreamsDict
+                        newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, UDP_RX_IP, \
+                                                        UDP_RX_PORT, glitchEventTriggerThreshold, udpSocket,
+                                                        rtpRxStreamsDict, rtpRxStreamsDictMutex)
+
+                        # Now delete the entry from the temporary dict
+                        rtpRxStreamTempDict.pop(syncSourceID, None)
+
+                    else:
+                        # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
+                        # create a entry in the temporary list (with a timestamp)
+                        Utils.Message.addMessage(
+                            Fore.RED + "INFO: Stream doesn't exist yet, adding to temp list: " + str(
+                                syncSourceID))
+                        rtpRxStreamTempDict[syncSourceID] = timer()
 
             # Catch all other exceptions
             except Exception as e:
