@@ -3195,6 +3195,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # Create raw socket
             rawSocket = createRawSocket(UDP_RX_IP, UDP_RX_PORT)
             Utils.Message.addMessage("DBUG: Created raw socket " + str(rawSocket))
+            # If execution makes it this far without an Exception being thrown, we can safely use the raw socket to receive
+            receiveSocket = rawSocket
 
             # If this a 'regeneration' of the existing socket, we need to inform all the existing RtpStream objects of the change
             if refreshRtpStreamSocketsFlag == True:
