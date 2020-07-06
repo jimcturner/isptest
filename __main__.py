@@ -3086,7 +3086,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 # Extract the rtp header
                 rtpHeader = _rawData[(IP_HEADER_SIZE + UDP_HEADER_SIZE): \
                                      (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE)]
-                # If there's any more payload data, strip that off too.
+                # If there's any payload data, strip that off too.
                 if rawBytesReceived > (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
                     payload = _rawData[IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE:]
                 else:
