@@ -3072,7 +3072,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     # Takes a raw packet and splits off the IP, UDP, RTP headers and Payload
     def parseRawPacket(_rawData):
         # Check to see that the supplied bytearray is large enough
-        if len(_rawData) >= (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
+        rawBytesReceived = len(_rawData)
+        if rawBytesReceived >= (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
             # Split off the various IP, UDP and RTP headers
             ipHeader = _rawData[:IP_HEADER_SIZE]
             udpHeader = _rawData[IP_HEADER_SIZE:(IP_HEADER_SIZE + UDP_HEADER_SIZE)]
@@ -3309,7 +3310,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         # If no data to be read, clear the rawData and rawAddr lists
                         rawData = []
                         rawAddr = ("",0)
-                    rawBytesReceived = len(rawData)
+                    # rawBytesReceived = len(rawData)
 
                     # Next, flush the corresponding UDP port binding (if it contains data, which it should)
                     if udpSocket in r:
@@ -3319,7 +3320,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         # If no data to be read, clear the udpSocketData and udpSocketAddr lists
                         udpSocketData = []
                         udpSocketAddr = ("",0)
-                    udpBytesReceived = len(udpSocketData)
+                    # udpBytesReceived = len(udpSocketData)
 
                     # Now parse the received packet
                     if receiveSocket is rawSocket:
@@ -3358,42 +3359,46 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         # Store the packet arrival time
                         packetArrivedTimestamp = udpTimestamp
 
-                # create bytestring to hold isptest header data
-                isptestHeaderData = b""
-                # Now process the payload (the bit after the rtp header)
-                payloadLength = len(payload)
-                if payloadLength >= ISPTEST_HEADER_SIZE:
-                    # Substring the isptest header part of the payload
-                    isptestHeaderData = payload[:ISPTEST_HEADER_SIZE]
+                # Test to see if we have any new data (by testing the syncSourceID field)
+                if syncSourceID is not None:
+                    # create bytestring to hold isptest header data
+                    isptestHeaderData = b""
+                    # Now process the payload (the bit after the rtp header)
+                    payloadLength = len(payload)
+                    if payloadLength >= ISPTEST_HEADER_SIZE:
+                        # Substring the isptest header part of the payload
+                        isptestHeaderData = payload[:ISPTEST_HEADER_SIZE]
 
-                # Finally, if we have a valid rtp packet with all meta data extracted, send it to an RtpReceiveStream
-                # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
-                try:
-                    # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
-                    rtpRxStreamsDict[syncSourceID].addData(\
-                        seqNo, payloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData)
+                    # Finally, if we have a valid rtp packet with all meta data extracted, send it to an RtpReceiveStream
+                    # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
+                    try:
+                        # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
+                        rtpRxStreamsDict[syncSourceID].addData(\
+                            seqNo, payloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData)
 
-                except:
-                    # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
-                    if syncSourceID in rtpRxStreamTempDict:
-                        # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
-                        Utils.Message.addMessage(Fore.GREEN + "INFO: " + str(syncSourceID) +
-                                           " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
-                        # Create and add the new stream to the rtpRxStreamsDict
-                        newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, UDP_RX_IP, \
-                                                        UDP_RX_PORT, glitchEventTriggerThreshold, udpSocket,
-                                                        rtpRxStreamsDict, rtpRxStreamsDictMutex)
+                    except:
+                        # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
+                        if syncSourceID in rtpRxStreamTempDict:
+                            # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
+                            Utils.Message.addMessage(Fore.GREEN + "INFO: " + str(syncSourceID) +
+                                               " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
+                            # Create and add the new stream to the rtpRxStreamsDict
+                            newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, UDP_RX_IP, \
+                                                            UDP_RX_PORT, glitchEventTriggerThreshold, udpSocket,
+                                                            rtpRxStreamsDict, rtpRxStreamsDictMutex)
 
-                        # Now delete the entry from the temporary dict
-                        rtpRxStreamTempDict.pop(syncSourceID, None)
+                            # Now delete the entry from the temporary dict
+                            rtpRxStreamTempDict.pop(syncSourceID, None)
 
-                    else:
-                        # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
-                        # create a entry in the temporary list (with a timestamp)
-                        Utils.Message.addMessage(
-                            Fore.RED + "INFO: Stream doesn't exist yet, adding to temp list: " + str(
-                                syncSourceID))
-                        rtpRxStreamTempDict[syncSourceID] = timer()
+                        else:
+                            # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
+                            # create a entry in the temporary list (with a timestamp)
+                            Utils.Message.addMessage(
+                                Fore.RED + "INFO: Stream doesn't exist yet, adding to temp list: " + str(
+                                    syncSourceID))
+                            rtpRxStreamTempDict[syncSourceID] = timer()
+                # Reset syncSourceID to None. This will inhibit any more data being added until it is set once more
+                syncSourceID = None
 
             # Catch all other exceptions
             except Exception as e:
