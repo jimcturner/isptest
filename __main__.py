@@ -3162,11 +3162,11 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     rawTimestamp = datetime.timedelta()
     udpTimestamp = datetime.timedelta()
     payload = bytearray()
-    syncSourceID = 0
-    seqNo = 0
+    syncSourceID = None
+    seqNo = None
     packetArrivedTimestamp = datetime.timedelta()
     srcAddress = ""
-    srcPort = 0
+    srcPort = None
 
 
     while True:
