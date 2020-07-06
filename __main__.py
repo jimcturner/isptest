@@ -3125,35 +3125,61 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # https://stackoverflow.com/questions/6878603/strange-raw-socket-on-mac-os-x
             # reach the socket. The upshot is that getting TTL values from the incoming packets is not possible on OSX
 
-            try:
-                udpSocket = createUDPSocket(UDP_RX_IP, UDP_RX_PORT)
-                # rawSocket = createRawSocket(UDP_RX_IP, UDP_RX_PORT)
-
-            except CreateUDPSocketError as e:
-                Utils.Message.addMessage("ERR:CreateUDPSocketError " + str(e))
-            except CreateRawSocketError as e:
-                Utils.Message.addMessage("ERR:CreateRawSocketError " + str(e))
-            except RawSocketNotPossibleForOSXError as e:
-                Utils.Message.addMessage("ERR:RawSocketNotPossibleForOSXError " + str(e))
-            except Exception as e:
-                Utils.Message.addMessage("ERR:__rtpReceiveThread create sockets " + str(e))
+            # Create udp socket
+            udpSocket = createUDPSocket(UDP_RX_IP, UDP_RX_PORT)
+            # Create raw socket
+            rawSocket = createRawSocket(UDP_RX_IP, UDP_RX_PORT)
 
             # If this a 'regeneration' of the existing socket, we need to inform all the existing RtpStream objects of the change
             if refreshRtpStreamSocketsFlag == True:
                 # Clear the flag
                 refreshRtpStreamSocketsFlag = False
-                try:
-                    # For Python3 (which has the id() function)
-                    Utils.Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(id(socket)))
-                except:
-                    # For Python2 which doesn't
-                    Utils.Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(socket))
-                # Update all streams in rtpRxStreamsDict
-                for stream in rtpRxStreamsDict:
-                    rtpRxStreamsDict[stream].setSocket(udpSocket)
+                Utils.Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(id(socket)))
+
+                # # Update all streams in rtpRxStreamsDict
+                # Note: This shouldn't be requried as socket objects are mutable
+                # i.e there's only ever one instance of 'udpSocket'
+                # for stream in rtpRxStreamsDict:
+                #     rtpRxStreamsDict[stream].setSocket(udpSocket)
 
 
-        except Exception as e:
+
+
+        except CreateRawSocketError as e:
+            # Couldn't create raw socket. Most likely because app wasn't run as sudo
+            Utils.Message.addMessage("ERR:CreateRawSocketError " + str(e))
+            # Warn the user
+            maxWidth = 70
+            errorText = textwrap.fill(str(e), width=maxWidth) + \
+                        "\n\n" + "'raw' receive socket could not be created therefore ttl values of".center(maxWidth) + \
+                        "\n" + "the received rtp packets will not be decoded".center(maxWidth) + \
+                        "\n" + "Note. isptest will run, but the ttl values of the received rtp".center(maxWidth) + \
+                        "\n" + "packets will not be decoded and ttl value changes will not be detected".center(maxWidth) + \
+                        "\n" + "All other functionality will remain".center(maxWidth) + \
+                        "\n" + "Hint: try running as 'sudo' or 'Administrator'".center(maxWidth) + \
+                        "\n\n" + "<Press any key to continue>".center(maxWidth)
+
+            uiInstance.showErrorDialogue("Network Error", errorText)
+
+        except RawSocketNotPossibleForOSXError as e:
+            # OSX has been detected. Warn the user that ttl values won't be displayed
+            Utils.Message.addMessage("ERR:RawSocketNotPossibleForOSXError " + str(e))
+            # Now signal to the user (via the UI object) that there is a problem
+            maxWidth = 70
+            errorText = "\n" + str("Mac OSX detected").center(maxWidth) + \
+                        "\n" + "Note. isptest will run, but the ttl values of the received rtp".center(maxWidth) + \
+                        "\n" + "packets will not be decoded. This is due to restrictions within OSX".center(maxWidth) + \
+                        "\n" + "itself. ttl value changes will not be detected but all other".center(maxWidth) + \
+                        "\n" + "functionality will remain".center(maxWidth) + \
+                        "\n\n" + "<Press any key to continue>".center(maxWidth)
+
+            uiInstance.showErrorDialogue("OSX detected", errorText)
+
+
+        # Catch fatal errors that will stop isptest from receiving packets
+        # isptest can live without a raw socket (all that will be missing is the ttl detection),
+        # but without a working udp port socket it can't receive anything
+        except (CreateUDPSocketError, Exception) as e:
             Utils.Message.addMessage(Term.FG(Term.RED) + "__receiveRtpThread(): Cannot listen on " + UDP_RX_IP + ":" + str(
                 UDP_RX_PORT) + ", " + str(e) + Term.FG(Term.RESET))
             Utils.Message.addMessage("DBUG:__receiveRtpThread(): " + str(e))
@@ -3163,9 +3189,10 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             maxWidth = 70
             Utils.Message.addMessage("DBUG:__receiveRtpThread(): calling UI.showFatalErrorDialogue()")
             errorText =  textwrap.fill(str(e), width=maxWidth) +\
-                    "\n\n" + str("This error is most likely due to the UDP Listen port (" + str(UDP_RX_PORT) + ")").center(maxWidth) +\
-                    "\n" + "already in use (eg. by vlc, or another instance of isptest?)".center(maxWidth) +\
-                    "\n" + "You must exit this app and either restart it using a different port,".center(maxWidth) +\
+                    "\n\n" + str("This could be due to the UDP Listen port (" + str(UDP_RX_PORT) + ")").center(maxWidth) +\
+                    "\n" + "already in use (eg. by vlc, or another instance of isptest?)".center(maxWidth) + \
+                         "\n" + "Or perhaps a non-existent listen address has been specified?".center(maxWidth) + \
+                         "\n" + "You must exit this app and either restart it using a different port,".center(maxWidth) +\
                     "\n" + "or else shut down the competing application first, and then restart".center(maxWidth) +\
                     "\n\n" + "TIP: To query what's listening on ports already, run the following:".center(maxWidth) + \
                     "\n" + "Linux: 'netstat -lnup'".center(maxWidth) + \
