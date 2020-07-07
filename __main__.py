@@ -2178,10 +2178,12 @@ class UI(object):
             # Display aggregate socket receive stats
             try:
                 # NOTE: These are all global vars declared in __receiveRtpThread
-                debugInfo.append(["0 len ", str(zeroLengthPacketCounter)])
-                debugInfo.append(["<12 len ", str(insufficientLengthPacketCounter)])
-                debugInfo.append(["dec err ", str(rtpDecodingErrorCounter)])
-                debugInfo.append(["Tot Rx ", str(packetsReceivedByRxThreadCount)])
+                debugInfo.append(["raw Rx'd ", str(rawPacketsReceivedByRxThreadCount)])   # Total Rx'd Raw packets
+                debugInfo.append(["raw ignored ", str(rawPacketsDiscardedByRxThreadCount)]) # Raw packets ignored
+                debugInfo.append(["raw decoded ", str(rawPacketsDecodedByRxThreadCount)])   # Raw packets with an rtp header
+                debugInfo.append(["udp Rx'd ", str(udpPacketsReceivedByRxThreadCount)])   # Total Rx'd UDP packets
+                debugInfo.append(["udp ignored ", str(udpPacketsDiscardedByRxThreadCount)])   # UDP packets ignored
+                debugInfo.append(["udp decoded ", str(udpPacketsDecodedByRxThreadCount)]) # UDP packets with an rtp header
             except:
                 pass
 
@@ -3099,7 +3101,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             else:
                 return None, None, None, None, None
         except Exception as e:
-            Utils.Message.addMessage("ERR:parseRawPacket " + str(e))
+            # Utils.Message.addMessage("ERR:parseRawPacket " + str(e))
             return None, None, None, None, None
 
     # Takes a udp packet and splits off the RTP header and payload
@@ -3115,7 +3117,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             else:
                 return None, None
         except Exception as e:
-            Utils.Message.addMessage("ERR:parseUDPPacket() " + str(e))
+            # Utils.Message.addMessage("ERR:parseUDPPacket() " + str(e))
             return None, None
 
     # Splits out the fields from the supplied rtp header
@@ -3127,7 +3129,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             else:
                 return None, None, None, None, None
         except Exception as e:
-            Utils.Message.addMessage("ERR:parseRTPHeader() " + str(e))
+            # Utils.Message.addMessage("ERR:parseRTPHeader() " + str(e))
             return None, None, None, None, None
 
 
@@ -3150,20 +3152,20 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     # diskLoggerThread.start()
     # Running total o
     # Create and initialise some global variables used for debugging -tracing lost packets
-    global zeroLengthPacketCounter # Counts the no of zero length packets received
-    zeroLengthPacketCounter = 0
-    global insufficientLengthPacketCounter # Counts the no of packets received that are too short (i.e size<rtp header)
-    insufficientLengthPacketCounter = 0
-    global rtpDecodingErrorCounter    # Counts the no. of rtpDecoding errors
-    rtpDecodingErrorCounter = 0
-    global packetsReceivedByRxThreadCount
-    packetsReceivedByRxThreadCount = 0
-    global udpPacketsReceivedByRxThreadCount
-    udpPacketsReceivedByRxThreadCount = 0
-    global rawPacketsReceivedByRxThreadCount
+
+
+    global rawPacketsReceivedByRxThreadCount    # Total Rx'd Raw packets
     rawPacketsReceivedByRxThreadCount = 0
-    global rawPacketsIgnored
-    rawPacketsIgnored = 0
+    global rawPacketsDiscardedByRxThreadCount   # Raw packets ignored
+    rawPacketsDiscardedByRxThreadCount = 0
+    global rawPacketsDecodedByRxThreadCount     # Raw packets with an rtp header
+    rawPacketsDecodedByRxThreadCount = 0
+    global udpPacketsReceivedByRxThreadCount    # Total Rx'd UDP packets
+    udpPacketsReceivedByRxThreadCount = 0
+    global udpPacketsDecodedByRxThreadCount     # UDP packets ignored
+    udpPacketsDecodedByRxThreadCount = 0
+    global udpPacketsDiscardedByRxThreadCount   # UDP packets with an rtp header
+    udpPacketsDiscardedByRxThreadCount = 0
 
     # IP Receive sockets
     udpSocket = None
@@ -3181,6 +3183,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     srcPort = None
     payloadLength = 0
 
+    inhibitOSXPopupMessage = False # Used to inhibit repeated showings of the same popup messages
+    inhibitRawSocketCreationPopupMessage = False
 
     while True:
         # Create receive UDP socket and raw socket
@@ -3220,8 +3224,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 # # Update all streams in rtpRxStreamsDict
                 # Note: This shouldn't be requried as socket objects are mutable
                 # i.e there's only ever one instance of 'udpSocket'
-                for stream in rtpRxStreamsDict:
-                    rtpRxStreamsDict[stream].setSocket(udpSocket)
+                # for stream in rtpRxStreamsDict:
+                #     rtpRxStreamsDict[stream].setSocket(udpSocket)
 
 
         except CreateRawSocketError as e:
@@ -3230,17 +3234,21 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             receiveSocket = udpSocket
             # Post a message
             Utils.Message.addMessage("ERR:CreateRawSocketError " + str(e))
-            # Warn the user
-            maxWidth = 70
-            errorText = textwrap.fill(str(e), width=maxWidth) + \
-                        "\n\n" + "'raw' receive socket could not be created therefore ttl values of".center(maxWidth) + \
-                        "\n" + "the received rtp packets will not be decoded".center(maxWidth) + \
-                        "\n" + "Note. isptest will run, but ttl value changes will not be detected".center(maxWidth) + \
-                        "\n" + "All other functionality will remain".center(maxWidth) + \
-                        "\n" + "Hint: try running as 'sudo' or 'Administrator'".center(maxWidth) + \
-                        "\n\n" + "<Press any key to continue>".center(maxWidth)
+            # Warn the user, but only once
+            if inhibitRawSocketCreationPopupMessage is False:
+                # Now the message has been displayed, set the flag
+                inhibitRawSocketCreationPopupMessage = True
+                maxWidth = 70
+                errorText = textwrap.fill(str(e), width=maxWidth) + \
+                            "\n\n" + "'raw' receive socket could not be created therefore ttl values of".center(maxWidth) + \
+                            "\n" + "the received rtp packets will not be decoded".center(maxWidth) + \
+                            "\n" + "Note. isptest will run, but ttl value changes will not be detected".center(maxWidth) + \
+                            "\n" + "All other functionality will remain".center(maxWidth) + \
+                            "\n" + "Hint: try running as 'sudo' or 'Administrator'".center(maxWidth) + \
+                            "\n\n" + "<Press any key to continue>".center(maxWidth)
 
-            # uiInstance.showErrorDialogue("Network Error", errorText)
+                uiInstance.showErrorDialogue("Raw Socket creation error", errorText)
+
 
         except RawSocketNotPossibleForOSXError as e:
             # OSX has been detected. Warn the user that ttl values won't be displayed
@@ -3248,16 +3256,19 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             receiveSocket = udpSocket
             # Post a message
             Utils.Message.addMessage("ERR:RawSocketNotPossibleForOSXError " + str(e))
-            # Now signal to the user (via the UI object) that there is a problem
-            maxWidth = 70
-            errorText = "\n" + str("Mac OSX detected").center(maxWidth) + \
-                        "\n" + "Note. isptest will run, but the ttl values of the received rtp".center(maxWidth) + \
-                        "\n" + "packets will not be decoded. This is due to restrictions within OSX".center(maxWidth) + \
-                        "\n" + "itself. ttl value changes will not be detected but all other".center(maxWidth) + \
-                        "\n" + "functionality will remain".center(maxWidth) + \
-                        "\n\n" + "<Press any key to continue>".center(maxWidth)
+            if inhibitOSXPopupMessage is False:
+                # Now the message has been displayed, set the flag
+                inhibitOSXPopupMessage = True
+                # Now signal to the user (via the UI object) that there is a problem, but only once
+                maxWidth = 70
+                errorText = "\n" + str("Mac OSX detected").center(maxWidth) + \
+                            "\n" + "Note. isptest will run, but the ttl values of the received rtp".center(maxWidth) + \
+                            "\n" + "packets will not be decoded. This is due to restrictions within OSX".center(maxWidth) + \
+                            "\n" + "itself. ttl value changes will not be detected but all other".center(maxWidth) + \
+                            "\n" + "functionality will remain".center(maxWidth) + \
+                            "\n\n" + "<Press any key to continue>".center(maxWidth)
 
-            # uiInstance.showErrorDialogue("OSX detected", errorText)
+                uiInstance.showErrorDialogue("OSX detected", errorText)
 
 
         # Catch fatal errors that will stop isptest from receiving packets
@@ -3290,7 +3301,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # uiInstance.showErrorDialogue("Network Error", errorText)
             # Cause thread to end by breaking out of while loop
             break
-        Utils.Message.addMessage("Using socket " + str(receiveSocket))
+        Utils.Message.addMessage("Receiving on socket " + str(receiveSocket))
 
         # Specify a timeout for select()
         selectTimeout = 1
@@ -3346,6 +3357,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     if receiveSocket is rawSocket:
                         try:
                             # If the data has been rx'd via the raw socket, we have to extract the data as a raw packet
+                            # Increment the counter
+                            rawPacketsReceivedByRxThreadCount += 1
                             rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = parseRawPacket(rawData)
                             # Note: On Windows, the raw port is running in promiscuous mode. That means it will receive
                             # ALL incoming packets addressed to that interface.
@@ -3353,20 +3366,21 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             # with what we're expecting to receive on
                             if destUDPPort == UDP_RX_PORT:
                                 # This UDP packet is addressed to us, so continue to process it
-                                # Increment the counter
-                                rawPacketsReceivedByRxThreadCount += 1
-                                version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
-                                # Get the source address
-                                srcAddress = rawAddr[0]
-                                # Get the source port no
-                                srcPort = srcUDPPort
-                                # Store the packet arrival time
-                                packetArrivedTimestamp = rawTimestamp
-                            else:
-                                # packet ignored. Increment the counter
-                                rawPacketsIgnored += 1
+                                if rtpHeader is not None:
+                                    # Increment the global counter
+                                    rawPacketsDecodedByRxThreadCount += 1
+                                    version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
+                                    # Get the source address
+                                    srcAddress = rawAddr[0]
+                                    # Get the source port no
+                                    srcPort = srcUDPPort
+                                    # Store the packet arrival time
+                                    packetArrivedTimestamp = rawTimestamp
+                                else:
+                                    # packet ignored. Increment the counter
+                                    rawPacketsDiscardedByRxThreadCount += 1
                         except Exception as e:
-                            Utils.Message.addMessage("parse rawSocket data " + str(e))
+                            Utils.Message.addMessage("DBUG:parse rawSocket data " + str(e))
 
                     elif receiveSocket is udpSocket:
                         try:
@@ -3374,17 +3388,22 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             udpPacketsReceivedByRxThreadCount += 1
                             # If the data has been rx'd via the udp socket, only the rtp header + payload will be present
                             rtpHeader, payload = parseUDPPacket(udpSocketData)
-                            # Now parse the rtp header
-                            version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
-                            # Get the source address
-                            srcAddress = udpSocketAddr[0]
-                            # Get the source port no
-                            srcPort = udpSocketAddr[1]
-
-                            # Store the packet arrival time
-                            packetArrivedTimestamp = udpTimestamp
+                            if rtpHeader is not None:
+                                # Increment the global counter
+                                udpPacketsDecodedByRxThreadCount += 1
+                                # Now parse the rtp header
+                                version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
+                                # Get the source address
+                                srcAddress = udpSocketAddr[0]
+                                # Get the source port no
+                                srcPort = udpSocketAddr[1]
+                                # Store the packet arrival time
+                                packetArrivedTimestamp = udpTimestamp
+                            else:
+                                # Increment the global counter
+                                udpPacketsDiscardedByRxThreadCount += 1
                         except Exception as e:
-                            Utils.Message.addMessage("parse udpSocket data " + str(e))
+                            Utils.Message.addMessage("DBUG:parse udpSocket data " + str(e))
 
                 # Test to see if we have any new data (by testing the syncSourceID field)
                 if syncSourceID is not None:
