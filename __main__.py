@@ -3182,6 +3182,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     srcAddress = ""
     srcPort = None
     payloadLength = 0
+    rxTTL = None
 
     inhibitOSXPopupMessage = False # Used to inhibit repeated showings of the same popup messages
     inhibitRawSocketCreationPopupMessage = False
@@ -3424,7 +3425,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     try:
                         # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
                         rtpRxStreamsDict[syncSourceID].addData(\
-                            seqNo, payloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData)
+                            seqNo, payloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, rxTTL)
 
                     except:
                         # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict

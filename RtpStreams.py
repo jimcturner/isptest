@@ -558,12 +558,13 @@ class MovingTotalEventCounter(object):
 # Define an object to hold data about an individual received rtp packet
 class RtpData(object):
     # Constructor method
-    def __init__(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData):
+    def __init__(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTL):
         self.rtpSequenceNo = rtpSequenceNo
         self.payloadSize = payloadSize
         self.timestamp = timestamp
         self.syncSource = syncSource
         self.isptestHeaderData = isptestHeaderData
+        self.rxTTL = rxTTL  # The TTL field from the IP header carrying this Rtp packet
         # timeDelta will store the timestamp diff between this and the previous packet
         self.timeDelta = 0
         # jitter will store the diff between the timeDelta of this and the prev packet
@@ -928,6 +929,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__packet_last_seen_received_timestamp = datetime.timedelta()
         self.__packetCounterTransmittedTotal = 0# Will be populated by incoming isptest header data
         self.__streamTransmitterTxRateBps = 0  # Will be populated by incoming isptest header data
+        self.__rxTTL = 0 # The most recent TTL value from the IP Header (that conveyed the Rtp packet)
 
         # Counter to be used by __calculateJitter()
         # self.sumOfJitter_1s = 0
@@ -946,6 +948,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_time_elapsed_total"] = datetime.timedelta()
         self.__stats["packet_instantaneous_receive_period_uS"] = 0
         self.__stats["packet_mean_receive_period_uS"] = 0
+        self.__stats["packet_instantaneous_ttl"] = 0
         self.aggregateSumOfTimeDeltas = 0  # Used to calculate self.__stats["packet_mean_receive_period_uS"]
 
         # Aggregate Glitch counters
@@ -1537,6 +1540,8 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.__stats["packet_counter_transmitted_total"] = self.__packetCounterTransmittedTotal
             # Snapshot streamTransmitterTxRateBps (intended tx rate, according to the transmitter)
             self.__stats["stream_transmitter_txRate_bps"] = self.__streamTransmitterTxRateBps
+            # Snapshot latest packet IP TTL value
+            self.__stats["packet_instantaneous_ttl"] = self.__rxTTL
 
             try:
                 ########### Calculate how many packets received in the latest 200mS period - required for 'mean' calculations
@@ -1899,7 +1904,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Route Change stats " + str(e))
 
-
+                ######## Calculate no of hops according to rxTTL value Display current rxTTL
+                try:
+                    if self.__stats["packet_instantaneous_ttl"] is not None:
+                        ttlDecrementDuringJourney = Registry.rtpGeneratorUDPTxTTL - self.__stats["packet_instantaneous_ttl"]
+                        Utils.Message.addMessage("rxTTL " + str(self.__stats["packet_instantaneous_ttl"]) + "(" +\
+                                                 str(ttlDecrementDuringJourney) +")")
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate ttl decrements " + str(e))
                 ######## 1 second counter end of code ########
 
             try:
@@ -2148,7 +2160,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # The __samplingThread will copy this var into the __stats dict
                 self.__packet_last_seen_received_timestamp = datetime.datetime.now()
 
-
                 # Increment packet received counter
                 self.packetCounterReceivedTotal += 1
                 # Update total bytes received
@@ -2293,6 +2304,10 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                     ########### Extract isptest header from most recent packet
                     self.__extractIsptestHeaderData(rtpPackets[-1].isptestHeaderData)
+
+                    ############ Snapshot the 'latest IP TTL' value
+                    # Note: This TTL value might be 'None' (i.e not set)
+                    self.__rxTTL = rtpPackets[-1].rxTTL
 
                     # x = rtpPackets[-1].rtpSequenceNo
                     # if x % 20 == 0:
@@ -2797,13 +2812,11 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
     # Define setter methods
-    def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData):
-        # Create a new rtp data object to hold the rtp packet data
-        newData = RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData)
-
-
+    def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTl):
+        # Create a new rtp data object to hold the rtp packet data and add it to the receive queue
+        # newData = RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData)
         try:
-            self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData))
+            self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTl))
             # Increment the counter. Packets out should equal packets in
             self.packetsAddedToRxQueueCount += 1
         except Exception as e:
