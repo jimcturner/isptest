@@ -13,7 +13,9 @@ class Registry(object):
     transmitterLogFilename= "isptest_Transmitter_Events_Log"
     maximumLogFileSize_bytes = 1024 * 1024 # 1Mb maximum size
 
-    messageLogFilename = "isptest_log.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
+    messageLogFilenameTx = "isptest_log_tx.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
+    messageLogFilenameRx = "isptest_log_rx.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
+
     # Provides content for the help popup
     helpTableContents = [["h","Display/hide this page"],
                          ["Ctrl-C", "Quit the application"],

@@ -2166,9 +2166,10 @@ class UI(object):
                                 textwrap.fill(str(os.path.abspath((Registry.resultsSubfolder))), width=maxWidth)])
         if self.operationMode == "RECEIVE":
             outputFileNames.append(["event list ", Registry.receiverLogFilename + ".csv"])
+            outputFileNames.append(["logfile ", Registry.messageLogFilenameRx])
         elif self.operationMode == "TRANSMIT":
             outputFileNames.append(["events ", Registry.transmitterLogFilename + ".csv"])
-        outputFileNames.append(["logfile ", Registry.messageLogFilename])
+            outputFileNames.append(["logfile ", Registry.messageLogFilenameTx])
 
         # Create some debug information to append to the end of the help list
         debugInfo = [["",""],["Debug info",""]]
@@ -3011,7 +3012,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # create UDP socket
             udpSocket = socket.socket(socket.AF_INET,  # Internet
                                       socket.SOCK_DGRAM)  # UDP
-            udpSocket.settimeout(timeout)
+            # udpSocket.settimeout(timeout)
             # Update socket with ttl value
             udpSocket.setsockopt(socket.SOL_IP, socket.IP_TTL, txTTL)
             udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
@@ -3177,6 +3178,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     packetArrivedTimestamp = datetime.timedelta()
     srcAddress = ""
     srcPort = None
+    payloadLength = 0
 
 
     while True:
@@ -3217,8 +3219,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 # # Update all streams in rtpRxStreamsDict
                 # Note: This shouldn't be requried as socket objects are mutable
                 # i.e there's only ever one instance of 'udpSocket'
-                # for stream in rtpRxStreamsDict:
-                #     rtpRxStreamsDict[stream].setSocket(udpSocket)
+                for stream in rtpRxStreamsDict:
+                    rtpRxStreamsDict[stream].setSocket(udpSocket)
 
 
         except CreateRawSocketError as e:
@@ -3343,7 +3345,6 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     if receiveSocket is rawSocket:
                         # If the data has been rx'd via the raw socket, we have to extract the data as a raw packet
                         rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = parseRawPacket(rawData)
-                        Utils.Message.addMessage("rxTTL " + str(rxTTL))
                         # Note: On Windows, the raw port is running in promiscuous mode. That means it will receive
                         # ALL incoming packets addressed to that interface.
                         # Therefore we need to check that this packet is for us, by comparing the udp dest port
@@ -3427,11 +3428,14 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                    str(UDP_RX_PORT) + ", " + str(id(udpSocket)))
 
                 Utils.Message.addMessage("__main() recvfrom: " + str(e))
+
                 try:
                     # Close existing socket
                     udpSocket.close()
                 except Exception as e:
                     Utils.Message.addMessage("ERR: main() udpSocket.close() " + str(e))
+
+
 
                 # Now try to recreate the socket
                 # break out of this inner while loop to the outer while loop (where the socket is created)
@@ -3863,6 +3867,13 @@ def main(argv):
     if MODE=="":
         print ("No mode option specified. Do you want Transmit or Receive mode?. Use -h for help")
         exit()
+
+    # Now set the message logging filename depending on the operation mode
+    # Get the filename itself, from Registry
+    if MODE == "TRANSMIT":
+        Utils.Message.setOutputFileName(Registry.messageLogFilenameTx)
+    elif MODE == "RECEIVE":
+        Utils.Message.setOutputFileName(Registry.messageLogFilenameRx)
 
     # Check to see if resultsSubfolder already exists (if not, create it)
     try:

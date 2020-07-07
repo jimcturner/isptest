@@ -208,9 +208,16 @@ class Message(object):
     # 0 = no warning messages, > 0 = warning messages displayed
     verbosityLevel = 0
 
+    outputFileName = "isptest_messages_default.txt"
+
     @classmethod
     def setVerbosity(cls, verbosity):
         cls.verbosityLevel = verbosity
+
+    # This method will override the default filename
+    @classmethod
+    def setOutputFileName(cls, fileName):
+        cls.outputFileName = fileName
 
     # Class method to add a new message to the list
     # Additionally, this method checks to see if the disk writing thread is active. If it is not, it will start it
@@ -311,7 +318,7 @@ class Message(object):
                 # Create the file object for appending
                 # Now log the message to disk
                 try:
-                    fh = open(Registry.messageLogFilename, "a+")
+                    fh = open(cls.outputFileName, "a+")
                     # Keep pulling messages from the queue and writing them until the queue is empty
                     while cls.__diskWriteQueue.qsize() > 0:
                         # Get the message item from the queue

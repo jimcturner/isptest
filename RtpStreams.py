@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Defines RtpStream objects for use by isptest
 # James Turner 20/2/20
+import select
 import socket
 import os
 import binascii
@@ -2851,9 +2852,9 @@ class ResultsTransmitter(object):
     def __resultsTransmitterThread(self):
         Utils.Message.addMessage("INFO: __resultsTransmitterThread started for stream: "+ str(self.syncSource))
 
-        oldSocket = self.parentRtpRxStream.getSocket()
+        # oldSocket = self.parentRtpRxStream.getSocket()
         # Utils.Message.addMessage("__resultsTransmitterThread. Initial socket" + str(id(oldSocket)))
-
+        selectTimeout = 1 # timeout for the select() function used to poll the OS for the availability of the socket
         while self.threadActiveFlag:
             self.udpSocket = self.parentRtpRxStream.getSocket()
             # if oldSocket is not self.udpSocket:
@@ -2894,17 +2895,28 @@ class ResultsTransmitter(object):
                             for fragment in fragmentedMessage:
                                 # Pickle and send each fragment one at a time
                                 txMessage = pickle.dumps(fragment,protocol=2)
+                                # Wait for socket to become available
+                                r, w, x = select.select([self.udpSocket], [], [], selectTimeout)
+                                # select() will return a list w containing the writable sockets
+                                # if self.udpSocket is present in that list, we can safely write to it
                                 # Utils.Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
-                                self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
-                                # clear the socket.sendto() error counter
-                                self.sendtoErrorCounter = 0
+                                if self.udpSocket in w:
+                                    self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
+                                    # clear the socket.sendto() error counter
+                                    self.sendtoErrorCounter = 0
+                                else:
+                                    # tx socket is not available within the timeout period
+                                    # Increment the counter
+                                    self.sendtoErrorCounter += 1
+                                    # Abort the transmission of all fragments
+                                    break
                         else:
                             # Utils.Message.addMessage("DBUG:__resultsTransmitterThread  - fragmentedMessage[] is None or empty")
                             pass
 
                     except Exception as e:
                         Utils.Message.addMessage("ERR:__resultsTransmitterThread sendto() socket id:" + str(id(self.udpSocket)) +", " + str(e))
-                        # Test to see if we've exceeeded the no of tolerable socket errors
+                        # Test to see if we've exceeeded the no of consequtive tolerable socket errors
                         if self.sendtoErrorCounter >= self.sendtoErrorCounterThreshold:
                             Utils.Message.addMessage("__resultsTransmitterThread. socket.sendto() error threshold exceeded (" +
                                                      str(self.sendtoErrorCounterThreshold) +\
