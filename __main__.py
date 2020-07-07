@@ -3227,7 +3227,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         "\n" + "Hint: try running as 'sudo' or 'Administrator'".center(maxWidth) + \
                         "\n\n" + "<Press any key to continue>".center(maxWidth)
 
-            uiInstance.showErrorDialogue("Network Error", errorText)
+            # uiInstance.showErrorDialogue("Network Error", errorText)
 
         except RawSocketNotPossibleForOSXError as e:
             # OSX has been detected. Warn the user that ttl values won't be displayed
@@ -3244,7 +3244,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         "\n" + "functionality will remain".center(maxWidth) + \
                         "\n\n" + "<Press any key to continue>".center(maxWidth)
 
-            uiInstance.showErrorDialogue("OSX detected", errorText)
+            # uiInstance.showErrorDialogue("OSX detected", errorText)
 
 
         # Catch fatal errors that will stop isptest from receiving packets
@@ -3274,7 +3274,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     "\n\n" + "<Press any key to continue>".center(maxWidth)
 
 
-            uiInstance.showErrorDialogue("Network Error", errorText)
+            # uiInstance.showErrorDialogue("Network Error", errorText)
             # Cause thread to end by breaking out of while loop
             break
         Utils.Message.addMessage("Using socket " + str(receiveSocket))
@@ -3333,6 +3333,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     if receiveSocket is rawSocket:
                         # If the data has been rx'd via the raw socket, we have to extract the data as a raw packet
                         rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = parseRawPacket(rawData)
+                        Utils.Message.addMessage("rxTTL " + str(rxTTL))
                         # Note: On Windows, the raw port is running in promiscuous mode. That means it will receive
                         # ALL incoming packets addressed to that interface.
                         # Therefore we need to check that this packet is for us, by comparing the udp dest port
