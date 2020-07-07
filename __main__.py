@@ -3100,7 +3100,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 return None, None, None, None, None
         except Exception as e:
             Utils.Message.addMessage("ERR:parseRawPacket " + str(e))
-
+            return None, None, None, None, None
 
     # Takes a udp packet and splits off the RTP header and payload
     def parseUDPPacket(_rawData):
@@ -3116,6 +3116,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 return None, None
         except Exception as e:
             Utils.Message.addMessage("ERR:parseUDPPacket() " + str(e))
+            return None, None
 
     # Splits out the fields from the supplied rtp header
     def parseRTPHeader(_rtpHeader):
@@ -3127,7 +3128,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 return None, None, None, None, None
         except Exception as e:
             Utils.Message.addMessage("ERR:parseRTPHeader() " + str(e))
-
+            return None, None, None, None, None
 
 
 
@@ -3343,40 +3344,47 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
 
                     # Now parse the received packet
                     if receiveSocket is rawSocket:
-                        # If the data has been rx'd via the raw socket, we have to extract the data as a raw packet
-                        rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = parseRawPacket(rawData)
-                        # Note: On Windows, the raw port is running in promiscuous mode. That means it will receive
-                        # ALL incoming packets addressed to that interface.
-                        # Therefore we need to check that this packet is for us, by comparing the udp dest port
-                        # with what we're expecting to receive on
-                        if destUDPPort == UDP_RX_PORT:
-                            # This UDP packet is addressed to us, so continue to process it
-                            # Increment the counter
-                            rawPacketsReceivedByRxThreadCount += 1
-                            version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
-                            # Get the source address
-                            srcAddress = rawAddr[0]
-                            # Get the source port no
-                            srcPort = srcUDPPort
-                            # Store the packet arrival time
-                            packetArrivedTimestamp = rawTimestamp
-                        else:
-                            # packet ignored. Increment the counter
-                            rawPacketsIgnored += 1
+                        try:
+                            # If the data has been rx'd via the raw socket, we have to extract the data as a raw packet
+                            rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = parseRawPacket(rawData)
+                            # Note: On Windows, the raw port is running in promiscuous mode. That means it will receive
+                            # ALL incoming packets addressed to that interface.
+                            # Therefore we need to check that this packet is for us, by comparing the udp dest port
+                            # with what we're expecting to receive on
+                            if destUDPPort == UDP_RX_PORT:
+                                # This UDP packet is addressed to us, so continue to process it
+                                # Increment the counter
+                                rawPacketsReceivedByRxThreadCount += 1
+                                version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
+                                # Get the source address
+                                srcAddress = rawAddr[0]
+                                # Get the source port no
+                                srcPort = srcUDPPort
+                                # Store the packet arrival time
+                                packetArrivedTimestamp = rawTimestamp
+                            else:
+                                # packet ignored. Increment the counter
+                                rawPacketsIgnored += 1
+                        except Exception as e:
+                            Utils.Message.addMessage("parse rawSocket data " + str(e))
 
                     elif receiveSocket is udpSocket:
-                        # If the data has been rx'd via the udp socket, only the rtp header + payload will be present
-                        rtpHeader, payload = parseUDPPacket(udpSocketData)
-                        # increment the counter
-                        udpPacketsReceivedByRxThreadCount += 1
-                        # Now parse the rtp header
-                        version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
-                        # Get the source address
-                        srcAddress = udpSocketAddr[0]
-                        # Get the source port no
-                        srcPort = udpSocketAddr[1]
-                        # Store the packet arrival time
-                        packetArrivedTimestamp = udpTimestamp
+                        try:
+                            # increment the counter
+                            udpPacketsReceivedByRxThreadCount += 1
+                            # If the data has been rx'd via the udp socket, only the rtp header + payload will be present
+                            rtpHeader, payload = parseUDPPacket(udpSocketData)
+                            # Now parse the rtp header
+                            version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
+                            # Get the source address
+                            srcAddress = udpSocketAddr[0]
+                            # Get the source port no
+                            srcPort = udpSocketAddr[1]
+
+                            # Store the packet arrival time
+                            packetArrivedTimestamp = udpTimestamp
+                        except Exception as e:
+                            Utils.Message.addMessage("parse udpSocket data " + str(e))
 
                 # Test to see if we have any new data (by testing the syncSourceID field)
                 if syncSourceID is not None:

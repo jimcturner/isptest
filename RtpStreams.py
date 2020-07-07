@@ -2896,25 +2896,30 @@ class ResultsTransmitter(object):
                                 # Pickle and send each fragment one at a time
                                 txMessage = pickle.dumps(fragment,protocol=2)
                                 # Wait for socket to become available
-                                r, w, x = select.select([self.udpSocket], [], [], selectTimeout)
+                                # r, w, x = select.select([self.udpSocket], [], [], selectTimeout)
                                 # select() will return a list w containing the writable sockets
                                 # if self.udpSocket is present in that list, we can safely write to it
                                 # Utils.Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
-                                if self.udpSocket in w:
-                                    self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
-                                    # clear the socket.sendto() error counter
-                                    self.sendtoErrorCounter = 0
-                                else:
-                                    # tx socket is not available within the timeout period
-                                    # Increment the counter
-                                    self.sendtoErrorCounter += 1
-                                    # Abort the transmission of all fragments
-                                    break
+                                # if self.udpSocket in w:
+                                self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
+                                # clear the socket.sendto() error counter
+                                self.sendtoErrorCounter = 0
+                                # else:
+                                #     # tx socket is not available within the timeout period
+                                #     # Increment the counter
+                                #     self.sendtoErrorCounter += 1
+                                #     Utils.Message.addMessage("__resultsTransmitterThread tx error count " + \
+                                #                              str(self.sendtoErrorCounter) + ", " +\
+                                #                              str(self.udpSocket))
+                                #     # Abort the transmission of all fragments
+                                #     break
                         else:
                             # Utils.Message.addMessage("DBUG:__resultsTransmitterThread  - fragmentedMessage[] is None or empty")
                             pass
 
                     except Exception as e:
+                        # Increment the error counter
+                        self.sendtoErrorCounter += 1
                         Utils.Message.addMessage("ERR:__resultsTransmitterThread sendto() socket id:" + str(id(self.udpSocket)) +", " + str(e))
                         # Test to see if we've exceeeded the no of consequtive tolerable socket errors
                         if self.sendtoErrorCounter >= self.sendtoErrorCounterThreshold:
