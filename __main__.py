@@ -3364,12 +3364,12 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             # ALL incoming packets addressed to that interface.
                             # Therefore we need to check that this packet is for us, by comparing the udp dest port
                             # with what we're expecting to receive on
-                            if destUDPPort == UDP_RX_PORT:
+                            if destUDPPort == UDP_RX_PORT and rtpHeader is not None:
                                 # This UDP packet is addressed to us, so continue to process it
-                                if rtpHeader is not None:
+                                version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
+                                if syncSourceID is not None:
                                     # Increment the global counter
                                     rawPacketsDecodedByRxThreadCount += 1
-                                    version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
                                     # Get the source address
                                     srcAddress = rawAddr[0]
                                     # Get the source port no
@@ -3389,19 +3389,20 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             # If the data has been rx'd via the udp socket, only the rtp header + payload will be present
                             rtpHeader, payload = parseUDPPacket(udpSocketData)
                             if rtpHeader is not None:
-                                # Increment the global counter
-                                udpPacketsDecodedByRxThreadCount += 1
                                 # Now parse the rtp header
                                 version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
-                                # Get the source address
-                                srcAddress = udpSocketAddr[0]
-                                # Get the source port no
-                                srcPort = udpSocketAddr[1]
-                                # Store the packet arrival time
-                                packetArrivedTimestamp = udpTimestamp
-                            else:
-                                # Increment the global counter
-                                udpPacketsDiscardedByRxThreadCount += 1
+                                if syncSourceID is not None:
+                                    # Increment the global counter
+                                    udpPacketsDecodedByRxThreadCount += 1
+                                    # Get the source address
+                                    srcAddress = udpSocketAddr[0]
+                                    # Get the source port no
+                                    srcPort = udpSocketAddr[1]
+                                    # Store the packet arrival time
+                                    packetArrivedTimestamp = udpTimestamp
+                                else:
+                                    # Increment the global counter
+                                    udpPacketsDiscardedByRxThreadCount += 1
                         except Exception as e:
                             Utils.Message.addMessage("DBUG:parse udpSocket data " + str(e))
 
