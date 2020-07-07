@@ -3071,51 +3071,61 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
 
     # Takes a raw packet and splits off the IP, UDP, RTP headers and Payload
     def parseRawPacket(_rawData):
-        # Check to see that the supplied bytearray is large enough
-        rawBytesReceived = len(_rawData)
-        if rawBytesReceived >= (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
-            # Split off the various IP, UDP and RTP headers
-            ipHeader = _rawData[:IP_HEADER_SIZE]
-            udpHeader = _rawData[IP_HEADER_SIZE:(IP_HEADER_SIZE + UDP_HEADER_SIZE)]
-            # Extract the Protocol field from the IP header to confirm that this contains a UDP packet.
-            # Also extract the ttl from the IP header (since they're adjacent)
-            rxTTL, ipProtocol = struct.unpack("!BB", ipHeader[8:10])
-            if ipProtocol == 17: # Contains a UDP header
-                # Extract the src and dest port from the UDP header
-                srcUDPPort, destUDPPort = struct.unpack("!HH", udpHeader[0:4])
-                # Extract the rtp header
-                rtpHeader = _rawData[(IP_HEADER_SIZE + UDP_HEADER_SIZE): \
-                                     (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE)]
-                # If there's any payload data, strip that off too.
-                if rawBytesReceived > (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
-                    payload = _rawData[IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE:]
+        try:
+            # Check to see that the supplied bytearray is large enough
+            rawBytesReceived = len(_rawData)
+            if rawBytesReceived >= (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
+                # Split off the various IP, UDP and RTP headers
+                ipHeader = _rawData[:IP_HEADER_SIZE]
+                udpHeader = _rawData[IP_HEADER_SIZE:(IP_HEADER_SIZE + UDP_HEADER_SIZE)]
+                # Extract the Protocol field from the IP header to confirm that this contains a UDP packet.
+                # Also extract the ttl from the IP header (since they're adjacent)
+                rxTTL, ipProtocol = struct.unpack("!BB", ipHeader[8:10])
+                if ipProtocol == 17: # Contains a UDP header
+                    # Extract the src and dest port from the UDP header
+                    srcUDPPort, destUDPPort = struct.unpack("!HH", udpHeader[0:4])
+                    # Extract the rtp header
+                    rtpHeader = _rawData[(IP_HEADER_SIZE + UDP_HEADER_SIZE): \
+                                         (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE)]
+                    # If there's any payload data, strip that off too.
+                    if rawBytesReceived > (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
+                        payload = _rawData[IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE:]
+                    else:
+                        payload = None
+                    return rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort
                 else:
-                    payload = None
-                return rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort
+                    return None, None, None, None, None
             else:
                 return None, None, None, None, None
-        else:
-            return None, None, None, None, None
+        except Exception as e:
+            Utils.Message.addMessage("ERR:parseRawPacket " + str(e))
+
 
     # Takes a udp packet and splits off the RTP header and payload
     def parseUDPPacket(_rawData):
-        if len(_rawData) >= RTP_HEADER_SIZE:
-            rtpHeader = _rawData[:RTP_HEADER_SIZE]
-            if len(_rawData) > RTP_HEADER_SIZE:
-                payload = _rawData[RTP_HEADER_SIZE:]
+        try:
+            if len(_rawData) >= RTP_HEADER_SIZE:
+                rtpHeader = _rawData[:RTP_HEADER_SIZE]
+                if len(_rawData) > RTP_HEADER_SIZE:
+                    payload = _rawData[RTP_HEADER_SIZE:]
+                else:
+                    payload = None
+                return rtpHeader, payload
             else:
-                payload = None
-            return rtpHeader, payload
-        else:
-            return None, None
+                return None, None
+        except Exception as e:
+            Utils.Message.addMessage("ERR:parseUDPPacket() " + str(e))
 
     # Splits out the fields from the supplied rtp header
     def parseRTPHeader(_rtpHeader):
-        if len(_rtpHeader) == RTP_HEADER_SIZE:
-            version, type, seqNo, timestamp, syncSourceID = struct.unpack("!BBHLL", _rtpHeader)
-            return version, type, seqNo, timestamp, syncSourceID
-        else:
-            return None, None, None, None, None
+        try:
+            if len(_rtpHeader) == RTP_HEADER_SIZE:
+                version, type, seqNo, timestamp, syncSourceID = struct.unpack("!BBHLL", _rtpHeader)
+                return version, type, seqNo, timestamp, syncSourceID
+            else:
+                return None, None, None, None, None
+        except Exception as e:
+            Utils.Message.addMessage("ERR:parseRTPHeader() " + str(e))
 
 
 
@@ -3372,10 +3382,13 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     # create bytestring to hold isptest header data
                     isptestHeaderData = b""
                     # Now process the payload (the bit after the rtp header)
-                    payloadLength = len(payload)
-                    if payloadLength >= ISPTEST_HEADER_SIZE:
-                        # Substring the isptest header part of the payload
-                        isptestHeaderData = payload[:ISPTEST_HEADER_SIZE]
+                    try:
+                        payloadLength = len(payload)
+                        if payloadLength >= ISPTEST_HEADER_SIZE:
+                            # Substring the isptest header part of the payload
+                            isptestHeaderData = payload[:ISPTEST_HEADER_SIZE]
+                    except Exception as e:
+                        Utils.Message.addMessage("payloadLength = len(payload) " + str(e))
 
                     # Finally, if we have a valid rtp packet with all meta data extracted, send it to an RtpReceiveStream
                     # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
