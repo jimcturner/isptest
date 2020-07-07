@@ -3873,7 +3873,7 @@ class RtpGenerator(object):
             # ResultsReceiver object (which will use this same socket, but to receive)
             self.udpTxSocket.settimeout(1)
             # Set custom udp ttl value
-            self.udpTxSocket.setsockopt(socket.SOL_IP, socket.IP_TTL, 50)
+            self.udpTxSocket.setsockopt(socket.SOL_IP, socket.IP_TTL, Registry.rtpGeneratorUDPTxTTL)
             # Utils.Message.addMessage(str(self.udpTxSocket.get))
             # If a UDP source port has been specified, use it
             if self.UDP_TX_SRC_PORT > 1024:
