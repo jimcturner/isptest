@@ -1781,6 +1781,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                 ######## Detect changes in the value of rxTTL
                 if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
                     # Change in the value of rxTTL detected
+                    Utils.Message.addMessage("rxTTL change " + str(prevRxTTL) + ">>" + \
+                                             str(self.__stats["packet_instantaneous_ttl"]))
                     pass
 
 
