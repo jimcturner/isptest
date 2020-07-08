@@ -1596,6 +1596,10 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.__stats["stream_transmitter_txRate_bps"] = self.__streamTransmitterTxRateBps
             # Snapshot latest packet IP TTL value
             self.__stats["packet_instantaneous_ttl"] = self.__rxTTL
+            # Snapshot latest src address
+            self.__stats["stream_srcAddress"] = self.__srcAddress
+            # Snapshot latest src port
+            self.__stats["stream_srcPort"] = self.__srcPort
 
             try:
                 ########### Calculate how many packets received in the latest 200mS period - required for 'mean' calculations
@@ -2424,7 +2428,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     ############ Snapshot the 'latest src addr' value
                     self.__srcAddress = rtpPackets[-1].srcAddr
                     ############ Snapshot the 'latest src port' value
-                    self.__srcAddress = rtpPackets[-1].srcPort
+                    self.__srcPort = rtpPackets[-1].srcPort
 
 
                     # x = rtpPackets[-1].rtpSequenceNo
