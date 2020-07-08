@@ -16,11 +16,14 @@ from ipwhois import IPWhois, exceptions
 import math
 # Formats a datetime.timedelta object as a simple string hh:mm:ss
 def dtstrft(timeDelta):
-    total_seconds = int(timeDelta.total_seconds())
-    hours, remainder = divmod(total_seconds, 60 * 60)
-    minutes, seconds = divmod(remainder, 60)
+    try:
+        total_seconds = int(timeDelta.total_seconds())
+        hours, remainder = divmod(total_seconds, 60 * 60)
+        minutes, seconds = divmod(remainder, 60)
 
-    return str(hours).zfill(2)+":"+str(minutes).zfill(2)+":"+str(seconds).zfill(2)
+        return str(hours).zfill(2)+":"+str(minutes).zfill(2)+":"+str(seconds).zfill(2)
+    except:
+        return None
 
 # Returns the IP address of the network interface currently used as the default route to the internet (if no args supplied)
 # Alternatively, for a supplied ip address, it will return ip address of the interface that, according to the OS

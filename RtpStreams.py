@@ -771,7 +771,7 @@ class RtpReceiveCommon(object):
         tracerouteHopsListAsString += "No. of route changes: ".rjust(labelWidth) + \
                                       str(stats["route_change_events_total"]) + "\r\n"
         tracerouteHopsListAsString += "Mean interval between route changes: ".rjust(labelWidth) +\
-                                      str(stats["route_mean_time_between_route_change_events"]) + "\r\n"
+                                      str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
         if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
             for hopNo in range(len(tracerouteHopsList)):
                 try:
