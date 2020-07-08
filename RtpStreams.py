@@ -1785,11 +1785,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                         oldLen = len(self.getTraceRouteHopsList())
                         Utils.Message.addMessage("rxTTL change " + str(prevRxTTL) + ">>" + \
                                                  str(self.__stats["packet_instantaneous_ttl"]))
-                        # Flush existing hops list because it can't possibly be accurate now (but will take time
-                        # to repopulate)
-                        self.setTraceRouteHopsList([])
-                        newLen = len(self.getTraceRouteHopsList())
-                        Utils.Message.addMessage("Flushing tracerouteHopsList " + str(oldLen) + ">" + str(newLen))
                         pass
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect rxTTL changes " + str(e))
@@ -1843,25 +1838,27 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # * Note if prevRxTTL is 'None' (because the rxTTL isn't able to be decoded)
                         # then all we have to go on is the length of the hops list
 
+                        # Test If length of list has changed then set hopsListHasChanged flag
                         elif (len(hopsList) != len(prevHopsList)):
-                            # Test to see if stats["packet_instantaneous_ttl"] contains any useful info
-                            # on which to base a route-change decision
-                            if self.__stats["packet_instantaneous_ttl"] is None:
-                                # It doesn't, so we can only go on the change in length of hopsList[]
-                                hopsListHasChanged = True
-                            else:
-                                # stats["packet_instantaneous_ttl"] does contain a value which we can use to see if the
-                                # route has changed. Compare current and prev rxTTL values
-                                if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
-                                    hopsListHasChanged = True
-                                else:
-                                    # This change in the length of hopsList is a red herring because rxTTL did not change.
-                                    # Therefore ignore.
-                                    hopsListHasChanged = False
-                                    Utils.Message.addMessage("DBUG: False route change. hopsList len changed " +\
-                                                             str(len(prevHopsList)) + ">>" + str(len(prevHopsList)) +\
-                                                             " but rxTTL val didn't " + str(prevRxTTL) + ">>" +\
-                                                             str(self.__stats["packet_instantaneous_ttl"]))
+                            hopsListHasChanged = True
+                            # # Test to see if stats["packet_instantaneous_ttl"] contains any useful info
+                            # # on which to base a route-change decision
+                            # if self.__stats["packet_instantaneous_ttl"] is None:
+                            #     # It doesn't, so we can only go on the change in length of hopsList[]
+                            #     hopsListHasChanged = True
+                            # else:
+                            #     # stats["packet_instantaneous_ttl"] does contain a value which we can use to see if the
+                            #     # route has changed. Compare current and prev rxTTL values
+                            #     if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
+                            #         hopsListHasChanged = True
+                            #     else:
+                            #         # This change in the length of hopsList is a red herring because rxTTL did not change.
+                            #         # Therefore ignore.
+                            #         hopsListHasChanged = False
+                            #         Utils.Message.addMessage("DBUG: False route change. hopsList len changed " +\
+                            #                                  str(len(prevHopsList)) + ">>" + str(len(prevHopsList)) +\
+                            #                                  " but rxTTL val didn't " + str(prevRxTTL) + ">>" +\
+                            #                                  str(self.__stats["packet_instantaneous_ttl"]))
 
 
                         # If the lengths of the two lists are the same, test the contents
