@@ -3419,13 +3419,16 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             isptestHeaderData = payload[:ISPTEST_HEADER_SIZE]
                     except Exception as e:
                         Utils.Message.addMessage("payloadLength = len(payload) " + str(e))
+                        payloadLength = 0
 
                     # Finally, if we have a valid rtp packet with all meta data extracted, send it to an RtpReceiveStream
                     # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
                     try:
-                        # For the sake of speed, this operation won't use the rtpRxStreamsDictMutex
+                        # Calculate the udp payload length (rtp header plus data). This is to allow bitrate calculations
+                        udpPayloadLength = payloadLength + RTP_HEADER_SIZE
+                        # Add the the new rtp data object to the RtpReceiveStream
                         rtpRxStreamsDict[syncSourceID].addData(\
-                            seqNo, payloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, rxTTL)
+                            seqNo, udpPayloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, rxTTL)
 
                     except:
                         # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict

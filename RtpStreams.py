@@ -948,7 +948,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_time_elapsed_total"] = datetime.timedelta()
         self.__stats["packet_instantaneous_receive_period_uS"] = 0
         self.__stats["packet_mean_receive_period_uS"] = 0
-        self.__stats["packet_instantaneous_ttl"] = 0
+        self.__stats["packet_instantaneous_ttl"] = None
         self.aggregateSumOfTimeDeltas = 0  # Used to calculate self.__stats["packet_mean_receive_period_uS"]
 
         # Aggregate Glitch counters
