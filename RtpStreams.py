@@ -485,6 +485,48 @@ class IPRoutingChange(Event):
         jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
         return jsonRepresentation
 
+# Define an event to register a change in the TTL field of the received UDP packets - signals a route change
+class IPRoutingTTLChange(Event):
+
+
+    def __init__(self, stats, prevRxTTL, currentRxTTL):
+        # Call Constructor of parent class. This will set parameters such as timeCreated etc
+        super().__init__(stats)
+        # Declare specific instance variables
+        self.prevRxTTL = prevRxTTL
+        self.currentRxTTL = currentRxTTL
+
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True,
+                   includeFriendlyName=True):
+        try:
+            optionalFields = ", Rx TTL change: " + str(self.prevRxTTL) + " >> " + str(self.currentRxTTL)
+        except:
+            optionalFields = ""
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo=includeEventNo,
+                                                includeType=includeType,
+                                                includeFriendlyName=includeFriendlyName)
+
+        summary += optionalFields
+        data = {'timeCreated': self.timeCreated, 'summary': summary}
+        return data
+
+    def getCSV(self):
+        optionalFields = ""
+        try:
+            optionalFields = "prev rxTTL," + str(self.prevRxTTL) + ",current rxTTL," + str(self.currentRxTTL)
+        except:
+            pass
+        csv = Event.createCommonCSVString(self) + optionalFields
+        return csv
+
+    def getJSON(self):
+        # # Returns a json object representation of the event as a string
+        # Create dictionary with any additional keys specific to this type of event
+        additionalData = {'prev rxTTL': self.prevRxTTL, 'current rxTTL': self.currentRxTTL}
+        jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
+        return jsonRepresentation
+
 
 # Stores a running total of events that happened within the last x seconds with y granularity
 class MovingTotalEventCounter(object):
@@ -1785,7 +1827,15 @@ class RtpReceiveStream(RtpReceiveCommon):
                         oldLen = len(self.getTraceRouteHopsList())
                         Utils.Message.addMessage("rxTTL change " + str(prevRxTTL) + ">>" + \
                                                  str(self.__stats["packet_instantaneous_ttl"]))
-                        pass
+                        # RxTTL change detected, create a new IPRoutingTTLChange event
+                        ipRoutingTTLChange = IPRoutingTTLChange(self.__stats, prevRxTTL, self.__stats["packet_instantaneous_ttl"])
+                        # Add the event to the event list
+                        self.__eventList.append(ipRoutingTTLChange)
+                        # # Increment the all_events counter
+                        self.__stats["stream_all_events_counter"] += 1
+                        # # Post a message
+                        Utils.Message.addMessage(ipRoutingTTLChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect rxTTL changes " + str(e))
 
