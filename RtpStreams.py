@@ -4555,7 +4555,7 @@ class RtpGenerator(object):
                 raise UDPTxError("UDPTxError " + str(e))
 
         # Define a socket timeout value
-        timeOut = 0.5
+        timeOut = 0.1
         # Define the number of times the traceroute will attempt to illicit a response from the router.
         # This is becuse some routers will fail to respond due to rate limiting of requests.
         # Note: Each subsquent attempt alternates between two possible ports
@@ -4764,8 +4764,8 @@ class RtpGenerator(object):
                     # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
                     pass
 
-                # Sleep for 2 sec between completed traceroutes
-                time.sleep(2)
+                # Sleep for 1 sec between completed traceroutes
+                time.sleep(1)
         except Exception as e:
             Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread outer loop error. " + str(type(e)) + ", " + str(e))
 
