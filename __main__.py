@@ -3058,11 +3058,15 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 raise RawSocketNotPossibleForOSXError("Not supported on OSX (Darwin)")
 
         except RawSocketNotPossibleForOSXError as e:
+            # Set rawSocket to None
+            rawSocket = None
             # Pass the Exception outwards
             raise RawSocketNotPossibleForOSXError(str(e))
 
         except Exception as e:
             # Socket creation failed. Raise an Exception
+            # Set rawSocket to None
+            rawSocket = None
             # print ("createRawSocket() " + str(e))
             raise CreateRawSocketError(str(e))
 
@@ -3462,11 +3466,18 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 Utils.Message.addMessage("__main() recvfrom: " + str(e))
 
                 try:
-                    # Close existing socket
+                    # Close udp socket
                     udpSocket.close()
+                    Utils.Message.addMessage("DBUG: main()__receiveRtpThread udpSocket closed")
                 except Exception as e:
-                    Utils.Message.addMessage("ERR: main() udpSocket.close() " + str(e))
-
+                    Utils.Message.addMessage("ERR:main()__receiveRtpThread udpSocket.close() " + str(e))
+                try:
+                    # Close raw socket
+                    if rawSocket is not None:
+                        rawSocket.close()
+                        Utils.Message.addMessage("DBUG: main()__receiveRtpThread rawSocket closed")
+                except Exception as e:
+                    Utils.Message.addMessage("ERR: main()__receiveRtpThread rawSocket.close() " + str(e))
 
 
                 # Now try to recreate the socket
@@ -3505,10 +3516,19 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
         time.sleep(1)
 
     try:
-        # Close the recvfrom socket in
+        # Close the udpSocket socket in
         udpSocket.close()
+        Utils.Message.addMessage("DBUG: main()__receiveRtpThread udpSocket closed")
     except Exception as e:
-        Utils.Message.addMessage("ERR: main() Can't close recvfrom socket. " + str(e))
+        Utils.Message.addMessage("ERR: main()__receiveRtpThread udpSocket.close() " + str(e))
+
+    try:
+        # Close raw socket
+        if rawSocket is not None:
+            rawSocket.close()
+            Utils.Message.addMessage("DBUG: main()__receiveRtpThread rawSocket closed")
+    except Exception as e:
+        Utils.Message.addMessage("ERR: main()__receiveRtpThread rawSocket.close() " + str(e))
 
     Utils.Message.addMessage("DBUG:__receiveRTPThread exiting")
     # print("__receiveRTPThread exiting\r")
