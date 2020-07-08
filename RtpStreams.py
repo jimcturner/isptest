@@ -754,6 +754,8 @@ class RtpReceiveCommon(object):
         "Total packets lost: ".rjust(labelWidth) + str(int(stats["glitch_packets_lost_total_count"])) + "\r\n" + \
             "Mean packet loss per glitch: ".rjust(labelWidth) + str(math.ceil(stats["glitch_packets_lost_per_glitch_mean"])) + "\r\n" + \
             "Total no of glitches: ".rjust(labelWidth) + str(int(stats["glitch_counter_total_glitches"])) + "\r\n" + \
+            str("Ignored glitches (<=" + str(stats["glitch_Event_Trigger_Threshold_packets"]) + " packets lost): ").rjust(labelWidth) + \
+            str(int(stats["glitch_glitches_ignored_counter"])) + "\r\n" + \
             "Maximum glitch dur: ".rjust(labelWidth) + str(Utils.dtstrft(stats["glitch_max_glitch_duration"])) + "\r\n" + \
             "Mean glitch dur: ".rjust(labelWidth) + str(Utils.dtstrft(stats["glitch_mean_glitch_duration"])) + "\r\n" + \
             "Mean interval between glitches: ".rjust(labelWidth) + str(
@@ -1523,6 +1525,8 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Stores the previous traceroute hops list. Used to detect route changes
         prevHopsList = []
+        # Stores the previous rx TTL value - Used to detect route changes
+        prevRxTTL = None
 
         # Infinite loop
         while self.samplingThreadActiveFlag:
@@ -1773,8 +1777,29 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect loss of stream " + str(e))
 
+
+                ######## Detect changes in the value of rxTTL
+                if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
+                    # Change in the value of rxTTL detected
+                    pass
+
+
+                ######## Calculate no of IP hops according to rxTTL value Display current rxTTL
+                # Only do this if the received packets were sent from an instance of isptest (because otherwise we
+                # won't know what the starting ttl would have been)
                 try:
-                    ######## Detect route changes
+                    if (self.__stats["packet_instantaneous_ttl"] is not None) and \
+                            (self.__stats["stream_transmitterVersion"] > 0):
+                        self.__stats["packet_ttl_decrement_count"] = \
+                            Registry.rtpGeneratorUDPTxTTL - self.__stats["packet_instantaneous_ttl"]
+                        # Compare
+                        # Utils.Message.addMessage("rxTTL " + str(self.__stats["packet_instantaneous_ttl"]) + "(" +\
+                        #                          str(self.__stats["packet_ttl_decrement_count"]) +")")
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate ttl decrements " + str(e))
+
+                try:
+                    ######## Detect route changes using traceroute hops list and rxTTL values
                     # Compare the diff of the sum of the each of the traceroute hops to the previous value for that hop
                     #  If it has changed, signal a route change.
                     # Note: some routers don't always respond (so that hop value oscillates between a valid IP address
@@ -1797,11 +1822,38 @@ class RtpReceiveStream(RtpReceiveCommon):
                             Utils.Message.addMessage("Initial traceroute received for stream " +\
                                                      str(self.__stats["stream_syncSource"]))
 
-                        # Test If length of list has changed then set hopsListHasChanged flag
-                        elif len(hopsList) != len(prevHopsList):
+                        # Test to see if the rxTTL value has changed, if so, set hopsListHasChanged flag
+                        if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
                             hopsListHasChanged = True
 
-                        # If the lenths of the two lists are the same, test the contents
+                        # Test If length of list has changed then set hopsListHasChanged flag
+                        # However, if the rxTTL value hasn't also changed*, this suggests an erroneous
+                        # traceroute hops list possibly caused by a series of routers not responding.
+                        # * Note if prevRxTTL is 'None' (because the rxTTL isn't able to be decoded)
+                        # then all we have to go on is the length of the hops list
+
+                        elif (len(hopsList) != len(prevHopsList)):
+                            # Test to see if stats["packet_instantaneous_ttl"] contains any useful info
+                            # on which to base a route-change decision
+                            if self.__stats["packet_instantaneous_ttl"] is None:
+                                # It doesn't, so we can only go on the change in length of hopsList[]
+                                hopsListHasChanged = True
+                            else:
+                                # stats["packet_instantaneous_ttl"] does contain a value which we can use to see if the
+                                # route has changed. Compare current and prev rxTTL values
+                                if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
+                                    hopsListHasChanged = True
+                                else:
+                                    # This change in the length of hopsList is a red herring because rxTTL did not change.
+                                    # Therefore ignore.
+                                    hopsListHasChanged = False
+                                    Utils.Message.addMessage("DBUG: False route change. hopsList len changed " +\
+                                                             str(len(prevHopsList)) + ">>" + str(len(prevHopsList)) +\
+                                                             " but rxTTL val didn't " + str(prevRxTTL) + ">>" +\
+                                                             str(self.__stats["packet_instantaneous_ttl"]))
+
+
+                        # If the lengths of the two lists are the same, test the contents
                         else:
                             # Otherwise, if list length is the same compare sums of latest and previous sumOfHopsList members
                             for hopNo in range(len(hopsList)):
@@ -1886,6 +1938,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect route changes " + str(e))
 
+                # Snapshot current rxTTL value
+                prevRxTTL = self.__stats["packet_instantaneous_ttl"]
 
                 ########## Calculate route change stats
                 try:
@@ -1908,18 +1962,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Route Change stats " + str(e))
 
-                ######## Calculate no of hops according to rxTTL value Display current rxTTL
-                # Only do this if the received packets were sent from an instance of isptest (because otherwise we
-                # won't know what the starting ttl would have been)
-                try:
-                    if (self.__stats["packet_instantaneous_ttl"] is not None) and \
-                            (self.__stats["stream_transmitterVersion"] > 0):
-                        self.__stats["packet_ttl_decrement_count"] = \
-                            Registry.rtpGeneratorUDPTxTTL - self.__stats["packet_instantaneous_ttl"]
-                        Utils.Message.addMessage("rxTTL " + str(self.__stats["packet_instantaneous_ttl"]) + "(" +\
-                                                 str(self.__stats["packet_ttl_decrement_count"]) +")")
-                except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate ttl decrements " + str(e))
+
                 ######## 1 second counter end of code ########
 
             try:
