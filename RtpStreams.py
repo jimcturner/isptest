@@ -1782,12 +1782,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                 try:
                     if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
                         # Change in the value of rxTTL detected
+                        oldLen = len(self.getTraceRouteHopsList())
                         Utils.Message.addMessage("rxTTL change " + str(prevRxTTL) + ">>" + \
-                                                 str(self.__stats["packet_instantaneous_ttl"]) + \
-                                                 ". Flushing tracerouteHopsList")
+                                                 str(self.__stats["packet_instantaneous_ttl"]))
                         # Flush existing hops list because it can't possibly be accurate now (but will take time
                         # to repopulate)
                         self.setTraceRouteHopsList([])
+                        newLen = len(self.getTraceRouteHopsList())
+                        Utils.Message.addMessage("Flushing tracerouteHopsList " + str(oldLen) + ">" + str(newLen))
                         pass
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect rxTTL changes " + str(e))
