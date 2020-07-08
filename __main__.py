@@ -3435,7 +3435,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         udpPayloadLength = payloadLength + RTP_HEADER_SIZE
                         # Add the the new rtp data object to the RtpReceiveStream
                         rtpRxStreamsDict[syncSourceID].addData(\
-                            seqNo, udpPayloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, rxTTL)
+                            seqNo, udpPayloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, \
+                            rxTTL, srcAddress, srcPort)
 
                     except:
                         # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict

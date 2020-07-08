@@ -600,13 +600,15 @@ class MovingTotalEventCounter(object):
 # Define an object to hold data about an individual received rtp packet
 class RtpData(object):
     # Constructor method
-    def __init__(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTL):
+    def __init__(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTL, srcAddr, srcPort):
         self.rtpSequenceNo = rtpSequenceNo
         self.payloadSize = payloadSize
         self.timestamp = timestamp
         self.syncSource = syncSource
         self.isptestHeaderData = isptestHeaderData
         self.rxTTL = rxTTL  # The TTL field from the IP header carrying this Rtp packet
+        self.srcAddr = srcAddr
+        self.srcPort = srcPort
         # timeDelta will store the timestamp diff between this and the previous packet
         self.timeDelta = 0
         # jitter will store the diff between the timeDelta of this and the prev packet
@@ -924,7 +926,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Assign to instance variable
         self.__stats["stream_syncSource"] = syncSource
         self.__stats["stream_srcAddress"] = srcAddress
+        self.__srcAddress = srcAddress
         self.__stats["stream_srcPort"] = srcPort
+        self.__srcPort = srcPort
         self.__stats["stream_rxAddress"] = rxAddress
         self.__stats["stream_rxPort"] = rxPort
         self.__stats["stream_transmitter_localAddress"] = "" # Will be populated by incoming isptest header data
@@ -2417,6 +2421,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                     ############ Snapshot the 'latest IP TTL' value
                     # Note: This TTL value might be 'None' (i.e not set)
                     self.__rxTTL = rtpPackets[-1].rxTTL
+                    ############ Snapshot the 'latest src addr' value
+                    self.__srcAddress = rtpPackets[-1].srcAddr
+                    ############ Snapshot the 'latest src port' value
+                    self.__srcAddress = rtpPackets[-1].srcPort
+
 
                     # x = rtpPackets[-1].rtpSequenceNo
                     # if x % 20 == 0:
@@ -2921,11 +2930,12 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
     # Define setter methods
-    def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTl):
+    def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTl, srcAddress, srcPort):
         # Create a new rtp data object to hold the rtp packet data and add it to the receive queue
         # newData = RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData)
         try:
-            self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTl))
+            self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, \
+                                            rxTTl, srcAddress, srcPort))
             # Increment the counter. Packets out should equal packets in
             self.packetsAddedToRxQueueCount += 1
         except Exception as e:
