@@ -704,7 +704,8 @@ class UI(object):
                        ["pack\np/s", "packet_counter_1S"],
                        ["Length\n(bytes)", "packet_payload_size_mean_1S_bytes"],
                        ["Recv\nperiod", "packet_mean_receive_period_uS"],
-                       ["Bytes\nRcvd", "packet_data_received_total_bytes"]
+                       ["Bytes\nRcvd", "packet_data_received_total_bytes"],
+                       ["TTL", "packet_instantaneous_ttl"]
                        # ["",""],
                        ], self.streamResultsDataSet])
 
@@ -2544,6 +2545,8 @@ class UI(object):
     def __humanise(self, key, value):
         # This function tests the supplied key against some specified key values, and formats the corresponding value
         # to make it more readable
+        if value == None:
+            value = " - "
         if key == "packet_data_received_1S_bytes":
             # We want this value in bps
             # Convert bytes to bits

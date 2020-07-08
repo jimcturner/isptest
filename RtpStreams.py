@@ -752,6 +752,8 @@ class RtpReceiveCommon(object):
             "\r\n" + \
         "Packet loss: ".rjust(labelWidth) + str("%0.2f" % stats["glitch_packets_lost_total_percent"]) + "%" + "\r\n" + \
         "Total packets lost: ".rjust(labelWidth) + str(int(stats["glitch_packets_lost_total_count"])) + "\r\n" + \
+            "Mean packet loss per glitch: ".rjust(labelWidth) + str(math.ceil(stats["glitch_packets_lost_per_glitch_mean"])) + "\r\n" + \
+            "Total no of glitches: ".rjust(labelWidth) + str(int(stats["glitch_counter_total_glitches"])) + "\r\n" + \
             "Maximum glitch dur: ".rjust(labelWidth) + str(Utils.dtstrft(stats["glitch_max_glitch_duration"])) + "\r\n" + \
             "Mean glitch dur: ".rjust(labelWidth) + str(Utils.dtstrft(stats["glitch_mean_glitch_duration"])) + "\r\n" + \
             "Mean interval between glitches: ".rjust(labelWidth) + str(
