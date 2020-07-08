@@ -1825,7 +1825,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                      str(self.__stats["stream_syncSource"]))
 
                         # Test to see if the rxTTL value has changed, if so, set hopsListHasChanged flag
-                        if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
+                        elif self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
                             hopsListHasChanged = True
 
                         # Test If length of list has changed then set hopsListHasChanged flag
