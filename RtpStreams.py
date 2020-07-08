@@ -951,6 +951,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["packet_instantaneous_receive_period_uS"] = 0
         self.__stats["packet_mean_receive_period_uS"] = 0
         self.__stats["packet_instantaneous_ttl"] = None
+        self.__stats["packet_ttl_decrement_count"] = None # Contains the difference in IP ttl value between at the start
+                                                            # (if known) and at the point of arrival
         self.aggregateSumOfTimeDeltas = 0  # Used to calculate self.__stats["packet_mean_receive_period_uS"]
 
         # Aggregate Glitch counters
@@ -1907,11 +1909,15 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Route Change stats " + str(e))
 
                 ######## Calculate no of hops according to rxTTL value Display current rxTTL
+                # Only do this if the received packets were sent from an instance of isptest (because otherwise we
+                # won't know what the starting ttl would have been)
                 try:
-                    if self.__stats["packet_instantaneous_ttl"] is not None:
-                        ttlDecrementDuringJourney = Registry.rtpGeneratorUDPTxTTL - self.__stats["packet_instantaneous_ttl"]
+                    if (self.__stats["packet_instantaneous_ttl"] is not None) and \
+                            (self.__stats["stream_transmitterVersion"] > 0):
+                        self.__stats["packet_ttl_decrement_count"] = \
+                            Registry.rtpGeneratorUDPTxTTL - self.__stats["packet_instantaneous_ttl"]
                         Utils.Message.addMessage("rxTTL " + str(self.__stats["packet_instantaneous_ttl"]) + "(" +\
-                                                 str(ttlDecrementDuringJourney) +")")
+                                                 str(self.__stats["packet_ttl_decrement_count"]) +")")
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate ttl decrements " + str(e))
                 ######## 1 second counter end of code ########
