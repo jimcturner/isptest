@@ -1779,11 +1779,18 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
                 ######## Detect changes in the value of rxTTL
-                if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
-                    # Change in the value of rxTTL detected
-                    Utils.Message.addMessage("rxTTL change " + str(prevRxTTL) + ">>" + \
-                                             str(self.__stats["packet_instantaneous_ttl"]))
-                    pass
+                try:
+                    if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
+                        # Change in the value of rxTTL detected
+                        Utils.Message.addMessage("rxTTL change " + str(prevRxTTL) + ">>" + \
+                                                 str(self.__stats["packet_instantaneous_ttl"]) + \
+                                                 ". Flushing tracerouteHopsList")
+                        # Flush existing hops list because it can't possibly be accurate now (but will take time
+                        # to repopulate)
+                        self.setTraceRouteHopsList([])
+                        pass
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect rxTTL changes " + str(e))
 
 
                 ######## Calculate no of IP hops according to rxTTL value Display current rxTTL
@@ -1824,9 +1831,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                             Utils.Message.addMessage("Initial traceroute received for stream " +\
                                                      str(self.__stats["stream_syncSource"]))
 
-                        # Test to see if the rxTTL value has changed, if so, set hopsListHasChanged flag
-                        elif self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
-                            hopsListHasChanged = True
+                        # # Test to see if the rxTTL value has changed, if so, set hopsListHasChanged flag
+                        # elif self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
+                        #     hopsListHasChanged = True
 
                         # Test If length of list has changed then set hopsListHasChanged flag
                         # However, if the rxTTL value hasn't also changed*, this suggests an erroneous
