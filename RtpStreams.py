@@ -1895,6 +1895,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                         Utils.Message.addMessage(
                             srcAddressChange.getSummary(includeStreamSyncSourceID=False)['summary'])
 
+                        # Now snapshot latest values
+                        prevSrcAddr = self.__stats["stream_srcAddress"]
+                        prevSrcPort = self.__stats["stream_srcPort"]
+
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect source address/port changes " + str(e))
 
