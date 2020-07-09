@@ -5004,7 +5004,7 @@ class RtpGenerator(object):
                         # If the lists are all identical that means that n consecqutive traceroutes gave the same result
                         # so the traceroute has been validated
                         # copy the new tracerouteHopsList back into the instance variable version
-                        Utils.Message.addMessage("traceroute results are identical, updating tracerouteHopsList")
+                        # Utils.Message.addMessage("traceroute results are identical, updating tracerouteHopsList")
                         self.tracerouteHopsListMutex.acquire()
                         self.tracerouteHopsList = hopsList
                         self.tracerouteHopsListMutex.release()
