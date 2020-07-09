@@ -4904,85 +4904,118 @@ class RtpGenerator(object):
 
         Utils.Message.addMessage(\
             "DBUG:__tracerouteThreadScapyWindowsRewrite starting for stream " + str(self.syncSourceIdentifier))
+        # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
+        # consecqutive identical lists have been determined can we say that we have a static route
+        tracerouteHopsListMustMatchThreshold = 2
         try:
             # Perform the traceroute in an infinite loop as long as the transmit stream is alive
             while self.timeToLive != 0:
-                # This is the main outer traceroute loop and counts the hops
-                # Set initial ttl
-                ttl = 0
-                # This list will be populated with the results of the traceroute
-                hopsList = []
-                # Utils.Message.addMessage("Starting traceroute....ttl = 1")
-                while ttl < maxNoOfHops and self.timeToLive != 0:
-                    attemptsCount = 1
-                    ttl += 1
-                    # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
-                    icmpSrcAddr = None
-                    # Utils.Message.addMessage("hop counter starting: ttl: " + str(ttl))
-                    # This loop counts the attempts for each hop
-                    while (attemptsCount < noOfRetries) and self.timeToLive != 0:
-                        # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
-                        # Send UDP packet
-                        # determine which destination port we should be using (based on the no of attempts so far)
-                        # and create a packet accordingly
-                        if attemptsCount % 2 == 1:
-                            pkt = IP(dst=self.UDP_TX_IP, ttl=ttl) / UDP(dport=self.UDP_TX_PORT)
+                # Create empty list to put the results of each traceroute attempt into
+                tracerouteResultsList = []
+                for tracerouteAttempt in range(0, tracerouteHopsListMustMatchThreshold):
+                    # This is the main outer traceroute loop and counts the hops
+                    # Set initial ttl
+                    ttl = 0
+                    # This list will be populated with the results of the traceroute
+                    hopsList = []
+                    # Utils.Message.addMessage("Starting traceroute....ttl = 1")
+                    while ttl < maxNoOfHops and self.timeToLive != 0:
+                        attemptsCount = 1
+                        ttl += 1
+                        # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
+                        icmpSrcAddr = None
+                        # Utils.Message.addMessage("hop counter starting: ttl: " + str(ttl))
+                        # This loop counts the attempts for each hop
+                        while (attemptsCount < noOfRetries) and self.timeToLive != 0:
+                            # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
+                            # Send UDP packet
+                            # determine which destination port we should be using (based on the no of attempts so far)
+                            # and create a packet accordingly
+                            if attemptsCount % 2 == 1:
+                                pkt = IP(dst=self.UDP_TX_IP, ttl=ttl) / UDP(dport=self.UDP_TX_PORT)
+                            else:
+                                pkt = IP(dst=self.UDP_TX_IP, ttl=ttl) / UDP(dport=fallbackPort)
+
+                            # Now send the packet and wait for a reply
+                            reply = sr1(pkt, verbose=0, timeout=timeOut)
+
+                            # Increment the attempts counter
+                            attemptsCount += 1
+                            # Test the reply (should be an ICMP message, or None if the router doesn't respond)
+                            if reply is not None:
+                                # Utils.Message.addMessage("Message reply type " + str(reply.type))
+                                # Detect TTL Expired messages (icmp type 11, code 0)
+                                if reply.type == 11:
+                                    # This is a TTL expired in transit message, for us - snapshot the address
+                                    icmpSrcAddr = reply.src
+                                # Detect Destination Host Port unreachable, destination reached
+                                if reply.type == 3 or reply.src == self.UDP_TX_IP:
+                                    icmpSrcAddr = reply.src
+                                    # Cause the outer-outer hops counter loop to break. The traceroute is complete
+                                    ttl = maxNoOfHops
+                                # Reset the 'no response' counter
+                                noResponseCounter = 0
+                                # We have a reply for this hop, so break out of the attempts loop
+                                # This will cause the ttl to increment (to the next hop value)
+                                break
+                        # Has icmpSrcAddr been populated with an address?
+                        if icmpSrcAddr is not None:
+                            # It has - the upstream router did respond
+                            # Query the WhoisResolver to find the owner of the domain
+                            Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
+                            # If so, break the address up into a list of octets - this is how they're stored in self.tracerouteHopsList
+                            icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
+                            hopsList.append(
+                                [int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]), int(icmpSrcAddrOctets[2]),
+                                 int(icmpSrcAddrOctets[3])])
                         else:
-                            pkt = IP(dst=self.UDP_TX_IP, ttl=ttl) / UDP(dport=fallbackPort)
+                            # icmpSrcAddr has not been overwritten with an addres so the upstream did not respond
+                            # Increment the 'no response' counter
+                            noResponseCounter += 1
+                            # As there was no router response for this hop, add 0.0.0.0 as the hop address
+                            hopsList.append([0, 0, 0, 0])
 
-                        # Now send the packet and wait for a reply
-                        reply = sr1(pkt, verbose=0, timeout=timeOut)
-
-                        # Increment the attempts counter
-                        attemptsCount += 1
-                        # Test the reply (should be an ICMP message, or None if the router doesn't respond)
-                        if reply is not None:
-                            # Utils.Message.addMessage("Message reply type " + str(reply.type))
-                            # Detect TTL Expired messages (icmp type 11, code 0)
-                            if reply.type == 11:
-                                # This is a TTL expired in transit message, for us - snapshot the address
-                                icmpSrcAddr = reply.src
-                            # Detect Destination Host Port unreachable, destination reached
-                            if reply.type == 3 or reply.src == self.UDP_TX_IP:
-                                icmpSrcAddr = reply.src
-                                # Cause the outer-outer hops counter loop to break. The traceroute is complete
-                                ttl = maxNoOfHops
-                            # Reset the 'no response' counter
-                            noResponseCounter = 0
-                            # We have a reply for this hop, so break out of the attempts loop
-                            # This will cause the ttl to increment (to the next hop value)
+                        # Now check to see if we've received five 'no replies' in a row, if so, give up
+                        # Or else, if we've reached the max no of hops, give up
+                        if (noResponseCounter > maxNoOfNoResponse) or (ttl == maxNoOfHops):
+                            # print ("5 in a row, aborting")
+                            # Utils.Message.addMessage(str(noResponseCounter) + " None's in a row or hop limit reached. Aborting")
+                            # Cause the outer-outer hops counter loop to break
+                            ttl = maxNoOfHops
+                            # Break out of this (hops) loop
                             break
-                    # Has icmpSrcAddr been populated with an address?
-                    if icmpSrcAddr is not None:
-                        # It has - the upstream router did respond
-                        # Query the WhoisResolver to find the owner of the domain
-                        Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
-                        # If so, break the address up into a list of octets - this is how they're stored in self.tracerouteHopsList
-                        icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
-                        hopsList.append(
-                            [int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]), int(icmpSrcAddrOctets[2]),
-                             int(icmpSrcAddrOctets[3])])
+                    # Traceroute pass completed, now append to tracerouteResultsList for later validation
+                    # Add the latest traceroute result to tracerouteResultsList
+                    tracerouteResultsList.append(hopsList)
+
+                # Now compare the contents of the lists within tracerouteResultsList for equality
+                if len(tracerouteResultsList) > 0:
+                    listsAreEqual = False
+                    for n in range(1,len(tracerouteResultsList)):
+                        # compare lists n and n-1 for equality
+                        if tracerouteResultsList[n-1] == tracerouteResultsList[n]:
+                            # If equal, move onto the next pair
+                            listsAreEqual = True
+                        else:
+                            # If the lists aren't equal, set the flag and break out of the loop
+                            listsAreEqual = False
+                            break
+                    if listsAreEqual is True:
+                        # If the lists are all identical that means that n consecqutive traceroutes gave the same result
+                        # so the traceroute has been validated
+                        # copy the new tracerouteHopsList back into the instance variable version
+                        Utils.Message.addMessage("traceroute results are identical, updating tracerouteHopsList")
+                        self.tracerouteHopsListMutex.acquire()
+                        self.tracerouteHopsList = hopsList
+                        self.tracerouteHopsListMutex.release()
                     else:
-                        # icmpSrcAddr has not been overwritten with an addres so the upstream did not respond
-                        # Increment the 'no response' counter
-                        noResponseCounter += 1
-                        # As there was no router response for this hop, add 0.0.0.0 as the hop address
-                        hopsList.append([0, 0, 0, 0])
+                        # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
+                        # Empty the tracerouteHopsList - it can't now be trusted
+                        Utils.Message.addMessage("DBUG:Traceroute results discrepency. emptying tracerouteHopsList ")
+                        self.tracerouteHopsListMutex.acquire()
+                        self.tracerouteHopsList = []
+                        self.tracerouteHopsListMutex.release()
 
-                    # Now check to see if we've received five 'no replies' in a row, if so, give up
-                    # Or else, if we've reached the max no of hops, give up
-                    if (noResponseCounter > maxNoOfNoResponse) or (ttl == maxNoOfHops):
-                        # print ("5 in a row, aborting")
-                        # Utils.Message.addMessage(str(noResponseCounter) + " None's in a row or hop limit reached. Aborting")
-                        # Cause the outer-outer hops counter loop to break
-                        ttl = maxNoOfHops
-                        # Break out of this (hops) loop
-                        break
-
-                # copy the new tracerouteHopsList back into the instance variable version
-                self.tracerouteHopsListMutex.acquire()
-                self.tracerouteHopsList = hopsList
-                self.tracerouteHopsListMutex.release()
 
                 # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
                 # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
