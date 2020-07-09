@@ -442,7 +442,7 @@ class DuplicateSequenceNo(UnexpectedSeqNo):
         super().__init__(stats, prevReceivedPacket, lastReceivedPacket)
 
 # Define an event to represent a change in the IP routing yielded by the Traceroute thread
-class IPRoutingChange(Event):
+class IPRoutingTracerouteChange(Event):
 
     def __init__(self, stats, latestHopsList):
         # Call Constructor of parent class. This will set parameters such as timeCreated etc
@@ -487,8 +487,6 @@ class IPRoutingChange(Event):
 
 # Define an event to register a change in the TTL field of the received UDP packets - signals a route change
 class IPRoutingTTLChange(Event):
-
-
     def __init__(self, stats, prevRxTTL, currentRxTTL):
         # Call Constructor of parent class. This will set parameters such as timeCreated etc
         super().__init__(stats)
@@ -527,6 +525,51 @@ class IPRoutingTTLChange(Event):
         jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
         return jsonRepresentation
 
+# Define an Event to represent a change in source address (address or port)
+class SrcAddressChange(Event):
+
+    def __init__(self, stats, prevSrcAddr, prevSrcPort, currentSrcAddr, currentSrcPort):
+        # Call Constructor of parent class. This will set parameters such as timeCreated etc
+        super().__init__(stats)
+        # Declare specific instance variables
+        self.prevSrcAddr = prevSrcAddr
+        self.prevSrcPort = prevSrcPort
+        self.currentSrcAddr = currentSrcAddr
+        self.currentSrcPort = currentSrcPort
+
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True,
+                   includeFriendlyName=True):
+        try:
+            optionalFields = ", Src addr/port change: " + str(self.prevSrcAddr) + ":" + str(self.prevSrcPort) + \
+                             " >> " + str(self.currentSrcAddr) + ":" + str(self.currentSrcPort)
+        except:
+            optionalFields = ""
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo=includeEventNo,
+                                                includeType=includeType,
+                                                includeFriendlyName=includeFriendlyName)
+
+        summary += optionalFields
+        data = {'timeCreated': self.timeCreated, 'summary': summary}
+        return data
+
+    def getCSV(self):
+        optionalFields = ""
+        try:
+            optionalFields = "prev source," + str(self.prevSrcAddr) + ":" + str(self.prevSrcPort) + \
+                             ",current source," + str(self.currentSrcAddr) + ":" + str(self.currentSrcPort)
+        except:
+            pass
+        csv = Event.createCommonCSVString(self) + optionalFields
+        return csv
+
+    def getJSON(self):
+        # # Returns a json object representation of the event as a string
+        # Create dictionary with any additional keys specific to this type of event
+        additionalData = {'prev source address': self.prevSrcAddr, 'prev source port': self.prevSrcPort,
+                          'current source address': self.currentSrcAddr, 'current source port': self.currentSrcPort}
+        jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
+        return jsonRepresentation
 
 # Stores a running total of events that happened within the last x seconds with y granularity
 class MovingTotalEventCounter(object):
@@ -1573,6 +1616,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         prevHopsList = []
         # Stores the previous rx TTL value - Used to detect route changes
         prevRxTTL = None
+        # Stores previous source address and UDP port. Used to detect changes
+        prevSrcAddr = None
+        prevSrcPort = None
 
         # Infinite loop
         while self.samplingThreadActiveFlag:
@@ -1827,14 +1873,39 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect loss of stream " + str(e))
 
+                ######## Detect changes in the source address/port
+                try:
+                    # Set initial values
+                    if prevSrcAddr is None:
+                        prevSrcAddr = self.__stats["stream_srcAddress"]
+                    if prevSrcPort is None:
+                        prevSrcPort = self.__stats["stream_srcPort"]
+
+                    # Test for changes of either source IP address or port
+                    if prevSrcAddr != self.__stats["stream_srcAddress"] or prevSrcPort != self.__stats["stream_srcPort"]:
+                        # Src has changed, create a SrcAddressChange Event
+                        srcAddressChange = SrcAddressChange(self.__stats, prevSrcAddr, prevSrcPort,
+                                                            self.__stats["stream_srcAddress"],
+                                                            self.__stats["stream_srcPort"])
+                        # Add the event to the event list
+                        self.__eventList.append(srcAddressChange)
+                        # # Increment the all_events counter
+                        self.__stats["stream_all_events_counter"] += 1
+                        # # Post a message
+                        Utils.Message.addMessage(
+                            srcAddressChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect source address/port changes " + str(e))
+
 
                 ######## Detect changes in the value of rxTTL
                 try:
                     if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
                         # Change in the value of rxTTL detected
                         oldLen = len(self.getTraceRouteHopsList())
-                        Utils.Message.addMessage("rxTTL change " + str(prevRxTTL) + ">>" + \
-                                                 str(self.__stats["packet_instantaneous_ttl"]))
+                        # Utils.Message.addMessage("rxTTL change " + str(prevRxTTL) + ">>" + \
+                        #                          str(self.__stats["packet_instantaneous_ttl"]))
                         # RxTTL change detected, create a new IPRoutingTTLChange event
                         ipRoutingTTLChange = IPRoutingTTLChange(self.__stats, prevRxTTL, self.__stats["packet_instantaneous_ttl"])
                         # Add the event to the event list
@@ -1863,7 +1934,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate ttl decrements " + str(e))
 
                 try:
-                    ######## Detect route changes using traceroute hops list and rxTTL values
+                    ######## Detect route changes using traceroute hops list
                     # Compare the diff of the sum of the each of the traceroute hops to the previous value for that hop
                     #  If it has changed, signal a route change.
                     # Note: some routers don't always respond (so that hop value oscillates between a valid IP address
@@ -1979,21 +2050,21 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                         if hopsListHasChanged:
                             # Route change detected, create a new IPRoutingChange event
-                            iPRoutingChange = IPRoutingChange(self.__stats, hopsList)
+                            iPRoutingTracerouteChange = IPRoutingTracerouteChange(self.__stats, hopsList)
                             # Add the event to the event list
-                            self.__eventList.append(iPRoutingChange)
+                            self.__eventList.append(iPRoutingTracerouteChange)
                             # # Increment the all_events counter
                             self.__stats["stream_all_events_counter"] += 1
                             # Update the routeChange stats
                             self.__stats["route_change_events_total"] += 1
-                            self.__stats["route_time_of_last_route_change_event"] = iPRoutingChange.timeCreated
+                            self.__stats["route_time_of_last_route_change_event"] = iPRoutingTracerouteChange.timeCreated
 
                             # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
                             self.sumOfTimeElapsedSinceLastRouteChange \
                                     += self.__stats["route_time_elapsed_since_last_route_change_event"]
 
                             # # Post a message
-                            Utils.Message.addMessage(iPRoutingChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+                            Utils.Message.addMessage(iPRoutingTracerouteChange.getSummary(includeStreamSyncSourceID=False)['summary'])
                             pass
 
                         # Snapshot latest hopsList
@@ -2007,7 +2078,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Snapshot current rxTTL value
                 prevRxTTL = self.__stats["packet_instantaneous_ttl"]
 
-                ########## Calculate route change stats
+                ########## Calculate traceroute route change stats
                 try:
                     # (But only if there has actually been a second route change in the past to measure against)
                     # AND stream is alive
