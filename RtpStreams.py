@@ -4663,7 +4663,7 @@ class RtpGenerator(object):
 
         # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
         # consecqutive identical lists have been determined can we say that we have a static route
-        tracerouteHopsListMustMatchThreshold = 5
+        tracerouteHopsListMustMatchThreshold = 2
         try:
             # Perform the traceroute in an infinite loop as long as the transmit stream is alive
             # The traceroute is performed n times. Only when the same route has been confirmed will the
