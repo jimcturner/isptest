@@ -1882,7 +1882,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         prevSrcPort = self.__stats["stream_srcPort"]
 
                     # Test for changes of either source IP address or port
-                    if prevSrcAddr != self.__stats["stream_srcAddress"] or prevSrcPort != self.__stats["stream_srcPort"]:
+                    if (prevSrcAddr != self.__stats["stream_srcAddress"]) or (prevSrcPort != self.__stats["stream_srcPort"]):
                         # Src has changed, create a SrcAddressChange Event
                         srcAddressChange = SrcAddressChange(self.__stats, prevSrcAddr, prevSrcPort,
                                                             self.__stats["stream_srcAddress"],
@@ -1895,9 +1895,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                         Utils.Message.addMessage(
                             srcAddressChange.getSummary(includeStreamSyncSourceID=False)['summary'])
 
-                        # Now snapshot latest values
-                        prevSrcAddr = self.__stats["stream_srcAddress"]
-                        prevSrcPort = self.__stats["stream_srcPort"]
+                    # Now snapshot latest values
+                    prevSrcAddr = self.__stats["stream_srcAddress"]
+                    prevSrcPort = self.__stats["stream_srcPort"]
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect source address/port changes " + str(e))
