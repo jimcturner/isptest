@@ -4663,7 +4663,7 @@ class RtpGenerator(object):
 
         # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
         # consecqutive identical lists have been determined can we say that we have a static route
-        tracerouteHopsListMustMatchThreshold = 2
+        tracerouteHopsListMustMatchThreshold = 5
         try:
             # Perform the traceroute in an infinite loop as long as the transmit stream is alive
             # The traceroute is performed n times. Only when the same route has been confirmed will the
@@ -4673,7 +4673,7 @@ class RtpGenerator(object):
                 # Create empty list to put the results of each traceroute attempt into
                 tracerouteResultsList = []
                 for tracerouteAttempt in range (0,tracerouteHopsListMustMatchThreshold):
-                    # Utils.Message.addMessage("traceroute attempt " + str(tracerouteAttempt))
+                    Utils.Message.addMessage("traceroute attempt " + str(tracerouteAttempt))
                     # This is the main outer traceroute loop and counts the hops
                     # Set initial ttl
                     ttl = 0
@@ -4821,23 +4821,52 @@ class RtpGenerator(object):
                     # Traceroute pass completed, now append to tracerouteResultsList for later validation
                     # Add the latest traceroute result to tracerouteResultsList
                     tracerouteResultsList.append(hopsList)
-                # Now compare the contents of the lists within tracerouteResultsList
-                # If we have two consequtive identical lists, the traceroute is been validated
-                if len(tracerouteResultsList) > 1:
-                    # Compare the two lists
-                    if tracerouteResultsList[0] == tracerouteResultsList[1]:
-                        Utils.Message.addMessage("traceroute results are identical, updating tracerouteHopsList")
 
+                # Now compare the contents of the lists within tracerouteResultsList for equality
+                if len(tracerouteResultsList) > 0:
+                    listsAreEqual = False
+                    for n in range(1,len(tracerouteResultsList)):
+                        # compare lists n and n-1 for equality
+                        if tracerouteResultsList[n-1] == tracerouteResultsList[n]:
+                            # If equal, move onto the next pair
+                            listsAreEqual = True
+                        else:
+                            # If the lists aren't equal, set the flag and break out of the loop
+                            listsAreEqual = False
+                            break
+                    if listsAreEqual is True:
+                        # If the lists are all identical that means that n consecqutive traceroutes gave the same result
+                        # so the traceroute has been validated
                         # copy the new tracerouteHopsList back into the instance variable version
+                        Utils.Message.addMessage("traceroute results are identical, updating tracerouteHopsList")
                         self.tracerouteHopsListMutex.acquire()
                         self.tracerouteHopsList = hopsList
                         self.tracerouteHopsListMutex.release()
                     else:
+                        # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
+                        # Empty the tracerouteHopsList - it can't now be trusted
                         Utils.Message.addMessage("traceroute results discrepency. emptying tracerouteHopsList ")
-                        # copy the new tracerouteHopsList back into the instance variable version
                         self.tracerouteHopsListMutex.acquire()
                         self.tracerouteHopsList = []
                         self.tracerouteHopsListMutex.release()
+
+
+                # # If we have two consequtive identical lists, the traceroute is been validated
+                # if len(tracerouteResultsList) > 1:
+                #     # Compare the two lists
+                #     if tracerouteResultsList[0] == tracerouteResultsList[1]:
+                #         Utils.Message.addMessage("traceroute results are identical, updating tracerouteHopsList")
+                #
+                #         # copy the new tracerouteHopsList back into the instance variable version
+                #         self.tracerouteHopsListMutex.acquire()
+                #         self.tracerouteHopsList = hopsList
+                #         self.tracerouteHopsListMutex.release()
+                #     else:
+                #         Utils.Message.addMessage("traceroute results discrepency. emptying tracerouteHopsList ")
+                #         # copy the new tracerouteHopsList back into the instance variable version
+                #         self.tracerouteHopsListMutex.acquire()
+                #         self.tracerouteHopsList = []
+                #         self.tracerouteHopsListMutex.release()
 
                 # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
                 # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
