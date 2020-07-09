@@ -1898,7 +1898,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect source address/port changes " + str(e))
 
-
                 ######## Detect changes in the value of rxTTL
                 try:
                     if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
