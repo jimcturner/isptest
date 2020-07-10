@@ -7,3 +7,15 @@ V1.7 Improves report generation, adds popup messages to detect blocked listening
 V1.8 Adds a NAT table to the streams table. Also includes local and public ip addresses and ports on the report
 V1.9 Adds a whois lookup feature on the traceroute table (and report). Adds a faster traceroute response on the Receiver end
 V2.0 Rewritten RtpGenerator tx thread to improve stability of tx rate. Changes excess jitter event threshold to 100% (was 30% leading to too many unuseful events). 
+V2.1 
+This is a massive change..
+Rewritten the receiver routine to make it more efficient. Receive mode should now be able to handle far more incoming streams for a given set of hardware
+Traceroute has been rewritten for OSX/linux - much less CPU intensive
+A Raspberry Pi 3 can now happily generate 30Mbps all day without cooking
+The 'tx bps' counter on the Transmitter now gives you the 'actual tx bps' (as opposed to the rate you specified) so you know what you're sending. It also puts up a warning if the tx rate is exceeding what you specified at the outset. This gives you some warning that you're probably overloading the hardware.
+Packet loss is now to two decimal places
+Adds more information to the report - the test duration, the total bytes received, detail about route changes etc.
+Also records the TTL value of the incoming packets. This allows a secondary source info about routing changes.
+Additional Event types for the report: Traceroute change, Received IP TTL, Source address/port, duplicate packets received, out of order packets received
+Help page shows the filenames/paths being saved to
+'Burst Mode'  - This will temporarily double the TX rate for a period of 5 secs to allow testing of Mikrotik queues to see what happens when there is a sudden increase in the amount of transmitted data
