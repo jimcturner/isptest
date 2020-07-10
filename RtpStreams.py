@@ -1958,9 +1958,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                                  "route_time_elapsed_since_last_TTL_change_event"],
                                                              (self.__stats["route_TTl_change_events_total"] - 1))
 
-                    Utils.Message.addMessage("ttl  events " + str(self.__stats["route_TTl_change_events_total"]) + \
-                            ", elapsed " + str(self.__stats["route_time_elapsed_since_last_TTL_change_event"].total_seconds()) +\
-                                             ", period " + str(Utils.dtstrft(self.__stats["route_mean_time_between_TTl_change_events"])))
+                    # Utils.Message.addMessage("ttl  events " + str(self.__stats["route_TTl_change_events_total"]) + \
+                    #         ", elapsed " + str(self.__stats["route_time_elapsed_since_last_TTL_change_event"].total_seconds()) +\
+                    #                          ", period " + str(Utils.dtstrft(self.__stats["route_mean_time_between_TTl_change_events"])))
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Rx TTL Change stats " + str(e))
