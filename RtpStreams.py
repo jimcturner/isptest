@@ -526,7 +526,7 @@ class IPRoutingTTLChange(Event):
         return jsonRepresentation
 
 # Define an Event to represent a change in source address (address or port)
-class SrcAddressChange(Event):
+class SrcAddrChange(Event):
 
     def __init__(self, stats, prevSrcAddr, prevSrcPort, currentSrcAddr, currentSrcPort):
         # Call Constructor of parent class. This will set parameters such as timeCreated etc
@@ -540,7 +540,7 @@ class SrcAddressChange(Event):
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True,
                    includeFriendlyName=True):
         try:
-            optionalFields = "," + str(self.prevSrcAddr) + ":" + str(self.prevSrcPort) + \
+            optionalFields = ", " + str(self.prevSrcAddr) + ":" + str(self.prevSrcPort) + \
                              ">" + str(self.currentSrcAddr) + ":" + str(self.currentSrcPort)
         except:
             optionalFields = ""
