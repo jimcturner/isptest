@@ -2113,7 +2113,8 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                             # # Post a message
                             Utils.Message.addMessage(iPRoutingTracerouteChange.getSummary(includeStreamSyncSourceID=False)['summary'])
-                            # Utils.Message.addMessage("new tr " + str(hopsList))
+                            Utils.Message.addMessage("old tr " + str(prevHopsList))
+                            Utils.Message.addMessage("new tr " + str(hopsList))
                             pass
 
                         # Snapshot latest hopsList
