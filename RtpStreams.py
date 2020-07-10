@@ -1892,7 +1892,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Test for changes of either source IP address or port
                     if (prevSrcAddr != self.__stats["stream_srcAddress"]) or (prevSrcPort != self.__stats["stream_srcPort"]):
                         # Src has changed, create a SrcAddressChange Event
-                        srcAddressChange = SrcAddressChange(self.__stats, prevSrcAddr, prevSrcPort,
+                        srcAddressChange = SrcAddrChange(self.__stats, prevSrcAddr, prevSrcPort,
                                                             self.__stats["stream_srcAddress"],
                                                             self.__stats["stream_srcPort"])
                         # Add the event to the event list
