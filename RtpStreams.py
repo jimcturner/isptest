@@ -1118,12 +1118,20 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["jitter_mean_time_between_excess_jitter_events"] = datetime.timedelta()
         self.sumOfTimeElapsedSinceLastExcessJitterEvents = datetime.timedelta()
 
-        # IPRoutingChange stats
+        # IPRoutingChange traceroute stats
         self.__stats["route_time_elapsed_since_last_route_change_event"] = datetime.timedelta()
         self.__stats["route_time_of_last_route_change_event"] = datetime.timedelta()
         self.__stats["route_change_events_total"] = 0
         self.__stats["route_mean_time_between_route_change_events"] = datetime.timedelta()
         self.sumOfTimeElapsedSinceLastRouteChange = datetime.timedelta()
+
+        # Ip routing Rx TTL stats
+        self.__stats["route_time_elapsed_since_last_TTL_change_event"] = datetime.timedelta()
+        self.__stats["route_time_of_last_TTL_change_event"] = datetime.timedelta()
+        self.__stats["route_TTl_change_events_total"] = 0
+        self.__stats["route_mean_time_between_TTl_change_events"] = datetime.timedelta()
+        self.sumOfTimeElapsedSinceLastRxTTLChange = datetime.timedelta()
+
 
         # Amount of time to elapse before a lossOfStream alarm event is triggered
         self.lossOfStreamAlarmThreshold_s = Registry.lossOfStreamAlarmThreshold_s
@@ -1915,11 +1923,47 @@ class RtpReceiveStream(RtpReceiveCommon):
                         self.__eventList.append(ipRoutingTTLChange)
                         # # Increment the all_events counter
                         self.__stats["stream_all_events_counter"] += 1
-                        # # Post a message
+                        # Update the rx TTL stats
+                        self.__stats["route_TTl_change_events_total"] += 1
+                        self.__stats["route_time_of_last_TTL_change_event"] = ipRoutingTTLChange.timeCreated
+
+                        # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
+                        self.sumOfTimeElapsedSinceLastRxTTLChange \
+                            += self.__stats["route_time_elapsed_since_last_TTL_change_event"]
+                        # Post a message
                         Utils.Message.addMessage(ipRoutingTTLChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+                        # Snapshot current rxTTL value
+                        prevRxTTL = self.__stats["packet_instantaneous_ttl"]
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect rxTTL changes " + str(e))
+
+
+                ########## Calculate rxTTL change stats
+                try:
+                    # (But only if there has actually been a second TTL change in the past to measure against)
+                    # AND stream is alive
+                    # Note: The initial route is considered as 'change 1' therefore is ignored and threshold is >=1
+                    ####### Now update the self.__stats["route_time_elapsed_since_last_TTL_change_event"] timer
+                    if (self.__stats["route_TTl_change_events_total"] > 0) and (streamIsDeadFlag is False):
+                        self.__stats["route_time_elapsed_since_last_TTL_change_event"] = \
+                            datetime.datetime.now() - self.__stats["route_time_of_last_TTL_change_event"]
+
+                    ########### Calculate mean time between Rx TTL changes.
+                    # Note: Ignore the first route change, because it's not really a 'change', just the initial value
+                    if (self.__stats["route_TTl_change_events_total"] > 1) and (streamIsDeadFlag is False):
+                        self.__stats["route_mean_time_between_TTl_change_events"] = \
+                            calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastRxTTLChange,
+                                                             self.__stats[
+                                                                 "route_time_elapsed_since_last_TTL_change_event"],
+                                                             (self.__stats["route_TTl_change_events_total"] - 1))
+
+                    Utils.Message.addMessage("ttl  events " + str(self.__stats["route_TTl_change_events_total"]) + \
+                            ", elapsed " + str(self.__stats["route_time_elapsed_since_last_TTL_change_event"].total_seconds()) +\
+                                             ", period " + str(Utils.dtstrft(self.__stats["route_mean_time_between_TTl_change_events"])))
+
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Rx TTL Change stats " + str(e))
 
 
                 ######## Calculate no of IP hops according to rxTTL value Display current rxTTL
@@ -1935,6 +1979,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         #                          str(self.__stats["packet_ttl_decrement_count"]) +")")
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate ttl decrements " + str(e))
+
 
                 try:
                     ######## Detect route changes using traceroute hops list
@@ -2078,8 +2123,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect route changes " + str(e))
 
-                # Snapshot current rxTTL value
-                prevRxTTL = self.__stats["packet_instantaneous_ttl"]
 
                 ########## Calculate traceroute route change stats
                 try:
