@@ -540,8 +540,8 @@ class SrcAddressChange(Event):
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True,
                    includeFriendlyName=True):
         try:
-            optionalFields = ", " + str(self.prevSrcAddr) + ":" + str(self.prevSrcPort) + \
-                             " >> " + str(self.currentSrcAddr) + ":" + str(self.currentSrcPort)
+            optionalFields = "," + str(self.prevSrcAddr) + ":" + str(self.prevSrcPort) + \
+                             ">" + str(self.currentSrcAddr) + ":" + str(self.currentSrcPort)
         except:
             optionalFields = ""
         summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
