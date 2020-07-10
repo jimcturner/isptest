@@ -3527,15 +3527,7 @@ class RtpGenerator(object):
         self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
 
-        # # Test to see if a UDP source port was specified
-        # if len(srcPort) > 0:
-        #     # Test to see if the supplied value is an int
-        #     try:
-        #         # check to see whether srcPort is a valid UDP port choice (has to be >1024)
-        #         if int(srcPort[0]) > 1024:
-        #             self.UDP_TX_SRC_PORT = int(srcPort[0])
-        #     except Exception as e:
-        #         Utils.Message.addMessage("INFO: RtpGenerator.__init(): Invalid UDP source port."+str(srcPort)+", "+str(e))
+        self.burstTimer = 0 # Used to count seconds when Generator is in Burst mode
 
         # Start the traffic generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
@@ -3964,6 +3956,24 @@ class RtpGenerator(object):
         # Returns the current status of self.enablePacketGeneration
         return self.enablePacketGeneration
 
+    # Turns on 'burst mode, whereby the tx rate will be temporarlily increased for a set period of seconds
+    # This is to test network performance under 'burst' conditions
+    # By default, the tx rate will double for 5 seconds
+    # The tx rate is manipulated by modifying the previously calculated txPeriod value
+    # At the transition from burstTimer=1 to burstTimer=0, the original tx period will be recalculated
+    def enableBurstMode(self, burstLength_s = 5, burstRatio = 2):
+        # Confirm we're not already in burst mode, don't want to apply it twice
+        if self.burstTimer == 0:
+            # Start the burst timer. This value will be decremented every second by the __samplingThread
+            self.burstTimer = burstLength_s
+            # Modify the prev calculated txPeriod to manipulate the txRate
+            # e.g if burstRatio is '2', the tx rate will be doubled
+            self.txPeriod = self.txPeriod / burstRatio
+            Utils.Message.addMessage("Enabling " + str(burstLength_s) + "s burst mode for stream " + str(self.syncSourceIdentifier))
+        else:
+            Utils.Message.addMessage("Burst mode already active for stream " + str(self.syncSourceIdentifier) +\
+                    ". " + str(self.burstTimer) + "s remaining")
+
     def simulatePacketLoss(self, packetsToSkip):
         # Used to simulate packet loss by skipping x packets (whilst incrementing the seq no internally)
         self.packetsToSkip = packetsToSkip
@@ -4020,8 +4030,8 @@ class RtpGenerator(object):
 
                 # Calculate the transmitted bits per second
                 self.txActualTxRate_bps = bytesPerSec * 8
-                # Check to see if actual TX rate is exceeding the specified rate
-                if self.txActualTxRate_bps > self.txRate:
+                # Check to see if actual TX rate is exceeding the specified rate (but ignore if burst mode is enabled)
+                if (self.txActualTxRate_bps > self.txRate) and self.burstTimer == 0:
                     # If actual tx rate is > 25% higher than the rate specified by txRate, force the txScheduler to
                     # restart its timing calculations
                     # For the sake of speed, shift txRate by '2 bits' to divide by 4 rather than using division
@@ -4052,6 +4062,16 @@ class RtpGenerator(object):
                 # A -ve value is used to denote 'live for ever'
                 if self.timeToLive > 0:
                     self.timeToLive -= 1
+
+                # Decrement the burst timer, but only if current value is +ve
+                if self.burstTimer >0:
+                    self.burstTimer -= 1
+                    # If we've only got 1 second left, recalculate txPeriod to revert the stream to the original tx rate
+                    if self.burstTimer < 2:
+                        self.txPeriod = self.calculateTxPeriod(self.txRate)
+                        Utils.Message.addMessage("Burst mode ending for stream " + str(self.syncSourceIdentifier) + \
+                                      ". Reverting to " + str(Utils.bToMb(self.txRate)) + "bps")
+
 
                 # # Now housekeep the associated rtpTxStreamResults object for this stream
                 # # Check to see that rtpTxStreamResultsDict contains this stream objects
@@ -4264,7 +4284,7 @@ class RtpGenerator(object):
                     if prevTxPeriod != txPeriod or rtpGeneratorInstance.resetSleepPeriodFlag:
                         # Clear the flag
                         rtpGeneratorInstance.resetSleepPeriodFlag = False
-                        Utils.Message.addMessage("INFO: RtpGenerator.calculateSleepPeriod() timing reset")
+                        Utils.Message.addMessage("DBUG: RtpGenerator.calculateSleepPeriod() timing reset")
                         # Reset the initial time reference
                         t = time.time()
                         # Reset the counter
@@ -4369,6 +4389,9 @@ class RtpGenerator(object):
         try:
             # Create a UDP socket for UDP transmission and reception
             self.__createUDPSocket()
+
+            # Wait a couple of seconds to allow the sockets to be created
+            time.sleep(2)
 
             # start the scheduler that will actually regulate the rate of transmission of packets
             # This is a blocking function call

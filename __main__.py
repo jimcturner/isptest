@@ -636,7 +636,7 @@ class UI(object):
         # Screen label showing the available key commands (depending upon mode)
         self.keyCommandsString = "[<][>][^][v]navigate, [d]elete, [l]abel, [a]bout, [r]eport, [h]elp, [t]raceroute"
 
-        self.txStreamModifierCommandsString = "TX  modifiers: [1/2] packet size, [3/4] tx rate, [5/6] lifetime, [n]ew stream"
+        self.txStreamModifierCommandsString = "TX  modifiers: [1/2] packet size, [3/4] tx rate, [5/6] lifetime, [n]ew [b]urst"
         # Extra command strip for 'special features' mode
         self.extraKeyCommandsString = "[7] enable/disable stream, [8] jitter on/off, [9] minor loss, [0] major  loss"
 
@@ -1942,9 +1942,16 @@ class UI(object):
     def __onDecreaseTimeToLive(self):
         self.__modifyTimeToLive(-1)
 
+    # 'b'
+    def __onEnableBurstMode(self):
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            # Enable burst mode for the selected RTPGenerator
+            self.selectedStream.enableBurstMode()
+
+
     # This is called by __onIncreaseTimeToLive() and __onDecreaseTimeToLive() and is the actual worker method
     def __modifyTimeToLive(self, direction):
-
         # If called with a +ve value it will increase the TTL, if called with a -1 it will reduce the TTL
         # bounds limit the input
         if direction < 0:
@@ -2412,6 +2419,9 @@ class UI(object):
             # # 'o' Decrement sync source ID of stream
             # elif self.keyPressed == ord('o'):
             #     self.__onDecrementSyncSourceID()
+            # 'b' enable Burst Mode for the current tx stream
+            elif self.keyPressed == ord('b'):
+                self.__onEnableBurstMode()
             # 'e' Toggle error messages on/off
             elif self.keyPressed == ord('e'):
                 self.__onToggleErrorMessages()
