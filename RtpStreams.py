@@ -2187,7 +2187,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     if hopsListChangeExpected is False:
                         # Under normal circumstances, take the rxTTL into account to determine route changes
                         routeHasChanged = detectRouteChanges(prevHopsList, hopsList,
-                                                            prevRxTTL, self.__stats["packet_instantaneous_ttl"])
+                                                            prevRxTTL=prevRxTTL,
+                                                             rxTTL=self.__stats["packet_instantaneous_ttl"])
                     else:
                         # Otherwise, if the rxTTL has recently changed, we can only go on the prevHopsList and hopsList
                         # to determine route changes because the hopsList changes will lag behind those of rxTTL
