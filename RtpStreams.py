@@ -2127,8 +2127,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Since the rxTTl has changed, we can expect a subsequent change in the received hopslist
                         hopsListChangeExpected = True
                         # Flush the contents of the current hopsList because it's now been invalidated
-                        Utils.Message.addMessage("DBUG: hopsListChangeExpected. Flushing hopslist")
-                        self.setTraceRouteHopsList([])
+                        Utils.Message.addMessage("DBUG: hopsListChangeExpected.")
+                        # self.setTraceRouteHopsList([])
                         # Post a message
                         Utils.Message.addMessage(ipRoutingTTLChange.getSummary(includeStreamSyncSourceID=False)['summary'])
                         # # Snapshot current rxTTL value
