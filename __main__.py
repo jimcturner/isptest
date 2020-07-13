@@ -3795,8 +3795,8 @@ def detectRouteChanges(prevHopsList, hopsList, prevRxTTL, rxTTL):
 
 def main(argv):
 
-    detectRouteChangesTest()
-    exit()
+    # detectRouteChangesTest()
+    # exit()
 
     # Get ip address of interface to be used to send/receive
     # ipAddrOfInterface = Utils.get_ip()
