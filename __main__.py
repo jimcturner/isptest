@@ -3654,7 +3654,27 @@ def detectRouteChangesTest():
             True,
             "6) prv and current hoplist are different lengths. prevTTL and currentTTL have not been set"
         ]
+        ,
+        [
+            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4], [127, 0, 0, 5]],
+            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [0, 0, 0, 6], [0, 0, 0, 6]],
+            5,
+            5,
+            True,
+            "7) prv and current hoplist have different contents, same length but prevTTL and currentTTL are the same"
+        ]
+        ,
+        [
+        [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4], [127, 0, 0, 5]],
+        [],
+        5,
+        5,
+        False,
+        "8) current hopslist is [], diff length but prevTTL and currentTTL are the same"
+        ]
+
     ]
+# rxTTL hasn't changed, but hops list is completely different
 
     # iterate over test list
     for testNo in range(0, len(testList)):
@@ -3775,9 +3795,8 @@ def detectRouteChanges(prevHopsList, hopsList, prevRxTTL, rxTTL):
 
 def main(argv):
 
-    # detectRouteChangesTest()
-    # detectRouteChanges(prevHopsList, hopsList, prevRxTTL, rxTTL)
-    # exit()
+    detectRouteChangesTest()
+    exit()
 
     # Get ip address of interface to be used to send/receive
     # ipAddrOfInterface = Utils.get_ip()

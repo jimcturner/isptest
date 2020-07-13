@@ -1655,8 +1655,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                 else:
                     print(str(test[5]) + ", " + str(result) + ", FAIL\n")
 
-        # Compares prec and current traceroute hops lists to determine whether the route has changed
-        def detectRouteChanges(prevHopsList, hopsList, prevRxTTL, rxTTL):
+        # Compares prev and current traceroute hops lists to determine whether the route has changed
+        # if prevRxTTL and rxTTL values are None, they will be ignored, and the decision about whether a
+        # route has changed will be made solely on the length/contents of prevHopsList[], hopsList[]
+        def detectRouteChanges(prevHopsList, hopsList, prevRxTTL=None, rxTTL=None):
             # print("args: " + str(len(prevHopsList)) + ", " + str(len(hopsList)) + ", " + str(prevRxTTL) + ", " + str(
             #     rxTTL))
             ######## Detect route changes using traceroute hops list
@@ -1805,6 +1807,15 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Stores the previous traceroute hops list. Used to detect route changes
         prevHopsList = []
+        # Stores the most recent hops list
+        hopsList = []
+        # This flag will be set high by any changes detected in the rxTTL value.
+        # rxTTL will change immediately, but it takes time for any traceroute hopslist changes to be transmitted
+        # Therefore we need a mechanism to to tell the route change detection to expect a hopList change, and also
+        # until that new list is picked up, ignore the prevRxTTl and rxTTL values.
+        # Once the new hopList has been received the detection routine will acknowledge the change and clear the
+        # hopsListChangeExpected flag. At this point it will resume monitoring prev rxTTl and rxTTL
+        hopsListChangeExpected = False
         # Stores the previous rx TTL value - Used to detect route changes
         prevRxTTL = None
         # Stores previous source address and UDP port. Used to detect changes
@@ -2113,6 +2124,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
                         self.sumOfTimeElapsedSinceLastRxTTLChange \
                             += self.__stats["route_time_elapsed_since_last_TTL_change_event"]
+                        # Since the rxTTl has changed, we can expect a subsequent change in the received hopslist
+                        hopsListChangeExpected = True
+                        # Flush the contents of the current hopsList because it's now been invalidated
+                        Utils.Message.addMessage("DBUG: hopsListChangeExpected. Flushing hopslist")
+                        self.setTraceRouteHopsList([])
                         # Post a message
                         Utils.Message.addMessage(ipRoutingTTLChange.getSummary(includeStreamSyncSourceID=False)['summary'])
                         # # Snapshot current rxTTL value
@@ -2168,9 +2184,19 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Get the current hops list
                     hopsList = self.getTraceRouteHopsList()
                     # Attempt to detect a route change
-                    if detectRouteChanges(prevHopsList, hopsList,
-                                                            prevRxTTL, self.__stats["packet_instantaneous_ttl"]):
+                    if hopsListChangeExpected is False:
+                        # Under normal circumstances, take the rxTTL into account to determine route changes
+                        routeHasChanged = detectRouteChanges(prevHopsList, hopsList,
+                                                            prevRxTTL, self.__stats["packet_instantaneous_ttl"])
+                    else:
+                        # Otherwise, if the rxTTL has recently changed, we can only go on the prevHopsList and hopsList
+                        # to determine route changes because the hopsList changes will lag behind those of rxTTL
+                        routeHasChanged = detectRouteChanges(prevHopsList, hopsList)
+
+                    if routeHasChanged:
                         # Route change detected, create a new IPRoutingChange event
+                        # Acknowledge the route change and clear the flag
+                        hopsListChangeExpected = False
                         iPRoutingTracerouteChange = IPRoutingTracerouteChange(self.__stats, hopsList)
                         # Add the event to the event list
                         self.__eventList.append(iPRoutingTracerouteChange)
