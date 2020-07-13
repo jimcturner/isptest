@@ -3587,57 +3587,171 @@ def shutdownApplicationSignalHandler(signum, frame):
     Utils.Message.addMessage("DBUG: shutdownApplicationSignalHandler() called with signal " + str(signum))
     raise ShutdownApplication
 
-
-#### Experimental functions
-def rawReceive():
-    import select
-    UDP_RX_PORT = 5000
-    UDP_RX_IP = "127.0.0.1"
-    # create UDP socket
-    udpSocket = socket.socket(socket.AF_INET,  # Internet
-                              socket.SOCK_DGRAM)  # UDP
-
-    # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
-    rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
-    rawSocket.setblocking(0)
+# Compares prec and current traceroute hops lists to determine whether the route has changed
+def detectRouteChanges(prevHopsList, hopsList, prevRxTTL, rxTTL):
+    ######## Detect route changes using traceroute hops list
+    # Compare the diff of the sum of the each of the traceroute hops to the previous value for that hop
+    #  If it has changed, signal a route change.
+    # Note: some routers don't always respond (so that hop value oscillates between a valid IP address
+    # and 0.0.0.0. Even though the rest of the hops have stayed the same, this could look like a
+    # route change
+    # Therefore, if we take the abs() of the diff, we can ignore that false positive
+    # generate a route changed event
 
 
-    udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
-    # rawSocket.settimeout(1)
-    rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
-    print ("udpSocket :" +str(udpSocket))
-    print("rawSocket :" + str(rawSocket))
-    while True:
-        r, w, x = select.select([rawSocket], [], [])
-        for i in r:
-            receiveSocket = i
-            data, addr = receiveSocket.recvfrom(131072)
-            print(str(receiveSocket.type) + ", " + str(data))
-        # rawData, rawAddr = rawSocket.recvfrom(131072)
-        # print("raw " + str(rawData))
+    # Flag to signal the detection of a route change
+    hopsListHasChanged = False
 
-            # # extract IP Header
-            # ipHeader = Utils.IPHeader(data[:20])
-            # udpHeader = Utils.UDPHeader(data[20:28])
-            # icmpMessage = Utils.ICMPHeader(data[20:28])
-            # message = data[28:]
-            # # print(str(i) + ", " + str(i.recvfrom(131072)))
-            # print(str(ipHeader.d_addr) + ":" + ", " + str(ipHeader.protocol) + ", type:" + str(icmpMessage.type) +\
-            #       ", code:" + str(icmpMessage.code))
+    # Wait until all the traceroute hops have been populated with values before calculating
+    if len(hopsList) > 0 and None not in hopsList:
+        # Set initial value for prevHopsList
+        if len(prevHopsList) == 0:
+            prevHopsList = hopsList
+            hopsListHasChanged = True
+            # Utils.Message.addMessage("Initial traceroute received for stream " + \
+            #                          str(self.__stats["stream_syncSource"]))
+            print("initial traceroute received")
+
+        # # Test to see if the rxTTL value has changed, if so, set hopsListHasChanged flag
+        # elif self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
+        #     hopsListHasChanged = True
+
+        # Test If length of list has changed then set hopsListHasChanged flag
+        # However, if the rxTTL value hasn't also changed*, this suggests an erroneous
+        # traceroute hops list possibly caused by a series of routers not responding.
+        # * Note if prevRxTTL is 'None' (because the rxTTL isn't able to be decoded)
+        # then all we have to go on is the length of the hops list
+
+        # Test If length of list has changed then set hopsListHasChanged flag
+        elif (len(hopsList) != len(prevHopsList)):
+            hopsListHasChanged = True
+            # # Test to see if stats["packet_instantaneous_ttl"] contains any useful info
+            # # on which to base a route-change decision
+            # if self.__stats["packet_instantaneous_ttl"] is None:
+            #     # It doesn't, so we can only go on the change in length of hopsList[]
+            #     hopsListHasChanged = True
+            # else:
+            #     # stats["packet_instantaneous_ttl"] does contain a value which we can use to see if the
+            #     # route has changed. Compare current and prev rxTTL values
+            #     if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
+            #         hopsListHasChanged = True
+            #     else:
+            #         # This change in the length of hopsList is a red herring because rxTTL did not change.
+            #         # Therefore ignore.
+            #         hopsListHasChanged = False
+            #         Utils.Message.addMessage("DBUG: False route change. hopsList len changed " +\
+            #                                  str(len(prevHopsList)) + ">>" + str(len(prevHopsList)) +\
+            #                                  " but rxTTL val didn't " + str(prevRxTTL) + ">>" +\
+            #                                  str(self.__stats["packet_instantaneous_ttl"]))
 
 
-# Main prog starts here
-# #####################
-# x =0
-# while True:
-#     time.sleep(0.00006670440)
-#     x+=1
-#     if x % 1000000:
-#         print ("x=0")
+        # If the lengths of the two lists are the same, test the contents
+        else:
+            # Otherwise, if list length is the same compare sums of latest and previous sumOfHopsList members
+            for hopNo in range(len(hopsList)):
+                # Iterate over hopsList, comparing the sums of the octets of the individual hops
+                # Subtract abs(current_value - prev_value) from current value
+                # If the result is 0, the hop hasn't changed
+                sumPrevHop = sum(prevHopsList[hopNo])
+                sumCurrentHop = sum(hopsList[hopNo])
+
+                # If the sum of the current and prev hops are different, the route may have changed
+                # But if that change is to/from a value of '0.0.0.0' (i.e the sum is 0) then the
+                # change doesn't
+
+                # Check to see if either the current or previous values are zero. If so, ignore
+                if sumPrevHop != 0 and sumCurrentHop != 0:
+                    if sumCurrentHop == sumPrevHop:
+                        # The hop value has remained the same, no route change
+                        hopsListHasChanged = False
+                        # Utils.Message.addMessage(
+                        #     "No Change" + str(prevHopsList[hopNo]) + "-->" + \
+                        #     str(hopsList[hopNo]))
+
+                    else:
+                        # The hop value has changed. New route
+                        hopsListHasChanged = True
+                        # Utils.Message.addMessage(
+                        #     "Change" + str(prevHopsList[hopNo]) + "-->" + \
+                        #     str(hopsList[hopNo]))
+
+                # Check to see of either and current values are zero
+                elif sumPrevHop == 0 and sumCurrentHop == 0:
+                    hopsListHasChanged = False
+
+
+                # Now check to see if we previously had a zero hop value but we now have a non zero value
+                # If so, this suggests a route change
+                elif sumCurrentHop != 0 and sumPrevHop == 0:
+                    hopsListHasChanged = True
+                    # Utils.Message.addMessage(
+                    #     "Change" + str(prevHopsList[hopNo]) + "-->" + \
+                    #     str(hopsList[hopNo]))
+
+                # Now check to see if we previously had a non-zero value for this hop. If so, make
+                # an educated guess and carry the prev hop value into the current hop value
+                # This means that we might have something to compare this hop value to if it changes
+                # to another non-zero value
+                elif sumCurrentHop == 0 and sumPrevHop != 0:
+                    hopsList[hopNo] = prevHopsList[hopNo]
+                    # Utils.Message.addMessage(
+                    #     "Copy prev value forward " + str(prevHopsList[hopNo]) + "-->" + \
+                    #     str(hopsList[hopNo]))
+                    hopsListHasChanged = False
+
+                else:
+                    # We don't know if the route has changed or not, because either the current or
+                    # prev sum value was/is zero
+                    # Utils.Message.addMessage(
+                    # "Don't know" + str(prevHopsList[hopNo]) + "-->" + \
+                    # str(hopsList[hopNo]))
+                    hopsListHasChanged = True
+
+        if hopsListHasChanged:
+            print ("changed from")
+            # Route change detected, create a new IPRoutingChange event
+            # iPRoutingTracerouteChange = IPRoutingTracerouteChange(self.__stats, hopsList)
+            # # Add the event to the event list
+            # self.__eventList.append(iPRoutingTracerouteChange)
+            # # # Increment the all_events counter
+            # self.__stats["stream_all_events_counter"] += 1
+            # # Update the routeChange stats
+            # self.__stats["route_change_events_total"] += 1
+            # self.__stats["route_time_of_last_route_change_event"] = iPRoutingTracerouteChange.timeCreated
+            #
+            # # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
+            # self.sumOfTimeElapsedSinceLastRouteChange \
+            #     += self.__stats["route_time_elapsed_since_last_route_change_event"]
+            #
+            # # # Post a message
+            # Utils.Message.addMessage(iPRoutingTracerouteChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+            # Utils.Message.addMessage("old tr " + str(prevHopsList))
+            # Utils.Message.addMessage("new tr " + str(hopsList)
+        else:
+            print("no change")
+
+
+        # Snapshot latest hopsList
+        prevHopsList = hopsList
+    else:
+        # Utils.Message.addMessage("empty hopslist")
+        print ("empty hopsList")
+
+
 
 def main(argv):
     # rawReceive()
+    prevHopsList = [[127,0,0,1], [127, 0, 0, 2], [0,0,0,0], [127, 0, 0, 4]]
+    # prevHopsList = [[0,0,0,0]]
+    # hopsList= [[127,0,0,1]]
+    # hopsList = [[127, 0, 0, 2]]
+    hopsList = [[127,0,0,1], [127, 0, 0, 2], [127, 0, 0, 3], [127, 0, 0, 4]]
+    # hopsList = [[0,0,0,0]]
+    rxTTL = None
+    prevRxTTL = None
 
+    detectRouteChanges(prevHopsList, hopsList, prevRxTTL, rxTTL)
+    exit()
 
     # Get ip address of interface to be used to send/receive
     # ipAddrOfInterface = Utils.get_ip()

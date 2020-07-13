@@ -818,3 +818,40 @@ class ICMPHeader(object):
             self.type, self.code, self.checksum, self.p_id, self.sequence = struct.unpack('bbHHh', icmp_header)
         except Exception as e:
             raise ICMPHeader.DecodeException(str(e))
+
+#### Experimental functions
+def rawReceive():
+    import select
+    UDP_RX_PORT = 5000
+    UDP_RX_IP = "127.0.0.1"
+    # create UDP socket
+    udpSocket = socket.socket(socket.AF_INET,  # Internet
+                              socket.SOCK_DGRAM)  # UDP
+
+    # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
+    rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+    rawSocket.setblocking(0)
+
+
+    udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+    # rawSocket.settimeout(1)
+    rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+    print ("udpSocket :" +str(udpSocket))
+    print("rawSocket :" + str(rawSocket))
+    while True:
+        r, w, x = select.select([rawSocket], [], [])
+        for i in r:
+            receiveSocket = i
+            data, addr = receiveSocket.recvfrom(131072)
+            print(str(receiveSocket.type) + ", " + str(data))
+        # rawData, rawAddr = rawSocket.recvfrom(131072)
+        # print("raw " + str(rawData))
+
+            # # extract IP Header
+            # ipHeader = Utils.IPHeader(data[:20])
+            # udpHeader = Utils.UDPHeader(data[20:28])
+            # icmpMessage = Utils.ICMPHeader(data[20:28])
+            # message = data[28:]
+            # # print(str(i) + ", " + str(i.recvfrom(131072)))
+            # print(str(ipHeader.d_addr) + ":" + ", " + str(ipHeader.protocol) + ", type:" + str(icmpMessage.type) +\
+            #       ", code:" + str(icmpMessage.code))
