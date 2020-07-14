@@ -2213,8 +2213,8 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                         # Post a message
                         Utils.Message.addMessage(iPRoutingTracerouteChange.getSummary(includeStreamSyncSourceID=False)['summary'])
-                        Utils.Message.addMessage("old tr " + str(prevHopsList))
-                        Utils.Message.addMessage("new tr " + str(hopsList))
+                        # Utils.Message.addMessage("old tr " + str(prevHopsList))
+                        # Utils.Message.addMessage("new tr " + str(hopsList))
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect route changes " + str(e))
