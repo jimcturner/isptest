@@ -8,7 +8,7 @@ def sendUDP(argv):
     counter = 0
     while True:
 
-        message = str(counter).encode('ascii')
+        message = str(counter).encode('ascii') + b' some more random text'
         print(message)
         txSocket.sendto(message, (argv[0],int(argv[1])))
         counter += 1
