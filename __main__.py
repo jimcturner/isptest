@@ -3587,213 +3587,27 @@ def shutdownApplicationSignalHandler(signum, frame):
     Utils.Message.addMessage("DBUG: shutdownApplicationSignalHandler() called with signal " + str(signum))
     raise ShutdownApplication
 
-# Tests the decision making within detectRouteChanges by seeding it with a range of possible traceroute combinations
-def detectRouteChangesTest():
-    # testList is an array of tuples
-    # [prevHopsList[], hopsList[], prevRxTTL, rxTTL, expected result, description"
-    testList = [
-            [
-                [],
-                [],
-                None,
-                None,
-                False,
-                "0)Zero length current and prev hops lists, rxTTL and prevRxTTL are None"
-            ]
-        ,
-            [
-                [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
-                [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 0], [127, 0, 0, 4]],
-                None,
-                None,
-                False,
-                "1) same length current and prev hops lists, current hops list flaps to 0  rxTTL and prevRxTTL are None. Should carry forward"
-            ]
-        ,
-        [
-            [[0,0,0,0]],
-            [[0,0,0,0]],
-            None,
-            None,
-            False,
-            "2) prv and current hoplist are 0.0.0.0"
-        ]
-        ,
-        [
-            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
-            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 7], [127, 0, 0, 4]],
-            None,
-            None,
-            True,
-            "3) prv and current hoplist are same length but different"
-        ]
-        ,
-        [
-            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
-            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3]],
-            4,
-            4,
-            False,
-            "4) prv and current hoplist are different lengths but prevTTL and currentTTL are the same"
-        ]
-        ,
-        [
-            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
-            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3]],
-            4,
-            3,
-            True,
-            "5) prv and current hoplist are different lengths. prevTTL and currentTTL have also changed"
-        ]
-        ,
-        [
-            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
-            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3]],
-            None,
-            None,
-            True,
-            "6) prv and current hoplist are different lengths. prevTTL and currentTTL have not been set"
-        ]
-        ,
-        [
-            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4], [127, 0, 0, 5]],
-            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [0, 0, 0, 6], [0, 0, 0, 6]],
-            5,
-            5,
-            True,
-            "7) prv and current hoplist have different contents, same length but prevTTL and currentTTL are the same"
-        ]
-        ,
-        [
-        [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4], [127, 0, 0, 5]],
-        [],
-        5,
-        5,
-        False,
-        "8) current hopslist is [], diff length but prevTTL and currentTTL are the same"
-        ]
 
-    ]
-# rxTTL hasn't changed, but hops list is completely different
-
-    # iterate over test list
-    for testNo in range(0, len(testList)):
-        test =testList[testNo]
-        result = detectRouteChanges(test[0], test[1], test[2], test[3])
-        # Test result against expected result
-        if result == test [4]:
-            print (str(test[5]) + ", " + str(result) + ", PASS\n")
-        else:
-            print(str(test[5]) + ", " + str(result) + ", FAIL\n")
-
-# Compares prec and current traceroute hops lists to determine whether the route has changed
-def detectRouteChanges(prevHopsList, hopsList, prevRxTTL, rxTTL):
-    print ("args: " + str(len(prevHopsList)) + ", " + str(len(hopsList)) + ", " + str(prevRxTTL) + ", " + str(rxTTL))
-    ######## Detect route changes using traceroute hops list
-    # Compare each of the traceroute hops to the previous value for that hop
-    #  If it has changed, signal a route change.
-    # Note: some routers don't always respond (so that hop value oscillates between a valid IP address
-    # and 0.0.0.0. Even though the rest of the hops have stayed the same, this could look like a
-    # route change
-    # Therefore we can also look at the IP TTl value to see if that has changed or not.
-    # if it hasn't then that suggests it's just an intermediate router not responding rather than a route change
-
-
-    # Flag to signal the detection of a route change
-    hopsListHasChanged = False
-
-    # Shorthand for 0.0.0.0 (i.e no response)
-    noResponse = [0, 0, 0, 0]
-
-    # Wait until all the traceroute hops have been populated with values before calculating
-    if len(hopsList) > 0 and None not in hopsList:
-        # Set initial value for prevHopsList
-        if len(prevHopsList) == 0:
-            prevHopsList = hopsList
-            hopsListHasChanged = True
-
-        # # Test to see if the rxTTL value has changed, if so, set hopsListHasChanged flag
-        # elif self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
-        #     hopsListHasChanged = True
-
-        # Test If length of list has changed then set hopsListHasChanged flag
-        # However, if the rxTTL value hasn't also changed*, this suggests an erroneous
-        # traceroute hops list possibly caused by a series of routers not responding.
-        # * Note if prevRxTTL is 'None' (because the rxTTL isn't able to be decoded)
-        # then all we have to go on is the length of the hops list
-
-        # Test If length of list has changed then set hopsListHasChanged flag
-        elif (len(hopsList) != len(prevHopsList)):
-            # Test to see if rxTTL values contain any further info on which to base a route-change decision
-            if prevRxTTL is not None and rxTTL is not None:
-                # rxTTL does contain a value which we can use to see if the route has changed.
-                # Compare current and prev rxTTL values
-                if prevRxTTL == rxTTL:
-                    # This change in the length of hopsList is a red herring because rxTTL did not change.
-                    # Therefore ignore.
-                    hopsListHasChanged = False
-                else:
-                    # rxTTL has changed, therefore the route must have changed
-                    hopsListHasChanged = True
-            else:
-                # It doesn't, so we can only go on the change in length of hopsList[]
-                hopsListHasChanged = True
-
-        # If the lengths of the two lists are the same, test the contents
-        else:
-            # Otherwise, if list length is the same compare latest and previous hopsList members
-            for hopNo in range(len(hopsList)):
-                # Iterate over hopsList, comparing the the octets of the individual hops
-                prevHop = prevHopsList[hopNo]
-                currentHop = hopsList[hopNo]
-
-                # Check to see if either the current or previous values are NOT 0.0.0.0.
-                if prevHop != noResponse and currentHop != noResponse:
-                    # These hops contains a value, so see if they have changed
-                    if currentHop == prevHop:
-                        # The hop value has remained the same, no route change
-                        hopsListHasChanged = False
-                    else:
-                        # The hop value has changed. New route
-                        hopsListHasChanged = True
-
-                # Check to see if either and current values are zero
-                elif prevHop == noResponse and currentHop == noResponse:
-                    hopsListHasChanged = False
-
-
-                # Now check to see if we previously had a zero hop value but we now have a non zero value
-                # If so, this suggests a route change
-                elif prevHop == noResponse and currentHop != noResponse:
-                    hopsListHasChanged = True
-
-                # Now check to see if we previously had a non-zero value for this hop. If so, make
-                # an educated guess and carry the prev hop value into the current hop value
-                # This means that we might have something to compare this hop value to if it changes
-                # to another non-zero value
-                elif prevHop != noResponse and currentHop == noResponse:
-                    print("carry forward hop " + str(hopNo))
-                    hopsList[hopNo] = prevHopsList[hopNo]
-                    hopsListHasChanged = False
-                else:
-                    # We don't know if the route has changed or not
-                    hopsListHasChanged = False
-
-                # At the end of each hop comparison check the status of hopsListHasChanged
-                # If it has, break out of the loop, otherwise continue onto the next hop
-                if hopsListHasChanged:
-                    return True
-                else:
-                    # Continue on the the next hop comparison
-                    pass
-        # At the end of the iteration over all hops, return the latest value of hopsListHasChanged
-        return hopsListHasChanged
-    else:
-        return False
-
+def calculateSlowStartSleepPeriod():
+    # Every x packets, reduce the txPeriod until it matches the calculated tx rate
+    initialTxPeriod = 0.1  # i.e 100 mS, or 10 packets per second
+    count = 0
+    txPeriod = initialTxPeriod
+    while True:
+        # Increment count with each call to calculateSlowStartSleepPeriod
+        count +=1
+        if count > 1:
+            # With each successive call, halve the txPeriod
+            txPeriod = txPeriod / 2
+        yield txPeriod
 
 
 def main(argv):
+
+    # y = calculateSlowStartSleepPeriod()
+    # for x in range (0,10):
+    #     print (str(next(y)))
+    # exit()
 
     # detectRouteChangesTest()
     # exit()

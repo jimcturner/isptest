@@ -3630,6 +3630,12 @@ class RtpGenerator(object):
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
 
         self.burstTimer = 0 # Used to count seconds when Generator is in Burst mode
+        # Slowstart variables - This creates a logarithmic increase in the  tx rate at the start of the stream.
+        # Its purpose is to allow the network hardware/CPUs to ramp up resources gradually when using high bitrates
+        # No of packets to have been transmitted between each increase in the controlled tx rate
+        self.slowStartPacketInterval = 10 # Every 10 packets sent, the rate will be allowed to increase
+        self.slowStartActiveFlag = True    # Flag to indicate whether slowStart is active
+        self.slowStartInitialTxPeriod = 0.1    # The starting tx period, i.e 100 mS, or 10 packets per second
 
         # Start the traffic generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
@@ -4411,13 +4417,45 @@ class RtpGenerator(object):
                 else:
                     return sleepTime
 
+            # This function deliberately increases the tx period at the start of transmission, to start the initial
+            # tx rate much slower than the specified rate
+            # it is a generator function, so it will remember it's previous value
+            def calculateSlowStartSleepPeriod():
+                # Every x packets, reduce the txPeriod until it matches the calculated tx rate
+                initialTxPeriod = 0.1 # i.e 100 mS, or 10 packets per second
+                count = 0
+                txPeriod = initialTxPeriod
+                while True:
+                    # Increment count with each call to calculateSlowStartSleepPeriod
+                    count += 1
+                    if count > 1:
+                        # With each successive call, halve the txPeriod
+                        txPeriod = txPeriod / 1.1
+                    # Return the latest value of txPeriod
+                    yield txPeriod
+
+
             # This is the infinite loop that actually transmits the rtp packet at an interval determined
             # by the tx period. The sleep period is determined by the calculateSleepPeriod() 'generator' function
             # Infinite loop until timeToLive == 0
             # Create a Generator function (which is a bit like an object, in that it will continue to exist after returning)
             g = calculateSleepPeriod()
+            # Create a Generator function to calculate the SlowStart tx period timings
+            slowStartTxPeriodGenerator = calculateSlowStartSleepPeriod()
+
             while rtpGeneratorInstance.timeToLive != 0:
-                if rtpGeneratorInstance.jitterGenerationFlag is False:
+                if rtpGeneratorInstance.slowStartActiveFlag is True:
+                    # Every 10 packets, request a regeneration of the slowstart tx Period
+                    if rtpGeneratorInstance.txCounter_packets % 10 == 0:
+                        sleepTime = next(slowStartTxPeriodGenerator)
+                        # Now check to see if the sleepTime has decreased to/beyond the target tx Period
+                        if sleepTime <= rtpGeneratorInstance.txPeriod:
+                            Utils.Message.addMessage("target tx Period reached, clearing slowStartActiveFlag")
+                            # Clear the slowStartActiveFlag. The Regular calculateSleepPeriod will take over now
+                            rtpGeneratorInstance.slowStartActiveFlag = False
+
+                elif rtpGeneratorInstance.jitterGenerationFlag is False:
+
                     # Get (dynamic) sleep interval. This should ensure that the next packet is sent at precisely the correct
                     # time with any processing delays compensated for
                     sleepTime = next(g)
