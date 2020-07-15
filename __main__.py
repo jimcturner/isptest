@@ -3495,7 +3495,6 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             Utils.Message.addMessage(
                                 Fore.RED + "INFO: Stream doesn't exist yet, adding to rtpRxStreamTempDict list: " + str(
                                     syncSourceID))
-                            # rtpRxStreamTempDict[syncSourceID] = timer()
                             rtpRxStreamTempDict[syncSourceID] = [RtpData(seqNo, udpPayloadLength,
                                                                          packetArrivedTimestamp, syncSourceID,
                                                                          isptestHeaderData, rxTTL, srcAddress, srcPort)]
@@ -3533,16 +3532,22 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # the stream will be deleted from tpRxStreamTempDict{}
             nonExistentStreamTimout_seconds = 5
             streamsToPurge = []
-            # Compile list of orphan streams
-            # for stream in rtpRxStreamTempDict:
-            #     if (timer() - rtpRxStreamTempDict[stream]) > nonExistentStreamTimout_seconds:
-            #         # Add to list
-            #         streamsToPurge.append(stream)
+            # Compile list of orphan streams whose most recent packetArrivedTimestamp exceeds the elapsed time threshold
+            for stream in rtpRxStreamTempDict:
+                try:
+                    if (datetime.datetime.now() - rtpRxStreamTempDict[stream][-1].timestamp).total_seconds() \
+                            > nonExistentStreamTimout_seconds:
+                        # Add to list
+                        streamsToPurge.append(stream)
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:__rtpReceiveThread() rtpRxStreamTempDict timestamp test " + \
+                                             str(stream) + ", " + str(e))
+
 
             # If there are some streams to purge, purge them
             if len(streamsToPurge) > 0:
                 for stream in streamsToPurge:
-                    Utils.Message.addMessage("INFO: Deleting orphan stream: " + str(stream) + " from rtpRxStreamTempDict{}")
+                    Utils.Message.addMessage("INFO: Deleting non-rtp stream: " + str(stream) + " from rtpRxStreamTempDict{}")
                     # Delete the stream (key) from the dictionary as not wanted
                     rtpRxStreamTempDict.pop(stream, None)
 
