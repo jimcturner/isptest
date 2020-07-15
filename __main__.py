@@ -97,7 +97,7 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 
 # Additonal libraries required (of my own making)
-from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch
+from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch, RtpData
 import Utils
 from Custom_prompt_toolkit_mods import multi_input_dialog
 from Traceroute import *
@@ -3027,7 +3027,6 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # create UDP socket
             udpSocket = socket.socket(socket.AF_INET,  # Internet
                                       socket.SOCK_DGRAM)  # UDP
-            # udpSocket.settimeout(timeout)
             # Update socket with ttl value
             udpSocket.setsockopt(socket.SOL_IP, socket.IP_TTL, txTTL)
             udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
@@ -3161,13 +3160,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     # (and their corresponding ResultsTransmitters) are sharing a reference to this single socket, this is a problem.
     refreshRtpStreamSocketsFlag = False
 
-    # # Create a diskLogging Thread - pass rtpStream object to it
-    # diskLoggerThread = threading.Thread(target=__diskLoggerThread,
-    #                                     args=(operationMode, rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,))
-    # diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
-    # diskLoggerThread.setName("__diskLoggerThread")
-    # diskLoggerThread.start()
-    # Running total o
+
     # Create and initialise some global variables used for debugging -tracing lost packets
 
 
@@ -3438,11 +3431,14 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         Utils.Message.addMessage("payloadLength = len(payload) " + str(e))
                         payloadLength = 0
 
+                    # Calculate the udp payload length (rtp header plus data). This is to allow bitrate calculations
+                    udpPayloadLength = payloadLength + RTP_HEADER_SIZE
+
                     # Finally, if we have a valid rtp packet with all meta data extracted, send it to an RtpReceiveStream
                     # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
+                    # This will raise an Exception if the key doesn't yet exist in the dictionary
                     try:
-                        # Calculate the udp payload length (rtp header plus data). This is to allow bitrate calculations
-                        udpPayloadLength = payloadLength + RTP_HEADER_SIZE
+
                         # Add the the new rtp data object to the RtpReceiveStream
                         rtpRxStreamsDict[syncSourceID].addData(\
                             seqNo, udpPayloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, \
@@ -3451,25 +3447,59 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     except:
                         # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
                         if syncSourceID in rtpRxStreamTempDict:
+                            # If this stream does exist in the temporary list, append the latest (possible) data to it
+                            rtpRxStreamTempDict[syncSourceID].append(RtpData(seqNo, udpPayloadLength,
+                                                                         packetArrivedTimestamp, syncSourceID,
+                                                                         isptestHeaderData, rxTTL, srcAddress, srcPort))
                             # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
                             Utils.Message.addMessage(Fore.GREEN + "INFO: " + str(syncSourceID) +
-                                               " exists in rtpRxStreamTempDict, creating entry in rtpRxStreamsDict")
-                            # Create and add the new stream to the rtpRxStreamsDict
-                            newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, UDP_RX_IP, \
-                                                            UDP_RX_PORT, glitchEventTriggerThreshold, udpSocket,
-                                                            rtpRxStreamsDict, rtpRxStreamsDictMutex)
+                                               " exists in rtpRxStreamTempDict already, adding RtpData(seqNo=" + \
+                                                     str(seqNo) + ")")
+                            ######<<<<<<GOT HERE > NOW TEST CONTENTS of the list to see if this is a valid stream to be added
+                            # For a stream to be considered valid, there has to be a minimum no of packets received
+                            # with the same sync source ID. Also, the seq no of the most recent packet must be higher
+                            # than the first packet received for this sync source ID.
+                            # In this way we can test for a constant sync source ID field and an incrementing seq no
+                            # Check to see how many packets with the same sync source ID have been received
+                            if (len(rtpRxStreamTempDict[syncSourceID]) > Registry.receiveStreamAcceptThreshold):
+                                # Now check to see if the sequence numbers appear to have incremented by at least the
+                                # no of packets received with this sync source ID
+                                if (rtpRxStreamTempDict[syncSourceID][-1].rtpSequenceNo - \
+                                                rtpRxStreamTempDict[syncSourceID][0].rtpSequenceNo) >= \
+                                        (len(rtpRxStreamTempDict[syncSourceID]) - 1):
 
-                            # Now delete the entry from the temporary dict
-                            rtpRxStreamTempDict.pop(syncSourceID, None)
+                                    Utils.Message.addMessage(Fore.GREEN + "INFO: rtp stream " + str(syncSourceID) +
+                                                             " validated. Creating new RtpReceiveStream")
+                                    # Create and add the new stream to the rtpRxStreamsDict
+                                    newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, UDP_RX_IP, \
+                                                                    UDP_RX_PORT, glitchEventTriggerThreshold, udpSocket,
+                                                                    rtpRxStreamsDict, rtpRxStreamsDictMutex)
+                                    # Add the most recent packet to the newly created stream
+                                    newRtpStream.addData(seqNo, udpPayloadLength, packetArrivedTimestamp,
+                                            syncSourceID, isptestHeaderData, rxTTL, srcAddress, srcPort)
+
+                                    # Now delete the entry from the temporary dict
+                                    rtpRxStreamTempDict.pop(syncSourceID, None)
+                                else:
+                                #  The sequence numbers don't appear to have incremented
+                                    Utils.Message.addMessage("Non-RTP packets received from " +\
+                                                             str(srcAddress) + ":" + str(srcPort) +\
+                                                             ", (" + str(udpPayloadLength) + " bytes)")
+                                    # Now delete the entry from the temporary dict
+                                    rtpRxStreamTempDict.pop(syncSourceID, None)
 
                         else:
                             # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
-                            # create a entry in the temporary list (with a timestamp)
+                            # create a key in the temporary dictionary using the sync Source ID field
+                            # The value is a list of (possible) rtpData objects
                             Utils.Message.addMessage(
-                                Fore.RED + "INFO: Stream doesn't exist yet, adding to temp list: " + str(
+                                Fore.RED + "INFO: Stream doesn't exist yet, adding to rtpRxStreamTempDict list: " + str(
                                     syncSourceID))
-                            rtpRxStreamTempDict[syncSourceID] = timer()
-                # Reset syncSourceID to None. This will inhibit any more data being added until it is set once more
+                            # rtpRxStreamTempDict[syncSourceID] = timer()
+                            rtpRxStreamTempDict[syncSourceID] = [RtpData(seqNo, udpPayloadLength,
+                                                                         packetArrivedTimestamp, syncSourceID,
+                                                                         isptestHeaderData, rxTTL, srcAddress, srcPort)]
+                            # Reset syncSourceID to None. This will inhibit any more data being added until it is set once more
                 syncSourceID = None
 
             # Catch all other exceptions
@@ -3504,10 +3534,10 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             nonExistentStreamTimout_seconds = 5
             streamsToPurge = []
             # Compile list of orphan streams
-            for stream in rtpRxStreamTempDict:
-                if (timer() - rtpRxStreamTempDict[stream]) > nonExistentStreamTimout_seconds:
-                    # Add to list
-                    streamsToPurge.append(stream)
+            # for stream in rtpRxStreamTempDict:
+            #     if (timer() - rtpRxStreamTempDict[stream]) > nonExistentStreamTimout_seconds:
+            #         # Add to list
+            #         streamsToPurge.append(stream)
 
             # If there are some streams to purge, purge them
             if len(streamsToPurge) > 0:

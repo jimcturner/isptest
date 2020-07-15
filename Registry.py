@@ -26,7 +26,10 @@ class Registry(object):
                          ["a", "Show 'About' dialogue"]
                          ]
 
+
     ######### RtpReceiveStream
+    receiveStreamAcceptThreshold = 5 # The minimum no of rtp packets for particular sync source ID to be received
+                                    # before the stream is accepted as a valid incoming stream
     lossOfStreamAlarmThreshold_s = 10 # Specifies how long before a loss of stream Event is triggered by RtpReceiveStream
     streamIsDeadThreshold_s = 90 # Specifies how long to wait with no incoming rtp packets before a stream is presumed dead
     autoRemoveDeadRxStreamsEnable = True # Determines whether dead streams should automaticaslly be removed from the
