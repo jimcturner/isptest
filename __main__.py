@@ -3537,7 +3537,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # Iterate over tpRxStreamTempDict to purge it of old, non-existant streams that never made it into rtpRxStreamTempDict
             # If an RTP packet with the matching sync source id doesn;t appear within nonExistentStreamTimout_seconds seconds,
             # the stream will be deleted from tpRxStreamTempDict{}
-            nonExistentStreamTimout_seconds = 5
+            nonExistentStreamTimout_seconds = 2
             streamsToPurge = []
             # Compile list of orphan streams whose most recent packetArrivedTimestamp exceeds the elapsed time threshold
             for stream in rtpRxStreamTempDict:
@@ -3558,7 +3558,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 for stream in streamsToPurge:
                     Utils.Message.addMessage("INFO: Deleting non-rtp stream: " + str(stream) + " from rtpRxStreamTempDict{}")
                     # Delete the stream (key) from the dictionary as not wanted
-                    rtpRxStreamTempDict.pop(stream, None)
+                    # rtpRxStreamTempDict.pop(stream, None)
 
         # Check status of shutdownFlag
         if shutdownFlag.is_set():
