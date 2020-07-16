@@ -3489,11 +3489,12 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                     # rtpRxStreamTempDict.pop(syncSourceID, None)
                                 else:
                                 #  The sequence numbers don't appear to have incremented
-                                    Utils.Message.addMessage(Fore.RED + "Non-RTP packets received from " +\
-                                                             str(srcAddress) + ":" + str(srcPort) +\
-                                                             ", (" + str(udpPayloadLength) + " bytes)")
+                                #     Utils.Message.addMessage(Fore.RED + "Non-RTP packets received from " +\
+                                #                              str(srcAddress) + ":" + str(srcPort) +\
+                                #                              ", (" + str(udpPayloadLength) + " bytes)")
                                     # Now delete the entry from the temporary dict
                                     # rtpRxStreamTempDict.pop(syncSourceID, None)
+                                    pass
 
                         except:
                             # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
