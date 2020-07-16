@@ -3553,8 +3553,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             #         del (rtpRxStreamTempDict[key])
 
             # Check length of rtpRxStreamTempDict. If it's too large, purge it
-            if len(rtpRxStreamTempDict) > 5:
-                Utils.Message.addMessage("Purging rtpRxStreamTempDict")
+            if len(rtpRxStreamTempDict) > 50:
+                # Utils.Message.addMessage("Purging rtpRxStreamTempDict")
                 rtpRxStreamTempDict = {}
 
         # Check status of shutdownFlag
