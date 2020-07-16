@@ -22,7 +22,7 @@ def sendUDP(argv):
                                   socket.SOCK_DGRAM)  # UDP
     randomText = generatePayload(20)
     counter = 0
-    noOfRepeats = 6
+    noOfRepeats = 3
     while True:
         if counter % noOfRepeats == 0:
             randomText = generatePayload(20)
