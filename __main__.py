@@ -3450,9 +3450,11 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         # This will fail if it doesn't already exist
                         try:
                             # If this stream does exist in the temporary list, append the latest (possible) data to it
-                            rtpRxStreamTempDict[syncSourceID].append(RtpData(seqNo, udpPayloadLength,
-                                                                         packetArrivedTimestamp, syncSourceID,
-                                                                         isptestHeaderData, rxTTL, srcAddress, srcPort))
+                            # in the form of a tuple containing the seq no the timestamp
+                            # rtpRxStreamTempDict[syncSourceID].append(RtpData(seqNo, udpPayloadLength,
+                            #                                              packetArrivedTimestamp, syncSourceID,
+                            #                                              isptestHeaderData, rxTTL, srcAddress, srcPort))
+                            rtpRxStreamTempDict[syncSourceID].append([seqNo, packetArrivedTimestamp])
                             # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
                             # Utils.Message.addMessage(Fore.GREEN + "INFO: " + str(syncSourceID) +
                             #                    " exists in rtpRxStreamTempDict already, adding RtpData(seqNo=" + \
@@ -3466,8 +3468,11 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             if (len(rtpRxStreamTempDict[syncSourceID]) > Registry.receiveStreamAcceptThreshold):
                                 # Now check to see if the sequence numbers appear to have incremented by at least the
                                 # no of packets received with this sync source ID
-                                if (rtpRxStreamTempDict[syncSourceID][-1].rtpSequenceNo - \
-                                                rtpRxStreamTempDict[syncSourceID][0].rtpSequenceNo) == \
+                                # if (rtpRxStreamTempDict[syncSourceID][-1].rtpSequenceNo - \
+                                #                 rtpRxStreamTempDict[syncSourceID][0].rtpSequenceNo) == \
+                                #         (len(rtpRxStreamTempDict[syncSourceID]) - 1):
+                                if (rtpRxStreamTempDict[syncSourceID][-1][0] - \
+                                    rtpRxStreamTempDict[syncSourceID][0][0]) == \
                                         (len(rtpRxStreamTempDict[syncSourceID]) - 1):
 
                                     Utils.Message.addMessage(Fore.GREEN + "INFO: rtp stream " + str(syncSourceID) +
@@ -3481,7 +3486,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                             syncSourceID, isptestHeaderData, rxTTL, srcAddress, srcPort)
 
                                     # Now delete the entry from the temporary dict
-                                    rtpRxStreamTempDict.pop(syncSourceID, None)
+                                    # rtpRxStreamTempDict.pop(syncSourceID, None)
                                 else:
                                 #  The sequence numbers don't appear to have incremented
                                     Utils.Message.addMessage(Fore.RED + "Non-RTP packets received from " +\
@@ -3493,13 +3498,14 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         except:
                             # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
                             # create a key in the temporary dictionary using the sync Source ID field
-                            # The value is a list of (possible) rtpData objects
+                            # The value is a list of (possible) rtpData objects' seq nos and timestamps
                             Utils.Message.addMessage(
                                 Fore.RED + "INFO: Stream doesn't exist yet, adding to rtpRxStreamTempDict list: " + str(
                                     syncSourceID))
-                            rtpRxStreamTempDict[syncSourceID] = [RtpData(seqNo, udpPayloadLength,
-                                                                         packetArrivedTimestamp, syncSourceID,
-                                                                         isptestHeaderData, rxTTL, srcAddress, srcPort)]
+                            # rtpRxStreamTempDict[syncSourceID] = [RtpData(seqNo, udpPayloadLength,
+                            #                                              packetArrivedTimestamp, syncSourceID,
+                            #                                              isptestHeaderData, rxTTL, srcAddress, srcPort)]
+                            rtpRxStreamTempDict[syncSourceID] = [[seqNo, packetArrivedTimestamp]]
                             # Reset syncSourceID to None. This will inhibit any more data being added until it is set once more
                 syncSourceID = None
 
@@ -3507,7 +3513,6 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             except Exception as e:
                 Utils.Message.addMessage(Term.WhiRed + "ERR: __main()udpSocket.recvfrom():" + UDP_RX_IP + ":" + \
                                    str(UDP_RX_PORT) + ", " + str(id(udpSocket)))
-
                 Utils.Message.addMessage("__main() recvfrom: " + str(e))
 
                 try:
@@ -3537,7 +3542,9 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # Compile list of orphan streams whose most recent packetArrivedTimestamp exceeds the elapsed time threshold
             for stream in rtpRxStreamTempDict:
                 try:
-                    if (datetime.datetime.now() - rtpRxStreamTempDict[stream][-1].timestamp).total_seconds() \
+                    # if (datetime.datetime.now() - rtpRxStreamTempDict[stream][-1].timestamp).total_seconds() \
+                    #         > nonExistentStreamTimout_seconds:
+                    if (datetime.datetime.now() - rtpRxStreamTempDict[stream][-1][1]).total_seconds() \
                             > nonExistentStreamTimout_seconds:
                         # Add to list
                         streamsToPurge.append(stream)

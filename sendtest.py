@@ -17,12 +17,12 @@ def generatePayload(payloadLength):
     return randomDataString.encode('ascii')
 
 def sendUDP(argv):
-    print("sending to " + str(argv[0]) + ":" + str(argv[1]))
+    print("sending to " + str(argv[0]) + ":" + str(argv[1]) + ", syncSourceRepeats: " + str(argv[2]))
     txSocket = socket.socket(socket.AF_INET,  # Internet
                                   socket.SOCK_DGRAM)  # UDP
     randomText = generatePayload(20)
     counter = 0
-    noOfRepeats = 3
+    noOfRepeats = int(argv[2])
     while True:
         if counter % noOfRepeats == 0:
             randomText = generatePayload(20)
