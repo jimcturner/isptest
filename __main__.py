@@ -3538,27 +3538,38 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             # If an RTP packet with the matching sync source id doesn;t appear within nonExistentStreamTimout_seconds seconds,
             # the stream will be deleted from tpRxStreamTempDict{}
             nonExistentStreamTimout_seconds = 2
-            streamsToPurge = []
-            # Compile list of orphan streams whose most recent packetArrivedTimestamp exceeds the elapsed time threshold
-            for stream in rtpRxStreamTempDict:
-                try:
-                    # if (datetime.datetime.now() - rtpRxStreamTempDict[stream][-1].timestamp).total_seconds() \
-                    #         > nonExistentStreamTimout_seconds:
-                    if (datetime.datetime.now() - rtpRxStreamTempDict[stream][-1][1]).total_seconds() \
+            # streamsToPurge = []
+            # # Compile list of orphan streams whose most recent packetArrivedTimestamp exceeds the elapsed time threshold
+            # for stream in rtpRxStreamTempDict:
+            #     try:
+            #         # if (datetime.datetime.now() - rtpRxStreamTempDict[stream][-1].timestamp).total_seconds() \
+            #         #         > nonExistentStreamTimout_seconds:
+            #         if (datetime.datetime.now() - rtpRxStreamTempDict[stream][-1][1]).total_seconds() \
+            #                 > nonExistentStreamTimout_seconds:
+            #             # Add to list
+            #             streamsToPurge.append(stream)
+            #     except Exception as e:
+            #         Utils.Message.addMessage("ERR:__rtpReceiveThread() rtpRxStreamTempDict timestamp test " + \
+            #                                  str(stream) + ", " + str(e))
+            #
+            #
+            # # If there are some streams to purge, purge them
+            # if len(streamsToPurge) > 0:
+            #     for stream in streamsToPurge:
+            #         Utils.Message.addMessage("INFO: Deleting non-rtp stream: " + str(stream) + " from rtpRxStreamTempDict{}")
+            #         # Delete the stream (key) from the dictionary as not wanted
+            #         rtpRxStreamTempDict.pop(stream, None)
+
+            # Create temporary copy of the dict we want to delete keys from
+            tmpDict = rtpRxStreamTempDict.copy()
+            # Iterate over the copy of the dict
+            for key, value in tmpDict.items():
+                # Test to see if the most recent packetArrivedTimestamp exceeds the elapsed time threshold. If so, remove it
+                if (datetime.datetime.now() - value[-1][1]).total_seconds() \
                             > nonExistentStreamTimout_seconds:
-                        # Add to list
-                        streamsToPurge.append(stream)
-                except Exception as e:
-                    Utils.Message.addMessage("ERR:__rtpReceiveThread() rtpRxStreamTempDict timestamp test " + \
-                                             str(stream) + ", " + str(e))
-
-
-            # If there are some streams to purge, purge them
-            if len(streamsToPurge) > 0:
-                for stream in streamsToPurge:
-                    Utils.Message.addMessage("INFO: Deleting non-rtp stream: " + str(stream) + " from rtpRxStreamTempDict{}")
-                    # Delete the stream (key) from the dictionary as not wanted
-                    # rtpRxStreamTempDict.pop(stream, None)
+                    Utils.Message.addMessage(
+                        "INFO: **Deleting non-rtp stream: " + str(key) + " from rtpRxStreamTempDict{}")
+                    del (rtpRxStreamTempDict[key])
 
         # Check status of shutdownFlag
         if shutdownFlag.is_set():
