@@ -3552,6 +3552,11 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             #         #     "INFO: **Deleting non-rtp stream: " + str(key) + " from rtpRxStreamTempDict{}")
             #         del (rtpRxStreamTempDict[key])
 
+            # Check length of rtpRxStreamTempDict. If it's too large, purge it
+            if len(rtpRxStreamTempDict) > 5:
+                Utils.Message.addMessage("Purging rtpRxStreamTempDict")
+                rtpRxStreamTempDict = {}
+
         # Check status of shutdownFlag
         if shutdownFlag.is_set():
             # If down, break out of the endless while loop
