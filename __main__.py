@@ -3452,9 +3452,9 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                                                          packetArrivedTimestamp, syncSourceID,
                                                                          isptestHeaderData, rxTTL, srcAddress, srcPort))
                             # If successful, create a new rxStream and add to the rtpRxStreamsDict{}
-                            Utils.Message.addMessage(Fore.GREEN + "INFO: " + str(syncSourceID) +
-                                               " exists in rtpRxStreamTempDict already, adding RtpData(seqNo=" + \
-                                                     str(seqNo) + ")")
+                            # Utils.Message.addMessage(Fore.GREEN + "INFO: " + str(syncSourceID) +
+                            #                    " exists in rtpRxStreamTempDict already, adding RtpData(seqNo=" + \
+                            #                          str(seqNo) + ")")
                             ######<<<<<<GOT HERE > NOW TEST CONTENTS of the list to see if this is a valid stream to be added
                             # For a stream to be considered valid, there has to be a minimum no of packets received
                             # with the same sync source ID. Also, the seq no of the most recent packet must be higher
