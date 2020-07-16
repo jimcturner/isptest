@@ -3499,9 +3499,9 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
                             # create a key in the temporary dictionary using the sync Source ID field
                             # The value is a list of (possible) rtpData objects' seq nos and timestamps
-                            Utils.Message.addMessage(
-                                Fore.RED + "INFO: Stream doesn't exist yet, adding to rtpRxStreamTempDict list: " + str(
-                                    syncSourceID))
+                            # Utils.Message.addMessage(
+                            #     Fore.RED + "INFO: Stream doesn't exist yet, adding to rtpRxStreamTempDict list: " + str(
+                            #         syncSourceID))
                             # rtpRxStreamTempDict[syncSourceID] = [RtpData(seqNo, udpPayloadLength,
                             #                                              packetArrivedTimestamp, syncSourceID,
                             #                                              isptestHeaderData, rxTTL, srcAddress, srcPort)]
@@ -3567,8 +3567,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 # Test to see if the most recent packetArrivedTimestamp exceeds the elapsed time threshold. If so, remove it
                 if (datetime.datetime.now() - value[-1][1]).total_seconds() \
                             > nonExistentStreamTimout_seconds:
-                    Utils.Message.addMessage(
-                        "INFO: **Deleting non-rtp stream: " + str(key) + " from rtpRxStreamTempDict{}")
+                    # Utils.Message.addMessage(
+                    #     "INFO: **Deleting non-rtp stream: " + str(key) + " from rtpRxStreamTempDict{}")
                     del (rtpRxStreamTempDict[key])
 
         # Check status of shutdownFlag
