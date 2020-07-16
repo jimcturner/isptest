@@ -3561,16 +3561,16 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
             #         # Delete the stream (key) from the dictionary as not wanted
             #         rtpRxStreamTempDict.pop(stream, None)
 
-            # Create temporary copy of the dict we want to delete keys from
-            tmpDict = rtpRxStreamTempDict.copy()
-            # Iterate over the copy of the dict
-            for key, value in tmpDict.items():
-                # Test to see if the most recent packetArrivedTimestamp exceeds the elapsed time threshold. If so, remove it
-                if (datetime.datetime.now() - value[-1][1]).total_seconds() \
-                            > nonExistentStreamTimout_seconds:
-                    # Utils.Message.addMessage(
-                    #     "INFO: **Deleting non-rtp stream: " + str(key) + " from rtpRxStreamTempDict{}")
-                    del (rtpRxStreamTempDict[key])
+            # # Create temporary copy of the dict we want to delete keys from
+            # tmpDict = rtpRxStreamTempDict.copy()
+            # # Iterate over the copy of the dict
+            # for key, value in tmpDict.items():
+            #     # Test to see if the most recent packetArrivedTimestamp exceeds the elapsed time threshold. If so, remove it
+            #     if (datetime.datetime.now() - value[-1][1]).total_seconds() \
+            #                 > nonExistentStreamTimout_seconds:
+            #         # Utils.Message.addMessage(
+            #         #     "INFO: **Deleting non-rtp stream: " + str(key) + " from rtpRxStreamTempDict{}")
+            #         del (rtpRxStreamTempDict[key])
 
         # Check status of shutdownFlag
         if shutdownFlag.is_set():
