@@ -28,7 +28,7 @@ class Registry(object):
 
 
     ######### RtpReceiveStream
-    receiveStreamAcceptThreshold = 5 # The minimum no of rtp packets for particular sync source ID to be received
+    receiveStreamAcceptThreshold = 15 # The minimum no of rtp packets for particular sync source ID to be received
                                     # before the stream is accepted as a valid incoming stream
     nonExistentStreamTimout_seconds = 5 # How long to wait before deciding that a received packet isn't part of any stream
 
