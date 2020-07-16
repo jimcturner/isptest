@@ -3446,7 +3446,9 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
 
                     except:
                         # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
-                        if syncSourceID in rtpRxStreamTempDict:
+                        # Attempt to add the latest rtpSyncSourceIdentifier to tpRxStreamTempDict
+                        # This will fail if it doesn't already exist
+                        try:
                             # If this stream does exist in the temporary list, append the latest (possible) data to it
                             rtpRxStreamTempDict[syncSourceID].append(RtpData(seqNo, udpPayloadLength,
                                                                          packetArrivedTimestamp, syncSourceID,
@@ -3488,7 +3490,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                     # Now delete the entry from the temporary dict
                                     rtpRxStreamTempDict.pop(syncSourceID, None)
 
-                        else:
+                        except:
                             # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
                             # create a key in the temporary dictionary using the sync Source ID field
                             # The value is a list of (possible) rtpData objects
