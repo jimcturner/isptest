@@ -3456,7 +3456,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             # Utils.Message.addMessage(Fore.GREEN + "INFO: " + str(syncSourceID) +
                             #                    " exists in rtpRxStreamTempDict already, adding RtpData(seqNo=" + \
                             #                          str(seqNo) + ")")
-                            ######<<<<<<GOT HERE > NOW TEST CONTENTS of the list to see if this is a valid stream to be added
+                            ######NOW TEST CONTENTS of the list to see if this is a valid stream to be added
                             # For a stream to be considered valid, there has to be a minimum no of packets received
                             # with the same sync source ID. Also, the seq no of the most recent packet must be higher
                             # than the first packet received for this sync source ID.
@@ -3465,13 +3465,10 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             if (len(rtpRxStreamTempDict[syncSourceID]) > Registry.receiveStreamAcceptThreshold):
                                 # Now check to see if the sequence numbers appear to have incremented by at least the
                                 # no of packets received with this sync source ID
-                                # if (rtpRxStreamTempDict[syncSourceID][-1].rtpSequenceNo - \
-                                #                 rtpRxStreamTempDict[syncSourceID][0].rtpSequenceNo) == \
-                                #         (len(rtpRxStreamTempDict[syncSourceID]) - 1):
                                 if (rtpRxStreamTempDict[syncSourceID][-1] - rtpRxStreamTempDict[syncSourceID][0]) == \
                                         (len(rtpRxStreamTempDict[syncSourceID]) - 1):
 
-                                    Utils.Message.addMessage(Fore.GREEN + "INFO: rtp stream " + str(syncSourceID) +
+                                    Utils.Message.addMessage(Fore.GREEN + "Rtp stream " + str(syncSourceID) +
                                                              " validated. Creating new RtpReceiveStream")
                                     # Create and add the new stream to the rtpRxStreamsDict
                                     newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, UDP_RX_IP, \
@@ -3481,27 +3478,24 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                     newRtpStream.addData(seqNo, udpPayloadLength, packetArrivedTimestamp,
                                             syncSourceID, isptestHeaderData, rxTTL, srcAddress, srcPort)
 
-                                    # Now delete the entry from the temporary dict
-                                    # rtpRxStreamTempDict.pop(syncSourceID, None)
                                 else:
                                  # The sequence numbers don't appear to have incremented
                                     Utils.Message.addMessage(Fore.RED + "Non-RTP packets received from " +\
                                                              str(srcAddress) + ":" + str(srcPort) +\
                                                              ", (" + str(udpPayloadLength) + " bytes)")
-                                    # # Now delete the entry from the temporary dict
-                                    # del (rtpRxStreamTempDict[syncSourceID])
-                                    # pass
+                                    # Now delete the entry from the temporary dict
+                                    del (rtpRxStreamTempDict[syncSourceID])
 
                         except:
                             # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
-                            # create a key in the temporary dictionary using the sync Source ID field
-                            # The value is a list of (possible) rtpData objects' seq nos and timestamps
+                            # create an entry in the temporary dictionary using the sync Source ID field as a key
+                            # The value is a list of (possible) rtpData objects' seq nos
                             # Utils.Message.addMessage(
                             #     Fore.RED + "INFO: Stream doesn't exist yet, adding to rtpRxStreamTempDict list: " + str(
                             #         syncSourceID))
 
                             rtpRxStreamTempDict[syncSourceID] = [seqNo]
-                            # Reset syncSourceID to None. This will inhibit any more data being added until it is set once more
+                # Reset syncSourceID to None. This will inhibit any more data being added until it is set once more
                 syncSourceID = None
 
             # Catch all other exceptions
