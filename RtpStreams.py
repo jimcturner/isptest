@@ -857,12 +857,37 @@ class RtpReceiveCommon(object):
         else:
             worstGlitchesListAsString += "No glitches to report\r\n"
 
+        # if available, create route change stats
+        routeChangeStats = "Route Change stats:\r\n"
+        # Get traceroute change stats
+        if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
+            routeChangeStats += "No. of traceroute changes: ".rjust(labelWidth) + \
+                                          str(stats["route_change_events_total"]) + "\r\n"
+            routeChangeStats += "Mean interval between route changes: ".rjust(labelWidth) +\
+                                          str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
+            routeChangeStats += "Time of last route change: ".rjust(labelWidth) + \
+                                str(stats["route_time_of_last_route_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
+
+        # Get RxTTL stats (if available)
+        if stats["packet_ttl_decrement_count"] is not None:
+            routeChangeStats += "No of hops according to received TTL: ".rjust(labelWidth) + \
+                                          str(stats["packet_ttl_decrement_count"]) + "\r\n"
+        if stats["packet_instantaneous_ttl"] is not None:
+            routeChangeStats += "No of received TTL changes: ".rjust(labelWidth) + \
+                                str(stats["route_TTl_change_events_total"]) + "\r\n"
+            routeChangeStats += "Mean interval between TTL changes: ".rjust(labelWidth) + \
+                                str(Utils.dtstrft(stats["route_mean_time_between_TTl_change_events"])) + "\r\n"
+            routeChangeStats += "Time of last TTL change: ".rjust(labelWidth) + \
+                                str(stats["route_time_of_last_TTL_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
+
+
+
         # Create a traceroute list of hops.
         tracerouteHopsListAsString = "Traceroute:\r\n"
-        tracerouteHopsListAsString += "No. of route changes: ".rjust(labelWidth) + \
-                                      str(stats["route_change_events_total"]) + "\r\n"
-        tracerouteHopsListAsString += "Mean interval between route changes: ".rjust(labelWidth) +\
-                                      str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
+        # tracerouteHopsListAsString += "No. of route changes: ".rjust(labelWidth) + \
+        #                               str(stats["route_change_events_total"]) + "\r\n"
+        # tracerouteHopsListAsString += "Mean interval between route changes: ".rjust(labelWidth) +\
+        #                               str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
         if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
             for hopNo in range(len(tracerouteHopsList)):
                 try:
@@ -895,7 +920,8 @@ class RtpReceiveCommon(object):
 
         outputString = title + subtitle + separator + streamIPDetails + transmitterDetails + \
                        separator + streamPerformance + separator +\
-                    tracerouteHopsListAsString + separator +\
+                        routeChangeStats + separator +\
+                        tracerouteHopsListAsString + separator +\
                        worstGlitchesListAsString + separator + eventsListAsAString
 
         # Return a string containing the output
