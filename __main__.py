@@ -3493,7 +3493,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                                              str(srcAddress) + ":" + str(srcPort) +\
                                                              ", (" + str(udpPayloadLength) + " bytes)")
                                     # Now delete the entry from the temporary dict
-                                    rtpRxStreamTempDict.pop(syncSourceID, None)
+                                    # rtpRxStreamTempDict.pop(syncSourceID, None)
 
                         except:
                             # If the stream doesn't exist as a key in either or rtpRxStreamsDict{} rtpRxStreamTempDict{},
