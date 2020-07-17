@@ -859,27 +859,31 @@ class RtpReceiveCommon(object):
 
         # if available, create route change stats
         routeChangeStats = "Route Change stats:\r\n"
+        try:
         # Get traceroute change stats
-        if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
-            routeChangeStats += "No. of traceroute changes: ".rjust(labelWidth) + \
-                                          str(stats["route_change_events_total"]) + "\r\n"
-            routeChangeStats += "Mean interval between route changes: ".rjust(labelWidth) +\
-                                          str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
-            routeChangeStats += "Time of last route change: ".rjust(labelWidth) + \
-                                str(stats["route_time_of_last_route_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
+            if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
+                routeChangeStats += "No. of traceroute changes: ".rjust(labelWidth) + \
+                                              str(stats["route_change_events_total"]) + "\r\n"
+                routeChangeStats += "Mean interval between route changes: ".rjust(labelWidth) +\
+                                              str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
+                routeChangeStats += "Time of last route change: ".rjust(labelWidth) + \
+                                    str(stats["route_time_of_last_route_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
+            else:
+                routeChangeStats += "No received TTL information available"
 
-        # Get RxTTL stats (if available)
-        if stats["packet_ttl_decrement_count"] is not None:
-            routeChangeStats += "No of hops according to received TTL: ".rjust(labelWidth) + \
-                                          str(stats["packet_ttl_decrement_count"]) + "\r\n"
-        if stats["packet_instantaneous_ttl"] is not None:
-            routeChangeStats += "No of received TTL changes: ".rjust(labelWidth) + \
-                                str(stats["route_TTl_change_events_total"]) + "\r\n"
-            routeChangeStats += "Mean interval between TTL changes: ".rjust(labelWidth) + \
-                                str(Utils.dtstrft(stats["route_mean_time_between_TTl_change_events"])) + "\r\n"
-            routeChangeStats += "Time of last TTL change: ".rjust(labelWidth) + \
-                                str(stats["route_time_of_last_TTL_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
-
+            # Get RxTTL stats (if available)
+            if stats["packet_ttl_decrement_count"] is not None:
+                routeChangeStats += "No of hops according to received TTL: ".rjust(labelWidth) + \
+                                              str(stats["packet_ttl_decrement_count"]) + "\r\n"
+            if stats["packet_instantaneous_ttl"] is not None:
+                routeChangeStats += "No of received TTL changes: ".rjust(labelWidth) + \
+                                    str(stats["route_TTl_change_events_total"]) + "\r\n"
+                routeChangeStats += "Mean interval between TTL changes: ".rjust(labelWidth) + \
+                                    str(Utils.dtstrft(stats["route_mean_time_between_TTl_change_events"])) + "\r\n"
+                routeChangeStats += "Time of last TTL change: ".rjust(labelWidth) + \
+                                    str(stats["route_time_of_last_TTL_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
+        except Exception as e:
+            Utils.Message.addMessage("RtpreceiveCommon.generateReport() route stats " + str(e))
 
 
         # Create a traceroute list of hops.
