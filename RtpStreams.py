@@ -868,8 +868,7 @@ class RtpReceiveCommon(object):
                                               str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
                 routeChangeStats += "Time of last route change: ".rjust(labelWidth) + \
                                     str(stats["route_time_of_last_route_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
-            else:
-                routeChangeStats += "No received TTL information available"
+
 
             # Get RxTTL stats (if available)
             if stats["packet_ttl_decrement_count"] is not None:
@@ -882,6 +881,9 @@ class RtpReceiveCommon(object):
                                     str(Utils.dtstrft(stats["route_mean_time_between_TTl_change_events"])) + "\r\n"
                 routeChangeStats += "Time of last TTL change: ".rjust(labelWidth) + \
                                     str(stats["route_time_of_last_TTL_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
+            else:
+                routeChangeStats += "No received TTL information available"
+
         except Exception as e:
             Utils.Message.addMessage("RtpreceiveCommon.generateReport() route stats " + str(e))
 
