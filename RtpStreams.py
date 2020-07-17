@@ -882,7 +882,7 @@ class RtpReceiveCommon(object):
                 routeChangeStats += "Time of last TTL change: ".rjust(labelWidth) + \
                                     str(stats["route_time_of_last_TTL_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
             else:
-                routeChangeStats += "No received TTL information available"
+                routeChangeStats += "No received TTL information available" + "\r\n"
 
         except Exception as e:
             Utils.Message.addMessage("RtpreceiveCommon.generateReport() route stats " + str(e))
