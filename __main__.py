@@ -1539,7 +1539,7 @@ class UI(object):
                                                         "File save Successful", textColour=Term.WHITE, bgColour=Term.GREEN)
                             else:
                                 # Save failed, so show an error
-                                errorMessage = textwrap(fileSavedStatus, width=maxWidth)
+                                errorMessage = textwrap.fill(str(fileSavedStatus), width=maxWidth)
                                 self.__renderMessageBox("Error: Unable to save file:-".center(errorMessage + 3) + "\n" + \
                                                         str(fileSavedStatus).center(errorMessage + 3) + "\n\n" + \
                                                         "<Press a key to continue>".center(errorMessage + 3), \
