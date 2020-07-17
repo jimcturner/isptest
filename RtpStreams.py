@@ -985,7 +985,7 @@ class RtpReceiveStream(RtpReceiveCommon):
     # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold, rxSocket,
-                 rtpRxStreamsDict, rtpRxStreamsDictMutex):
+                 rtpRxStreamsDict, rtpRxStreamsDictMutex, txMessageQueue):
         # Call super constructor
         super().__init__()
         # Create Queue to accept the received packets
@@ -993,6 +993,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpStreamQueueCurrentSize = 0  # Tracks the current size of the receive queue
         self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
         self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
+
+        self.resultsTxQueue = txMessageQueue    # Shared queue for sending results back to the transmitter
 
         self.rtpRxStreamsDict = rtpRxStreamsDict
         self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
@@ -3271,6 +3273,9 @@ class ResultsTransmitter(object):
                         msg = {"stats": stats, "eventList": eventsList}
                         pickledMessage = pickle.dumps(msg,protocol=2)
 
+                        # add the pickled message to the txMessageQueue
+                        self.parentRtpRxStream.resultsTxQueue.put([pickledMessage, self.destAddr, self.destPort])
+
                         # Set max safe UDP tx size to 576 (based on this:-
                         # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
                         MAX_UDP_TX_LENGTH = 512
@@ -3288,7 +3293,7 @@ class ResultsTransmitter(object):
                                 # if self.udpSocket is present in that list, we can safely write to it
                                 # Utils.Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
                                 # if self.udpSocket in w:
-                                self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
+                                # self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
                                 # clear the socket.sendto() error counter
                                 self.sendtoErrorCounter = 0
                                 # else:

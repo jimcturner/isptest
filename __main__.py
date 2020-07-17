@@ -10,6 +10,7 @@ import sys
 
 # from icmplib import ICMPv4Socket, TimeoutExceeded, ICMPRequest
 # from Custom_icmplib import customICMPv4Socket
+from queue import SimpleQueue, Empty
 
 from Registry import Registry # This class contains constants/defaults used throughout the program
 
@@ -2193,6 +2194,8 @@ class UI(object):
                 debugInfo.append(["udp Rx'd ", str(udpPacketsReceivedByRxThreadCount)])   # Total Rx'd UDP packets
                 debugInfo.append(["udp ignored ", str(udpPacketsDiscardedByRxThreadCount)])   # UDP packets ignored
                 debugInfo.append(["udp decoded ", str(udpPacketsDecodedByRxThreadCount)]) # UDP packets with an rtp header
+                debugInfo.append(["udp tx ", str(sendUDPThreadTxPacketCounter)])
+                debugInfo.append(["udp Q ", str(sendUDPThreadMessageQueueSize)])
             except:
                 pass
 
@@ -3011,12 +3014,79 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
     except Exception as e:
         Utils.Message.addMessage("ERR: __diskloggerThread. Error closing file " + str(e))
 
+
+# Autonomous thread to send UDP messages. The thread we permanently monitor the txMessageQueue
+# All other threads that need to send using the udpSocket can do so by putting items on the queue
+# The thread relies upon a UDP socket having been previously created and encapsulated within a list
+def __sendUDPThread(txMessageQueue, udpSocket, shutdownFlag):
+    Utils.Message.addMessage("DBUG:__sendUDPThread starting")
+    # Global tx counters
+    global sendUDPThreadTxPacketCounter
+    sendUDPThreadTxPacketCounter = 0
+    global sendUDPThreadMessageQueueSize
+    sendUDPThreadMessageQueueSize = 0
+    # Set max safe UDP tx size to 576 (based on this:-
+    # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
+    MAX_UDP_TX_LENGTH = 576
+    while True:
+        # Check status of shutdownFlag
+        if shutdownFlag.is_set():
+            # If down, break out of the endless while loop
+            break
+
+        # Confirm that socket has been created
+        if udpSocket[0] is not None:
+            # Poll the message queue to see if it contains any data to be sent
+            # The txMessageQueue is a tuple of the form [byteString, destIPAddr, destport]
+            try:
+                sendUDPThreadMessageQueueSize = txMessageQueue.qsize()
+                txData = txMessageQueue.get(timeout=0.2)
+                txData_msg = txData[0]
+                txData_ipAddr = txData[1]
+                txData_udpPort = txData[2]
+
+                # Now break the message up into a list of fragments so that it can be fitted into a udp frame
+                fragmentedMessage = Utils.fragmentString(txData_msg, MAX_UDP_TX_LENGTH)
+
+                # iterate over fragments and send
+                if fragmentedMessage is not None and len(fragmentedMessage) > 0:
+                    # iterate over fragments and send
+                    for fragment in fragmentedMessage:
+                        # Each fragment is actually a tuple, so itself needs pickling before it can be sent
+                        # Pickle and send each fragment one at a time
+                        pickledFragment = pickle.dumps(fragment, protocol=2)
+                        udpSocket[0].sendto(pickledFragment, (txData_ipAddr, txData_udpPort))
+                        # Increment the counter
+                        sendUDPThreadTxPacketCounter += 1
+            # if Queue timed out without any data in it
+            except Empty:
+                pass
+            except Exception as e:
+                Utils.Message.addMessage("ERR:__sendUDPThread.txMessageQueue.get() " + str(e))
+
+
+
+        # Utils.Message.addMessage("__sendUDPThread " + str(udpSocket[0]))
+        # time.sleep(0.2)
+    Utils.Message.addMessage("DBUG:__sendUDPThread Ending")
+
+
 # Autonomous thread to decode rtp streams and pass the data into the relevant RtpRXStream
 # The uiInstance allows this thread to access methods/variables within the UI class for the app
 # This is required because this thread has the power to shut the app down should the UDP listen port
 # not be available
+# Note: the sharedUDPSocket argument is used as a pointer. That is to say, when __receiveRtpThread() creates its UDP socket,
+# it will be copied onto this object. this way, the socket can be shared with other sockets.
+# txMessageQueue is a SimpleQueue that will be passed to any RtpReceiveStream objects created by this thread.
+# This will provide a shared means of multiple RtpReceiveStreams being able to transmit results using a single UDP
+# transmit thread. This means that within the entire program there will only ever be one thread receiving packets
+# (__receiveRtpThread) and another thread tranmsitting packets (__sendUDPThread). Hopefully this should make the isptest
+# program robust when it is dealing with multiple receive streams (otherwise there might be contention, if many threads
+# were trying to send via the same socket simultaneously)
+
 def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
-                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, uiInstance):
+                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, uiInstance,
+                       sharedUDPSocket, txMessageQueue):
     # Custom Exception for createUDPSocket()
     class CreateUDPSocketError(Exception):
         pass
@@ -3220,6 +3290,9 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
 
             # Create udp socket
             udpSocket = createUDPSocket(UDP_RX_IP, UDP_RX_PORT)
+            # update the shared UDP socket object
+            # This is used as a pointer to the socket and will allow the other threads to make use of it
+            sharedUDPSocket[0] = udpSocket
             Utils.Message.addMessage("DBUG:Created udp socket " + str(udpSocket))
             # Create raw socket
             rawSocket = createRawSocket(UDP_RX_IP, UDP_RX_PORT)
@@ -3474,7 +3547,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                     # Create and add the new stream to the rtpRxStreamsDict
                                     newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, UDP_RX_IP, \
                                                                     UDP_RX_PORT, glitchEventTriggerThreshold, udpSocket,
-                                                                    rtpRxStreamsDict, rtpRxStreamsDictMutex)
+                                                                    rtpRxStreamsDict, rtpRxStreamsDictMutex,
+                                                                    txMessageQueue)
                                     # Add the most recent packet to the newly created stream
                                     newRtpStream.addData(seqNo, udpPayloadLength, packetArrivedTimestamp,
                                             syncSourceID, isptestHeaderData, rxTTL, srcAddress, srcPort)
@@ -4073,20 +4147,34 @@ def main(argv):
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
-
-        # Create a diskLogging Thread - pass rtpStream object to it
+        # Create a diskLogging Thread - pass rtpStream object dictionary to it
         diskLoggerThread = threading.Thread(target=__diskLoggerThread,
                                             args=(MODE, rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,))
         diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
         diskLoggerThread.setName("__diskLoggerThread")
         diskLoggerThread.start()
 
+        # Create a UDP socket object to be shared between the __receiveRtpThread and __sendUDPThread
+        # Note, because pointers don't exist in python, we can encapsulate our mutable object (i.e the socket created
+        # by receiveRtpThread) in a list, and then it will be mutable, and act as a pointer that we can access
+        # from outside the thread
+        udpSocket = [None]
+        # Create a simple queue to hold results data to be sent back to the isptest transmitters
+        txMessageQueue = SimpleQueue()
+
         # Create a thread to receive the RTP streams
         receiveRtpThread = threading.Thread(target=__receiveRtpThread,
                                             args=(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
-                   UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, ui))
+                   UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, ui, udpSocket,
+                                                  txMessageQueue))
         receiveRtpThread.setName("__receiveRtpThread")
         receiveRtpThread.start()
+
+        # Create a thread to send the results back to the transmitter instances using UDP
+        sendUDPThread = threading.Thread(target=__sendUDPThread,
+                                         args=(txMessageQueue, udpSocket, shutdownFlag))
+        sendUDPThread.setName("__sendUDPThread")
+        sendUDPThread.start()
 
     # Endless loop
     while True:
