@@ -2300,14 +2300,19 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Route Change stats " + str(e))
 
                 ############ Now send results back to transmitter
-                # Confirm that the stream is being sent from an instance of isptest
-                if self.__stats["stream_transmitterVersion"] > 0:
-                    # Get the last 5 events for this stream
-                    NO_OF_PREV_EVENTS_TO_SEND = 5
-                    eventsList = self.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
-                    addResultsToTxQueue(self.__stats, eventsList, self.resultsTxQueue, self.__stats["stream_srcAddress"],
-                                        self.__stats["stream_srcPort"])
+                try:
+                    # Confirm that the stream is being sent from an instance of isptest
+                    if self.__stats["stream_transmitterVersion"] > 0:
 
+                            # Get the last 5 events for this stream
+                            NO_OF_PREV_EVENTS_TO_SEND = 5
+                            eventsList = self.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
+                            addResultsToTxQueue(self.__stats, eventsList, self.resultsTxQueue,
+                                                self.__stats["stream_srcAddress"],
+                                                self.__stats["stream_srcPort"])
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
+                                             str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
                 ######## 1 second counter end of code ########
 
