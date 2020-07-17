@@ -1527,10 +1527,11 @@ class UI(object):
                             # Use the current display filter for events to determine which events are exported to the file
                             fileSavedStatus = selectedRxOrResultsStream.writeReportToDisk(fullSavePath,\
                                                                         exportFilterList=self.filterListForDisplayedEvents)
+                            maxWidth = 70
                             if fileSavedStatus == True:
                                 # Display a message box showing the successful save path + filname
                                 # Query the OS for the the absolute file path (this will be displayed)
-                                maxWidth = 70
+
                                 absoluteSavePath = textwrap.fill(str(os.path.abspath(fullSavePath)), width=maxWidth)
                                 self.__renderMessageBox("File saved to:-".center(maxWidth + 3) + "\n" +\
                                                         str(absoluteSavePath).center(maxWidth + 3)+ "\n\n" + \
