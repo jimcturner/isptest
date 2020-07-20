@@ -3391,6 +3391,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
 
         # Endless UDP/IP receive loop.
         # Use select() to poll the OS to see if packets have arrived
+        destUDPPort = 0
         while True:
             # Check status of shutdownFlag
             if shutdownFlag.is_set():
