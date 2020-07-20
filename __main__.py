@@ -3750,7 +3750,6 @@ def main(argv):
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
 
-
     # Additonal Operation Mode flag for 'special features'
     specialFeaturesModeFlag = False
     # Specify a default txRate of 1Mbps if no rate specified
