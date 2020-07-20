@@ -1512,8 +1512,6 @@ class RtpReceiveStream(RtpReceiveCommon):
             except Exception as e:
                 Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread.addResultsToTxQueue() " + str(e))
 
-
-
         Utils.Message.addMessage("DBUG: __samplingThread started for stream " + str(self.__stats["stream_syncSource"]))
         # Initialise variables to be used within the loop
         loopCounter = 0
@@ -2002,8 +2000,10 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                 ############ Now send results back to transmitter
                 try:
-                    # Confirm that the stream is being sent from an instance of isptest
-                    if self.__stats["stream_transmitterVersion"] > 0:
+                    # Confirm that the stream is being sent from an instance of isptest AND only send if we're
+                    # currently receiving bytes
+                    if (self.__stats["stream_transmitterVersion"] > 0) and \
+                            self.__stats["packet_data_received_1S_bytes"] > 0:
 
                             # Get the last 5 events for this stream
                             NO_OF_PREV_EVENTS_TO_SEND = 5

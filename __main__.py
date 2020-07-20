@@ -2188,12 +2188,14 @@ class UI(object):
             # Display aggregate socket receive stats
             try:
                 # NOTE: These are all global vars declared in __receiveRtpThread
+                debugInfo.append(["\nReceiver ", ""])
                 debugInfo.append(["raw Rx'd ", str(rawPacketsReceivedByRxThreadCount)])   # Total Rx'd Raw packets
                 debugInfo.append(["raw ignored ", str(rawPacketsDiscardedByRxThreadCount)]) # Raw packets ignored
                 debugInfo.append(["raw decoded ", str(rawPacketsDecodedByRxThreadCount)])   # Raw packets with an rtp header
                 debugInfo.append(["udp Rx'd ", str(udpPacketsReceivedByRxThreadCount)])   # Total Rx'd UDP packets
                 debugInfo.append(["udp ignored ", str(udpPacketsDiscardedByRxThreadCount)])   # UDP packets ignored
                 debugInfo.append(["udp decoded ", str(udpPacketsDecodedByRxThreadCount)]) # UDP packets with an rtp header
+                # Note: These are global vars declared in __sendUDPThread
                 debugInfo.append(["udp tx ", str(sendUDPThreadTxPacketCounter)])
                 debugInfo.append(["udp Q ", str(sendUDPThreadMessageQueueSize)])
             except:
@@ -2206,6 +2208,7 @@ class UI(object):
             if type(self.selectedStream) == RtpGenerator:
                 try:
                     # This will only work if the stream type is an RtpGenerator object
+                    debugInfo.append(["\nTransmitter ", ""])
                     debugInfo.append(["sleep time ", str("%0.20f" %stats['Sleep Time mean']) + "S"])
                     debugInfo.append(["Tx period ", str("%0.10f" %stats['Tx period']) + "S"])
                     debugInfo.append(["Tx'd packets ", str(self.selectedStream.txCounter_packets)])
