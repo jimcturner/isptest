@@ -3753,13 +3753,13 @@ def main(argv):
     # Additonal Operation Mode flag for 'special features'
     specialFeaturesModeFlag = False
     # Specify a default txRate of 1Mbps if no rate specified
-    txRate = 1 * 1024 * 1024
+    txRate = Registry.defaultTXRate_bps
 
     # Specify a default packet size for the tx stream (if none supplied)
-    payloadLength = 1300
+    payloadLength = Registry.defaultPayloadLength_bytes
 
     # Default level of packet loss that will generate an event
-    glitchEventTriggerThreshold  = 4
+    glitchEventTriggerThreshold  = Registry.rtpReceiveStreamGlitchThreshold
 
     UDP_TX_SRC_PORT = 0
 
@@ -3770,7 +3770,7 @@ def main(argv):
     SYNC_SOURCE_ID =random.randint(1000, 2000)
 
     # Default lifespan of a tx stream (default 1 hr)
-    txStreamTimeToLive_sec = 3600
+    txStreamTimeToLive_sec = Registry.defaultTxStreamTimeToLive_sec
 
     # Default friendly name of Tx stream (if not overridden, sync source ID is used instead)
     RTP_TX_STREAM_FRIENDLY_NAME = ""
@@ -3822,22 +3822,25 @@ def main(argv):
                 print ("isptest Version " + str(Registry.version) + "\r")
                 print ("options are:\r")
                 print ("-h: help (this message)\r")
-                print ("-x: loopback mode\r")
                 print ("-t: transmit mode usage: address:port\r")
                 print("Additional transmit parameters:-\r")
-                print ("\t-s [val] udp transmit source port (for transmit or loopback mode)\r")
+                print ("\t-s [val] udp transmit source port (for transmit mode)\r")
                 print ("\t-u [val] sync source ID (for transmit or loopback mode)")
-                print ("\t-l: [val] duration of transmission (in seconds. Default 1hr (3600 sec).\r")
+                print ("\t-l: [val] duration of transmission (in seconds. Default " + \
+                       str(Registry.defaultTxStreamTimeToLive_sec) + " sec).\r")
                 print ("\t    A value of -1 means 'forever'\r")
                 print ("\t-b [val] tx bandwidth (append k for kbps, m for mbps\r")
-                print ("\t   eg -b 1m or -b 500k). Default 1Mbps\r")
-                print ("\t-d [val] rtp payload size (bytes). Default = 1300 bytes\r")
+                print ("\t   eg -b 1m or -b 500k). Default " + str(Utils.bToMb(Registry.defaultTXRate_bps)) + "bps, " +\
+                       "minimum " + str(Utils.bToMb(Registry.minimumPermittedTXRate_bps)) + "bps" +"\r")
+                print ("\t-d [val] rtp payload size (bytes). Default = " + \
+                       str(Registry.defaultPayloadLength_bytes) + " bytes\r")
                 print ("\t-n: [name] friendly name for tx stream (10 chars max)\r")
                 print ("\r")
                 print ("-r receive mode usage: -r [port] or -r [address:port]\r")
                 print("Additional receive parameters:-\r")
                 print ("\t-i [val] Glitch event packet loss ignore threshold (or 'sensitivity'). \r")
-                print("\t  Outages below this limit will not generate an event. Default = 4\r")
+                print("\t  Outages below this limit will not generate an event. Default = " +\
+                      str(Registry.rtpReceiveStreamGlitchThreshold) + "\r")
                 print ("\r")
                 print ("-v [val] message verbosity level 0-3\r")
                 print ("\r")
@@ -3912,11 +3915,20 @@ def main(argv):
                     elif multiplier == 'm' or multiplier == 'M':
                         txRate = x * 1024 * 1024
                     else:
-                        print ("Invalid -b bandwidth specified. Unknown multiplier: " + str(multiplier))
+                        print ("Invalid -b bandwidth specified. Unknown multiplier: " + str(multiplier) +"\r")
                         exit()
-                except:
-                    print ("Invalid -b bandwidth specfied. Should be xy whether x is a numerical value and y is k or m (kbps or mbps). "+ \
-                        "If no multiplier supplied then assuming x mbps. eg. 500k, 1m, 5m etc")
+                    # Now check to see if the rate meets the minimum permitted
+                    if txRate < Registry.minimumPermittedTXRate_bps:
+                        print("Specified tx rate too low. The minimum allowed is " + \
+                              str(Utils.bToMb(Registry.minimumPermittedTXRate_bps)) + "bps\r")
+                        exit()
+
+                except Exception as e:
+                    print ("Invalid -b bandwidth specfied. Should be xy whether x is a numerical value and\n" +\
+                           "y is k or m (kbps or mbps). "+ \
+                        "\nIf no multiplier supplied then assuming x mbps. eg. 500k, 1m, 5m etc" +\
+                        "\nMinimum bandwidth 10kbps, default " + str(Utils.bToMb(Registry.defaultTXRate_bps)) + "bps\r")
+                    print("Exception: " + str(e) + "\r")
                     exit()
 
 

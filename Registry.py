@@ -51,6 +51,7 @@ class Registry(object):
     # two receive periods worth of time) an Event will be created
     # then an Event will be generated
     rtpReceiveStreamJitterExcessiveAlarmThreshold = 2
+    rtpReceiveStreamGlitchThreshold = 4 # The default no of packets that have to be lost before a Glitch Event is generated
 
 
     # RtpGenerator
@@ -60,6 +61,11 @@ class Registry(object):
     tracerouteFallbackUDPDestPort = 33434  # The 'fallback' port used by the RtpGenerator.traceroute thread if no reply
     # is received from a host
     simulatedJitterPercent = 50 # The amount of 'simulated jitter' to add to the tx packets, if the feature is enabled
+    # Specify min/max/default RtpGenerator tx parameters
+    minimumPermittedTXRate_bps = 10240 # Specifies the minimum RtpGenerator tx rate as 10kbps
+    defaultTXRate_bps = 1 * 1024 * 1024 # Specifies the default RtpGenerator tx rate as 1Mbps
+    defaultPayloadLength_bytes = 1300
+    defaultTxStreamTimeToLive_sec = 3600
 
     # RtpStreamResults
     # No of historic events to keep in memory (before events are purged)
