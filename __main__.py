@@ -3438,13 +3438,14 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             # If the data has been rx'd via the raw socket, we have to extract the data as a raw packet
                             # Increment the counter
                             rawPacketsReceivedByRxThreadCount += 1
+                            rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = parseRawPacket(rawData)
                             # Note: On Windows, the raw port is running in promiscuous mode. That means it will receive
                             # ALL incoming packets addressed to that interface.
                             # Therefore we need to check that this packet is for us, by comparing the udp dest port
                             # with what we're expecting to receive on
                             if destUDPPort == UDP_RX_PORT:
                                 # This UDP packet is addressed to us, so continue to process it
-                                rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = parseRawPacket(rawData)
+
                                 if rtpHeader is not None:
                                     # Packet payload is large enough to contain an rtp header. but does it?
                                     version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
