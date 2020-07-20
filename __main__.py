@@ -3160,9 +3160,11 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     IP_HEADER_SIZE = 20
 
     # Takes a raw packet and splits off the IP, UDP, RTP headers and Payload
+    # If the packet is not large enough to contain the rtp header, it will just test for a udp header and
+    # return the rxTTL, srcUDPPort and destUDPPort
     def parseRawPacket(_rawData):
         try:
-            # Check to see that the supplied bytearray is large enough
+            # Check to see that the supplied bytearray is large enough to accommodate an RTP header
             rawBytesReceived = len(_rawData)
             if rawBytesReceived >= (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
                 # Split off the various IP, UDP and RTP headers
@@ -3185,6 +3187,20 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     return rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort
                 else:
                     return None, None, None, None, None
+            # Otherwise check to see if this packet is only large enough to accommodate a UDP header
+            # Even if it doesn't contain an RTP header, we can still extract the rxTTL, srcUDPPort and  destUDPPort
+            elif rawBytesReceived >= (IP_HEADER_SIZE + UDP_HEADER_SIZE):
+                # Split off the various IP, UDP and RTP headers
+                ipHeader = _rawData[:IP_HEADER_SIZE]
+                udpHeader = _rawData[IP_HEADER_SIZE:(IP_HEADER_SIZE + UDP_HEADER_SIZE)]
+                # Extract the Protocol field from the IP header to confirm that this contains a UDP packet.
+                # Also extract the ttl from the IP header (since they're adjacent)
+                rxTTL, ipProtocol = struct.unpack("!BB", ipHeader[8:10])
+                if ipProtocol == 17:  # Contains a UDP header
+                    # Extract the src and dest port from the UDP header
+                    srcUDPPort, destUDPPort = struct.unpack("!HH", udpHeader[0:4])
+                    return None, None, rxTTL, srcUDPPort, destUDPPort
+            # Otherwise this packet doesn't contain a UDP packet
             else:
                 return None, None, None, None, None
         except Exception as e:
