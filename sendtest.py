@@ -20,19 +20,19 @@ def sendUDP(argv):
     print("sending to " + str(argv[0]) + ":" + str(argv[1]) + ", syncSourceRepeats: " + str(argv[2]))
     txSocket = socket.socket(socket.AF_INET,  # Internet
                                   socket.SOCK_DGRAM)  # UDP
-    randomText = generatePayload(20)
+    randomText = generatePayload(50)
     counter = 0
     noOfRepeats = int(argv[2])
     while True:
         if counter % noOfRepeats == 0:
-            randomText = generatePayload(20)
-        message = str(counter).encode('ascii') + randomText + b'_sendUDP: '
+            randomText = generatePayload(2)
+        message = str(counter).encode('ascii') + randomText #+ b'_sendUDP: '
         print(message)
         txSocket.sendto(message, (argv[0],int(argv[1])))
         counter += 1
         if counter == 1000:
             counter = 0
-        time.sleep(0.01)
+        time.sleep(0.001)
 
 if __name__ == "__main__":
     # Call main and pass command line args to it (but ignore the first argument)

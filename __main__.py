@@ -3437,23 +3437,25 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             # If the data has been rx'd via the raw socket, we have to extract the data as a raw packet
                             # Increment the counter
                             rawPacketsReceivedByRxThreadCount += 1
-                            rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = parseRawPacket(rawData)
                             # Note: On Windows, the raw port is running in promiscuous mode. That means it will receive
                             # ALL incoming packets addressed to that interface.
                             # Therefore we need to check that this packet is for us, by comparing the udp dest port
                             # with what we're expecting to receive on
-                            if destUDPPort == UDP_RX_PORT and rtpHeader is not None:
+                            if destUDPPort == UDP_RX_PORT:
                                 # This UDP packet is addressed to us, so continue to process it
-                                version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
-                                if syncSourceID is not None:
-                                    # Increment the global counter
-                                    rawPacketsDecodedByRxThreadCount += 1
-                                    # Get the source address
-                                    srcAddress = rawAddr[0]
-                                    # Get the source port no
-                                    srcPort = srcUDPPort
-                                    # Store the packet arrival time
-                                    packetArrivedTimestamp = rawTimestamp
+                                rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = parseRawPacket(rawData)
+                                if rtpHeader is not None:
+                                    # Packet payload is large enough to contain an rtp header. but does it?
+                                    version, type, seqNo, timestamp, syncSourceID = parseRTPHeader(rtpHeader)
+                                    if syncSourceID is not None:
+                                        # Increment the global counter
+                                        rawPacketsDecodedByRxThreadCount += 1
+                                        # Get the source address
+                                        srcAddress = rawAddr[0]
+                                        # Get the source port no
+                                        srcPort = srcUDPPort
+                                        # Store the packet arrival time
+                                        packetArrivedTimestamp = rawTimestamp
                                 else:
                                     # packet ignored. Increment the counter
                                     rawPacketsDiscardedByRxThreadCount += 1
@@ -3478,9 +3480,9 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                     srcPort = udpSocketAddr[1]
                                     # Store the packet arrival time
                                     packetArrivedTimestamp = udpTimestamp
-                                else:
-                                    # Increment the global counter
-                                    udpPacketsDiscardedByRxThreadCount += 1
+                            else:
+                                # Increment the global counter
+                                udpPacketsDiscardedByRxThreadCount += 1
                         except Exception as e:
                             Utils.Message.addMessage("DBUG:parse udpSocket data " + str(e))
 
