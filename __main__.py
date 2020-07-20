@@ -3306,13 +3306,6 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                 refreshRtpStreamSocketsFlag = False
                 Utils.Message.addMessage(Term.RedWhi + "Regenerated UDP Rx socket " + str(id(socket)))
 
-                # # Update all streams in rtpRxStreamsDict
-                # Note: This shouldn't be requried as socket objects are mutable
-                # i.e there's only ever one instance of 'udpSocket'
-                # for stream in rtpRxStreamsDict:
-                #     rtpRxStreamsDict[stream].setSocket(udpSocket)
-
-
         except CreateRawSocketError as e:
             # Couldn't create raw socket. Most likely because app wasn't run as sudo
             # Set the data source to be the UDP socket
@@ -3546,7 +3539,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                                              " validated. Creating new RtpReceiveStream")
                                     # Create and add the new stream to the rtpRxStreamsDict
                                     newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, UDP_RX_IP, \
-                                                                    UDP_RX_PORT, glitchEventTriggerThreshold, udpSocket,
+                                                                    UDP_RX_PORT, glitchEventTriggerThreshold,
                                                                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
                                                                     txMessageQueue)
                                     # Add the most recent packet to the newly created stream
