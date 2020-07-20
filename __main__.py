@@ -1673,7 +1673,7 @@ class UI(object):
                 friendlyName = str(syncSourceID)
 
                 # As a default, set time to live to be 1hr
-                timeToLive = 3600
+                timeToLive = Registry.defaultTxStreamTimeToLive_sec
                 # As a default, set tx rate to be 1 Mbps
                 # txRate = 1048576
                 txRate = "1M"
@@ -1690,7 +1690,9 @@ class UI(object):
                 dialogUserFieldsList = [["Destination address", six.text_type(destAddr)],
                                         ["UDP destination port (1024-65535)", six.text_type(destPort)],
                                         ["UDP source port (1024-65535)", six.text_type(sourcePort)],
-                                        ["Transmit bitrate (append K for Kbps or M for Mbps (minimum: 100k)", six.text_type(txRate)],
+                                        ["Transmit bitrate (append K for Kbps or M for Mbps (minimum: " +\
+                                            six.text_type(Utils.bToMb(Registry.minimumPermittedTXRate_bps)) + "bps)",\
+                                            six.text_type(txRate)],
                                         [packetSizeLabelText, six.text_type(packetLength)],
                                         ["Sync Source identifier (1-4294967295", six.text_type(syncSourceID)],
                                         ["Time to live (seconds)", six.text_type(timeToLive)],
@@ -1726,9 +1728,9 @@ class UI(object):
                         elif multiplier == 'm' or multiplier == 'M':
                             return x * 1024 * 1024
                         else:
-                            # Uknown suffix
+                            # Unknown suffix
                             return None
-                    except:
+                    except Exception as e:
                         return None
 
                 # newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList, title='Enter parameters for new transmit stream', style=styleDefinition)
@@ -1796,13 +1798,14 @@ class UI(object):
 
                         # Validate transmit bitrate
                         try:
-                            # Specify 100kbps as the minimum
+                            # Get the minimum allowed value from Registry
                             txRate_bps = validators.integer(parseSuffix(
-                                newTxStreamParametersDict["Transmit bitrate (append K for Kbps or M for Mbps (minimum: 100k)"]),
-                            minimum=parseSuffix("100k"))
+                                newTxStreamParametersDict["Transmit bitrate (append K for Kbps or M for Mbps (minimum: " +\
+                                            six.text_type(Utils.bToMb(Registry.minimumPermittedTXRate_bps)) + "bps)"]),
+                                minimum=Registry.minimumPermittedTXRate_bps)
 
-                        except:
-                            title = 'ERROR: TRANSMIT BITRATE SPECIFIER - Use "m" for mbps or "k" for kbps'
+                        except Exception as e:
+                            title = 'ERROR: TRANSMIT BITRATE SPECIFIER - Use "m" for mbps or "k" for kbps ' + str(e)
                             raise InvalidUserresponse
 
                         # Validate packet size
@@ -3792,7 +3795,7 @@ def main(argv):
     try:
         # options are:
         # -h: help
-        # -x: loopback mode
+        # -x: loopback mode <<<NO LONGER SUPPORTED. WILL ALMOST CERTAINLY ACT STRANGELY
         # -t: transmit mode usage: address:port
         # -l: duration of transmission (in seconds. Default 1hr (3600 sec)
         # -b bandwidth (append k for kbps, m for mbps eg 1m or 500k). Default 1Mbps
@@ -3934,7 +3937,8 @@ def main(argv):
 
             elif opt in ("-d"):
                 # Maximum Ethernet frame size is 1500 bytes (minus 12 bytes for the RTP header)
-                MAX_PAYLOAD_SIZE_bytes = 1500 - 12
+                MAX_PAYLOAD_SIZE_bytes = Registry.maximumPayloadSize_bytes
+                # Minimum size is determined by the sice of the isptest header
                 MIN_PAYLOAD_SIZE_bytes = RtpGenerator.getIsptestHeaderSize()
                 try:
                     if int(arg) > MAX_PAYLOAD_SIZE_bytes:

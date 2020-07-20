@@ -66,6 +66,7 @@ class Registry(object):
     defaultTXRate_bps = 1 * 1024 * 1024 # Specifies the default RtpGenerator tx rate as 1Mbps
     defaultPayloadLength_bytes = 1300
     defaultTxStreamTimeToLive_sec = 3600
+    maximumPayloadSize_bytes = 1500 - 12 # Maximum Ethernet frame size is 1500 bytes (minus 12 bytes for the RTP header)
 
     # RtpStreamResults
     # No of historic events to keep in memory (before events are purged)

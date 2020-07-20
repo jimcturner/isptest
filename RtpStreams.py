@@ -3451,8 +3451,8 @@ class RtpGenerator(object):
         return txPeriod
 
     def setTxRate(self, newTxRate_bps):
-        # Specify Minimum tx rate 100kbps
-        minimumRate=102400
+        # Specify Minimum tx rate according to vakue set in Registry
+        minimumRate=Registry.minimumPermittedTXRate_bps
         if newTxRate_bps < minimumRate:
             newTxRate_bps = minimumRate
         # Update instance variable
