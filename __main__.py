@@ -3398,7 +3398,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     "\n\n" + "<Press any key to continue>".center(maxWidth)
 
 
-            # uiInstance.showErrorDialogue("Network Error", errorText)
+            uiInstance.showErrorDialogue("Network Error", errorText)
             # Cause thread to end by breaking out of while loop
             break
         Utils.Message.addMessage("Receiving on socket " + str(receiveSocket))
@@ -4191,6 +4191,7 @@ def main(argv):
         # from outside the thread
         udpSocket = [None]
         # Create a simple queue to hold results data to be sent back to the isptest transmitters
+        # Each tx message is a tuple containing [txMessage (byteArray), dest ip addr, dest udp port]
         txMessageQueue = SimpleQueue()
 
         # Create a thread to receive the RTP streams

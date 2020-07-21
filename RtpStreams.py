@@ -3096,6 +3096,20 @@ class RtpGenerator(object):
         self.slowStartActiveFlag = True    # Flag to indicate whether slowStart is active
         self.slowStartInitialTxPeriod = 0.1    # The starting tx period, i.e 100 mS, or 10 packets per second
 
+        # Create a FIFO queue to hold control messages/instructions. These will be picked up in the __samplingThread
+        # This messages can be used to modify the RtpGenrator parameters as an alternative to calling the
+        # various setxx() methods directly
+        # The ResultsReceiver.__resultsReceiverThread() is able to receive control messages from the corresponding
+        # RECEIVER instance, and will put the received control messages onto the controlMessageQueue
+
+        # Each message is a list of at least length = 1
+        # The first element of the list is a string which identifies the type of message
+        # current messages are:
+        #   ["txbps_inc"] Increase the tx bitrate
+        #   ["txbps_dec"] Decrease the tx bitrate
+        self.controlMessageQueue = SimpleQueue()
+        ######## Actual code starts here
+
         # Start the traffic generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
         self.rtpGeneratorThread.daemon = False
