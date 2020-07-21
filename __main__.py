@@ -3887,7 +3887,7 @@ def main(argv):
                     except Exception as e:
                         print ("Invalid RECEIVE IP address:port combination supplied: " + str(arg) + ", "+ str(e))
                         exit()
-                    print (MODE+", "+str(UDP_RX_IP)+", "+str(UDP_RX_PORT))
+                    print(MODE+", "+str(UDP_RX_IP)+", "+str(UDP_RX_PORT))
                 else:
                     # If only a single parameter supplied, use the 'OS supplied' address
                     # and the supplied value as a UDP receive port
