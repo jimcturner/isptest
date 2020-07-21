@@ -3101,13 +3101,17 @@ class RtpGenerator(object):
         # various setxx() methods directly
         # The ResultsReceiver.__resultsReceiverThread() is able to receive control messages from the corresponding
         # RECEIVER instance, and will put the received control messages onto the controlMessageQueue
+        # self.addControlMessage() will put a message onto the queue
+        # self.parseControlMessage() will decode a message
 
         # Each message is a list of at least length = 1
         # The first element of the list is a string which identifies the type of message
         # current messages are:
         #   ["txbps_inc"] Increase the tx bitrate
         #   ["txbps_dec"] Decrease the tx bitrate
-        self.controlMessageQueue = SimpleQueue()
+        self.__controlMessageQueue = SimpleQueue()
+
+
         ######## Actual code starts here
 
         # Start the traffic generator thread
@@ -3575,6 +3579,24 @@ class RtpGenerator(object):
         # returns a reference to the socket created by __rtpGeneratorThread
         return self.udpTxSocket
 
+    # Puts a control message into self.__controlMessageQueue
+    def addControlMessage(self, controlMessage):
+        self.__controlMessageQueue.put(controlMessage)
+
+    # Takes a control message (as stored in self.__controlMessageQueue) and parses it
+    def parseControlMessage(self, controlMessage):
+        Utils.Message.addMessage("Control Message " + str(self.syncSourceIdentifier) + ":" + str(controlMessage[0]))
+        # parse the incoming message
+        try:
+            # Get message type
+            messageType = controlMessage[0]
+            if messageType == "txbps_inc":
+                self.setTxRate(self.txRate+262144)
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR:RtpGenerator.parseControlMessage() (stream " + \
+                                     str(self.syncSourceIdentifier) + "), " + str(e))
+
     # This thread samples the actual transmitter tx rate and also housekeeps
     def __samplingThread(self):
         Utils.Message.addMessage(
@@ -3592,7 +3614,21 @@ class RtpGenerator(object):
             sleepTime = 0.2
             # sleep
             time.sleep(sleepTime)
-            ########### Timed loop starts -  Now do 'the thing'
+            ########### Timed loop starts
+
+            # Check to see if there are any control messages in the queue
+            while self.__controlMessageQueue.qsize() > 0:
+                # Attempt to retrieve the message(s) from the queue
+                try:
+                    # Take the message from the queue
+                    msg = self.__controlMessageQueue.get(timeout=0.2)
+                    # parse the message
+                    self.parseControlMessage(msg)
+                # If not possible to get message/timeout reached
+                except Empty as e:
+                    Utils.Message.addMessage("ERR:RtpGenerator.__samplingThread. __controlMessageQueue.get() (stream " + \
+                                             str(self.syncSourceIdentifier) + "), " + str(e))
+
             # Take snapshot of current tx byte counter
             currentTxCounter_Bytes = self.txCounter_bytes
             # Append the latest bytes transmitted (during the last 0.2 seconds) to the list
@@ -3634,8 +3670,6 @@ class RtpGenerator(object):
                                              str(Utils.bToMb(self.txRate)) + "(" +\
                                              str(Utils.bToMb(self.txActualTxRate_bps)) + ")bps")
 
-
-
             ######## 1 second counter
             if loopCounter % 5 == 0:
                 # 1 Second has elapsed
@@ -3654,18 +3688,7 @@ class RtpGenerator(object):
                                       ". Reverting to " + str(Utils.bToMb(self.txRate)) + "bps")
 
 
-                # # Now housekeep the associated rtpTxStreamResults object for this stream
-                # # Check to see that rtpTxStreamResultsDict contains this stream objects
-                # if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
-                #     try:
-                #         # Get a handle on the rtpTxStreamResults object
-                #         rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                #         if type(rtpTxStreamResults) == RtpStreamResults:
-                #             # Invoke the housekeeping method to purge any really old events
-                #             rtpTxStreamResults.houseKeepEventList()
-                #     except Exception as e:
-                #         Utils.Message.addMessage(
-                #             "ERR: __samplingThread rtpTxStreamResults.houseKeepEventList(): " + str(e))
+
             ######## 1 second counter end of code ########
 
             # Increment 1 sec loop counter

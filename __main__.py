@@ -1904,7 +1904,11 @@ class UI(object):
 
     # 'm' pressed
     def __onIncreaseTxRate(self):
-        self.__modifyTxRate(1)
+        # self.__modifyTxRate(1)
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage(["txbps_inc"])
+
 
     # 'n' pressed
     def __onDecreaseTxRate(self):
