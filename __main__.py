@@ -1902,17 +1902,21 @@ class UI(object):
                     ", " + str(e))
 
 
-    # 'm' pressed
+    # '4' pressed
     def __onIncreaseTxRate(self):
         # self.__modifyTxRate(1)
         # Confirm that the selected stream is a generator object
         if type(self.selectedStream) == RtpGenerator:
-            self.selectedStream.addControlMessage(["txbps_inc"])
+            self.selectedStream.addControlMessage([self.selectedStream.syncSourceIdentifier, "txbps_inc"])
 
 
-    # 'n' pressed
+    # '3' pressed
     def __onDecreaseTxRate(self):
-        self.__modifyTxRate(-1)
+        # self.__modifyTxRate(-1)
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage([self.selectedStream.syncSourceIdentifier, "txbps_dec"])
+
 
     # This is called by __onIncreaseTxRate() and  __onDecreaseTxRate() and is the method that actually does the work
     def __modifyTxRate(self, direction):
@@ -1939,7 +1943,7 @@ class UI(object):
                 newTxRate = currentTxRate + (524288 * direction)
                 self.selectedStream.setTxRate(newTxRate)
 
-            # get new confirmed rate from RtpGenrator object
+            # get new confirmed rate from RtpGenerator object
             confirmedTxRate = int(self.selectedStream.getRtpStreamStatsByKey('Tx Rate'))
             Utils.Message.addMessage("Setting Tx rate for stream " + str(self.selectedStreamID) + " to " + \
                                      str(Utils.bToMb(confirmedTxRate)) + "bps")

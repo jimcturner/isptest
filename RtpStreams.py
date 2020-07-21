@@ -3104,11 +3104,12 @@ class RtpGenerator(object):
         # self.addControlMessage() will put a message onto the queue
         # self.parseControlMessage() will decode a message
 
-        # Each message is a list of at least length = 1
-        # The first element of the list is a string which identifies the type of message
+        # Each message is a list of at least length = 2
+        # The first element of the list is a number which identifies the sync source ID
+        # The second element is a string that identifies the type of message
         # current messages are:
-        #   ["txbps_inc"] Increase the tx bitrate
-        #   ["txbps_dec"] Decrease the tx bitrate
+        #   [xxxxx,"txbps_inc"] Increase the tx bitrate
+        #   [xxxx,"txbps_dec"] Decrease the tx bitrate
         self.__controlMessageQueue = SimpleQueue()
 
 
@@ -3468,16 +3469,43 @@ class RtpGenerator(object):
         txPeriod = (self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES) * 8.0 / newTxRate_bps
         return txPeriod
 
-    def setTxRate(self, newTxRate_bps):
-        # Specify Minimum tx rate according to vakue set in Registry
-        minimumRate=Registry.minimumPermittedTXRate_bps
-        if newTxRate_bps < minimumRate:
-            newTxRate_bps = minimumRate
+    # Modify the tx rate of the RtpGenerator stream.
+    # Additionally, if autoIncrement or autoDecrement are set, the first argument (newTxRate_bps) will be ignored
+    # and instead, the method will increase/decrease the tx rate by a fixed amount relative to the current rate
+    def setTxRate(self, newTxRate_bps, autoIncrement=False, autoDecrement=False):
+
+        txRateChange_bps = 0
+        # calculate step change value (up or down) based on current txRate
+        # If 100kbps or less, change in 10kbps steps
+        if self.txRate <= 102400:
+            txRateChange_bps = 10240
+        # Else if tx rate between 100kbps and 1Mbps, change in 256kbps steps
+        elif self.txRate <= 1048576:
+            txRateChange_bps = 262144
+        # Otherwise change in 512Mbps steps
+        else:
+            txRateChange_bps = 524288
+
+        # Check to see if autoIncrement or autoDecrement have been set. If so, override newTxRate_bps value
+        if autoIncrement:
+            # Auto increment is set
+            newTxRate_bps = self.txRate + txRateChange_bps
+        elif autoDecrement:
+            # Auto decrement is set
+            newTxRate_bps = self.txRate - txRateChange_bps
+
+
+        # Confirm that the new TX rate isn't below the minimum permitted
+        if newTxRate_bps < Registry.minimumPermittedTXRate_bps:
+            newTxRate_bps = Registry.minimumPermittedTXRate_bps
+
+        Utils.Message.addMessage("Setting new tx rate " + str(Utils.bToMb(newTxRate_bps)) + \
+                                 "bps, for stream " + str(self.syncSourceIdentifier))
+
         # Update instance variable
         self.txRate = newTxRate_bps
-        # Calculates then set the new txPeriod for a given newTxRate_bps
-        txPeriod = self.calculateTxPeriod(newTxRate_bps)
-        self.txPeriod = txPeriod
+        # Calculate then set the new txPeriod for a given newTxRate_bps
+        self.txPeriod = self.calculateTxPeriod(newTxRate_bps)
 
 
     def setPayloadLength(self, payloadLength_bytes):
@@ -3585,13 +3613,22 @@ class RtpGenerator(object):
 
     # Takes a control message (as stored in self.__controlMessageQueue) and parses it
     def parseControlMessage(self, controlMessage):
-        Utils.Message.addMessage("Control Message " + str(self.syncSourceIdentifier) + ":" + str(controlMessage[0]))
+        Utils.Message.addMessage("DBUG:Control Message " + str(self.syncSourceIdentifier) + ":" + str(controlMessage))
         # parse the incoming message
         try:
             # Get message type
-            messageType = controlMessage[0]
-            if messageType == "txbps_inc":
-                self.setTxRate(self.txRate+262144)
+            messageSyncSourceID = controlMessage[0]
+            messageType = controlMessage[1]
+            # Confirm that this is a message destined for this RtpGenerator Object
+            if messageSyncSourceID == self.syncSourceIdentifier:
+                if messageType == "txbps_inc":
+                    self.setTxRate(0, autoIncrement=True)
+                elif messageType == "txbps_dec":
+                    self.setTxRate(0, autoDecrement=True)
+
+            else:
+                Utils.Message.addMessage("Misrouted RTPGenerator control message. Dest:" + \
+                                         str(messageSyncSourceID) + ", Recipient:" + str(self.syncSourceIdentifier))
 
         except Exception as e:
             Utils.Message.addMessage("ERR:RtpGenerator.parseControlMessage() (stream " + \
