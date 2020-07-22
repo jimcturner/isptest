@@ -4462,7 +4462,7 @@ class RtpGenerator(object):
                             listsAreEqual = False
                             break
                     if listsAreEqual is True:
-                        # If the lists are all identical that means that n consecqutive traceroutes gave the same result
+                        # If the lists are all identical that means that n consecutive traceroutes gave the same result
                         # so the traceroute has been validated
                         # copy the new tracerouteHopsList back into the instance variable version
                         # Utils.Message.addMessage("traceroute results are identical, updating tracerouteHopsList")
