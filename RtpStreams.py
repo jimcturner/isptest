@@ -4509,7 +4509,7 @@ class RtpGenerator(object):
                         for x in hopsList:
                             hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
                         Utils.Message.addMessage(
-                            "DBUG:Traceroute successful match: " + str(hopsListAsString))
+                            "DBUG:Traceroute successful match: (" + str(len(hopsList)) + "), " + str(hopsListAsString))
                     else:
                         # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
                         # Increment the mismatch counter
@@ -4532,7 +4532,7 @@ class RtpGenerator(object):
                         # Now test to see if we have exceeded the max no of allowed mismatches
                         if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
                             Utils.Message.addMessage(\
-                                "DBUG:Traceroute. Exceeded  consecutive mismatch Threshold, clearing hopsList")
+                                "DBUG:Traceroute. Exceeded consecutive mismatch Threshold, clearing hopsList")
                             self.tracerouteHopsListMutex.acquire()
                             self.tracerouteHopsList = []
                             self.tracerouteHopsListMutex.release()
