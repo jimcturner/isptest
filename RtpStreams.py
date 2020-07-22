@@ -4473,14 +4473,16 @@ class RtpGenerator(object):
                         tracerouteHopsListMismatchCounter = 0
                     else:
                         # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
-                        # Empty the tracerouteHopsList - it can't now be trusted
 
 
                         # Consequtive traceroutes were not identical. Increment the mismatch counter
                         tracerouteHopsListMismatchCounter += 1
+                        hopsListAsString = ""
+                        for x in hopsList:
+                            hopsListAsString += str(x[0])+"."+str(x[1])+"."+str(x[2])+"."+str(x[3])+","
                         Utils.Message.addMessage(
                             "DBUG:Traceroute results discrepency. tracerouteHopsListMismatchCounter: " + \
-                            str(tracerouteHopsListMismatchCounter) + ", " + str(hopsList))
+                            str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
                         # Now test to see if we have exceeded the max no of allowed mismatches
                         if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
                             Utils.Message.addMessage(\
