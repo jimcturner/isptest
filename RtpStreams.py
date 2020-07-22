@@ -3273,20 +3273,29 @@ class RtpGenerator(object):
                 tracerouteHopsList = self.getTraceRouteHopsList()
                 # Transmit each element of the self.tracerouteHopsList sequentially (as a carousel)
                 if len(tracerouteHopsList) > 0:
+                    # Get the hop to be transmitted
+                    # Initialise with default value
+                    hopToBeTransmitted = [0,0,0,0]
+                    try:
+                        hopToBeTransmitted = tracerouteHopsList[self.tracerouteCarouselIndexNo]
+                    except Exception as e:
+                        Utils.Message.addMessage(
+                            "ERR: RtpGenerator.generateIsptestHeader():traceroute_gethopToBeTransmitted " + str(e))
+                    # Now construct the actual message
                     try:
                         messageData = [0 & 0xFF,  # Message type 0: traceroute
                                        self.tracerouteCarouselIndexNo & 0xFF,  # Traceroute Hop no
                                        len(tracerouteHopsList) & 0xFF,  # # Traceroute total no of hops
-                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][0] & 0xFF,  # IP address octet 1
-                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][1] & 0xFF,  # IP address octet 2
-                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][2] & 0xFF,  # IP address octet 3
-                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][3] & 0xFF]  # IP address octet 4
+                                      hopToBeTransmitted[0] & 0xFF,  # IP address octet 1
+                                      hopToBeTransmitted[1] & 0xFF,  # IP address octet 2
+                                      hopToBeTransmitted[2] & 0xFF,  # IP address octet 3
+                                      hopToBeTransmitted[3] & 0xFF]  # IP address octet 4
                         # Now increment the carousel index so that the next hop value will be transmitted the next time this
                         # method is called
                         self.tracerouteCarouselIndexNo += 1
 
                     except Exception as e:
-                        Utils.Message.addMessage("DBUG: RtpGenerator.generateIsptestHeader():tracerouteHopsList[] " + str(e))
+                        Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader():traceroute_create message " + str(e))
                 else:
                     # Create a dummy traceroute message
                     messageData = [0 & 0xFF,  # Message type 0: traceroute
@@ -4484,8 +4493,9 @@ class RtpGenerator(object):
                     if listsAreEqual is True:
                         # If the lists are all identical that means that n consecutive traceroutes gave the same result
                         # so the traceroute has been validated
-                        # copy the new tracerouteHopsList back into the instance variable version
-                        # Utils.Message.addMessage("traceroute results are identical, updating tracerouteHopsList")
+                        # Check to see if the existing instance variable version of hopsList is different to
+                        # the latest validated traceroute hopslist. If it's different, update the instance variable version
+                        # Otherwise leave it alone. This should minimise the risk of access violations
                         self.tracerouteHopsListMutex.acquire()
                         self.tracerouteHopsList = hopsList
                         self.tracerouteHopsListMutex.release()
