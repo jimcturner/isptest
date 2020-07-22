@@ -4500,14 +4500,14 @@ class RtpGenerator(object):
                         for x in tracerouteResultsList[0]:
                             hopsListAsString += str(x[0])+"."+str(x[1])+"."+str(x[2])+"."+str(x[3])+","
                         Utils.Message.addMessage(
-                            "DBUG:Traceroute results discrepency (1). tracerouteHopsListMismatchCounter: " + \
+                            "DBUG:Traceroute results discrepency (attempt 1). MismatchCounter: " + \
                             str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
                         # Dump attempt 2 to the log
                         hopsListAsString = ""
                         for x in tracerouteResultsList[1]:
                             hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
                         Utils.Message.addMessage(
-                            "DBUG:Traceroute results discrepency (1). tracerouteHopsListMismatchCounter: " + \
+                            "DBUG:Traceroute results discrepency (attempt 2). MismatchCounter: " + \
                             str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
 
                         # Now test to see if we have exceeded the max no of allowed mismatches
