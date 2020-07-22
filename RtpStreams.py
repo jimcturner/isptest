@@ -4445,7 +4445,27 @@ class RtpGenerator(object):
                             ttl = maxNoOfHops
                             # Break out of this (hops) loop
                             break
-                    # Traceroute pass completed, now append to tracerouteResultsList for later validation
+
+                    # Traceroute pass completed,Now strip off any trailing 0.0.0.0 (no responses)
+                    if len(hopsList) > 0:
+                        elementsToTrim = 0
+                        # Work backwards from the end of the list
+                        for x in range(len(hopsList) - 1, 0, -1):
+                            if hopsList[x] == [0, 0, 0, 0]:
+                                elementsToTrim += 1
+                            else:
+                                # Otherwise a non-0.0.0.0 address present, so break out of the loop
+                                break
+                        # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
+                        if elementsToTrim > 0:
+                            try:
+                                # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
+                                hopsList = hopsList[:(len(hopsList) - elementsToTrim)]
+                            except Exception as e:
+                                Utils.Message.addMessage(
+                                    "ERR:__tracerouteLinuxOSXThread() trim trailing 0.0.0.0s " + str(e))
+
+                    # Traceroute pass completed and hopslist trimmed. Now append to tracerouteResultsList for later validation
                     # Add the latest traceroute result to tracerouteResultsList
                     tracerouteResultsList.append(hopsList)
 
@@ -4473,16 +4493,23 @@ class RtpGenerator(object):
                         tracerouteHopsListMismatchCounter = 0
                     else:
                         # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
-
-
-                        # Consequtive traceroutes were not identical. Increment the mismatch counter
+                        # Increment the mismatch counter
                         tracerouteHopsListMismatchCounter += 1
+                        # Dump attempt 1 to the log
                         hopsListAsString = ""
-                        for x in hopsList:
+                        for x in tracerouteResultsList[0]:
                             hopsListAsString += str(x[0])+"."+str(x[1])+"."+str(x[2])+"."+str(x[3])+","
                         Utils.Message.addMessage(
-                            "DBUG:Traceroute results discrepency. tracerouteHopsListMismatchCounter: " + \
+                            "DBUG:Traceroute results discrepency (1). tracerouteHopsListMismatchCounter: " + \
                             str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
+                        # Dump attempt 2 to the log
+                        hopsListAsString = ""
+                        for x in tracerouteResultsList[1]:
+                            hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
+                        Utils.Message.addMessage(
+                            "DBUG:Traceroute results discrepency (1). tracerouteHopsListMismatchCounter: " + \
+                            str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
+
                         # Now test to see if we have exceeded the max no of allowed mismatches
                         if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
                             Utils.Message.addMessage(\
