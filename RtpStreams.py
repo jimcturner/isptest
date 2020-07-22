@@ -4491,6 +4491,12 @@ class RtpGenerator(object):
                         self.tracerouteHopsListMutex.release()
                         # Successful (replicated) traceroute has completed, so reset the mismatch counter
                         tracerouteHopsListMismatchCounter = 0
+                        # Dump successful hopslist to the log
+                        hopsListAsString = ""
+                        for x in hopsList:
+                            hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
+                        Utils.Message.addMessage(
+                            "DBUG:Traceroute successful match: " + str(hopsListAsString))
                     else:
                         # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
                         # Increment the mismatch counter
