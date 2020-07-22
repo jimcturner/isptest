@@ -3280,7 +3280,9 @@ class RtpGenerator(object):
                         hopToBeTransmitted = tracerouteHopsList[self.tracerouteCarouselIndexNo]
                     except Exception as e:
                         Utils.Message.addMessage(
-                            "ERR: RtpGenerator.generateIsptestHeader():traceroute_gethopToBeTransmitted " + str(e))
+                            "ERR: RtpGenerator.generateIsptestHeader():traceroute_gethopToBeTransmitted index no:" +\
+                            str(self.tracerouteCarouselIndexNo) + ", len(tracerouteHopsList): " + \
+                            str(len(tracerouteHopsList)) + ", " + str(e))
                     # Now construct the actual message
                     try:
                         messageData = [0 & 0xFF,  # Message type 0: traceroute
