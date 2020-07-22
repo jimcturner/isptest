@@ -4287,11 +4287,15 @@ class RtpGenerator(object):
         # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
         # consecqutive identical lists have been determined can we say that we have a static route
         tracerouteHopsListMustMatchThreshold = 2
+        # Additionally, it's possible a mismatch would occur if a hop flapped to/from zero. This is likely to be quite a
+        # frequent occurance. And, given the length of time it takes a traceroute to complete, we don't necessarily want
+        # to write-off the results we have
+        tracerouteHopsListMismatchCounterThreshold = 5 # No of consecutive failures before clearing the hopsList
+        tracerouteHopsListMismatchCounter = 0 # Counts the no of consecutive failures
         try:
             # Perform the traceroute in an infinite loop as long as the transmit stream is alive
             # The traceroute is performed n times. Only when the same route has been confirmed will the
             # tracerouteHopsList be updated. This is to guard against situations where the route changes mid-traceroute
-
             while self.timeToLive != 0 and socketsCreatedSuccesfullyFlag:
                 # Create empty list to put the results of each traceroute attempt into
                 tracerouteResultsList = []
@@ -4465,14 +4469,25 @@ class RtpGenerator(object):
                         self.tracerouteHopsListMutex.acquire()
                         self.tracerouteHopsList = hopsList
                         self.tracerouteHopsListMutex.release()
+                        # Successful (replicated) traceroute has completed, so reset the mismatch counter
+                        tracerouteHopsListMismatchCounter = 0
                     else:
                         # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
                         # Empty the tracerouteHopsList - it can't now be trusted
-                        Utils.Message.addMessage("DBUG:Traceroute results discrepency. emptying tracerouteHopsList ")
-                        self.tracerouteHopsListMutex.acquire()
-                        self.tracerouteHopsList = []
-                        self.tracerouteHopsListMutex.release()
 
+
+                        # Consequtive traceroutes were not identical. Increment the mismatch counter
+                        tracerouteHopsListMismatchCounter += 1
+                        Utils.Message.addMessage(
+                            "DBUG:Traceroute results discrepency. tracerouteHopsListMismatchCounter: " + \
+                            str(tracerouteHopsListMismatchCounter))
+                        # Now test to see if we have exceeded the max no of allowed mismatches
+                        if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
+                            Utils.Message.addMessage(\
+                                "DBUG:Traceroute. Exceeded  consecutive mismatch Threshold, clearing hopsList")
+                            self.tracerouteHopsListMutex.acquire()
+                            self.tracerouteHopsList = []
+                            self.tracerouteHopsListMutex.release()
 
                 # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
                 # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
