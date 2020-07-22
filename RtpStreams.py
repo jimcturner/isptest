@@ -3272,11 +3272,17 @@ class RtpGenerator(object):
                 # This is traceroute message - Get copy of tracerouteHopsList[]
                 tracerouteHopsList = self.getTraceRouteHopsList()
                 # Transmit each element of the self.tracerouteHopsList sequentially (as a carousel)
-                if len(tracerouteHopsList) > 0:
+                hopsListLength = len(tracerouteHopsList)
+                if hopsListLength > 0:
                     # Get the hop to be transmitted
                     # Initialise with default value
                     hopToBeTransmitted = [0,0,0,0]
                     try:
+                        # Test to ensure that self.tracerouteCarouselIndexNo array index is within range
+                        if self.tracerouteCarouselIndexNo > (hopsListLength - 1):
+                            # If so, reset it to zero to avoid an out-of-range index error
+                            self.tracerouteCarouselIndexNo = 0
+                        # Now grab the hop pointed to by self.tracerouteCarouselIndexNo
                         hopToBeTransmitted = tracerouteHopsList[self.tracerouteCarouselIndexNo]
                     except Exception as e:
                         Utils.Message.addMessage(
@@ -3287,7 +3293,7 @@ class RtpGenerator(object):
                     try:
                         messageData = [0 & 0xFF,  # Message type 0: traceroute
                                        self.tracerouteCarouselIndexNo & 0xFF,  # Traceroute Hop no
-                                       len(tracerouteHopsList) & 0xFF,  # # Traceroute total no of hops
+                                       hopsListLength & 0xFF,  # # Traceroute total no of hops
                                       hopToBeTransmitted[0] & 0xFF,  # IP address octet 1
                                       hopToBeTransmitted[1] & 0xFF,  # IP address octet 2
                                       hopToBeTransmitted[2] & 0xFF,  # IP address octet 3
@@ -3307,11 +3313,6 @@ class RtpGenerator(object):
                                    0 & 0xFF,  # IP address octet 2
                                    0 & 0xFF,  # IP address octet 3
                                    0 & 0xFF]  # IP address octet 4
-
-                # Bounds check tracerouteCarouselIndexNo
-                if self.tracerouteCarouselIndexNo > (len(tracerouteHopsList) - 1):
-                    # Reset the carousel value
-                    self.tracerouteCarouselIndexNo = 0
 
             elif self.isptestHeaderMessageIndex == 1:
                 # This is a 'local adapter IP address and src port' message
@@ -4260,7 +4261,7 @@ class RtpGenerator(object):
         # The first attempt will be to use the destination port for the stream
         # If that fails, a fallback port specified in the Registry will be used. Routers are more likely to respond
         # on this other port (33434)
-        noOfRetries = 4
+        noOfRetries = 6
         # Get the max no of hops before traceroute gives up
         maxNoOfHops = Registry.tracerouteMaxHops
         # Get the UDP 'fallback' port
