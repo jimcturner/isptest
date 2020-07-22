@@ -4480,7 +4480,7 @@ class RtpGenerator(object):
                         tracerouteHopsListMismatchCounter += 1
                         Utils.Message.addMessage(
                             "DBUG:Traceroute results discrepency. tracerouteHopsListMismatchCounter: " + \
-                            str(tracerouteHopsListMismatchCounter))
+                            str(tracerouteHopsListMismatchCounter) + ", " + str(hopsList))
                         # Now test to see if we have exceeded the max no of allowed mismatches
                         if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
                             Utils.Message.addMessage(\
