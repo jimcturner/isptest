@@ -1425,8 +1425,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         # if prevRxTTL and rxTTL values are None, they will be ignored, and the decision about whether a
         # route has changed will be made solely on the length/contents of prevHopsList[], hopsList[]
         def detectRouteChanges(prevHopsList, hopsList, prevRxTTL=None, rxTTL=None):
-            # print("args: " + str(len(prevHopsList)) + ", " + str(len(hopsList)) + ", " + str(prevRxTTL) + ", " + str(
-            #     rxTTL))
+            Utils.Message.addMessage("args: " + str(len(prevHopsList)) + ", " + str(len(hopsList)) + ", " + str(prevRxTTL) + ", " + str(
+                rxTTL))
             ######## Detect route changes using traceroute hops list
             # Compare each of the traceroute hops to the previous value for that hop
             #  If it has changed, signal a route change.
@@ -1459,7 +1459,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # * Note if prevRxTTL is 'None' (because the rxTTL isn't able to be decoded)
                 # then all we have to go on is the length of the hops list
 
-                # Test If length of list has changed then set hopsListHasChanged flag
+                # Test If length of list has changed, then test rxTTL for confirmation of the change (if possible)
                 elif (len(hopsList) != len(prevHopsList)):
                     # Test to see if rxTTL values contain any further info on which to base a route-change decision
                     if prevRxTTL is not None and rxTTL is not None:
@@ -1469,6 +1469,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                             # This change in the length of hopsList is a red herring because rxTTL did not change.
                             # Therefore ignore.
                             hopsListHasChanged = False
+                            Utils.Message.addMessage("DBUG:hopsList len changed but rxTTL didn't. Ignored hopList change" )
                         else:
                             # rxTTL has changed, therefore the route must have changed
                             hopsListHasChanged = True
@@ -1625,7 +1626,8 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Snapshot streamTransmitterTxRateBps (intended tx rate, according to the transmitter)
             self.__stats["stream_transmitter_txRate_bps"] = self.__streamTransmitterTxRateBps
             # Snapshot latest packet IP TTL value
-            self.__stats["packet_instantaneous_ttl"] = self.__rxTTL
+            # self.__stats["packet_instantaneous_ttl"] = self.__rxTTL
+            self.__stats["packet_instantaneous_ttl"] = 10
             # Snapshot latest src address
             self.__stats["stream_srcAddress"] = self.__srcAddress
             # Snapshot latest src port
@@ -1972,7 +1974,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     localTracerouteChecksum = self.createTracerouteChecksum(hopsList)
                     if localTracerouteChecksum == self.tracerouteReceivedChecksum:
                         # If the checksum's match, we can be reasonably confident our hopsList data is valid
-
+                        # Utils.Message.addMessage("Checksums match local " +str(localTracerouteChecksum) + ", rx" +\
+                        #               str(self.tracerouteReceivedChecksum))
                         # Attempt to detect a route change
                         if hopsListChangeExpected is False:
                             # Under normal circumstances, take the rxTTL into account to determine route changes
@@ -2007,19 +2010,19 @@ class RtpReceiveStream(RtpReceiveCommon):
                             Utils.Message.addMessage(iPRoutingTracerouteChange.getSummary(includeStreamSyncSourceID=False)['summary'])
                             # Utils.Message.addMessage("old tr " + str(prevHopsList))
                             # Utils.Message.addMessage("new tr " + str(hopsList))
+
+                        # Snapshot latest hopsList (regardless of whether a route change was detected)
+                        prevHopsList = hopsList
                     else:
-                        Utils.Message.addMessage("Traceroute checksums don't match " + str(localTracerouteChecksum) + ":" +\
-                                      str(self.tracerouteReceivedChecksum))
+                        # Utils.Message.addMessage("Traceroute checksums don't match " + str(localTracerouteChecksum) + ":" +\
+                        #               str(self.tracerouteReceivedChecksum))
+                        pass
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect route changes " + str(e))
 
                 # Snapshot current rxTTL value
                 prevRxTTL = self.__stats["packet_instantaneous_ttl"]
-                # Snapshot latest hopsList
-                prevHopsList = hopsList
-
-
 
                 ########## Calculate traceroute route change stats
                 try:
@@ -4122,6 +4125,54 @@ class RtpGenerator(RtpCommon):
                 #     except Exception as e:
                 #         Utils.Message.addMessage("TR test " + str(e))
                 #         rtpGeneratorInstance.tracerouteHopsList.append([0, 0, 0, 0])
+                # # Deliberately modify the traceroute hops list every 50 packets
+                paths = [[
+                    [192, 168, 224, 252],
+                    [82, 194, 125, 65],
+                    [212, 74, 66, 251],
+                    [62, 214, 37, 134],
+                    [80, 81, 192, 59],
+                    [0, 0, 0, 0],
+                    [0, 0, 0, 0],
+                    [0, 0, 0, 0],
+                    [132, 185, 249, 7],
+                    [212, 58, 231, 65]]
+                    ,
+                    [
+                        [192, 168, 224, 252],
+                        [82, 194, 125, 65],
+                        [212, 74, 66, 251],
+                        [62, 214, 37, 134],
+                        [80, 81, 192, 59],
+                        [0, 0, 0, 0],
+                        [0, 0, 0, 0],
+                        [0, 0, 0, 0],
+                        [132, 185, 249, 7]]
+                    ,
+                        [
+                        [192, 168, 224, 253],
+                        [62, 96, 44, 73],
+                        [212, 74, 66, 251],
+                        [212, 74, 66, 251],
+                        [80, 81, 192, 59],
+                        [0, 0, 0, 0],
+                        [0, 0, 0, 0],
+                        [0, 0, 0, 0],
+                        [132, 185, 249, 9],
+                        [212, 58, 231, 65]
+                    ]]
+                packetThreshold = 400
+                if rtpGeneratorInstance.txCounter_packets % packetThreshold < (packetThreshold / 2):
+                    # Modify the path
+                    rtpGeneratorInstance.tracerouteHopsList = paths[0]
+                else:
+                    rtpGeneratorInstance.tracerouteHopsList = paths[2]
+                # calculate the checksum
+                rtpGeneratorInstance.tracerouteChecksum = \
+                    rtpGeneratorInstance.createTracerouteChecksum(rtpGeneratorInstance.tracerouteHopsList)
+
+
+
 
                 # Update sleepTime stats
                 updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
