@@ -10,6 +10,7 @@ import sys
 
 # from icmplib import ICMPv4Socket, TimeoutExceeded, ICMPRequest
 # from Custom_icmplib import customICMPv4Socket
+from functools import reduce
 from queue import SimpleQueue, Empty
 
 from Registry import Registry # This class contains constants/defaults used throughout the program
@@ -3720,22 +3721,43 @@ def shutdownApplicationSignalHandler(signum, frame):
     Utils.Message.addMessage("DBUG: shutdownApplicationSignalHandler() called with signal " + str(signum))
     raise ShutdownApplication
 
+# Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
+def createTracerouteChecksum(hopsList):
+    if len(hopsList) > 0:
+        try:
+            # Create lambda function to xor two values
+            xor = lambda x, y: x ^ y
+            # Use reduce() to iterate over a the list of octets in sequence using our lambda function
+            xorSingleHop = lambda hopOctets:reduce(xor, hopOctets)
 
-def calculateSlowStartSleepPeriod():
-    # Every x packets, reduce the txPeriod until it matches the calculated tx rate
-    initialTxPeriod = 0.1  # i.e 100 mS, or 10 packets per second
-    count = 0
-    txPeriod = initialTxPeriod
-    while True:
-        # Increment count with each call to calculateSlowStartSleepPeriod
-        count +=1
-        if count > 1:
-            # With each successive call, halve the txPeriod
-            txPeriod = txPeriod / 2
-        yield txPeriod
+            output = 0
+            # Iterate over the all the hops, xor'ing each hop in turn
+            for hop in hopsList:
+                output = output ^ xorSingleHop(hop)
+            return output
+        except Exception as e:
+            return None
+    else:
+        return None
 
 
 def main(argv):
+    hopsList=[[0,0,0,0],[0,0,0,10],[10,0,0,0],[10,0,0,1], [1,0,0,10], [10,0,0,10], [10,12,6,10], [10,6,12,15]]
+    tracerouteHopLists = [
+        [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
+        [[0, 0, 0, 0], [0, 0, 0, 10], [10, 0, 0, 0], [10, 0, 0, 1], [1, 0, 0, 10], [10, 0, 0, 10], [10, 12, 6, 10],
+         [10, 6, 12, 15]],
+        [[255,255,255,255], [0,0,0,0], [255,0,0,0]],
+        [[127,0,0,1]]
+
+    ]
+    # for hop in hopsList:
+    #     x = createTracerouteChecksum(hop)
+    #     print(str(hop) + ":" + str(x))
+    for test in tracerouteHopLists:
+        x = createTracerouteChecksum(test)
+        print(str(x))
+    exit()
 
     # y = calculateSlowStartSleepPeriod()
     # for x in range (0,10):

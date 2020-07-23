@@ -9,6 +9,7 @@ import platform
 # psutil seems to be broken on Linux
 # import psutil
 from collections import deque
+from functools import reduce
 from queue import SimpleQueue
 
 from Registry import Registry
@@ -818,6 +819,25 @@ class ICMPHeader(object):
             self.type, self.code, self.checksum, self.p_id, self.sequence = struct.unpack('bbHHh', icmp_header)
         except Exception as e:
             raise ICMPHeader.DecodeException(str(e))
+
+# Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
+def createTracerouteChecksum(hopsList):
+    if len(hopsList) > 0:
+        try:
+            # Create lambda function to xor two values
+            xor = lambda x, y: x ^ y
+            # Use reduce() to iterate over a the list of octets in sequence using our lambda function
+            xorSingleHop = lambda hopOctets:reduce(xor, hopOctets)
+
+            output = 0
+            # Iterate over the all the hops, xor'ing each hop in turn
+            for hop in hopsList:
+                output = output ^ xorSingleHop(hop)
+            return output
+        except Exception as e:
+            return None
+    else:
+        return None
 
 #### Experimental functions
 def rawReceive():

@@ -13,6 +13,7 @@ import threading
 import random
 import string
 import platform
+from functools import reduce
 from queue import SimpleQueue, Queue, Empty, Full
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
@@ -657,10 +658,33 @@ class RtpData(object):
         # jitter will store the diff between the timeDelta of this and the prev packet
         self.jitter = 0
 
+# Define a Super Class for all RTP objects (Generators, ReceiveStreams, ReceiveResults..)
+# This will contain methods that are useful to all
+class RtpCommon(object):
+    # Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
+    # Returns None on failure, otherwise returns an int
+    def createTracerouteChecksum(hopsList):
+        if len(hopsList) > 0:
+            try:
+                # Create lambda function to xor two values
+                xor = lambda x, y: x ^ y
+                # Use reduce() to iterate over a the list of octets in sequence using our lambda function
+                xorSingleHop = lambda hopOctets: reduce(xor, hopOctets)
+                # Create variable to hold the output
+                output = 0
+                # Iterate over the all the hops, xor'ing each hop in turn
+                for hop in hopsList:
+                    # XOR current hop with all previous hops
+                    output = output ^ xorSingleHop(hop)
+                return output
+            except Exception as e:
+                return None
+        else:
+            return None
+
 # Define a Super Class for RTP Receive streams. This will contain methods that are common to both
 # RtpReceiveStream and RtpStreamResults
-class RtpReceiveCommon(object):
-
+class RtpReceiveCommon(RtpCommon):
     def __init__(self):
         # Create a 'leaderboard' for the worst 10 glitches
         # In futire this will be a list of Glitch events
