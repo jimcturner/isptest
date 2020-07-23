@@ -1225,7 +1225,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # hopAddr = [isptestHeaderData[4], isptestHeaderData[5],
                 #            isptestHeaderData[6], isptestHeaderData[7]]
                 # update the self.__tracerouteHopsList[] with the latest received address/hopNo
-                self.updateTraceRouteHopsList(hopNo, noOfHops, isptestHeaderData[4:])
+                self.updateTraceRouteHopsList(hopNo, noOfHops, isptestHeaderData[4:8])
+                checksum = isptestHeaderData[8]
                 # Now pass the hop address to WhoisResolver.queryWhoisCache
                 # to populate the whois cache for later use
                 hopAddrAsString = str(isptestHeaderData[4]) + "." + str(isptestHeaderData[5]) + "." +\
@@ -1259,7 +1260,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # This is a message containing the intended tx rate of the stream (as an unsigned long, 4 bytes)
                 try:
                     # Convert the 4 bytes back to an int
-                    self.__streamTransmitterTxRateBps = struct.unpack_from("!L", bytes(isptestHeaderData[4:]))[0]
+                    self.__streamTransmitterTxRateBps = struct.unpack_from("!L", bytes(isptestHeaderData[4:8]))[0]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 4 " + str(e))
 
@@ -1267,7 +1268,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # This is a message containing a count of the tx'd packets (as an unsigned long, 4 bytes)
                 try:
                     # Convert the 4 bytes back to an int
-                    self.__packetCounterTransmittedTotal = struct.unpack_from("!L", bytes(isptestHeaderData[4:]))[0]
+                    self.__packetCounterTransmittedTotal = struct.unpack_from("!L", bytes(isptestHeaderData[4:8]))[0]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 5 " + str(e))
 
@@ -2955,7 +2956,7 @@ class RtpGenerator(object):
 
     # The size of the messages sent in the RtpGenerator payload
     # This can be queried by the class method getIsptestHeaderSize() (and is consumed by RtpReceiveStream and main())
-    ISPTEST_HEADER_SIZE = 19
+    ISPTEST_HEADER_SIZE = 20
 
     # The maximum allowed stream friendly name length
     # This can be queried by the class method getMaxFriendlyNameLength() (and is consumed by RtpReceiveStream and main())
@@ -3216,13 +3217,14 @@ class RtpGenerator(object):
     # Generates the isptest (this program) specific header to convey extra info (like the friendly name) to the receiver
     def generateIsptestHeader(self):
         # Generate the 'isptest' header
-        # Header currently consists of 19 bytes of data NOTE. This is defined in RtpGenerator.getIsptestHeaderSize():
+        # Header currently consists of 20 bytes of data NOTE. This is defined in RtpGenerator.getIsptestHeaderSize():
         # [uniqueValue(David's birthday)(short, 2 bytes)
         # plus....
         # [byte1] Message type (0: Traceroute)
         # [byte2] Hop no
         # [byte3] Total no of hops
         # [byte4][byte5][byte6][byte7] Hop id address octets
+        # [byte8] traceroute Checksum value (consisisting of all the hop Octets XORd together)
         # [friendlyName] 10 bytes
 
         # OR
@@ -3230,6 +3232,7 @@ class RtpGenerator(object):
         #         # [byte2] src port (MSB)
         #         # [byte3] src port (LSB)
         #         # [byte4][byte5][byte6][byte7] local ip address octets
+        #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
         # OR
@@ -3237,6 +3240,7 @@ class RtpGenerator(object):
         #         # [byte2] 0/not used
         #         # [byte3] 0/not used
         #         # [byte4][byte5][byte6][byte7] dest ip address octets
+        #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
         # OR
@@ -3244,6 +3248,7 @@ class RtpGenerator(object):
         #         # [byte2] major version no
         #         # [byte3] minor version no
         #         # [byte4][byte5][byte6][byte7] all 0/not used
+        #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
         # OR
@@ -3251,13 +3256,15 @@ class RtpGenerator(object):
         #         # [byte2]
         #         # [byte3]
         #         # [byte4][byte5][byte6][byte7] tx bitrate as an unsigned long (4 bytes)
+        #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
         # OR
         # [byte1] Message type (5: Transmitter tx total packets sent.
         #         # [byte2]
         #         # [byte3]
-        #         # [byte4][byte5][byte6][byte7] all 0/not used
+        #         # [byte4][byte5][byte6][byte7] total packets sent as an unsigned long (4 bytes)
+        #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
         header = b""  # Specify byte string
@@ -3297,7 +3304,8 @@ class RtpGenerator(object):
                                       hopToBeTransmitted[0] & 0xFF,  # IP address octet 1
                                       hopToBeTransmitted[1] & 0xFF,  # IP address octet 2
                                       hopToBeTransmitted[2] & 0xFF,  # IP address octet 3
-                                      hopToBeTransmitted[3] & 0xFF]  # IP address octet 4
+                                      hopToBeTransmitted[3] & 0xFF,  # IP address octet 4
+                                        0 & 0xFF]  # hopList checksum
                         # Now increment the carousel index so that the next hop value will be transmitted the next time this
                         # method is called
                         self.tracerouteCarouselIndexNo += 1
@@ -3312,7 +3320,8 @@ class RtpGenerator(object):
                                    0 & 0xFF,  # IP address octet 1
                                    0 & 0xFF,  # IP address octet 2
                                    0 & 0xFF,  # IP address octet 3
-                                   0 & 0xFF]  # IP address octet 4
+                                   0 & 0xFF,  # IP address octet 4
+                                   0 & 0xFF]  # hopList checksum
 
             elif self.isptestHeaderMessageIndex == 1:
                 # This is a 'local adapter IP address and src port' message
@@ -3327,7 +3336,8 @@ class RtpGenerator(object):
                                    int(localAddr[0]) & 0xFF,  # IP address octet 1
                                    int(localAddr[1]) & 0xFF,  # IP address octet 2
                                    int(localAddr[2]) & 0xFF,  # IP address octet 3
-                                   int(localAddr[3]) & 0xFF]  # IP address octet 4
+                                   int(localAddr[3]) & 0xFF,  # IP address octet 4
+                                    0 & 0xFF]  # not used
                 except Exception as e:
                     messageData = [1 & 0xFF,  # Message type 0: traceroute
                                    0 & 0xFF,  # Top byte (MSB) of the source port
@@ -3335,7 +3345,8 @@ class RtpGenerator(object):
                                    0 & 0xFF,  # IP address octet 1
                                    0 & 0xFF,  # IP address octet 2
                                    0 & 0xFF,  # IP address octet 3
-                                   0 & 0xFF]  # IP address octet 4
+                                   0 & 0xFF,  # IP address octet 4
+                                    0 & 0xFF]  # not used
                     Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx local adapter addr " + str(e))
 
             elif self.isptestHeaderMessageIndex == 2:
@@ -3349,7 +3360,8 @@ class RtpGenerator(object):
                                    int(destAddr[0]) & 0xFF,  # IP address octet 1
                                    int(destAddr[1]) & 0xFF,  # IP address octet 2
                                    int(destAddr[2]) & 0xFF,  # IP address octet 3
-                                   int(destAddr[3]) & 0xFF]  # IP address octet 4
+                                   int(destAddr[3]) & 0xFF,  # IP address octet 4
+                                   0 & 0xFF]  # not used
                 except Exception as e:
                     messageData = [2 & 0xFF,  # Message type 2: destination addr
                                    0 & 0xFF,  # not used
@@ -3357,7 +3369,8 @@ class RtpGenerator(object):
                                    0 & 0xFF,  # IP address octet 1
                                    0 & 0xFF,  # IP address octet 2
                                    0 & 0xFF,  # IP address octet 3
-                                   0 & 0xFF]  # IP address octet 4
+                                   0 & 0xFF,  # IP address octet 4
+                                   0 & 0xFF]  # not used
                     Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx dest addr " + str(e))
 
             elif self.isptestHeaderMessageIndex == 3:
@@ -3371,11 +3384,13 @@ class RtpGenerator(object):
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
                                    0 & 0xFF]  # not used
                 except Exception as e:
                     messageData = [3 & 0xFF,  # Message type 3: Destination addr
                                    0 & 0xFF,  # Major version no
                                    0 & 0xFF,  # Minor version no
+                                   0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
@@ -3394,12 +3409,14 @@ class RtpGenerator(object):
                                    txRateAsBytes[0] & 0xFF,  # MSB
                                    txRateAsBytes[1] & 0xFF,  #
                                    txRateAsBytes[2] & 0xFF,  #
-                                   txRateAsBytes[3] & 0xFF]  # LSB
+                                   txRateAsBytes[3] & 0xFF,  # LSB
+                                   0 & 0xFF]  # not used
 
                 except Exception as e:
                     messageData = [4 & 0xFF,  # Message type 4: Transmit rate (the specified rate)
                                    0 & 0xFF,  #
                                    0 & 0xFF,  #
+                                   0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
@@ -3417,12 +3434,14 @@ class RtpGenerator(object):
                                    txdPackets[0] & 0xFF,  # MSB
                                    txdPackets[1] & 0xFF,  #
                                    txdPackets[2] & 0xFF,  #
-                                   txdPackets[3] & 0xFF]  # LSB
+                                   txdPackets[3] & 0xFF,  # LSB
+                                   0 & 0xFF]  # not used
 
                 except Exception as e:
                     messageData = [5 & 0xFF,  # Message type 5: Transmit rate (the specified rate)
                                    0 & 0xFF,  #
                                    0 & 0xFF,  #
+                                   0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
@@ -3441,8 +3460,8 @@ class RtpGenerator(object):
 
 
             # Now assemble the header
-            header = struct.pack("!HBBBBBBB", uniqueValue, messageData[0], messageData[1], messageData[2], \
-                                 messageData[3], messageData[4], messageData[5], messageData[6])
+            header = struct.pack("!HBBBBBBBB", uniqueValue, messageData[0], messageData[1], messageData[2], \
+                                 messageData[3], messageData[4], messageData[5], messageData[6], messageData[7])
 
             # Append friendly name to header digits
             header += str(self.friendlyName).encode('ascii')
@@ -4296,8 +4315,7 @@ class RtpGenerator(object):
                     Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
                                              str(e))
 
-        # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
-        # consecqutive identical lists have been determined can we say that we have a static route
+
         tracerouteHopsListMustMatchThreshold = 2
         # Additionally, it's possible a mismatch would occur if a hop flapped to/from zero. This is likely to be quite a
         # frequent occurance. And, given the length of time it takes a traceroute to complete, we don't necessarily want
@@ -4309,6 +4327,8 @@ class RtpGenerator(object):
             # The traceroute is performed n times. Only when the same route has been confirmed will the
             # tracerouteHopsList be updated. This is to guard against situations where the route changes mid-traceroute
             while self.timeToLive != 0 and socketsCreatedSuccesfullyFlag:
+                # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
+                # consecqutive identical lists have been determined can we say that we have a 'stable' route
                 # Create empty list to put the results of each traceroute attempt into
                 tracerouteResultsList = []
                 for tracerouteAttempt in range (0,tracerouteHopsListMustMatchThreshold):
