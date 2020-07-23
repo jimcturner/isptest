@@ -1288,7 +1288,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             # substring the part of the data holding the friendly name of the stream
             isptestHeaderDataFriendlyName = str(rtpPayload[numericalHeaderDataLength:].decode('utf-8'))
             # unpack the values from the struct
-            isptestHeaderData = struct.unpack("!HBBBBBBB", isptestHeaderDataStruct)
+            isptestHeaderData = struct.unpack("!HBBBBBBBB", isptestHeaderDataStruct)
             # Utils.Message.addMessage("INFO: Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
             # Check to see if we've managed to unpack the data
             if len(isptestHeaderData) > 0:
