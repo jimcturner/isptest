@@ -3742,22 +3742,22 @@ def createTracerouteChecksum(hopsList):
 
 
 def main(argv):
-    hopsList=[[0,0,0,0],[0,0,0,10],[10,0,0,0],[10,0,0,1], [1,0,0,10], [10,0,0,10], [10,12,6,10], [10,6,12,15]]
-    tracerouteHopLists = [
-        [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
-        [[0, 0, 0, 0], [0, 0, 0, 10], [10, 0, 0, 0], [10, 0, 0, 1], [1, 0, 0, 10], [10, 0, 0, 10], [10, 12, 6, 10],
-         [10, 6, 12, 15]],
-        [[255,255,255,255], [0,0,0,0], [255,0,0,0]],
-        [[127,0,0,1]]
-
-    ]
-    # for hop in hopsList:
-    #     x = createTracerouteChecksum(hop)
-    #     print(str(hop) + ":" + str(x))
-    for test in tracerouteHopLists:
-        x = createTracerouteChecksum(test)
-        print(str(x))
-    exit()
+    # hopsList=[[0,0,0,0],[0,0,0,10],[10,0,0,0],[10,0,0,1], [1,0,0,10], [10,0,0,10], [10,12,6,10], [10,6,12,15]]
+    # tracerouteHopLists = [
+    #     [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
+    #     [[0, 0, 0, 0], [0, 0, 0, 10], [10, 0, 0, 0], [10, 0, 0, 1], [1, 0, 0, 10], [10, 0, 0, 10], [10, 12, 6, 10],
+    #      [10, 6, 12, 15]],
+    #     [[255,255,255,255], [0,0,0,0], [255,0,0,0]],
+    #     [[127,0,0,1]]
+    #
+    # ]
+    # # for hop in hopsList:
+    # #     x = createTracerouteChecksum(hop)
+    # #     print(str(hop) + ":" + str(x))
+    # for test in tracerouteHopLists:
+    #     x = createTracerouteChecksum(test)
+    #     print(str(x))
+    # exit()
 
     # y = calculateSlowStartSleepPeriod()
     # for x in range (0,10):
