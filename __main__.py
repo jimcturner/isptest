@@ -2315,7 +2315,7 @@ class UI(object):
         if selectedStream is not None:
             try:
                 # Get tracerouteHopsList from selected stream
-                tracerouteHopsList = selectedStream.getTraceRouteHopsList(trimEndOfList=True)
+                tracerouteHopsList = selectedStream.getTraceRouteHopsList()
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
                 friendlyName = str(selectedStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
                 syncSourceID = str(selectedStream.getRtpStreamStatsByKey("stream_syncSource"))

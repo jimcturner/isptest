@@ -742,33 +742,11 @@ class RtpReceiveCommon(RtpCommon):
 
     # Thread-safe method to return a list of the traceroute hops
     # If trimEndOfList=True, all the trailing '0.0.0.0' hops will omitted from the returned list
-    def getTraceRouteHopsList(self, trimEndOfList=True):
+    def getTraceRouteHopsList(self):
         self.tracerouteHopsListMutex.acquire()
         tracerouteHopsList = deepcopy(self.tracerouteHopsList)
         self.tracerouteHopsListMutex.release()
-        if trimEndOfList and len(tracerouteHopsList) > 1:
-            # Clean up the tail end of the hops list which is liable to be full of 0.0.0.0's if
-            # a series of routers didn't respond. This isn't very helpful, so get rid of them
-            # Iterate over the list starting at the last element. matching [0,0,0,0]
-            # If matched, delete that element
-            elementsToTrim = 0
-            for x in range(len(tracerouteHopsList) - 1, 0, -1):
-                if tracerouteHopsList[x] == [0,0,0,0]:
-                    elementsToTrim +=1
-                else:
-                    # Otherwise a non-0.0.0.0 address present, so break out of the loop
-                    break
-            # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
-            if elementsToTrim > 0:
-                try:
-                    # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
-                    tracerouteHopsList = tracerouteHopsList[:(len(tracerouteHopsList) - elementsToTrim)]
-                except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveCommon.getTracerouteHopsList() trim trailing 0.0.0.0s " + str(e))
-            return tracerouteHopsList
-        else:
-            # Otherwise, return the list as-is
-            return tracerouteHopsList
+        return tracerouteHopsList
 
     # Thread-safe method to set the self.tracerouteHopsList[]
     # This completely replaces the existing list with a new supplied list
