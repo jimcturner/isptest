@@ -4403,6 +4403,7 @@ class RtpGenerator(RtpCommon):
                 # consecqutive identical lists have been determined can we say that we have a 'stable' route
                 # Create empty list to put the results of each traceroute attempt into
                 tracerouteResultsList = []
+
                 for tracerouteAttempt in range (0,tracerouteHopsListMustMatchThreshold):
                     # Utils.Message.addMessage("traceroute attempt " + str(tracerouteAttempt))
                     # This is the main outer traceroute loop and counts the hops
@@ -4421,7 +4422,9 @@ class RtpGenerator(RtpCommon):
                         while (attemptsCount < noOfRetries) and self.timeToLive != 0:
                             # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
                             # Send UDP packet
+                            ######## OS specific traceroute code starts here ########
                             # determine which destination port we should be using (based on the no of attempts so far)
+
                             if attemptsCount % 2 == 1:
                                 udpTxPort = self.UDP_TX_PORT
                             else:
@@ -4432,7 +4435,6 @@ class RtpGenerator(RtpCommon):
                                 Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread.sendUDP() . Aborting" + str(e))
                             # Increment the attempts counter
                             attemptsCount += 1
-
 
                             # Receive ICMP packet(s)
                             # This loop waits to receive icmp packets
@@ -4540,6 +4542,7 @@ class RtpGenerator(RtpCommon):
                             # If there was no router response for this hop, add 0.0.0.0 as the hop address
                             hopsList.append([0,0,0,0])
 
+                        ######## OS specific traceroute code ends here
                         # Now check to see if we've received five 'no replies' in a row, if so, give up
                         # Or else, if we've reached the max no of hops, give up
                         if (noResponseCounter > maxNoOfNoResponse) or (ttl == maxNoOfHops):
@@ -4549,6 +4552,7 @@ class RtpGenerator(RtpCommon):
                             ttl = maxNoOfHops
                             # Break out of this (hops) loop
                             break
+
 
                     # Traceroute pass completed,Now strip off any trailing 0.0.0.0 (no responses)
                     if len(hopsList) > 0:
@@ -4695,6 +4699,7 @@ class RtpGenerator(RtpCommon):
             while self.timeToLive != 0:
                 # Create empty list to put the results of each traceroute attempt into
                 tracerouteResultsList = []
+
                 for tracerouteAttempt in range(0, tracerouteHopsListMustMatchThreshold):
                     # This is the main outer traceroute loop and counts the hops
                     # Set initial ttl
@@ -4712,6 +4717,7 @@ class RtpGenerator(RtpCommon):
                         while (attemptsCount < noOfRetries) and self.timeToLive != 0:
                             # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
                             # Send UDP packet
+                            ######## OS specific traceroute code starts here
                             # determine which destination port we should be using (based on the no of attempts so far)
                             # and create a packet accordingly
                             if attemptsCount % 2 == 1:
@@ -4741,6 +4747,8 @@ class RtpGenerator(RtpCommon):
                                 # We have a reply for this hop, so break out of the attempts loop
                                 # This will cause the ttl to increment (to the next hop value)
                                 break
+
+                        ############# The 'result' (if there was a response) of the current hop is in var icmpSrcAddr.
                         # Has icmpSrcAddr been populated with an address?
                         if icmpSrcAddr is not None:
                             # It has - the upstream router did respond
@@ -4752,11 +4760,12 @@ class RtpGenerator(RtpCommon):
                                 [int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]), int(icmpSrcAddrOctets[2]),
                                  int(icmpSrcAddrOctets[3])])
                         else:
-                            # icmpSrcAddr has not been overwritten with an addres so the upstream did not respond
+                            # icmpSrcAddr has not been overwritten with an address so the upstream did not respond
                             # Increment the 'no response' counter
                             noResponseCounter += 1
                             # As there was no router response for this hop, add 0.0.0.0 as the hop address
                             hopsList.append([0, 0, 0, 0])
+                        ######## OS specific traceroute code ends here
 
                         # Now check to see if we've received five 'no replies' in a row, if so, give up
                         # Or else, if we've reached the max no of hops, give up
@@ -4770,6 +4779,8 @@ class RtpGenerator(RtpCommon):
                     # Traceroute pass completed, now append to tracerouteResultsList for later validation
                     # Add the latest traceroute result to tracerouteResultsList
                     tracerouteResultsList.append(hopsList)
+
+
 
                 # Now compare the contents of the lists within tracerouteResultsList for equality
                 if len(tracerouteResultsList) > 0:
