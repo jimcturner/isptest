@@ -5042,7 +5042,7 @@ class RtpGenerator(RtpCommon):
                 #   if socket timeout exception raised
                 #   If matcher matches an icmp reply
                 elapsedTime = timer() - startTime
-                if elapsedTime > _timeout:
+                if elapsedTime > (_timeout * 2):
                     # print("elapsedTimer exceeded twice timeout " + str(round(elapsedTime,1)) + "/" + str(timeOut * 2))
                     break
                 # Receive ICMP data from socket
