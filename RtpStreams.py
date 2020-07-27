@@ -5013,8 +5013,9 @@ class RtpGenerator(RtpCommon):
         # Linux/OSX compatible function to send a UDP packet with a specfied TTL value, and then immediately wait for
         # an ICMP reply. Makes use of a previously created raw and UDP socket
         # Takes: rawSocket, udpSocket, source address, destAddr, destPort, ttl, receive timeout
+        # Note: _icmpSocket and _udpSocket have to be overridden
         # Returns: IcmpSourceAddr, icmp type, icmp code
-        def sendUdpRecvIcmpLinuxOSX(_icmpSocket, _udpSocket, _srcAddr, _destAddr, _destPort, _ttl, _timeout):
+        def sendUdpRecvIcmpLinuxOSX(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None):
             icmpSourceAddr = None
             icmpMessageType = None
             icmpMessagecode = None
@@ -5149,7 +5150,7 @@ class RtpGenerator(RtpCommon):
                                              str(e))
 
 
-        tracerouteHopsListMustMatchThreshold = 1
+        tracerouteHopsListMustMatchThreshold = 2
         # Additionally, it's possible a mismatch would occur if a hop flapped to/from zero. This is likely to be quite a
         # frequent occurance. And, given the length of time it takes a traceroute to complete, we don't necessarily want
         # to write-off the results we have
@@ -5191,7 +5192,8 @@ class RtpGenerator(RtpCommon):
 
                             # Perform the UDP Send/ICMP receive
                             icmpSrcAddr, icmpType, icmpCode = sendUdpRecvIcmpLinuxOSX(\
-                                icmpRx, udpTx, self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut)
+                                self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
+                                _udpSocket=udpTx, _icmpSocket=icmpRx)
                             # Test the icmp response:-
                             # If the traceroute hop router did not respond, we get None, otherwise we should get an ip addr
                             if icmpSrcAddr is not None:
@@ -5236,7 +5238,7 @@ class RtpGenerator(RtpCommon):
                     # Traceroute pass completed,Now strip off any trailing 0.0.0.0 (no responses)
                     if len(hopsList) > 0:
                         hopsList = trimHopsList(hopsList)
-                        Utils.Message.addMessage("hopsList: " + str(hopsList))
+                        # Utils.Message.addMessage("hopsList: " + str(hopsList))
                         # Traceroute pass completed and hopslist trimmed. Now append to tracerouteResultsList for later validation
                         # Add the latest traceroute result to tracerouteResultsList
                         tracerouteResultsList.append(hopsList)
