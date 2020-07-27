@@ -3159,8 +3159,8 @@ class RtpGenerator(RtpCommon):
 
         else:
             # Start the Linux/OSX traceroute thread
-            # self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
-            self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
+            self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
+            # self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
             self.tracerouteThread.daemon = False
             self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinuxOSX ("+ str(os) + ")")
         # Test the Registry var. If traceroute is enabled, start the thread
@@ -4389,7 +4389,7 @@ class RtpGenerator(RtpCommon):
                                              str(e))
 
 
-        tracerouteHopsListMustMatchThreshold = 1
+        tracerouteHopsListMustMatchThreshold = 2
         # Additionally, it's possible a mismatch would occur if a hop flapped to/from zero. This is likely to be quite a
         # frequent occurance. And, given the length of time it takes a traceroute to complete, we don't necessarily want
         # to write-off the results we have
