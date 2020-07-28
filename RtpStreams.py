@@ -5037,8 +5037,9 @@ class RtpGenerator(RtpCommon):
 
             # Create elapsed timer
             startTime = timer()
+            icmpPacketsReceivedCounter = 0
             while True:
-                # Infinite loop to receive all icmp packets
+                # Infinite loop to receive *all* icmp packets
                 # Break out of loop:
                 #   If timeOut period has been exceeded
                 #   if socket timeout exception raised
@@ -5048,8 +5049,11 @@ class RtpGenerator(RtpCommon):
                     # print("elapsedTimer exceeded twice timeout " + str(round(elapsedTime,1)) + "/" + str(timeOut * 2))
                     break
                 # Receive ICMP data from socket
+                # Keep waiting until we get a matched packet or the timeout occurs
                 try:
                     data, addr = _icmpSocket.recvfrom(5012)
+                    icmpPacketsReceivedCounter += 1
+                    Utils.Message.addMessage("icmpPacketsReceivedCounter: " + str(icmpPacketsReceivedCounter))
                     # Snapshot the source address (of the received icmp packet)
                     untestedIcmpSourceAddr = addr[0]
                     # Create ICMPHeader object from the received data. This will unpack and decode the fields
@@ -5109,7 +5113,7 @@ class RtpGenerator(RtpCommon):
             return icmpSourceAddr, icmpMessageType, icmpMessagecode
 
         # Define a socket timeout value
-        timeOut = 0.1
+        timeOut = 0.5
         # Define the number of times the traceroute will attempt to illicit a response from the router.
         # This is becuse some routers will fail to respond due to rate limiting of requests.
         # Note: Each subsquent attempt alternates between two possible ports
@@ -5179,7 +5183,7 @@ class RtpGenerator(RtpCommon):
                     # Utils.Message.addMessage("Starting traceroute....ttl = 1")
                     while ttl < maxNoOfHops and self.timeToLive != 0:
                         retryCount = 1
-                        ttl += 1
+                        ttl +=1
                         # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
                         icmpSrcAddr = None
 
@@ -5254,7 +5258,8 @@ class RtpGenerator(RtpCommon):
                     Utils.Message.addMessage("(attempt:" + str(tracerouteAttempt) + ", len:" + str(len(hopsList)) + \
                                              ", ttl:" + str(ttl) + ", retry:" + str(retryCount) + ")" +\
                                              str(hopsList))
-
+                    Utils.Message.addMessage("End of attempt " + str(tracerouteAttempt) + ". Sleeping")
+                    time.sleep(1)
                 # # Now compare the contents of the lists within tracerouteResultsList for equality
                 if len(tracerouteResultsList) > 0:
                     if testHopsListsForEquality(tracerouteResultsList):
