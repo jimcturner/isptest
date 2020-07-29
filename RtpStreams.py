@@ -5128,7 +5128,7 @@ class RtpGenerator(RtpCommon):
                     pass
 
                 except Exception as e:
-                    raise ICMPRxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.recvICMP " + str(e))
+                    raise ICMPRxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpRawSocket.recvICMP " + str(e))
 
             return icmpSourceAddr, icmpMessageType, icmpMessagecode
 
@@ -5158,7 +5158,7 @@ class RtpGenerator(RtpCommon):
                         icmpMessageType = reply.type
 
             except Exception as e:
-                Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sendUdpRecvIcmpWindows() " + str(e))
+                Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sendUdpRecvIcmpScapy() " + str(e))
                 # Clear return vars
                 icmpSourceAddr = None
                 icmpMessageType = None
@@ -5192,18 +5192,30 @@ class RtpGenerator(RtpCommon):
         Utils.Message.addMessage("DBUG:__tracerouteThread starting for stream " + str(self.syncSourceIdentifier))
 
         # Determine which Operating System is in use, and therfore which udp tx/icmp rx function we will use
-        if Utils.getOperatingSystem() == "Windows":
-        # if True:
+        # if Utils.getOperatingSystem() == "Windows":
+        if True:
             # Windows detected
             # Create pointer to correct function for this OS
             sendUdpRecvIcmp = sendUdpRecvIcmpScapy
             self.tracerouteFunctionInUse = "sendUdpRecvIcmpScapy"
-            setupSuccessfulFlag = True
+            # Do a simple test using Scapy to check it will work (by sending a single raw packet to localhost)
+            try:
+                pkt = IP(dst="127.0.0.1", ttl=1) / UDP(dport=5000)
+                # Send the packet and wait for a reply
+                reply = sr1(pkt, verbose=0, timeout=0.1)
+                if reply is not None:
+                    Utils.Message.addMessage("DBUG:RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv successful")
+                    setupSuccessfulFlag = True
+            except Exception as e:
+                # Scapy failed
+                setupSuccessfulFlag = False
+                # Store the error message
+                setupErrorMessage = e
         else:
             # Linux or OSX detected
             # Create pointer to correct function for this OS
             sendUdpRecvIcmp = sendUdpRecvIcmpRawSockets
-            self.tracerouteFunctionInUse = "sendUdpRecvIcmpLinuxOSX"
+            self.tracerouteFunctionInUse = "sendUdpRecvIcmpRawSockets"
             # Now create udp tx and icmp rx sockets
             try:
                 # Create tx (udp) and rx (icmp) sockets, specifying the ip address we will be transmitting from
