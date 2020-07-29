@@ -5244,7 +5244,7 @@ class RtpGenerator(RtpCommon):
             Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
             # If a UI instance (user interface) reference was supplied, display an error message on the UI
             maxWidth = 60
-            errorText = "Insufficient rights to enable traceroute functionality.".center(maxWidth) + \
+            errorText = str(setupErrorMessage).center(maxWidth) + \
                         "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) + \
                         "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
                         "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
