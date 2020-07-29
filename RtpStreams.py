@@ -5178,8 +5178,12 @@ class RtpGenerator(RtpCommon):
                     Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
                                              str(e))
 
+        # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
+        # consecutive identical lists have been determined can we say that we have a 'stable' route
+        # Create empty list to put the results of each traceroute attempt into
 
         tracerouteHopsListMustMatchThreshold = 2
+        tracerouteResultsList = deque(maxlen=tracerouteHopsListMustMatchThreshold)
         # Additionally, it's possible a mismatch would occur if a hop flapped to/from zero. This is likely to be quite a
         # frequent occurance. And, given the length of time it takes a traceroute to complete, we don't necessarily want
         # to write-off the results we have
@@ -5190,13 +5194,9 @@ class RtpGenerator(RtpCommon):
             # The traceroute is performed n times. Only when the same route has been confirmed will the
             # tracerouteHopsList be updated. This is to guard against situations where the route changes mid-traceroute
             while self.timeToLive != 0 and socketsCreatedSuccesfullyFlag:
-                # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
-                # consecutive identical lists have been determined can we say that we have a 'stable' route
-                # Create empty list to put the results of each traceroute attempt into
-                tracerouteResultsList = deque(maxlen=tracerouteHopsListMustMatchThreshold)
 
 
-                # This is the main outer traceroute loop and counts the hops
+                # This is the main traceroute loop and counts the hops
                 # Set initial ttl
                 ttl = 0
                 # Counter for the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
@@ -5280,19 +5280,20 @@ class RtpGenerator(RtpCommon):
                 # # Create a new one in its place
                 # udpTx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 # Now strip off any trailing 0.0.0.0 (no responses)
-
                 if len(hopsList) > 0:
                     hopsList = trimHopsList(hopsList)
                     # Utils.Message.addMessage("hopsList: " + str(hopsList))
                     # Traceroute pass completed and hopslist trimmed. Now append to tracerouteResultsList for later validation
                     # Add the latest traceroute result to tracerouteResultsList
-                    tracerouteResultsList.append(hopsList)
-                Utils.Message.addMessage("(attempt:" + str(tracerouteAttempt) + ", len:" + str(len(hopsList)) + \
-                                         ", ttl:" + str(ttl) + ", retry:" + str(retryCount) + ")" +\
-                                         str(hopsList))
 
-                # # Now compare the contents of the lists within tracerouteResultsList for equality
-                if len(tracerouteResultsList) > 0:
+                    tracerouteResultsList.append(hopsList)
+                    Utils.Message.addMessage("dequeLen:" + str(len(tracerouteResultsList)) + ", traceroute len:" + str(len(hopsList)) + \
+                                             ", ttl:" + str(ttl) + ", retry:" + str(retryCount) + ")" +\
+                                             str(hopsList))
+
+                # Wait for tracerouteResultsList to be populated with the required no of traceroute passes
+                # When ready, compare the contents of the lists within tracerouteResultsList for equality
+                if len(tracerouteResultsList) >= tracerouteHopsListMustMatchThreshold:
                     if testHopsListsForEquality(tracerouteResultsList):
                         # If the lists are all identical that means that n consecutive traceroutes gave the same result
                         # so the traceroute has been validated
