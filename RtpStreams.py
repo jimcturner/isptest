@@ -5146,15 +5146,16 @@ class RtpGenerator(RtpCommon):
                 # Send the packet and wait for a reply
                 reply = sr1(pkt, verbose=0, timeout=_timeout)
                 # Now parse the reply
-                # Detect TTL Expired messages (icmp type 11, code 0)
-                if reply.type == 11:
-                    # This is a TTL expired in transit message, for us - snapshot the address
-                    icmpSourceAddr = reply.src
-                    icmpMessageType = reply.type
-                # Detect Destination Host Port unreachable, destination reached
-                elif reply.type == 3 or reply.src == _destAddr:
-                    icmpSourceAddr = reply.src
-                    icmpMessageType = reply.type
+                if reply is not None:
+                    # Detect TTL Expired messages (icmp type 11, code 0)
+                    if reply.type == 11:
+                        # This is a TTL expired in transit message, for us - snapshot the address
+                        icmpSourceAddr = reply.src
+                        icmpMessageType = reply.type
+                    # Detect Destination Host Port unreachable, destination reached
+                    elif reply.type == 3 or reply.src == _destAddr:
+                        icmpSourceAddr = reply.src
+                        icmpMessageType = reply.type
 
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sendUdpRecvIcmpWindows() " + str(e))
@@ -5188,15 +5189,16 @@ class RtpGenerator(RtpCommon):
         sendUdpRecvIcmp = None # Operating system-dependant pointer to the traceroute send/recv function
         setupErrorMessage = None
 
-        Utils.Message.addMessage("DBUG:__tracerouteLinuxOSXThread starting for stream " + str(self.syncSourceIdentifier))
+        Utils.Message.addMessage("DBUG:__tracerouteThread starting for stream " + str(self.syncSourceIdentifier))
 
         # Determine which Operating System is in use, and therfore which udp tx/icmp rx function we will use
-        if Utils.getOperatingSystem() == "Windows":
-        # if True:
+        # if Utils.getOperatingSystem() == "Windows":
+        if True:
             # Windows detected
             # Create pointer to correct function for this OS
             sendUdpRecvIcmp = sendUdpRecvIcmpWindows
             self.tracerouteFunctionInUse = "sendUdpRecvIcmpWindows"
+            setupSuccessfulFlag = True
         else:
             # Linux or OSX detected
             # Create pointer to correct function for this OS
