@@ -5086,6 +5086,25 @@ class RtpGenerator(RtpCommon):
                         # Break out of this (the icmp receive) loop
                         break
 
+                    # Detect another weird condition whereby an icmp packet with ttl=0 is returned by an
+                    # upstream router. This should be impossible because routers should discard packets
+                    # whose TTL has decremented to 1 on receipt. Some routers appear to ignore the ttl
+                    # for existing traffic flows (Virgin Media home router, Dublin?) but still
+                    # decrement the ttl *and then* the subsequent router returns an ICMP packet containing
+                    # the IP header with a TTL of zero. This confuses the traceroute logic. We can't know
+                    # what the original source TTL was set to so the best we can do is discard this hop
+
+                    # Detect weird 'ttl=0' icmp packets
+                    elif icmpReplyMatcher(icmpHeader, ipHeaderOfOriginalSender, icmpType=11, icmpCode=0, \
+                                              srcAddress=_srcAddr, srcTtl=0,
+                                              destAddress=_destAddr):
+                        # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                        #                          " RtpGenerator.__tracerouteThread() ttl=0")
+                        icmpSourceAddr = untestedIcmpSourceAddr
+                        icmpMessageType = 44
+                        icmpMessagecode = 0
+                        break
+
                     # this an unknown icmp packet
                     # attempt to decode it
                     else:
@@ -5172,8 +5191,8 @@ class RtpGenerator(RtpCommon):
         Utils.Message.addMessage("DBUG:__tracerouteLinuxOSXThread starting for stream " + str(self.syncSourceIdentifier))
 
         # Determine which Operating System is in use, and therfore which udp tx/icmp rx function we will use
-        # if Utils.getOperatingSystem() == "Windows":
-        if True:
+        if Utils.getOperatingSystem() == "Windows":
+        # if True:
             # Windows detected
             # Create pointer to correct function for this OS
             sendUdpRecvIcmp = sendUdpRecvIcmpWindows
@@ -5279,6 +5298,10 @@ class RtpGenerator(RtpCommon):
                             # Detect TTL Expired messages (icmp type 11, code 0) - we're mid-traceroute
                             elif icmpType == 11:
                                 pass
+                            # Detect erroneous messages (I use type 44 to trap ttl=0 messages
+                            elif icmpType == 44:
+                                Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + \
+                                                         " Erroneous ttl=0 ICMP message for hop " + str(ttl) + ". Caution!")
                             # Store the address
                             # Query the WhoisResolver to find the owner of the domain
                             Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
@@ -5349,9 +5372,9 @@ class RtpGenerator(RtpCommon):
                         #     hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
                         # Utils.Message.addMessage(
                         #     "DBUG:Traceroute successful match: (" + str(len(hopsList)) + "), " + str(hopsListAsString))
-                        Utils.Message.addMessage( \
-                            "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
-                            " Consecutive results matched " + str(hopsList))
+                        # Utils.Message.addMessage( \
+                        #     "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
+                        #     " Consecutive results matched " + str(hopsList))
                     else:
 
                             # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
