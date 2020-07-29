@@ -5014,7 +5014,7 @@ class RtpGenerator(RtpCommon):
         # Takes: rawSocket, udpSocket, source address, destAddr, destPort, ttl, receive timeout
         # Note: _icmpSocket and _udpSocket have to be overridden
         # Returns: IcmpSourceAddr, icmp type, icmp code
-        def sendUdpRecvIcmpLinuxOSX(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None):
+        def sendUdpRecvIcmpRawSockets(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None):
             icmpSourceAddr = None
             icmpMessageType = None
             icmpMessagecode = None
@@ -5136,7 +5136,7 @@ class RtpGenerator(RtpCommon):
         # an ICMP reply. Makes use of the Scapy library to receive raw packets/decode ICMP
         # Takes: rawSocket, udpSocket, destAddr, destPort, ttl
         # Returns: IcmpSourceAddr, icmp type, icmp code
-        def sendUdpRecvIcmpWindows(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None):
+        def sendUdpRecvIcmpScapy(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None):
             icmpSourceAddr = None
             icmpMessageType = None
             icmpMessagecode = None
@@ -5192,17 +5192,17 @@ class RtpGenerator(RtpCommon):
         Utils.Message.addMessage("DBUG:__tracerouteThread starting for stream " + str(self.syncSourceIdentifier))
 
         # Determine which Operating System is in use, and therfore which udp tx/icmp rx function we will use
-        # if Utils.getOperatingSystem() == "Windows":
-        if True:
+        if Utils.getOperatingSystem() == "Windows":
+        # if True:
             # Windows detected
             # Create pointer to correct function for this OS
-            sendUdpRecvIcmp = sendUdpRecvIcmpWindows
-            self.tracerouteFunctionInUse = "sendUdpRecvIcmpWindows"
+            sendUdpRecvIcmp = sendUdpRecvIcmpScapy
+            self.tracerouteFunctionInUse = "sendUdpRecvIcmpScapy"
             setupSuccessfulFlag = True
         else:
             # Linux or OSX detected
             # Create pointer to correct function for this OS
-            sendUdpRecvIcmp = sendUdpRecvIcmpLinuxOSX
+            sendUdpRecvIcmp = sendUdpRecvIcmpRawSockets
             self.tracerouteFunctionInUse = "sendUdpRecvIcmpLinuxOSX"
             # Now create udp tx and icmp rx sockets
             try:
