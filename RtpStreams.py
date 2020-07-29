@@ -5208,9 +5208,11 @@ class RtpGenerator(RtpCommon):
                     setupSuccessfulFlag = True
             except Exception as e:
                 # Scapy failed
+                Utils.Message.addMessage("DBUG:RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv test failed " +\
+                                         str(e))
                 setupSuccessfulFlag = False
                 # Store the error message
-                setupErrorMessage = e
+                setupErrorMessage = str(e)
         else:
             # Linux or OSX detected
             # Create pointer to correct function for this OS
@@ -5225,16 +5227,19 @@ class RtpGenerator(RtpCommon):
 
             except Exception as e:
                 # Failed to set up sockets
+                Utils.Message.addMessage(
+                    "DBUG:RtpGeneratorThread.__tracerouteThread() createSockets() failed " + \
+                    str(e))
                 setupSuccessfulFlag = False
                 # Store the error message
-                setupErrorMessage = e
+                setupErrorMessage = str(e)
 
         if setupSuccessfulFlag:
             Utils.Message.addMessage("DBUG:__tracerouteThread Stream " + str(self.syncSourceIdentifier) + " using " +\
                           str(self.tracerouteFunctionInUse))
         else:
             # If setup failed
-            Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread.createSockets() " + str(setupErrorMessage))
+            Utils.Message.addMessage("ERR: __tracerouteThread.createSockets() " + str(setupErrorMessage))
             Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
             # If a UI instance (user interface) reference was supplied, display an error message on the UI
             maxWidth = 60
