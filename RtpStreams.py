@@ -3159,10 +3159,10 @@ class RtpGenerator(RtpCommon):
 
         else:
             # Start the Linux/OSX traceroute thread
-            self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
-            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinuxOSX (" + str(os) + ")")
-            # self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
-            # self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteNew(" + str(os) + ")")
+            # self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
+            # self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinuxOSX (" + str(os) + ")")
+            self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
+            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteNew(" + str(os) + ")")
             self.tracerouteThread.daemon = False
 
         # Test the Registry var. If traceroute is enabled, start the thread
@@ -4479,24 +4479,16 @@ class RtpGenerator(RtpCommon):
                                     # message and listen again (within the timeout period)
                                     ipHeaderOfOriginalSender = IPHeader(data[28:48])
 
-                                    # Utils.Message.addMessage(str(ttl) + ":" + "tx src addr: " + str(ipHeaderOfOriginalSender.s_addr) +\
-                                    #         ", ttl when received: " + str(ipHeaderOfOriginalSender.ttl) +\
-                                    #         ", attempt: " + str(attemptsCount) +\
-                                    #         ", tx port: " + str(udpTxPort) +\
-                                    #           ", icmp type: " + str(icmpHeader.type) +\
-                                    #           ", icmp code: " + str(icmpHeader.code) + \
-                                    #           ", reply from addr: " + str(addr[0]) +\
-                                    #       " elapsed time: " + str(round(elapsedTime,1)))
 
-                                    # Utils.Message.addMessage("txTTL:" + str(ttl)+ \
-                                    #                          ", try:" + str(attemptsCount) + \
-                                    #                          ", txPort:" + str(udpTxPort) +\
-                                    #                          ", icmpSrc:" + str(str(addr[0]))+\
-                                    #                          ", type:" + str(icmpHeader.type) +\
-                                    #                          ", code:" + str(icmpHeader.code) +\
-                                    #                          ", src:" + str(ipHeaderOfOriginalSender.s_addr) +\
-                                    #                          ", dst:" + str(ipHeaderOfOriginalSender.d_addr)+\
-                                    #                          ", ttlOnReceipt:" + str(ipHeaderOfOriginalSender.ttl))
+                                    Utils.Message.addMessage("txTTL:" + str(ttl)+ \
+                                                             ", try:" + str(attemptsCount) + \
+                                                             ", txPort:" + str(udpTxPort) +\
+                                                             ", icmpSrc:" + str(str(addr[0]))+\
+                                                             ", type:" + str(icmpHeader.type) +\
+                                                             ", code:" + str(icmpHeader.code) +\
+                                                             ", src:" + str(ipHeaderOfOriginalSender.s_addr) +\
+                                                             ", dst:" + str(ipHeaderOfOriginalSender.d_addr)+\
+                                                             ", ttlOnReceipt:" + str(ipHeaderOfOriginalSender.ttl))
 
 
                                     # Test to see if this icmp packet is addressed to 'us'
@@ -4885,6 +4877,7 @@ class RtpGenerator(RtpCommon):
         class TracerouteLinuxOSXThreadError(Exception):
             pass
 
+
         # Creates and returns two seperate sockets, one for tx (udp) and one for rx (icmp)
         # Returns a UDPTxSocketSetupError or ICMPRxSocketSetupError Exception
         def createSockets(ipAddrofInterface):
@@ -5110,21 +5103,18 @@ class RtpGenerator(RtpCommon):
                     # attempt to decode it
                     else:
                         try:
-                            # Create ICMPHeader object to decode the header
-                            mysteryICMPHeader = ICMPHeader(icmpHeader)
-                            mysteryICMPPayload= IPHeader(ipHeaderOfOriginalSender)
                             Utils.Message.addMessage("Unexpected packet " +\
                                                      "src:" + str(addr[0]) +\
-                                                     ", type:" + str(mysteryICMPHeader.type)+\
-                                                     ", code:" + str(mysteryICMPHeader.code)+\
-                                                     ", IPsrc:" + str(mysteryICMPPayload.s_addr) + \
-                                                     ", IPdst:" + str(mysteryICMPPayload.d_addr) + \
-                                                     ", IPttl:" + str(mysteryICMPPayload.ttl))
+                                                     ", type:" + str(icmpHeader.type)+\
+                                                     ", code:" + str(icmpHeader.code)+\
+                                                     ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
+                                                     ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
+                                                     ", IPttl:" + str(ipHeaderOfOriginalSender.ttl))
                         except Exception as e:
                             # couldn't decode packet
                             mysteryIPHeader = IPHeader(data[:20])
                             Utils.Message.addMessage("Mystery packet from " + str(addr[0]) +\
-                                                     ", proto: " + str(mysteryIPHeader.protocol))
+                                                     ", proto: " + str(ipHeaderOfOriginalSender.protocol) + " " + str(e))
 
                 except socket.timeout:
                     # print("socket timeout")
@@ -5147,7 +5137,7 @@ class RtpGenerator(RtpCommon):
             return icmpSourceAddr, icmpMessageType, icmpMessagecode
 
         # Define a socket timeout value
-        timeOut = 0.5
+        timeOut = 0.1
         # Define the number of times the traceroute will attempt to illicit a response from the router.
         # This is becuse some routers will fail to respond due to rate limiting of requests.
         # Note: Each subsquent attempt alternates between two possible ports
@@ -5283,7 +5273,14 @@ class RtpGenerator(RtpCommon):
                         Utils.Message.addMessage("[TTL:" + str(ttl) + ", Retry:" + str(retryCount) +"]" + str(hopsList[-1]))
 
 
-                    # Traceroute pass completed,Now strip off any trailing 0.0.0.0 (no responses)
+                    # Traceroute pass completed,
+                    # Close the existing UDP tx socket
+                    Utils.Message.addMessage("Closing and recreating the udp tx socket")
+                    udpTx.close()
+                    # Create a new one in its place
+                    udpTx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    # Now strip off any trailing 0.0.0.0 (no responses)
+
                     if len(hopsList) > 0:
                         hopsList = trimHopsList(hopsList)
                         # Utils.Message.addMessage("hopsList: " + str(hopsList))
@@ -5293,8 +5290,8 @@ class RtpGenerator(RtpCommon):
                     Utils.Message.addMessage("(attempt:" + str(tracerouteAttempt) + ", len:" + str(len(hopsList)) + \
                                              ", ttl:" + str(ttl) + ", retry:" + str(retryCount) + ")" +\
                                              str(hopsList))
-                    Utils.Message.addMessage("End of attempt " + str(tracerouteAttempt) + ". Sleeping")
-                    time.sleep(1)
+                    # Utils.Message.addMessage("End of attempt " + str(tracerouteAttempt) + ". Sleeping")
+                    # time.sleep(1)
                 # # Now compare the contents of the lists within tracerouteResultsList for equality
                 if len(tracerouteResultsList) > 0:
                     if testHopsListsForEquality(tracerouteResultsList):
