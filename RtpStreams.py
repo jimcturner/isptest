@@ -5192,10 +5192,11 @@ class RtpGenerator(RtpCommon):
         Utils.Message.addMessage("DBUG:__tracerouteThread starting for stream " + str(self.syncSourceIdentifier))
 
         # Determine which Operating System is in use, and therfore which udp tx/icmp rx function we will use
-        # if Utils.getOperatingSystem() == "Windows":
-        if True:
+        os = Utils.getOperatingSystem()
+        os = "Windows"
+        if os == "Windows":
             # Windows detected
-            # Create pointer to correct function for this OS
+            # Create pointer to the correct function for this OS
             sendUdpRecvIcmp = sendUdpRecvIcmpScapy
             self.tracerouteFunctionInUse = "sendUdpRecvIcmpScapy"
             # Do a simple test using Scapy to check it will work (by sending a single raw packet to localhost)
