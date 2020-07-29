@@ -2227,7 +2227,7 @@ class UI(object):
                     debugInfo.append(["Tx err ", str(self.selectedStream.txErrorCounter)])
                     debugInfo.append(["Rx error ",
                                       str(self.selectedStream.rtpStreamResultsReceiver.receiveDecodeErrorCounter)])
-
+                    debugInfo.append(["traceroute\n function ", str(self.selectedStream.tracerouteFunctionInUse)])
                 except Exception as e:
                     Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
             if type(self.selectedStream) == RtpReceiveStream:
