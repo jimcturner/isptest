@@ -10,6 +10,7 @@ import sys
 
 # from icmplib import ICMPv4Socket, TimeoutExceeded, ICMPRequest
 # from Custom_icmplib import customICMPv4Socket
+from functools import reduce
 from queue import SimpleQueue, Empty
 
 from Registry import Registry # This class contains constants/defaults used throughout the program
@@ -1902,13 +1903,21 @@ class UI(object):
                     ", " + str(e))
 
 
-    # 'm' pressed
+    # '4' pressed
     def __onIncreaseTxRate(self):
-        self.__modifyTxRate(1)
+        # self.__modifyTxRate(1)
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage([self.selectedStream.syncSourceIdentifier, "txbps_inc"])
 
-    # 'n' pressed
+
+    # '3' pressed
     def __onDecreaseTxRate(self):
-        self.__modifyTxRate(-1)
+        # self.__modifyTxRate(-1)
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage([self.selectedStream.syncSourceIdentifier, "txbps_dec"])
+
 
     # This is called by __onIncreaseTxRate() and  __onDecreaseTxRate() and is the method that actually does the work
     def __modifyTxRate(self, direction):
@@ -1935,7 +1944,7 @@ class UI(object):
                 newTxRate = currentTxRate + (524288 * direction)
                 self.selectedStream.setTxRate(newTxRate)
 
-            # get new confirmed rate from RtpGenrator object
+            # get new confirmed rate from RtpGenerator object
             confirmedTxRate = int(self.selectedStream.getRtpStreamStatsByKey('Tx Rate'))
             Utils.Message.addMessage("Setting Tx rate for stream " + str(self.selectedStreamID) + " to " + \
                                      str(Utils.bToMb(confirmedTxRate)) + "bps")
@@ -2218,7 +2227,7 @@ class UI(object):
                     debugInfo.append(["Tx err ", str(self.selectedStream.txErrorCounter)])
                     debugInfo.append(["Rx error ",
                                       str(self.selectedStream.rtpStreamResultsReceiver.receiveDecodeErrorCounter)])
-
+                    debugInfo.append(["traceroute\n function ", str(self.selectedStream.tracerouteFunctionInUse)])
                 except Exception as e:
                     Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
             if type(self.selectedStream) == RtpReceiveStream:
@@ -2306,7 +2315,7 @@ class UI(object):
         if selectedStream is not None:
             try:
                 # Get tracerouteHopsList from selected stream
-                tracerouteHopsList = selectedStream.getTraceRouteHopsList(trimEndOfList=True)
+                tracerouteHopsList = selectedStream.getTraceRouteHopsList()
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
                 friendlyName = str(selectedStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
                 syncSourceID = str(selectedStream.getRtpStreamStatsByKey("stream_syncSource"))
@@ -3531,7 +3540,6 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
                     # This will raise an Exception if the key doesn't yet exist in the dictionary
                     try:
-
                         # Add the the new rtp data object to the RtpReceiveStream
                         rtpRxStreamsDict[syncSourceID].addData(\
                             seqNo, udpPayloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, \
@@ -3712,22 +3720,43 @@ def shutdownApplicationSignalHandler(signum, frame):
     Utils.Message.addMessage("DBUG: shutdownApplicationSignalHandler() called with signal " + str(signum))
     raise ShutdownApplication
 
+# Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
+def createTracerouteChecksum(hopsList):
+    if len(hopsList) > 0:
+        try:
+            # Create lambda function to xor two values
+            xor = lambda x, y: x ^ y
+            # Use reduce() to iterate over a the list of octets in sequence using our lambda function
+            xorSingleHop = lambda hopOctets:reduce(xor, hopOctets)
 
-def calculateSlowStartSleepPeriod():
-    # Every x packets, reduce the txPeriod until it matches the calculated tx rate
-    initialTxPeriod = 0.1  # i.e 100 mS, or 10 packets per second
-    count = 0
-    txPeriod = initialTxPeriod
-    while True:
-        # Increment count with each call to calculateSlowStartSleepPeriod
-        count +=1
-        if count > 1:
-            # With each successive call, halve the txPeriod
-            txPeriod = txPeriod / 2
-        yield txPeriod
+            output = 0
+            # Iterate over the all the hops, xor'ing each hop in turn
+            for hop in hopsList:
+                output = output ^ xorSingleHop(hop)
+            return output
+        except Exception as e:
+            return None
+    else:
+        return None
 
 
 def main(argv):
+    # hopsList=[[0,0,0,0],[0,0,0,10],[10,0,0,0],[10,0,0,1], [1,0,0,10], [10,0,0,10], [10,12,6,10], [10,6,12,15]]
+    # tracerouteHopLists = [
+    #     [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
+    #     [[0, 0, 0, 0], [0, 0, 0, 10], [10, 0, 0, 0], [10, 0, 0, 1], [1, 0, 0, 10], [10, 0, 0, 10], [10, 12, 6, 10],
+    #      [10, 6, 12, 15]],
+    #     [[255,255,255,255], [0,0,0,0], [255,0,0,0]],
+    #     [[127,0,0,1]]
+    #
+    # ]
+    # # for hop in hopsList:
+    # #     x = createTracerouteChecksum(hop)
+    # #     print(str(hop) + ":" + str(x))
+    # for test in tracerouteHopLists:
+    #     x = createTracerouteChecksum(test)
+    #     print(str(x))
+    # exit()
 
     # y = calculateSlowStartSleepPeriod()
     # for x in range (0,10):
