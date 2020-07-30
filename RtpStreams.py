@@ -2261,9 +2261,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                 if rtpPacketData.rxTTL == 0 or rtpPacketData.rxTTL == None:
                     Utils.Message.addMessage(str(rtpPacketData.syncSource) + " 0 or None TTL. rxTTL is: " + \
                                              str(rtpPacketData.rxTTL))
-                else:
-                    Utils.Message.addMessage(str(rtpPacketData.syncSource) + " latest TTL. rxTTL is: " + \
-                                             str(rtpPacketData.rxTTL))
+                # else:
+                #     Utils.Message.addMessage(str(rtpPacketData.syncSource) + " latest TTL. rxTTL is: " + \
+                #                              str(rtpPacketData.rxTTL))
 
                 # Take a copy of the latest sequence no.
                 latestSeqNo = rtpPacketData.rtpSequenceNo
@@ -2300,7 +2300,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 self.__packetDataReceivedTotalBytes += rtpPacketData.payloadSize
 
                 ########### Extract isptest header from most recent packet
-                self.__extractIsptestHeaderData(rtpPackets[-1].isptestHeaderData)
+                self.__extractIsptestHeaderData(rtpPacketData.isptestHeaderData)
 
                 ############ Snapshot the 'latest IP TTL' value
                 # Note: This TTL value might be 'None' (i.e not set)
