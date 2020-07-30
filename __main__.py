@@ -3540,13 +3540,10 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                     # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
                     # This will raise an Exception if the key doesn't yet exist in the dictionary
                     try:
-
                         # Add the the new rtp data object to the RtpReceiveStream
                         rtpRxStreamsDict[syncSourceID].addData(\
                             seqNo, udpPayloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, \
                             rxTTL, srcAddress, srcPort)
-                        if rxTTL == 0 or rxTTL == None:
-                            Utils.Message.addMessage(str(syncSourceID) + " 0 or None TTL. rxTTL is: " + str(rxTTL))
 
                     except:
                         # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict

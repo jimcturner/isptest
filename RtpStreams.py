@@ -2258,6 +2258,8 @@ class RtpReceiveStream(RtpReceiveCommon):
             try:
                 # Wait for a packet to arrive in the receive queue
                 rtpPacketData = self.rtpStreamQueue.get(timeout=0.2)
+                if rtpPacketData.rxTTL == 0 or rtpPacketData.rxTTL == None:
+                    Utils.Message.addMessage(str(rtpPacketData.syncSource) + " 0 or None TTL. rxTTL is: " + str(rxTTL))
                 # Take a copy of the latest sequence no.
                 latestSeqNo = rtpPacketData.rtpSequenceNo
 
