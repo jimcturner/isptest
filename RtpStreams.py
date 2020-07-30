@@ -1426,9 +1426,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     prevHopsList = hopsList
                     hopsListHasChanged = True
 
-                # # Test to see if the rxTTL value has changed, if so, set hopsListHasChanged flag
-                # elif self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
-                #     hopsListHasChanged = True
+
 
                 # Test If length of list has changed then set hopsListHasChanged flag
                 # However, if the rxTTL value hasn't also changed*, this suggests an erroneous
@@ -5426,49 +5424,35 @@ class RtpGenerator(RtpCommon):
                         # Recalculate the checksum for the hopsList
                         self.tracerouteChecksum = self.createTracerouteChecksum(hopsList)
 
-                #     else:
-                #
-                #             # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
-                #         # Increment the mismatch counter
-                #         tracerouteHopsListMismatchCounter += 1
-                #         # # Dump attempt 1 to the log
-                #         # hopsListAsString = ""
-                #         # for x in tracerouteResultsList[0]:
-                #         #     hopsListAsString += str(x[0])+"."+str(x[1])+"."+str(x[2])+"."+str(x[3])+","
-                #         # Utils.Message.addMessage(
-                #         #     "DBUG:Traceroute results discrepency (attempt 1). MismatchCounter: " + \
-                #         #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
-                #         # # Dump attempt 2 to the log
-                #         # hopsListAsString = ""
-                #         # for x in tracerouteResultsList[1]:
-                #         #     hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
-                #         # Utils.Message.addMessage(
-                #         #     "DBUG:Traceroute results discrepency (attempt 2). MismatchCounter: " + \
-                #         #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
-                #
-                #         # Now test to see if we have exceeded the max no of allowed consecutive mismatches
-                #         if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
-                #             Utils.Message.addMessage(\
-                #                 "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
-                #                 ") Exceeded consecutive mismatch Threshold, clearing hopsList ")
-                #             self.tracerouteHopsListMutex.acquire()
-                #             self.tracerouteHopsList = []
-                #             self.tracerouteHopsListMutex.release()
-                #             # Clear the traceroute checksum
-                #             self.tracerouteChecksum = 0
+                    else:
+                        # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
+                        # Increment the mismatch counter
+                        tracerouteHopsListMismatchCounter += 1
+                        # Now test to see if we have exceeded the max no of allowed consecutive mismatches
+                        if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
+                            Utils.Message.addMessage(\
+                                "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
+                                ") Exceeded consecutive mismatch Threshold, clearing hopsList ")
+                            # Empty the current tracerouteHopsList (by filling with an empty list)
+                            self.setTraceRouteHopsList([])
+                            # self.tracerouteHopsListMutex.acquire()
+                            # self.tracerouteHopsList = []
+                            # self.tracerouteHopsListMutex.release()
+                            # Clear the traceroute checksum
+                            self.tracerouteChecksum = 0
                 #
                 # # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
                 # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
                 # # So has to be updated manually here
-                # try:
-                #     # get the instance of the corresponding RtpStreamResults object
-                #     rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                #     # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
-                #     rtpStreamResults.setTraceRouteHopsList(hopsList)
-                #
-                # except Exception as e:
-                #     # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
-                #     pass
+                try:
+                    # get the instance of the corresponding RtpStreamResults object
+                    rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                    # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+                    rtpStreamResults.setTraceRouteHopsList(hopsList)
+
+                except Exception as e:
+                    # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
+                    pass
 
                 # Sleep for 1 sec between completed traceroutes
                 time.sleep(1)
