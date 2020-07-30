@@ -5248,6 +5248,9 @@ class RtpGenerator(RtpCommon):
             # If a UI instance (user interface) reference was supplied, display an error message on the UI
             maxWidth = 60
             # errorText = textwrap.fill(setupErrorMessage, width=maxWidth) + \
+            # Truncate setupErrorMessage if necessary, to fit screen
+            if setupErrorMessage is not None and len(setupErrorMessage) >= maxWidth:
+                setupErrorMessage = setupErrorMessage[:maxWidth]
             errorText = str(setupErrorMessage).center(maxWidth) + \
                                     "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) + \
                         "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
