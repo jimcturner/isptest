@@ -2261,6 +2261,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                 if rtpPacketData.rxTTL == 0 or rtpPacketData.rxTTL == None:
                     Utils.Message.addMessage(str(rtpPacketData.syncSource) + " 0 or None TTL. rxTTL is: " + \
                                              str(rtpPacketData.rxTTL))
+                else:
+                    Utils.Message.addMessage(str(rtpPacketData.syncSource) + " latest TTL. rxTTL is: " + \
+                                             str(rtpPacketData.rxTTL))
+
                 # Take a copy of the latest sequence no.
                 latestSeqNo = rtpPacketData.rtpSequenceNo
 
