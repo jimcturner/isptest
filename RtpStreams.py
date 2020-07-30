@@ -2443,18 +2443,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # re-enable jitter detection
                         jitterDetectionEnabledFlag = True
 
-                    # ########### Extract isptest header from most recent packet
-                    # self.__extractIsptestHeaderData(rtpPackets[-1].isptestHeaderData)
-                    #
-                    # ############ Snapshot the 'latest IP TTL' value
-                    # # Note: This TTL value might be 'None' (i.e not set)
-                    # self.__rxTTL = rtpPackets[-1].rxTTL
-                    # ############ Snapshot the 'latest src addr' value
-                    # self.__srcAddress = rtpPackets[-1].srcAddr
-                    # ############ Snapshot the 'latest src port' value
-                    # self.__srcPort = rtpPackets[-1].srcPort
-
-
                     # x = rtpPackets[-1].rtpSequenceNo
                     # if x % 20 == 0:
                     #     # Utils.Message.addMessage("__queueReceiverThread " + str(x) + " Packets Rx'd: " +\
