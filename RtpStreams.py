@@ -12,6 +12,7 @@ import datetime
 import threading
 import random
 import string
+import textwrap
 import platform
 from functools import reduce
 from queue import SimpleQueue, Queue, Empty, Full
@@ -5199,7 +5200,8 @@ class RtpGenerator(RtpCommon):
             # Create pointer to the correct function for this OS
             sendUdpRecvIcmp = sendUdpRecvIcmpScapy
             self.tracerouteFunctionInUse = "sendUdpRecvIcmpScapy"
-            # Do a simple test using Scapy to check it will work (by sending a single raw packet to localhost)
+            # Do a simple test using Scapy.sr1() to check it will work (by sending a single raw packet to localhost)
+            # If it raises an exception, traceroute won't work
             try:
                 pkt = IP(dst="127.0.0.1", ttl=1) / UDP(dport=5000)
                 # Send the packet and wait for a reply
@@ -5207,12 +5209,7 @@ class RtpGenerator(RtpCommon):
                 Utils.Message.addMessage(
                     "DBUG:******RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv successful " + str(reply))
                 setupSuccessfulFlag = True
-                # if reply is not None:
-                #     Utils.Message.addMessage("DBUG:******RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv successful")
-                #     setupSuccessfulFlag = True
-                # else:
-                #     Utils.Message.addMessage("*****Scapy reply is None")
-                #     setupSuccessfulFlag = False
+
             except Exception as e:
                 # Scapy failed
                 Utils.Message.addMessage("DBUG:RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv test failed " +\
@@ -5250,7 +5247,7 @@ class RtpGenerator(RtpCommon):
             Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
             # If a UI instance (user interface) reference was supplied, display an error message on the UI
             maxWidth = 60
-            errorText = str(setupErrorMessage).center(maxWidth) + \
+            errorText = textwrap.fill(setupErrorMessage, width=maxWidth) + \
                         "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) + \
                         "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
                         "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
