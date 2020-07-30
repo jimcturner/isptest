@@ -3489,8 +3489,6 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                         srcPort = srcUDPPort
                                         # Store the packet arrival time
                                         packetArrivedTimestamp = rawTimestamp
-                                        if rxTTL == 0 or rxTTL == None:
-                                            Utils.Message.addMessage(str(syncSourceID) + " 0 or None TTL. rxTTL is: " + str(rxTTL))
                                 else:
                                     # packet ignored. Increment the counter
                                     rawPacketsDiscardedByRxThreadCount += 1
@@ -3547,6 +3545,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                         rtpRxStreamsDict[syncSourceID].addData(\
                             seqNo, udpPayloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, \
                             rxTTL, srcAddress, srcPort)
+                        if rxTTL == 0 or rxTTL == None:
+                            Utils.Message.addMessage(str(syncSourceID) + " 0 or None TTL. rxTTL is: " + str(rxTTL))
 
                     except:
                         # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
