@@ -3047,8 +3047,9 @@ class RtpGenerator(RtpCommon):
         self.rtpSequenceNo = 0 # The incrementing index within the rtp header
         self.elapsedTime = datetime.timedelta()
         self.friendlyName = ""
-        self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ipopctet4]
-        self.tracerouteHopsListMutex = threading.Lock()
+        self._tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ipopctet4]
+                                        # Should only be accessed by the setter/getter methods
+        self.tracerouteHopsListMutex = threading.Lock() # Protects tracerouteHopsListMutex
         self.tracerouteCarouselIndexNo = 0  # Keeps track of which traceroute hop value is currently being transmitted
                                             # in the isptest header (in RtpGenerator.generateIsptestHeader()
 
@@ -3317,42 +3318,57 @@ class RtpGenerator(RtpCommon):
             # Test what type of message we are scheduled to send
             if self.isptestHeaderMessageIndex == 0:
                 # This is traceroute message - Get copy of tracerouteHopsList[]
-                tracerouteHopsList = self.getTraceRouteHopsList()
-                # Transmit each element of the self.tracerouteHopsList sequentially (as a carousel)
-                hopsListLength = len(tracerouteHopsList)
-                if hopsListLength > 0:
-                    # Get the hop to be transmitted
-                    # Initialise with default value
-                    hopToBeTransmitted = [0,0,0,0]
-                    try:
-                        # Test to ensure that self.tracerouteCarouselIndexNo array index is within range
-                        if self.tracerouteCarouselIndexNo > (hopsListLength - 1):
-                            # If so, reset it to zero to avoid an out-of-range index error
-                            self.tracerouteCarouselIndexNo = 0
-                        # Now grab the hop pointed to by self.tracerouteCarouselIndexNo
-                        hopToBeTransmitted = tracerouteHopsList[self.tracerouteCarouselIndexNo]
-                    except Exception as e:
-                        Utils.Message.addMessage(
-                            "ERR: RtpGenerator.generateIsptestHeader():traceroute_gethopToBeTransmitted index no:" +\
-                            str(self.tracerouteCarouselIndexNo) + ", len(tracerouteHopsList): " + \
-                            str(len(tracerouteHopsList)) + ", " + str(e))
-                    # Now construct the actual message
-                    try:
-                        messageData = [0 & 0xFF,  # Message type 0: traceroute
-                                       self.tracerouteCarouselIndexNo & 0xFF,  # Traceroute Hop no
-                                       hopsListLength & 0xFF,  # # Traceroute total no of hops
-                                      hopToBeTransmitted[0] & 0xFF,  # IP address octet 1
-                                      hopToBeTransmitted[1] & 0xFF,  # IP address octet 2
-                                      hopToBeTransmitted[2] & 0xFF,  # IP address octet 3
-                                      hopToBeTransmitted[3] & 0xFF,  # IP address octet 4
-                                        self.tracerouteChecksum & 0xFF]  # hopList checksum
-                        # Now increment the carousel index so that the next hop value will be transmitted the next time this
-                        # method is called
-                        self.tracerouteCarouselIndexNo += 1
+                # We don't want to hold up the transmission of packets, so instruct getTraceRouteHopsList to not block
+                tracerouteHopsList = self.getTraceRouteHopsList(allowBlocking=False)
+                # Check to see that we have received a valid hopslist
+                if tracerouteHopsList is not None:
+                    # Transmit each element of the self.tracerouteHopsList sequentially (as a carousel)
+                    hopsListLength = len(tracerouteHopsList)
+                    if hopsListLength > 0:
+                        # Get the hop to be transmitted
+                        # Initialise with default value
+                        hopToBeTransmitted = [0,0,0,0]
+                        try:
+                            # Test to ensure that self.tracerouteCarouselIndexNo array index is within range
+                            if self.tracerouteCarouselIndexNo > (hopsListLength - 1):
+                                # If so, reset it to zero to avoid an out-of-range index error
+                                self.tracerouteCarouselIndexNo = 0
+                            # Now grab the hop pointed to by self.tracerouteCarouselIndexNo
+                            hopToBeTransmitted = tracerouteHopsList[self.tracerouteCarouselIndexNo]
+                        except Exception as e:
+                            Utils.Message.addMessage(
+                                "ERR: RtpGenerator.generateIsptestHeader():traceroute_gethopToBeTransmitted index no:" +\
+                                str(self.tracerouteCarouselIndexNo) + ", len(tracerouteHopsList): " + \
+                                str(len(tracerouteHopsList)) + ", " + str(e))
+                        # Now construct the actual message
+                        try:
+                            messageData = [0 & 0xFF,  # Message type 0: traceroute
+                                           self.tracerouteCarouselIndexNo & 0xFF,  # Traceroute Hop no
+                                           hopsListLength & 0xFF,  # # Traceroute total no of hops
+                                          hopToBeTransmitted[0] & 0xFF,  # IP address octet 1
+                                          hopToBeTransmitted[1] & 0xFF,  # IP address octet 2
+                                          hopToBeTransmitted[2] & 0xFF,  # IP address octet 3
+                                          hopToBeTransmitted[3] & 0xFF,  # IP address octet 4
+                                            self.tracerouteChecksum & 0xFF]  # hopList checksum
+                            # Now increment the carousel index so that the next hop value will be transmitted the next time this
+                            # method is called
+                            self.tracerouteCarouselIndexNo += 1
 
-                    except Exception as e:
-                        Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader():traceroute_create message " + str(e))
+                        except Exception as e:
+                            Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader():traceroute_create message " + str(e))
+                    else:
+                        # Rettrieved tracerouteHopsList was empty
+                        # Create a dummy traceroute message
+                        messageData = [0 & 0xFF,  # Message type 0: traceroute
+                                       0 & 0xFF,  # Traceroute Hop no
+                                       0 & 0xFF,  # Traceroute total no of hops
+                                       0 & 0xFF,  # IP address octet 1
+                                       0 & 0xFF,  # IP address octet 2
+                                       0 & 0xFF,  # IP address octet 3
+                                       0 & 0xFF,  # IP address octet 4
+                                       0 & 0xFF]  # hopList checksum
                 else:
+                    # Unable to retrieve tracerouteHopsList
                     # Create a dummy traceroute message
                     messageData = [0 & 0xFF,  # Message type 0: traceroute
                                    0 & 0xFF,  # Traceroute Hop no
@@ -3518,7 +3534,7 @@ class RtpGenerator(RtpCommon):
                 header = b""
 
         except Exception as e:
-            Utils.Message.addMessage("ERR: RtpGenerator.generatePayload(). Header err: " + str(e))
+            Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader(). Header err: " + str(e))
 
         # Return the isptestheader data (as a bytestring)
         return header
@@ -4216,11 +4232,30 @@ class RtpGenerator(RtpCommon):
             Utils.Message.addMessage("ERR:__newImprovedRtpGeneratorThread " + str(e))
 
     # Thread-safe method to return a list of the traceroute hops
-    def getTraceRouteHopsList(self):
+    # Optional allowBlocking argument. If True, the method will block until the data is available
+    # If allowBlocking is False, the method will check to see if the data is available in this instance and, if not
+    # it will return None
+    def getTraceRouteHopsList(self, allowBlocking=True):
+        # Check status of lock before attempting to lock it
+        isAccessible = self.tracerouteHopsListMutex.acquire(blocking=allowBlocking)
+        if isAccessible:
+            # Data is available
+            tracerouteHopsList = deepcopy(self._tracerouteHopsList)
+            self.tracerouteHopsListMutex.release()
+            return tracerouteHopsList
+        else:
+            # Data is currently locked by another process
+            Utils.Message.addMessage("DBUG:RtpGenerator.getTraceRouteHopsList() blocked")
+            return None
+
+    # Thread-safe method to set the traceroute hops list
+    def setTraceRouteHopsList(self, newHopsList):
+        # Decouple the method from any changs to the input source list by taking a deepcopy
+        tempList = deepcopy(newHopsList)
         self.tracerouteHopsListMutex.acquire()
-        tracerouteHopsList = deepcopy(self.tracerouteHopsList)
+        self._tracerouteHopsList = tempList
         self.tracerouteHopsListMutex.release()
-        return tracerouteHopsList
+
 
     def __tracerouteLinuxOSXThread(self):
     # def __tracerouteLinuxOSXThread(self, ipAddrofSendingInterface, destHost, destPort, fallbackPort=33434,
@@ -4529,7 +4564,7 @@ class RtpGenerator(RtpCommon):
                             # Utils.Message.addMessage("tracerouteLinux icmpSrcAddr " + str(icmpSrcAddr))
                             # Query the WhoisResolver to find the owner of the domain
                             Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
-                            # If so, break the address up into a list of octets - this is how they're stored in self.tracerouteHopsList
+                            # If so, break the address up into a list of octets - this is how they're stored in self._tracerouteHopsList
                             icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
                             hopsList.append([int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]), int(icmpSrcAddrOctets[2]),
                                                int(icmpSrcAddrOctets[3])])
@@ -5332,7 +5367,7 @@ class RtpGenerator(RtpCommon):
                             # Store the address
                             # Query the WhoisResolver to find the owner of the domain
                             Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
-                            # If so, break the address up into a list of octets - this is how they're stored in self.tracerouteHopsList
+                            # If so, break the address up into a list of octets - this is how they're stored in self._tracerouteHopsList
                             icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
                             hopsList.append([int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]),
                                                  int(icmpSrcAddrOctets[2]),
@@ -5364,6 +5399,7 @@ class RtpGenerator(RtpCommon):
 
 
                 # Traceroute pass completed,
+
                 # Now strip off any trailing 0.0.0.0 (no responses)
                 if len(hopsList) > 0:
                     hopsList = trimHopsList(hopsList)
@@ -5374,77 +5410,65 @@ class RtpGenerator(RtpCommon):
                     tracerouteResultsList.append(hopsList)
                     Utils.Message.addMessage("DBUG: stream " + str(self.syncSourceIdentifier) + \
                                              " traceroute len:" + str(len(hopsList)) + \
-                                             ", ttl:" + str(ttl) + ", retry:" + str(retryCount) + ")" +\
+                                             ", ttl:" + str(ttl) + ", retry:" + str(retryCount) + ")" + \
                                              str(hopsList))
-
-                # Wait for tracerouteResultsList to be populated with the required no of traceroute passes
-                # When ready, compare the contents of the lists within tracerouteResultsList for equality
+                #
+                # # Wait for tracerouteResultsList to be populated with the required no of traceroute passes
+                # # When ready, compare the contents of the lists within tracerouteResultsList for equality
                 if len(tracerouteResultsList) >= tracerouteHopsListMustMatchThreshold:
                     if testHopsListsForEquality(tracerouteResultsList):
                         # If the lists are all identical that means that n consecutive traceroutes gave the same result
-                        # so the traceroute has been validated
-                        # Check to see if the existing instance variable version of hopsList is different to
-                        # the latest validated traceroute hopslist. If it's different, update the instance variable version
-                        # Otherwise leave it alone. This should minimise the risk of access violations
-                        self.tracerouteHopsListMutex.acquire()
-                        self.tracerouteHopsList = deepcopy(hopsList)
-                        self.tracerouteHopsListMutex.release()
+                        # so the traceroute has been validated. Update the instance variable (via the setter method)
+
+                        self.setTraceRouteHopsList(hopsList)
                         # Successful (replicated) traceroute has completed, so reset the mismatch counter
                         tracerouteHopsListMismatchCounter = 0
                         # Recalculate the checksum for the hopsList
                         self.tracerouteChecksum = self.createTracerouteChecksum(hopsList)
-                        # # Dump successful hopslist to the log
-                        # hopsListAsString = ""
-                        # for x in hopsList:
-                        #     hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
-                        # Utils.Message.addMessage(
-                        #     "DBUG:Traceroute successful match: (" + str(len(hopsList)) + "), " + str(hopsListAsString))
-                        # Utils.Message.addMessage( \
-                        #     "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
-                        #     " Consecutive results matched " + str(hopsList))
-                    else:
 
-                            # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
-                        # Increment the mismatch counter
-                        tracerouteHopsListMismatchCounter += 1
-                        # # Dump attempt 1 to the log
-                        # hopsListAsString = ""
-                        # for x in tracerouteResultsList[0]:
-                        #     hopsListAsString += str(x[0])+"."+str(x[1])+"."+str(x[2])+"."+str(x[3])+","
-                        # Utils.Message.addMessage(
-                        #     "DBUG:Traceroute results discrepency (attempt 1). MismatchCounter: " + \
-                        #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
-                        # # Dump attempt 2 to the log
-                        # hopsListAsString = ""
-                        # for x in tracerouteResultsList[1]:
-                        #     hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
-                        # Utils.Message.addMessage(
-                        #     "DBUG:Traceroute results discrepency (attempt 2). MismatchCounter: " + \
-                        #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
-
-                        # Now test to see if we have exceeded the max no of allowed consecutive mismatches
-                        if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
-                            Utils.Message.addMessage(\
-                                "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
-                                ") Exceeded consecutive mismatch Threshold, clearing hopsList ")
-                            self.tracerouteHopsListMutex.acquire()
-                            self.tracerouteHopsList = []
-                            self.tracerouteHopsListMutex.release()
-                            # Clear the traceroute checksum
-                            self.tracerouteChecksum = 0
-
-                # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
-                # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
-                # So has to be updated manually here
-                try:
-                    # get the instance of the corresponding RtpStreamResults object
-                    rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                    # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
-                    rtpStreamResults.setTraceRouteHopsList(hopsList)
-
-                except Exception as e:
-                    # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
-                    pass
+                #     else:
+                #
+                #             # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
+                #         # Increment the mismatch counter
+                #         tracerouteHopsListMismatchCounter += 1
+                #         # # Dump attempt 1 to the log
+                #         # hopsListAsString = ""
+                #         # for x in tracerouteResultsList[0]:
+                #         #     hopsListAsString += str(x[0])+"."+str(x[1])+"."+str(x[2])+"."+str(x[3])+","
+                #         # Utils.Message.addMessage(
+                #         #     "DBUG:Traceroute results discrepency (attempt 1). MismatchCounter: " + \
+                #         #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
+                #         # # Dump attempt 2 to the log
+                #         # hopsListAsString = ""
+                #         # for x in tracerouteResultsList[1]:
+                #         #     hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
+                #         # Utils.Message.addMessage(
+                #         #     "DBUG:Traceroute results discrepency (attempt 2). MismatchCounter: " + \
+                #         #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
+                #
+                #         # Now test to see if we have exceeded the max no of allowed consecutive mismatches
+                #         if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
+                #             Utils.Message.addMessage(\
+                #                 "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
+                #                 ") Exceeded consecutive mismatch Threshold, clearing hopsList ")
+                #             self.tracerouteHopsListMutex.acquire()
+                #             self.tracerouteHopsList = []
+                #             self.tracerouteHopsListMutex.release()
+                #             # Clear the traceroute checksum
+                #             self.tracerouteChecksum = 0
+                #
+                # # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
+                # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
+                # # So has to be updated manually here
+                # try:
+                #     # get the instance of the corresponding RtpStreamResults object
+                #     rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                #     # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+                #     rtpStreamResults.setTraceRouteHopsList(hopsList)
+                #
+                # except Exception as e:
+                #     # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
+                #     pass
 
                 # Sleep for 1 sec between completed traceroutes
                 time.sleep(1)
