@@ -2299,6 +2299,16 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Update total bytes received
                 self.__packetDataReceivedTotalBytes += rtpPacketData.payloadSize
 
+                ########### Extract isptest header from most recent packet
+                self.__extractIsptestHeaderData(rtpPackets[-1].isptestHeaderData)
+
+                ############ Snapshot the 'latest IP TTL' value
+                # Note: This TTL value might be 'None' (i.e not set)
+                self.__rxTTL = rtpPacketData.rxTTL
+                ############ Snapshot the 'latest src addr' value
+                self.__srcAddress = rtpPacketData.srcAddr
+                ############ Snapshot the 'latest src port' value
+                self.__srcPort = rtpPacketData.srcPort
 
                 # Add the packet to the circular packet buffer (for glitch, receive period and jitter analysis)
                 rtpPackets.append(rtpPacketData)
@@ -2439,16 +2449,16 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # re-enable jitter detection
                         jitterDetectionEnabledFlag = True
 
-                    ########### Extract isptest header from most recent packet
-                    self.__extractIsptestHeaderData(rtpPackets[-1].isptestHeaderData)
-
-                    ############ Snapshot the 'latest IP TTL' value
-                    # Note: This TTL value might be 'None' (i.e not set)
-                    self.__rxTTL = rtpPackets[-1].rxTTL
-                    ############ Snapshot the 'latest src addr' value
-                    self.__srcAddress = rtpPackets[-1].srcAddr
-                    ############ Snapshot the 'latest src port' value
-                    self.__srcPort = rtpPackets[-1].srcPort
+                    # ########### Extract isptest header from most recent packet
+                    # self.__extractIsptestHeaderData(rtpPackets[-1].isptestHeaderData)
+                    #
+                    # ############ Snapshot the 'latest IP TTL' value
+                    # # Note: This TTL value might be 'None' (i.e not set)
+                    # self.__rxTTL = rtpPackets[-1].rxTTL
+                    # ############ Snapshot the 'latest src addr' value
+                    # self.__srcAddress = rtpPackets[-1].srcAddr
+                    # ############ Snapshot the 'latest src port' value
+                    # self.__srcPort = rtpPackets[-1].srcPort
 
 
                     # x = rtpPackets[-1].rtpSequenceNo
