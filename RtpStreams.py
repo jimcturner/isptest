@@ -5205,8 +5205,11 @@ class RtpGenerator(RtpCommon):
                 # Send the packet and wait for a reply
                 reply = sr1(pkt, verbose=0, timeout=0.1)
                 if reply is not None:
-                    Utils.Message.addMessage("DBUG:RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv successful")
+                    Utils.Message.addMessage("DBUG:******RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv successful")
                     setupSuccessfulFlag = True
+                else:
+                    Utils.Message.addMessage("*****Scapy reply is None")
+                    setupSuccessfulFlag = False
             except Exception as e:
                 # Scapy failed
                 Utils.Message.addMessage("DBUG:RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv test failed " +\
