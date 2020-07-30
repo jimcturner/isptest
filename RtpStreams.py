@@ -5421,8 +5421,21 @@ class RtpGenerator(RtpCommon):
                         self.setTraceRouteHopsList(hopsList)
                         # Successful (replicated) traceroute has completed, so reset the mismatch counter
                         tracerouteHopsListMismatchCounter = 0
-                        # Recalculate the checksum for the hopsList
+                        # Recalculate the checksum for the (transmitted( hopsList
                         self.tracerouteChecksum = self.createTracerouteChecksum(hopsList)
+
+                        # # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
+                        # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
+                        # # So has to be updated manually here
+                        try:
+                            # get the instance of the corresponding RtpStreamResults object
+                            rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                            # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+                            rtpStreamResults.setTraceRouteHopsList(hopsList)
+
+                        except Exception as e:
+                            # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
+                            pass
 
                     else:
                         # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
@@ -5435,24 +5448,21 @@ class RtpGenerator(RtpCommon):
                                 ") Exceeded consecutive mismatch Threshold, clearing hopsList ")
                             # Empty the current tracerouteHopsList (by filling with an empty list)
                             self.setTraceRouteHopsList([])
-                            # self.tracerouteHopsListMutex.acquire()
-                            # self.tracerouteHopsList = []
-                            # self.tracerouteHopsListMutex.release()
                             # Clear the traceroute checksum
                             self.tracerouteChecksum = 0
-                #
-                # # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
-                # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
-                # # So has to be updated manually here
-                try:
-                    # get the instance of the corresponding RtpStreamResults object
-                    rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                    # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
-                    rtpStreamResults.setTraceRouteHopsList(hopsList)
+                            # # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
+                            # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
+                            # # So has to be updated manually here
+                            try:
+                                # get the instance of the corresponding RtpStreamResults object
+                                rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                                # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+                                rtpStreamResults.setTraceRouteHopsList([])
 
-                except Exception as e:
-                    # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
-                    pass
+                            except Exception as e:
+                                # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
+                                pass
+
 
                 # Sleep for 1 sec between completed traceroutes
                 time.sleep(1)
