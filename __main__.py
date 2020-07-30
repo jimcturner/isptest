@@ -3470,8 +3470,6 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                             # Increment the counter
                             rawPacketsReceivedByRxThreadCount += 1
                             rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = parseRawPacket(rawData)
-                            if rxTTL == 0 or rxTTL == None:
-                                Utils.Message.addMessage("0 or None TTL. rxTTL is: " + str(rxTTL))
                             # Note: On Windows, the raw port is running in promiscuous mode. That means it will receive
                             # ALL incoming packets addressed to that interface.
                             # Therefore we need to check that this packet is for us, by comparing the udp dest port
@@ -3491,6 +3489,8 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                                         srcPort = srcUDPPort
                                         # Store the packet arrival time
                                         packetArrivedTimestamp = rawTimestamp
+                                        if rxTTL == 0 or rxTTL == None:
+                                            Utils.Message.addMessage(str(syncSourceID) + " 0 or None TTL. rxTTL is: " + str(rxTTL))
                                 else:
                                     # packet ignored. Increment the counter
                                     rawPacketsDiscardedByRxThreadCount += 1
