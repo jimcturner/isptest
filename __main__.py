@@ -1909,7 +1909,20 @@ class UI(object):
         # Confirm that the selected stream is a generator object
         if type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage([self.selectedStream.syncSourceIdentifier, "txbps_inc"])
+        # Orthwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            try:
+                # Create message
+                msg={"control": ["hello!"]}
+                pickledMessage = pickle.dumps(msg, protocol=2)
+                # Get source IP addr and port of selected stream
+                destAddr = self.selectedStream.getRtpStreamStatsByKey("stream_srcAddress")
+                destPort =  self.selectedStream.getRtpStreamStatsByKey("stream_srcPort")
 
+                # add the pickled message to the txMessageQueue
+                self.selectedStream.resultsTxQueue.put([pickledMessage, destAddr, destPort])
+            except Exception as e:
+                Utils.Message.addMessage("Send control message: " + str(e))
 
     # '3' pressed
     def __onDecreaseTxRate(self):

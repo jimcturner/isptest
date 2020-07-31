@@ -5641,8 +5641,13 @@ class ResultsReceiver(object):
 
                                 # Attempt to extract the stats dictionary and eventsList list
                                 try:
-                                    stats = unPickledMessage["stats"]
-                                    latestEventsList = unPickledMessage["eventList"]
+                                    if "stats" in unPickledMessage:
+                                        stats = unPickledMessage["stats"]
+                                    if "eventList" in unPickledMessage:
+                                        latestEventsList = unPickledMessage["eventList"]
+                                    if "control" in unPickledMessage:
+                                        controlMessage = unPickledMessage["control"]
+                                        Utils.Message.addMessage("Control Message received: " + str(controlMessage))
                                 except Exception as e:
                                     Utils.Message.addMessage(
                                         "ERR: __resultsReceiverThread (error unpacking stats and eventList): " + str(e))
@@ -5742,14 +5747,7 @@ class ResultsReceiver(object):
                         except Exception as e:
                             Utils.Message.addMessage("ERR:_resultsReceiverThread(): rtpStreamResults.updateEventsList() " + str(e))
 
-                    # if len(stats) > 0:
-                    #     try:
-                    #         stream= self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
-                    #         x=stream.getRTPStreamEventList(1)
-                    #         if len(x) > 0:
-                    #             Utils.Message.addMessage("DBUG: Last known event: " + str(x[-1].type))
-                    #     except Exception as e:
-                    #         Utils.Message.addMessage("DBUG: wtf " + str(e))
+
                 # socket is set with a timeout, so need to catch timeouts but can ignore them
                 except socket.timeout:
                     # Utils.Message.addMessage("DBUG: ResultsReceiver socket.recvfrom() timeout")
