@@ -3795,6 +3795,13 @@ class RtpGenerator(RtpCommon):
             ######## 1 second counter
             if loopCounter % 5 == 0:
                 # 1 Second has elapsed
+
+                # Check to see if the tx source IP address has changed (transmitting via different interface/Wifi network?)
+                currentSrcIPAddr = Utils.get_ip(self.UDP_TX_IP)
+                # if it has changed, update the instance variable. The traceroute thread depends upon this
+                if self.SRC_IP_ADDR != currentSrcIPAddr:
+                    self.SRC_IP_ADDR = currentSrcIPAddr
+
                 # Decrement timeToLive seconds counter but only if current value is +ve
                 # A -ve value is used to denote 'live for ever'
                 if self.timeToLive > 0:
@@ -4898,9 +4905,10 @@ class RtpGenerator(RtpCommon):
         class TracerouteLinuxOSXThreadError(Exception):
             pass
 
-        # Creates and returns two seperate sockets, one for tx (udp) and one for rx (icmp)
+        # Creates and returns two separate sockets, one for tx (udp) and one for rx (icmp)
         # Returns a UDPTxSocketSetupError or ICMPRxSocketSetupError Exception
         def createSockets(ipAddrofInterface):
+            ipAddrofInterface = "0.0.0.0"
             # Set up udp transmit socket
             try:
                 # Create UDP socket
@@ -5275,7 +5283,7 @@ class RtpGenerator(RtpCommon):
                           str(self.tracerouteFunctionInUse))
         else:
             # If setup failed
-            Utils.Message.addMessage("ERR: __tracerouteThread.createSockets() " + str(setupErrorMessage))
+            Utils.Message.addMessage("ERR: __tracerouteThread setup error: " + str(setupErrorMessage))
             Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
             # If a UI instance (user interface) reference was supplied, display an error message on the UI
             maxWidth = 60
@@ -5339,9 +5347,33 @@ class RtpGenerator(RtpCommon):
                             udpTxPort = fallbackPort
 
                         # Perform the UDP Send/ICMP receive
-                        icmpSrcAddr, icmpType, icmpCode = sendUdpRecvIcmp(\
-                            self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
-                            _udpSocket=udpTx, _icmpSocket=icmpRx)
+                        try:
+                            icmpSrcAddr, icmpType, icmpCode = sendUdpRecvIcmp(\
+                                self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
+                                _udpSocket=udpTx, _icmpSocket=icmpRx)
+                        except UDPTxError as e:
+                            Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
+                                                     "__tracerouteThread UDPTxError. Recreating udp Tx socket" + str(
+                                type(e)) + ", " + str(e))
+                            # close existing socket
+                            try:
+                                udpTx.close()
+                            except:
+                                Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
+                                                         "__tracerouteThread UDPTxError.  udpTx.close()" + str(
+                                    type(e)) + ", " + str(e))
+                            # Recreate the udp tx socket
+                            try:
+                                # close existing socket
+                                udpTx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                                Utils.Message.addMessage("DBUG:Stream" + str(self.syncSourceIdentifier) + \
+                                                         "__tracerouteThread UDPTxError.  udpTx socket recreated successfully " + str(
+                                    type(e)) + ", " + str(e))
+                            except:
+                                Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
+                                                         "__tracerouteThread UDPTxError.  udpTx socket recreation failed " + str(
+                                    type(e)) + ", " + str(e))
+
                         # Test the icmp response:-
                         # If the traceroute hop router did not respond, we get None, otherwise we should get an ip addr
                         if icmpSrcAddr is not None:
@@ -5465,6 +5497,7 @@ class RtpGenerator(RtpCommon):
 
                 # Sleep for 1 sec between completed traceroutes
                 time.sleep(1)
+
         except Exception as e:
             Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
                                      "__tracerouteThread outer loop error. " + str(type(e)) + ", " + str(e))
