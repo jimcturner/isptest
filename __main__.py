@@ -1913,7 +1913,7 @@ class UI(object):
         elif type(self.selectedStream) == RtpReceiveStream:
             try:
                 # Create message
-                msg={"control": ["hello!"]}
+                msg={"control": [self.selectedStreamID, "txbps_inc"]}
                 pickledMessage = pickle.dumps(msg, protocol=2)
                 # Get source IP addr and port of selected stream
                 destAddr = self.selectedStream.getRtpStreamStatsByKey("stream_srcAddress")

@@ -5648,6 +5648,8 @@ class ResultsReceiver(object):
                                     if "control" in unPickledMessage:
                                         controlMessage = unPickledMessage["control"]
                                         Utils.Message.addMessage("Control Message received: " + str(controlMessage))
+                                        self.relatedRtpGenerator.addControlMessage(controlMessage)
+
                                 except Exception as e:
                                     Utils.Message.addMessage(
                                         "ERR: __resultsReceiverThread (error unpacking stats and eventList): " + str(e))
