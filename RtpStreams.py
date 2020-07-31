@@ -3556,27 +3556,35 @@ class RtpGenerator(RtpCommon):
     # Modify the tx rate of the RtpGenerator stream.
     # Additionally, if autoIncrement or autoDecrement are set, the first argument (newTxRate_bps) will be ignored
     # and instead, the method will increase/decrease the tx rate by a fixed amount relative to the current rate
-    def setTxRate(self, newTxRate_bps, autoIncrement=False, autoDecrement=False):
-
+    # if autoIncrement = 1, the rate will increase, if autoIncrement = -1, the rate will decrease
+    def setTxRate(self, newTxRate_bps, autoIncrement=None):
+        # Snaps the incoming value to 1024 so that autoIncrements/decrements will settle on a nat value (i.e in
+        # steps of 1024bps). See https://stackoverflow.com/questions/2272149/round-to-5-or-other-number-in-python
+        # Snap value is overridden by setting base= value
+        def snapTo(x, base=1024):
+            return base * round(x / base)
         txRateChange_bps = 0
         # calculate step change value (up or down) based on current txRate
         # If 100kbps or less, change in 10kbps steps
         if self.txRate <= 102400:
             txRateChange_bps = 10240
+        # Special case. If tx rate is currently 256kbps or less AND is being decremented, use 10kbps steps
+        elif (self.txRate <= 262144) and (autoIncrement == -1):
+            txRateChange_bps = 10240
         # Else if tx rate between 100kbps and 1Mbps, change in 256kbps steps
         elif self.txRate <= 1048576:
             txRateChange_bps = 262144
-        # Otherwise change in 512Mbps steps
+        # Otherwise change in 512kbps steps
         else:
             txRateChange_bps = 524288
 
         # Check to see if autoIncrement or autoDecrement have been set. If so, override newTxRate_bps value
-        if autoIncrement:
+        if autoIncrement == 1:
             # Auto increment is set
-            newTxRate_bps = self.txRate + txRateChange_bps
-        elif autoDecrement:
+            newTxRate_bps = snapTo(self.txRate + txRateChange_bps, base=txRateChange_bps)
+        elif autoIncrement == -1:
             # Auto decrement is set
-            newTxRate_bps = self.txRate - txRateChange_bps
+            newTxRate_bps = snapTo(self.txRate - txRateChange_bps, base=txRateChange_bps)
 
 
         # Confirm that the new TX rate isn't below the minimum permitted
@@ -3706,9 +3714,9 @@ class RtpGenerator(RtpCommon):
             # Confirm that this is a message destined for this RtpGenerator Object
             if messageSyncSourceID == self.syncSourceIdentifier:
                 if messageType == "txbps_inc":
-                    self.setTxRate(0, autoIncrement=True)
+                    self.setTxRate(0, autoIncrement=1)
                 elif messageType == "txbps_dec":
-                    self.setTxRate(0, autoDecrement=True)
+                    self.setTxRate(0, autoIncrement=-1)
 
             else:
                 Utils.Message.addMessage("Misrouted RTPGenerator control message. Dest:" + \
@@ -5247,7 +5255,7 @@ class RtpGenerator(RtpCommon):
                 # Send the packet and wait for a reply
                 reply = sr1(pkt, verbose=0, timeout=0.1)
                 Utils.Message.addMessage(
-                    "DBUG:******RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv successful " + str(reply))
+                    "DBUG:RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv successful " + str(reply))
                 setupSuccessfulFlag = True
 
             except Exception as e:
@@ -5392,7 +5400,7 @@ class RtpGenerator(RtpCommon):
                             # Detect erroneous messages (I use type 44 to trap ttl=0 messages
                             elif icmpType == 44:
                                 Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + \
-                                                         " Erroneous ttl=0 ICMP message for hop " + str(ttl) + ". Caution!")
+                                        " Erroneous ttl=0 ICMP message for traceroute hop " + str(ttl) + ". Caution!")
                             # Store the address
                             # Query the WhoisResolver to find the owner of the domain
                             Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
@@ -5437,10 +5445,10 @@ class RtpGenerator(RtpCommon):
                     # Add the latest traceroute result to tracerouteResultsList
 
                     tracerouteResultsList.append(hopsList)
-                    Utils.Message.addMessage("DBUG: stream " + str(self.syncSourceIdentifier) + \
-                                             " traceroute len:" + str(len(hopsList)) + \
-                                             ", ttl:" + str(ttl) + ", retry:" + str(retryCount) + ")" + \
-                                             str(hopsList))
+                    # Utils.Message.addMessage("DBUG: stream " + str(self.syncSourceIdentifier) + \
+                    #                          " traceroute len:" + str(len(hopsList)) + \
+                    #                          ", ttl:" + str(ttl) + ", retry:" + str(retryCount) + ")" + \
+                    #                          str(hopsList))
                 #
                 # # Wait for tracerouteResultsList to be populated with the required no of traceroute passes
                 # # When ready, compare the contents of the lists within tracerouteResultsList for equality
@@ -5476,11 +5484,16 @@ class RtpGenerator(RtpCommon):
                         if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
                             Utils.Message.addMessage(\
                                 "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
-                                ") Exceeded consecutive mismatch Threshold, clearing hopsList ")
+                                ") Exceeded consecutive mismatch Threshold (" +\
+                                str(tracerouteHopsListMismatchCounterThreshold) + \
+                                "), clearing hopsList. Most recent " + str(hopsList))
+
                             # Empty the current tracerouteHopsList (by filling with an empty list)
                             self.setTraceRouteHopsList([])
                             # Clear the traceroute checksum
                             self.tracerouteChecksum = 0
+                            # reset the mismatch counter
+                            tracerouteHopsListMismatchCounter = 0
                             # # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
                             # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
                             # # So has to be updated manually here
