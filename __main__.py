@@ -1966,6 +1966,17 @@ class UI(object):
             # Enable burst mode for the selected RTPGenerator
             self.selectedStream.enableBurstMode()
 
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                   "source": "Transmitter" + str(self.pid),
+                                                   "type": "txburst"})
+            # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txburst"})
+
 
     # # This is called by __onIncreaseTimeToLive() and __onDecreaseTimeToLive() and is the actual worker method
     # def __modifyTimeToLive(self, direction):

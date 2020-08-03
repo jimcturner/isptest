@@ -3644,7 +3644,6 @@ class RtpGenerator(RtpCommon):
         # Snap the value to the nearest '10'
         payloadLength_bytes = snapTo(payloadLength_bytes)
 
-
         # Bounds check new supplied/calculated value
         if payloadLength_bytes > 1488:
             payloadLength_bytes = 1488
@@ -3793,6 +3792,8 @@ class RtpGenerator(RtpCommon):
                     self.setPayloadLength(0, autoIncrement=1)
                 elif messageType == "txpayload_dec":
                     self.setPayloadLength(0, autoIncrement=-1)
+                elif messageType == "txburst":
+                    self.enableBurstMode()
 
             else:
                 Utils.Message.addMessage("Misrouted RTPGenerator control message. Dest:" + \
