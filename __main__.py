@@ -2580,7 +2580,7 @@ class UI(object):
             value = Utils.bToMb(value) + "B"
             return value
 
-        if key == key == 'Tx Rate (actual)':
+        if key == 'Tx Rate (actual)' or key == 'stream_transmitter_txRate_bps':
             value = Utils.bToMb(value)
             return value
 
@@ -2602,7 +2602,7 @@ class UI(object):
                 value = str(math.ceil(value)) + "uS"
             return value
 
-        if key == 'Time to live':
+        if key == 'Time to live' or key == 'stream_transmitter_TimeToLive_sec':
             # If this is am endless stream (created with a negative time to live)
             if value < 0:
                 value = "forever"
