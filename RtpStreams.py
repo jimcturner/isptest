@@ -3129,17 +3129,18 @@ class RtpGenerator(RtpCommon):
         # self.addControlMessage() will put a message onto the queue
         # self.parseControlMessage() will decode a message
 
-        # Each message is a list of at least length = 2
+        # Each message is a dictionary of at least length = 3
+        #{syncSourceID: int, source: String, type: String}
         # The first element of the list is a number which identifies the sync source ID
-        # The second element is a string that identifies the type of message
-        # current messages are:
-        #   [xxxxx,"txbps_inc"] Increase the tx bitrate
-        #   [xxxx,"txbps_dec"] Decrease the tx bitrate
+        # The second element is a string that identifies the source of message (bot sure how this will be used yet)
+        # The third  element is a string that identifies the type of message
+        # current message types are:
+        #   {"txbps_inc"} Increase the tx bitrate
+        #   {"txbps_dec"} Decrease the tx bitrate
         self.__controlMessageQueue = SimpleQueue()
 
 
         ######## Actual code starts here
-
         # Start the traffic generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
         self.rtpGeneratorThread.daemon = False
@@ -3705,12 +3706,14 @@ class RtpGenerator(RtpCommon):
 
     # Takes a control message (as stored in self.__controlMessageQueue) and parses it
     def parseControlMessage(self, controlMessage):
+        # Messages are a dict of the form
+        # {syncSourceID: int, source: String, type: String}
         Utils.Message.addMessage("DBUG:Control Message " + str(self.syncSourceIdentifier) + ":" + str(controlMessage))
         # parse the incoming message
         try:
             # Get message type
-            messageSyncSourceID = controlMessage[0]
-            messageType = controlMessage[1]
+            messageSyncSourceID = controlMessage["syncSourceID"]
+            messageType = controlMessage["type"]
             # Confirm that this is a message destined for this RtpGenerator Object
             if messageSyncSourceID == self.syncSourceIdentifier:
                 if messageType == "txbps_inc":
@@ -5648,6 +5651,7 @@ class ResultsReceiver(object):
                                     if "control" in unPickledMessage:
                                         controlMessage = unPickledMessage["control"]
                                         Utils.Message.addMessage("Control Message received: " + str(controlMessage))
+                                        # Pass the message to the RtpGenerator Control Message queue
                                         self.relatedRtpGenerator.addControlMessage(controlMessage)
 
                                 except Exception as e:
