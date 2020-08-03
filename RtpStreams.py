@@ -696,8 +696,6 @@ class RtpReceiveCommon(RtpCommon):
 
         self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
         self.tracerouteHopsListMutex = threading.Lock()
-        # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
-        self.__stats = {}
 
     # Thread-safe method to return a list of the worst glitches
     # If returnSummaries is True, will return a list of summary strings. Otherwise will return a list of events
@@ -985,12 +983,6 @@ class RtpReceiveCommon(RtpCommon):
             Utils.Message.addMessage("ERR: RtpReceiveCommon.writeReportToDisk() " + str(e))
             return str(e)
 
-    # Returns the version no of the transmitter generating this rtp stream
-    # This can be used to determine whether the source of the packets os from an instance of isptest running in
-    # TRANSMIT mode, or whether the source is some other kind of device (eg an NTT)
-    def getTransmitterVersion(self):
-        transmitterVersion = self.__stats["stream_transmitterVersion"]
-        return transmitterVersion
 
 # Define a class to represent a stream of received rtp packets (and associated stats)
 class RtpReceiveStream(RtpReceiveCommon):
@@ -1012,7 +1004,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpRxStreamsDict = rtpRxStreamsDict
         self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
         # # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
-        # self.__stats = {}
+        self.__stats = {}
         # Assign to instance variable
         self.__stats["stream_syncSource"] = syncSource
         self.__stats["stream_srcAddress"] = srcAddress
@@ -2650,15 +2642,19 @@ class RtpReceiveStream(RtpReceiveCommon):
             Utils.Message.addMessage("RtpReceiveStream.addData() " + str(e))
 
     # Sends a control message to the isptest Transmitter associated with this ReceiverStream object
-    # by wrapping the supplied dict and putting it on the txMessageQueue
+    # by pickling the supplied message and wrapping it up in another dict along with
+    # a destination ip and port (so that the  udpTransmit routine knows where to send it)
     # Returns a sucess/fail message transmit status in the form of a dict
+    # Messages sent by this method will be parsed by RtpGenerator.parseControlMessage()
     def sendControlMessageToTransmitter(self, msg):
         # Test to see if the rtp source of this stream is actually an instance of isptest
-        if self.getTransmitterVersion() > 0:
-            # msg = {"control": {"syncSourceID": self.selectedStreamID, "type": "txbps_inc"}}
+        if self.__stats["stream_transmitterVersion"] > 0:
+            Utils.Message.addMessage("DBUG:sendControlMessageToTransmitter() msg to send: " + str(msg))
             try:
-                # pickle the supplied message
-                pickledMessage = pickle.dumps(msg, protocol=2)
+                # wrap the message in a dict with the "control" key. This will be detected in ResultsReceiver.__resultsReceiverThread()
+                wrappedMessage = {"control": msg}
+                # pickle the wrapped message
+                pickledMessage = pickle.dumps(wrappedMessage, protocol=2)
                 # add the pickled message to the txMessageQueue
                 self.resultsTxQueue.put(\
                     [pickledMessage, self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"]])
@@ -3738,7 +3734,7 @@ class RtpGenerator(RtpCommon):
     def parseControlMessage(self, controlMessage):
         # Messages are a dict of the form
         # {syncSourceID: int, source: String, type: String}
-        Utils.Message.addMessage("DBUG:Control Message " + str(self.syncSourceIdentifier) + ":" + str(controlMessage))
+        Utils.Message.addMessage("INFO:parseControlMessage() " + str(self.syncSourceIdentifier) + ":" + str(controlMessage))
         # parse the incoming message
         try:
             # Get message type
@@ -5681,7 +5677,8 @@ class ResultsReceiver(object):
                                         latestEventsList = unPickledMessage["eventList"]
                                     if "control" in unPickledMessage:
                                         controlMessage = unPickledMessage["control"]
-                                        Utils.Message.addMessage("Control Message received: " + str(controlMessage))
+                                        Utils.Message.addMessage("DBUG:__resultsReceiverThread() Control Message Rx'd: " + \
+                                                                 str(controlMessage))
                                         # Pass the message to the RtpGenerator Control Message queue
                                         self.relatedRtpGenerator.addControlMessage(controlMessage)
 

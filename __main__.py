@@ -568,6 +568,8 @@ class UI(object):
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
+        self.pid = os.getpid() # Stores the processID (pid of this process. Used as a source id in
+        # control messages sent back to the transmitter (so that the source of the message can be identified)
 
         # If true, this will cause renderDisplayThread to put up a quit y/n? prompt
         self.displayQuitDialogueFlag = False
@@ -1909,21 +1911,11 @@ class UI(object):
         # Confirm that the selected stream is a generator object
         if type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage([self.selectedStream.syncSourceIdentifier, "txbps_inc"])
-        # Orthwise send a message to the remote end
+        # Otherwise send a message to the remote end
         elif type(self.selectedStream) == RtpReceiveStream:
-            self.selectedStream.sendControlMessageToTransmitter({"control": {"syncSourceID": self.selectedStreamID, "type": "txbps_inc"}})
-            # try:
-            #     # Create message
-            #     msg={"control": {"syncSourceID": self.selectedStreamID, "type": "txbps_inc"}}
-            #     pickledMessage = pickle.dumps(msg, protocol=2)
-            #     # Get source IP addr and port of selected stream
-            #     destAddr = self.selectedStream.getRtpStreamStatsByKey("stream_srcAddress")
-            #     destPort =  self.selectedStream.getRtpStreamStatsByKey("stream_srcPort")
-            #
-            #     # add the pickled message to the txMessageQueue
-            #     self.selectedStream.resultsTxQueue.put([pickledMessage, destAddr, destPort])
-            # except Exception as e:
-            #     Utils.Message.addMessage("Send control message: " + str(e))
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txbps_inc"})
 
     # '3' pressed
     def __onDecreaseTxRate(self):
@@ -1931,6 +1923,11 @@ class UI(object):
         # Confirm that the selected stream is a generator object
         if type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage([self.selectedStream.syncSourceIdentifier, "txbps_dec"])
+        # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txbps_dec"})
 
 
     # This is called by __onIncreaseTxRate() and  __onDecreaseTxRate() and is the method that actually does the work
