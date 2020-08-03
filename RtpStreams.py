@@ -1018,7 +1018,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_transmitter_destAddress"] = "" # Will be populated by incoming isptest header data
         self.__stats["stream_transmitterVersion"] = 0
         self.__stats["stream_transmitter_txRate_bps"] = 0 # Will be populated by incoming isptest header data
-
+        self.__stats["stream_transmitter_TimeToLive_sec"] = 0  # Will be populated by incoming isptest header data
         Utils.Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
 
         # Var to store the traceroute checksum value extracted from the isptestheader data
@@ -1058,6 +1058,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__packet_last_seen_received_timestamp = datetime.timedelta()
         self.__packetCounterTransmittedTotal = 0# Will be populated by incoming isptest header data
         self.__streamTransmitterTxRateBps = 0  # Will be populated by incoming isptest header data
+        self.__txStreamTimeToLive = 0 # Will be populated by incoming isptest header data
         self.__rxTTL = 0 # The most recent TTL value from the IP Header (that conveyed the Rtp packet)
 
         # Counter to be used by __calculateJitter()
@@ -1281,6 +1282,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__packetCounterTransmittedTotal = struct.unpack_from("!L", bytes(isptestHeaderData[4:8]))[0]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 5 " + str(e))
+
+            elif isptestHeaderData[1] == 6:
+                # This is a message containing the stream time to live (as an signed long, 4 bytes)
+                try:
+                    # Convert the 4 bytes back to a signed int
+                    self.__txStreamTimeToLive = struct.unpack_from("!i", bytes(isptestHeaderData[4:8]))[0]
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
 
         except Exception as e:
             Utils.Message.addMessage("DBUG:__RtpReceiveStream.__pasrseIsptestHeader " + str(e))
@@ -1610,6 +1619,8 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.__stats["stream_srcAddress"] = self.__srcAddress
             # Snapshot latest src port
             self.__stats["stream_srcPort"] = self.__srcPort
+            # Snampshot latest stream time to live
+            self.__stats["stream_transmitter_TimeToLive_sec"] = self.__txStreamTimeToLive
 
             try:
                 ########### Calculate how many packets received in the latest 200mS period - required for 'mean' calculations
@@ -2040,6 +2051,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
+
+                Utils.Message.addMessage("TX stream ttl: " + str(self.__stats["stream_transmitter_TimeToLive_sec"]))
                 ######## 1 second counter end of code ########
 
             try:
@@ -3078,13 +3091,14 @@ class RtpGenerator(RtpCommon):
 
         self.tracerouteChecksum = 0# Calculated by XORing an entire hops list, once it's been successfully validated
         self.isptestHeaderMessageIndex = 0 # Keeps track of which type of message we are sending in the header
-        self.noOfMessageTypes = 6 # The current message types are:
+        self.noOfMessageTypes = 7 # The current message types are:
                                     # 0 Traceroute
                                     # 1 private LAN Address of the local interface used for transmitting
                                     # 2 The 'public' destination address
                                     # 3 The current version of isptest
                                     # 4 The specified TX rate
                                     # 5 The transmitted packet count
+                                    # 6 The stream time to live (in seconds)
 
         self.uiInstance = uiInstance   # This allows access to the methods of the UI class
         # self.minSleepTime = None
@@ -3332,6 +3346,15 @@ class RtpGenerator(RtpCommon):
         #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
+        # OR
+        # [byte1] Message type (6: Tx stream time to live (in seconds).
+        #         # [byte2]
+        #         # [byte3]
+        #         # [byte4][byte5][byte6][byte7] time to live as a signed int (4 bytes) (ttl can be -ve)
+        #         # [byte8] not used
+        #         # [friendlyName] 10 bytes
+
+
         header = b""  # Specify byte string
         # Initialise messageData to zero
         messageData = [0,0,0,0,0,0,0]
@@ -3528,6 +3551,32 @@ class RtpGenerator(RtpCommon):
                                    0 & 0xFF]  # not used
                     Utils.Message.addMessage(
                         "DBUG:RtpGenerator.generateIsptestHeader(): Message type 5: Transmit total packets " + str(e))
+
+            elif self.isptestHeaderMessageIndex == 6:
+                # Transmitter tx stream time to live (in seconds)
+                try:
+                    # Split ttl into a series of bytes
+                    timeToLive = struct.pack("!i", self.timeToLive & 0xFFFFFFFF)
+                    messageData = [6 & 0xFF,  # Message type 6: # Transmitter tx stream time to live (in seconds)
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   timeToLive[0] & 0xFF,  # MSB
+                                   timeToLive[1] & 0xFF,  #
+                                   timeToLive[2] & 0xFF,  #
+                                   timeToLive[3] & 0xFF,  # LSB
+                                   0 & 0xFF]  # not used
+
+                except Exception as e:
+                    messageData = [6 & 0xFF,  # Message type 6: # Transmitter tx stream time to live (in seconds)
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF]  # not used
+                    Utils.Message.addMessage(
+                        "DBUG:RtpGenerator.generateIsptestHeader(): Message type 6: Transmit tx stream time to live " + str(e))
 
             # Now That the message data list has been created, increment the message type index
             self.isptestHeaderMessageIndex += 1

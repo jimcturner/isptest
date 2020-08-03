@@ -1963,11 +1963,6 @@ class UI(object):
     def __onEnableBurstMode(self):
         # Confirm that the selected stream is a generator object
         if type(self.selectedStream) == RtpGenerator:
-            # Enable burst mode for the selected RTPGenerator
-            self.selectedStream.enableBurstMode()
-
-        # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                    "source": "Transmitter" + str(self.pid),
                                                    "type": "txburst"})
@@ -1976,40 +1971,6 @@ class UI(object):
             self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
                                                                  "source": "Receiver" + str(self.pid),
                                                                  "type": "txburst"})
-
-
-    # # This is called by __onIncreaseTimeToLive() and __onDecreaseTimeToLive() and is the actual worker method
-    # def __modifyTimeToLive(self, direction):
-    #     # If called with a +ve value it will increase the TTL, if called with a -1 it will reduce the TTL
-    #     # bounds limit the input
-    #     if direction < 0:
-    #         # For all negative values, set direction to -1
-    #         direction = -1
-    #     else:
-    #         # For all other values, set direction to '1'
-    #         direction = 1
-    #     # Confirm that the selected stream is a generator object
-    #     if type(self.selectedStream) == RtpGenerator:
-    #         # Get TTL of currently selected stream
-    #         currentTTL = int(self.selectedStream.getRtpStreamStatsByKey('Time to live'))
-    #         # Has the selected stream TTL already expired?
-    #         if currentTTL == 0:
-    #             # If so, recreate the stream with identical parameters
-    #             self.__recreateExpiredStream(self.selectedStream)
-    #         else:
-    #             # Calculate new TTL (either adding/removing time, or setting 'forever')
-    #             # Add/subtract 1hr (3600 secs)
-    #             newTTL = currentTTL + (3600 * direction)
-    #             # If the new calculated value is -ve, interpret as 'forever'
-    #             if newTTL < 0:
-    #                 # Set stream TTL to 'forever'
-    #                 self.selectedStream.setTimeToLive(-1)
-    #                 Utils.Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to 'forever'")
-    #             else:
-    #                 # Otherwise update the stream with the new calculated TTL
-    #                 self.selectedStream.setTimeToLive(newTTL)
-    #                 Utils.Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + Utils.dtstrft(
-    #                     datetime.timedelta(seconds=newTTL)))
 
 
     # '2'
@@ -2038,13 +1999,11 @@ class UI(object):
                                                                  "source": "Receiver" + str(self.pid),
                                                                  "type": "txpayload_dec"})
 
-
-
-    # 'p'
+    # Deprecated
     def __onIncrementSyncSourceID(self):
         self.__modifySyncSourceID(1)
 
-    # 'o'
+    # Deprecated
     def __onDecrementSyncSourceID(self):
         self.__modifySyncSourceID(-1)
 
