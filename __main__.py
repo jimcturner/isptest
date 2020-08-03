@@ -1907,10 +1907,13 @@ class UI(object):
 
     # '4' pressed
     def __onIncreaseTxRate(self):
-        # self.__modifyTxRate(1)
+        # Construct the control message:-
         # Confirm that the selected stream is a generator object
         if type(self.selectedStream) == RtpGenerator:
-            self.selectedStream.addControlMessage([self.selectedStream.syncSourceIdentifier, "txbps_inc"])
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Transmitter" + str(self.pid),
+                                                                 "type": "txbps_inc"})
+
         # Otherwise send a message to the remote end
         elif type(self.selectedStream) == RtpReceiveStream:
             self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
@@ -1919,53 +1922,46 @@ class UI(object):
 
     # '3' pressed
     def __onDecreaseTxRate(self):
-        # self.__modifyTxRate(-1)
         # Confirm that the selected stream is a generator object
         if type(self.selectedStream) == RtpGenerator:
-            self.selectedStream.addControlMessage([self.selectedStream.syncSourceIdentifier, "txbps_dec"])
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Transmitter" + str(self.pid),
+                                                                 "type": "txbps_dec"})
         # Otherwise send a message to the remote end
         elif type(self.selectedStream) == RtpReceiveStream:
             self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
                                                                  "source": "Receiver" + str(self.pid),
                                                                  "type": "txbps_dec"})
 
-
-    # This is called by __onIncreaseTxRate() and  __onDecreaseTxRate() and is the method that actually does the work
-    def __modifyTxRate(self, direction):
-        # If called with a +ve value it will increase the tx rate, if called with a -1 it will reduce the tx rate
-
-        # bounds limit the input
-        if direction < 0:
-            # For all negative values, set direction to -1
-            direction = -1
-        else:
-            # For all other values, set direction to '1'
-            direction = 1
-        # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
-            # Get tx rate from currently selected stream
-            currentTxRate = int(self.selectedStream.getRtpStreamStatsByKey('Tx Rate'))
-            # If less than 1Mbps increment/decrement by 256kbps
-            if currentTxRate < 1048576:
-                newTxRate = currentTxRate + (262144 * direction)
-
-                self.selectedStream.setTxRate(newTxRate)
-            # Otherwise increment/decrement by 500kbps
-            else:
-                newTxRate = currentTxRate + (524288 * direction)
-                self.selectedStream.setTxRate(newTxRate)
-
-            # get new confirmed rate from RtpGenerator object
-            confirmedTxRate = int(self.selectedStream.getRtpStreamStatsByKey('Tx Rate'))
-            Utils.Message.addMessage("Setting Tx rate for stream " + str(self.selectedStreamID) + " to " + \
-                                     str(Utils.bToMb(confirmedTxRate)) + "bps")
     # 'j'
     def __onIncreaseTimeToLive(self):
-        self.__modifyTimeToLive(1)
+        # self.__modifyTimeToLive(1)
+        # self.selectedStream.setTimeToLive(0, autoIncrement=1)
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                             "source": "Transmitter" + str(self.pid),
+                                                             "type": "txttl_inc"})
+            # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                             "source": "Receiver" + str(self.pid),
+                                                             "type": "txttl_inc"})
 
     # 'h'
     def __onDecreaseTimeToLive(self):
-        self.__modifyTimeToLive(-1)
+        # self.__modifyTimeToLive(-1)
+        # self.selectedStream.setTimeToLive(0, autoIncrement=-1)
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Transmitter" + str(self.pid),
+                                                                 "type": "txttl_dec"})
+            # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txttl_dec"})
 
     # 'b'
     def __onEnableBurstMode(self):

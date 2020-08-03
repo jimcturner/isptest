@@ -3641,10 +3641,31 @@ class RtpGenerator(RtpCommon):
         # Recalculates the tx period based on the new packet length
         self.txPeriod = self.calculateTxPeriod(self.txRate)
 
-    def setTimeToLive(self, newTimeToLive):
-        # Modifies the existing time to live value
-        # Setting this to a -ve value will mean the tx stream object last for ever
-        self.timeToLive = newTimeToLive
+    # Modifies the existing time to live value
+    # Setting this to a -ve value will mean the tx stream object last for ever
+    # If autoIncrement = 1, the method will auto add a certain amount of time to the lifetime
+    # If autoIncrement = -1, the method will auto decrement a certain amount of time from the lifepan
+    def setTimeToLive(self, newTimeToLive, autoIncrement=None):
+        if autoIncrement is None:
+            self.timeToLive = newTimeToLive
+        else:
+            # Calculate the amount to decrement by
+            # If current time to live less than 1hr, change time in 10 min increments
+            # Otherwise change ttl by 1hr
+            if self.timeToLive < 3600: # 1hr
+                delta = 600 # 10 minutes
+            elif (self.timeToLive < 4300) and (autoIncrement == -1): # 1hr 10mins and decrementing
+                delta = 600
+            else:
+                delta = 3600 # 1 hr
+
+            if autoIncrement == -1:
+                self.timeToLive -= delta
+            elif autoIncrement == 1:
+                self.timeToLive += delta
+            Utils.Message.addMessage("Setting new time to live " + str(datetime.timedelta(seconds=self.timeToLive)) + \
+                                     " for stream " + str(self.syncSourceIdentifier))
+
 
     def killStream(self):
         # Kills the stream by setting the time to live to zero. This will cause the main thread to exit
@@ -3746,6 +3767,12 @@ class RtpGenerator(RtpCommon):
                     self.setTxRate(0, autoIncrement=1)
                 elif messageType == "txbps_dec":
                     self.setTxRate(0, autoIncrement=-1)
+                elif messageType == "txttl_inc":
+                    self.setTimeToLive(0, autoIncrement=1)
+                elif messageType == "txttl_dec":
+                    self.setTimeToLive(0, autoIncrement=-1)
+
+
 
             else:
                 Utils.Message.addMessage("Misrouted RTPGenerator control message. Dest:" + \
