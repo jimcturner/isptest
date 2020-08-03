@@ -1531,6 +1531,35 @@ class RtpReceiveStream(RtpReceiveCommon):
             except Exception as e:
                 Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread.addResultsToTxQueue() " + str(e))
 
+        # This function attempts to calculate the mean period between events (such as glitch, or jitter)
+        # to provide a value of how often, on average, the event has occurred
+        # To give a glimpse into the future, it will also take into account the time elapsed since the
+        # last event happened. Once this elapsed time is greater than the calculated mean of the time
+        # between the events, it will also take this time period into account - in effect increasing the
+        # average time between events
+        def calculateMeanPeriodBetweenEvents(sumOfTimePeriodsBetweenEvents,
+                                             timeElapsedSinceMostRecentEvent,
+                                             totalNoOfEvents):
+            try:
+                # Calculate mean period between the events that have already happened
+                actualPeriodBetweenEvents = sumOfTimePeriodsBetweenEvents / totalNoOfEvents
+                # Now look to see if time elapsed since the last event is longer than the mean between events
+                if timeElapsedSinceMostRecentEvent > actualPeriodBetweenEvents:
+                    # This 'pretends' that a event has 'just happened' which will have the effect of increasing
+                    # the apparent time between events. Therefore as time moves on, with no more events
+                    # recorded, the 'mean period between events' will improve (i.e get larger)
+                    meanPeriodBetweenEvents = (sumOfTimePeriodsBetweenEvents + timeElapsedSinceMostRecentEvent) / \
+                                              (totalNoOfEvents + 1)
+                    return meanPeriodBetweenEvents
+                else:
+                    # The time elapsed since the last event is less than the calculated actual mean.
+                    # Therefore we ignore the effect of it, as it will only worsen the mean period
+                    return actualPeriodBetweenEvents
+            except Exception as e:
+                Utils.Message.addMessage("RtpReceiveStream.__samplingThread.calculateMeanPeriodBetweenEvents() " + \
+                                         str(e))
+                return None
+
         Utils.Message.addMessage("DBUG: __samplingThread started for stream " + str(self.__stats["stream_syncSource"]))
         # Initialise variables to be used within the loop
         loopCounter = 0
@@ -1724,28 +1753,28 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # last event happened. Once this elapsed time is greater than the calculated mean of the time
                 # between the events, it will also take this time period into account - in effect increasing the
                 # average time between events
-                def calculateMeanPeriodBetweenEvents(sumOfTimePeriodsBetweenEvents,
-                                                     timeElapsedSinceMostRecentEvent,
-                                                     totalNoOfEvents):
-                    try:
-                        # Calculate mean period between the events that have already happened
-                        actualPeriodBetweenEvents = sumOfTimePeriodsBetweenEvents / totalNoOfEvents
-                        # Now look to see if time elapsed since the last event is longer than the mean between events
-                        if timeElapsedSinceMostRecentEvent > actualPeriodBetweenEvents:
-                            # This 'pretends' that a event has 'just happened' which will have the effect of increasing
-                            # the apparent time between events. Therefore as time moves on, with no more events
-                            # recorded, the 'mean period between events' will improve (i.e get larger)
-                            meanPeriodBetweenEvents = (sumOfTimePeriodsBetweenEvents + timeElapsedSinceMostRecentEvent)/\
-                                                      (totalNoOfEvents + 1)
-                            return meanPeriodBetweenEvents
-                        else:
-                            # The time elapsed since the last event is less than the calculated actual mean.
-                            # Therefore we ignore the effect of it, as it will only worsen the mean period
-                            return actualPeriodBetweenEvents
-                    except Exception as e:
-                        Utils.Message.addMessage("RtpReceiveStream.__samplingThread.calculateMeanPeriodBetweenEvents() " +\
-                                                 str(e))
-                        return None
+                # def calculateMeanPeriodBetweenEvents(sumOfTimePeriodsBetweenEvents,
+                #                                      timeElapsedSinceMostRecentEvent,
+                #                                      totalNoOfEvents):
+                #     try:
+                #         # Calculate mean period between the events that have already happened
+                #         actualPeriodBetweenEvents = sumOfTimePeriodsBetweenEvents / totalNoOfEvents
+                #         # Now look to see if time elapsed since the last event is longer than the mean between events
+                #         if timeElapsedSinceMostRecentEvent > actualPeriodBetweenEvents:
+                #             # This 'pretends' that a event has 'just happened' which will have the effect of increasing
+                #             # the apparent time between events. Therefore as time moves on, with no more events
+                #             # recorded, the 'mean period between events' will improve (i.e get larger)
+                #             meanPeriodBetweenEvents = (sumOfTimePeriodsBetweenEvents + timeElapsedSinceMostRecentEvent)/\
+                #                                       (totalNoOfEvents + 1)
+                #             return meanPeriodBetweenEvents
+                #         else:
+                #             # The time elapsed since the last event is less than the calculated actual mean.
+                #             # Therefore we ignore the effect of it, as it will only worsen the mean period
+                #             return actualPeriodBetweenEvents
+                #     except Exception as e:
+                #         Utils.Message.addMessage("RtpReceiveStream.__samplingThread.calculateMeanPeriodBetweenEvents() " +\
+                #                                  str(e))
+                #         return None
 
                 try:
                     ########### Update Mean Jitter averages
@@ -2052,7 +2081,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
 
-                Utils.Message.addMessage("TX stream ttl: " + str(self.__stats["stream_transmitter_TimeToLive_sec"]))
+                # Utils.Message.addMessage("TX stream ttl: " + str(self.__stats["stream_transmitter_TimeToLive_sec"]))
                 ######## 1 second counter end of code ########
 
             try:

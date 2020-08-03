@@ -759,6 +759,14 @@ class UI(object):
                        ["Rx Local addr", "stream_rxAddress"]
                        ],self.streamResultsDataSet])
 
+        # Additionally, for RECEIVE mode, add a further table that will show the transmitter parameters
+        if self.operationMode == 'RECEIVE':
+            self.views.append([Term.FG(Term.RED) + "Transmitter",
+                          [["#", 0],  # Used as an index[]
+                           ["Name", "stream_friendly_name"],
+                           ["Target\nTx Bps", 'stream_transmitter_txRate_bps'],
+                           [" Time\nremain", 'stream_transmitter_TimeToLive_sec']
+                           ], self.streamResultsDataSet])
         # self.views.append(["Misc",
         #               [["#", 0],  # Used as an index[]
         #                ["", ""],
