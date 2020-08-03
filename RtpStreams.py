@@ -3630,12 +3630,20 @@ class RtpGenerator(RtpCommon):
     # If autoIncrement is set to -1 or 1, payload will be incremented or decremented by 10 bytes
     # and the payloadLength_bytes argument will be ignored
     def setPayloadLength(self, payloadLength_bytes, autoIncrement=None):
+        # Function used to ensure a nice snap-to value when auto incrementing/decrementing
+        def snapTo(x, base=10):
+            return base * round(x / base)
+
         if autoIncrement == 1:
             # override supplied value and just increment existing value
             payloadLength_bytes = self.payloadLength + 10
         elif autoIncrement == -1:
             # override supplied value and just increment existing value
             payloadLength_bytes = self.payloadLength - 10
+
+        # Snap the value to the nearest '10'
+        payloadLength_bytes = snapTo(payloadLength_bytes)
+
 
         # Bounds check new supplied/calculated value
         if payloadLength_bytes > 1488:
