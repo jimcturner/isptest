@@ -1933,10 +1933,8 @@ class UI(object):
                                                                  "source": "Receiver" + str(self.pid),
                                                                  "type": "txbps_dec"})
 
-    # 'j'
+    # '6'
     def __onIncreaseTimeToLive(self):
-        # self.__modifyTimeToLive(1)
-        # self.selectedStream.setTimeToLive(0, autoIncrement=1)
         # Confirm that the selected stream is a generator object
         if type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
@@ -1948,10 +1946,8 @@ class UI(object):
                                                              "source": "Receiver" + str(self.pid),
                                                              "type": "txttl_inc"})
 
-    # 'h'
+    # '5'
     def __onDecreaseTimeToLive(self):
-        # self.__modifyTimeToLive(-1)
-        # self.selectedStream.setTimeToLive(0, autoIncrement=-1)
         # Confirm that the selected stream is a generator object
         if type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
@@ -1971,67 +1967,67 @@ class UI(object):
             self.selectedStream.enableBurstMode()
 
 
-    # This is called by __onIncreaseTimeToLive() and __onDecreaseTimeToLive() and is the actual worker method
-    def __modifyTimeToLive(self, direction):
-        # If called with a +ve value it will increase the TTL, if called with a -1 it will reduce the TTL
-        # bounds limit the input
-        if direction < 0:
-            # For all negative values, set direction to -1
-            direction = -1
-        else:
-            # For all other values, set direction to '1'
-            direction = 1
-        # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
-            # Get TTL of currently selected stream
-            currentTTL = int(self.selectedStream.getRtpStreamStatsByKey('Time to live'))
-            # Has the selected stream TTL already expired?
-            if currentTTL == 0:
-                # If so, recreate the stream with identical parameters
-                self.__recreateExpiredStream(self.selectedStream)
-            else:
-                # Calculate new TTL (either adding/removing time, or setting 'forever')
-                # Add/subtract 1hr (3600 secs)
-                newTTL = currentTTL + (3600 * direction)
-                # If the new calculated value is -ve, interpret as 'forever'
-                if newTTL < 0:
-                    # Set stream TTL to 'forever'
-                    self.selectedStream.setTimeToLive(-1)
-                    Utils.Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to 'forever'")
-                else:
-                    # Otherwise update the stream with the new calculated TTL
-                    self.selectedStream.setTimeToLive(newTTL)
-                    Utils.Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + Utils.dtstrft(
-                        datetime.timedelta(seconds=newTTL)))
+    # # This is called by __onIncreaseTimeToLive() and __onDecreaseTimeToLive() and is the actual worker method
+    # def __modifyTimeToLive(self, direction):
+    #     # If called with a +ve value it will increase the TTL, if called with a -1 it will reduce the TTL
+    #     # bounds limit the input
+    #     if direction < 0:
+    #         # For all negative values, set direction to -1
+    #         direction = -1
+    #     else:
+    #         # For all other values, set direction to '1'
+    #         direction = 1
+    #     # Confirm that the selected stream is a generator object
+    #     if type(self.selectedStream) == RtpGenerator:
+    #         # Get TTL of currently selected stream
+    #         currentTTL = int(self.selectedStream.getRtpStreamStatsByKey('Time to live'))
+    #         # Has the selected stream TTL already expired?
+    #         if currentTTL == 0:
+    #             # If so, recreate the stream with identical parameters
+    #             self.__recreateExpiredStream(self.selectedStream)
+    #         else:
+    #             # Calculate new TTL (either adding/removing time, or setting 'forever')
+    #             # Add/subtract 1hr (3600 secs)
+    #             newTTL = currentTTL + (3600 * direction)
+    #             # If the new calculated value is -ve, interpret as 'forever'
+    #             if newTTL < 0:
+    #                 # Set stream TTL to 'forever'
+    #                 self.selectedStream.setTimeToLive(-1)
+    #                 Utils.Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to 'forever'")
+    #             else:
+    #                 # Otherwise update the stream with the new calculated TTL
+    #                 self.selectedStream.setTimeToLive(newTTL)
+    #                 Utils.Message.addMessage("Setting stream " + str(self.selectedStreamID) + " time to live to dur " + Utils.dtstrft(
+    #                     datetime.timedelta(seconds=newTTL)))
 
 
-    # 'l'
+    # '2'
     def __onIncreasePayloadSize(self):
-        self.__modifyPayloadSize(1)
-
-    # 'k'
-    def __onDecreasePayloadSize(self):
-        self.__modifyPayloadSize(-1)
-
-    # Called from __onIncreasePayloadSize() and __onDecreasePayloadSize(). Direction flag determines increment/decrement
-    def __modifyPayloadSize(self, direction):
-        # bounds limit the input
-        if direction < 0:
-            # For all negative values, set direction to -1
-            direction = -1
-        else:
-            # For all other values, set direction to '1'
-            direction = 1
         # Confirm that the selected stream is a generator object
         if type(self.selectedStream) == RtpGenerator:
-            # Get current payload size
-            currentTxPayloadSize = int(self.selectedStream.getRtpStreamStatsByKey('Packet size'))
-            # Increment/decrement current size by 10 bytes
-            self.selectedStream.setPayloadLength(currentTxPayloadSize + (10 * direction))
-            # Verify new payload size
-            currentTxPayloadSize = int(self.selectedStream.getRtpStreamStatsByKey('Packet size'))
-            Utils.Message.addMessage(
-                " Stream " + str(self.selectedStreamID) + " packet size changed to " + str(currentTxPayloadSize) + " bytes")
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                   "source": "Transmitter" + str(self.pid),
+                                                   "type": "txpayload_inc"})
+            # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txpayload_inc"})
+
+    # '1'
+    def __onDecreasePayloadSize(self):
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                   "source": "Transmitter" + str(self.pid),
+                                                   "type": "txpayload_dec"})
+            # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txpayload_dec"})
+
+
 
     # 'p'
     def __onIncrementSyncSourceID(self):

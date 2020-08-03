@@ -3626,13 +3626,23 @@ class RtpGenerator(RtpCommon):
         # Calculate then set the new txPeriod for a given newTxRate_bps
         self.txPeriod = self.calculateTxPeriod(newTxRate_bps)
 
+    # Modifies the payload length of this RTP TX stream
+    # If autoIncrement is set to -1 or 1, payload will be incremented or decremented by 10 bytes
+    # and the payloadLength_bytes argument will be ignored
+    def setPayloadLength(self, payloadLength_bytes, autoIncrement=None):
+        if autoIncrement == 1:
+            # override supplied value and just increment existing value
+            payloadLength_bytes = self.payloadLength + 10
+        elif autoIncrement == -1:
+            # override supplied value and just increment existing value
+            payloadLength_bytes = self.payloadLength - 10
 
-    def setPayloadLength(self, payloadLength_bytes):
-        # Modifies the payload length of this RTP TX stream
+        # Bounds check new supplied/calculated value
         if payloadLength_bytes > 1488:
             payloadLength_bytes = 1488
         if payloadLength_bytes < 20:
             payloadLength_bytes =20
+
         # Set instance variable
         self.payloadLength = payloadLength_bytes
         # Trigger regeneration of entire udp data frame (rtp header + isptest header + dummy payload)
@@ -3771,8 +3781,10 @@ class RtpGenerator(RtpCommon):
                     self.setTimeToLive(0, autoIncrement=1)
                 elif messageType == "txttl_dec":
                     self.setTimeToLive(0, autoIncrement=-1)
-
-
+                elif messageType == "txpayload_inc":
+                    self.setPayloadLength(0, autoIncrement=1)
+                elif messageType == "txpayload_dec":
+                    self.setPayloadLength(0, autoIncrement=-1)
 
             else:
                 Utils.Message.addMessage("Misrouted RTPGenerator control message. Dest:" + \
