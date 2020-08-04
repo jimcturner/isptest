@@ -1175,10 +1175,13 @@ class UI(object):
         Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 1), Term.WHITE)
         # Print list of key commands
         Term.printAt(self.keyCommandsString, 1, (self.currentTermHeight - 1), Term.BLACK, Term.WHITE)
-        # For tx mode, add an extra row of commands
+        Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 2), Term.WHITE)
+        Term.printAt(self.txStreamModifierCommandsString, 1, (self.currentTermHeight - 2), Term.BLACK, Term.WHITE)
+
+        # For tx mode special features, add an extra row of commands
         if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
-            Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 2), Term.WHITE)
-            Term.printAt(self.txStreamModifierCommandsString, 1, (self.currentTermHeight - 2), Term.BLACK, Term.WHITE)
+            # Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 2), Term.WHITE)
+            # Term.printAt(self.txStreamModifierCommandsString, 1, (self.currentTermHeight - 2), Term.BLACK, Term.WHITE)
 
             # For special features mode, add yet another row of commands
             if self.specialFeaturesModeFlag == True:
