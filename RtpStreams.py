@@ -3585,7 +3585,7 @@ class RtpGenerator(RtpCommon):
                 # Transmitter tx stream time to live (in seconds)
                 try:
                     # Split ttl into a series of bytes
-                    timeToLive = struct.pack("!i", self.timeToLive & 0xFFFFFFFF)
+                    timeToLive = struct.pack("!i", self.timeToLive)
                     messageData = [6 & 0xFF,  # Message type 6: # Transmitter tx stream time to live (in seconds)
                                    0 & 0xFF,  #
                                    0 & 0xFF,  #
@@ -3754,10 +3754,17 @@ class RtpGenerator(RtpCommon):
             else:
                 delta = 3600 # 1 hr
 
+            # calculate new ttl
+            newTTL = 0
             if autoIncrement == -1:
-                self.timeToLive -= delta
+                newTTL = self.timeToLive - delta
             elif autoIncrement == 1:
-                self.timeToLive += delta
+                newTTL = self.timeToLive + delta
+            # Bounds check new TTL value. -1 is the lowest allowed value (-1 means 'forever')
+            if newTTL < -1:
+                newTTL = -1
+            # Set the instance variable
+            self.timeToLive = newTTL
             Utils.Message.addMessage("Setting new time to live " + str(datetime.timedelta(seconds=self.timeToLive)) + \
                                      " for stream " + str(self.syncSourceIdentifier))
 
