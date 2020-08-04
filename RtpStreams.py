@@ -3387,7 +3387,6 @@ class RtpGenerator(RtpCommon):
         header = b""  # Specify byte string
         # Initialise messageData to zero
         messageData = [0,0,0,0,0,0,0]
-
         try:
             # Note: a short is 16 bits - max value 65535
             uniqueValue = RtpGenerator.UNIQUE_ID_FOR_ISPTEST_STREAMS & 0xFFFF

@@ -657,7 +657,7 @@ class UI(object):
         if self.operationMode == 'LOOPBACK' or self.operationMode == 'TRANSMIT':
             self.views.append([Term.FG(Term.RED) + "Tx Streams",
                           [["#", 0],  # Used as an index[]
-                           ["Name", 'Friendly Name'],
+                           ["Name", 'Friendly Name'], # [column title, dictionary key containing that value]
                            ["Src\nPort", 'Tx Source Port'],
                            ["Dest\n IP", 'Dest IP'],
                            ["Dest\nPort", 'Dest Port'],
@@ -666,7 +666,7 @@ class UI(object):
                            ["Size", 'Packet size'],
                            ["Bytes\n tx'd", 'Bytes transmitted'],
                            [" Time\nremain", 'Time to live']
-                           ], self.availableRtpTxStreamList])
+                           ], self.availableRtpTxStreamList]) # data source
 
         # If actually the receiving end, use availableRtpRxStreamList[] as a source for the stream tables
         if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
@@ -1032,11 +1032,24 @@ class UI(object):
                                 tableCell = str(self.__humanise(key, streamDataStats[key]))
 
                                 try:
-                                    # Now attempt to colour code the table based on some tests
                                     # is it a receive stream?
+                                    # If so, test the stream stats
                                     if type(streamData[1]) == RtpReceiveStream or type(
                                             streamData[1]) == RtpStreamResults:
-                                        # If so, test the stream stats
+                                        # Is the source of this stream an instance of an isptest transmitter?
+                                        # If not (eg. from an NTT) mask the 'Transmitter' pane values as these would
+                                        # be carried in the isptestheader, and will therefore be missing
+                                        if streamDataStats["stream_transmitterVersion"] > 0:
+                                            # If these are isptest-generated packets, leave alone
+                                            pass
+                                        else:
+                                            # Otherwise overwrite the tablecell value for certain keys where the
+                                            # data is not available
+                                            if key == 'stream_transmitter_txRate_bps' or \
+                                                key == 'stream_transmitter_TimeToLive_sec':
+                                                tableCell = "-"
+
+                                        # Colour code the table based on some received bitrate
                                         if streamDataStats["packet_data_received_1S_bytes"] == 0:
                                             # If so, make the row red
                                             tableCell = Term.FG(Term.RED) + tableCell
@@ -1055,6 +1068,7 @@ class UI(object):
                                         if streamDataStats["Time to live"] == 0:
                                             # If tx stream has 'died', dim
                                             tableCell = Term.DIM + tableCell
+
                                 except Exception as e:
                                     Utils.Message.addMessage(
                                         "ERR: __displayThread: (colour coding of stream tables) " + str(e) + "**")
