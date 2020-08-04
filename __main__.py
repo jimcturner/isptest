@@ -1612,7 +1612,13 @@ class UI(object):
     # 's' pressed
     def __onEnterFriendlyName(self):
         # Confirm that this operation is allowed on  the current stream type
-        if type(self.selectedStream) == RtpGenerator or type(self.selectedStream) == RtpReceiveStream:
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
+        elif type(self.selectedStream) == RtpGenerator or type(self.selectedStream) == RtpReceiveStream:
+            # We're either in TRANSIT mode vieing the TX Stream pane, or in RECEIVE mode
             styleDefinition = Style.from_dict({
                 'dialog': 'bg:ansiblue',        # Screen background
                 'dialog frame.label': 'bg:ansiwhite ansired ',
@@ -1625,9 +1631,31 @@ class UI(object):
                 text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':',
                 style=styleDefinition).run()
             if text is not None:
-                self.selectedStream.setFriendlyName(text)
-        else:
-            Utils.Message.addMessage("Can't modify stream results. Change the name in the Transmit pane instead")
+                # Now pass the new name to the correct method (based on the currently selected stream type)
+                if type(self.selectedStream) == RtpReceiveStream:
+                    # We must be in RECEIVER mode,
+                    # If this stream originates from an instance of isptest, transmit the name change request back to
+                    # transmitter and this will be picked up by the Receiver via the isptestheader
+                    # Or else, if the stream is originating from another source (eg an NTT), directly modify the
+                    # friendly name field in the RtpReceiveStream object
+                    if self.selectedStream.getRtpStreamStatsByKey("stream_transmitterVersion") > 0:
+                        # This stream originated from an isptest transmitter so need to remotely set it via a control msg
+                        self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txname",
+                                                                "name": text})
+                    else:
+                        # This stream is from an unknown source, set it directly using the object setter method
+                        self.selectedStream.setFriendlyName(text)
+
+                elif type(self.selectedStream) == RtpGenerator:
+                    # We must be in TRANSMIT mode, currently viewing the transmit pane
+                    # Send a local control message
+                    self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Transmitter" + str(self.pid),
+                                                                 "type": "txname",
+                                                                "name": text})
+
 
     # This method is called if a previously expired stream (that is still listed in
     # self.rtpTxStreamsDict{} is requested to be restarted

@@ -3879,6 +3879,9 @@ class RtpGenerator(RtpCommon):
                     self.setPayloadLength(0, autoIncrement=-1)
                 elif messageType == "txburst":
                     self.enableBurstMode()
+                # Set friendly name
+                elif messageType == "txname" and "name" in controlMessage:
+                    self.setFriendlyName(controlMessage["name"])
 
             else:
                 Utils.Message.addMessage("Misrouted RTPGenerator control message. Dest:" + \
