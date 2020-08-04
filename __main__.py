@@ -2602,7 +2602,7 @@ class UI(object):
                 value = str(math.ceil(value)) + "uS"
             return value
 
-        if key == 'Time to live': # or key == 'stream_transmitter_TimeToLive_sec':
+        if key == 'Time to live' or key == 'stream_transmitter_TimeToLive_sec':
             # If this is am endless stream (created with a negative time to live)
             if value < 0:
                 value = "forever"
