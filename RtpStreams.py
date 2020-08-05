@@ -5278,15 +5278,15 @@ class RtpGenerator(RtpCommon):
                     # message and listen again (within the timeout period)
                     ipHeaderOfOriginalSender = IPHeader(data[28:48])
                     # Display the  header fields of the received packet
-                    Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                                             " RtpGenerator.__tracerouteThread() ICMP packet fields " + \
-                                             "src:" + str(addr[0]) + \
-                                             ", type:" + str(icmpHeader.type) + \
-                                             ", code:" + str(icmpHeader.code) + \
-                                             ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
-                                             ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
-                                             ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
-                                             ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum))
+                    # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                    #                          " RtpGenerator.__tracerouteThread() ICMP packet fields " + \
+                    #                          "src:" + str(addr[0]) + \
+                    #                          ", type:" + str(icmpHeader.type) + \
+                    #                          ", code:" + str(icmpHeader.code) + \
+                    #                          ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
+                    #                          ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
+                    #                          ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
+                    #                          ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum))
 
                     # Test to see if this icmp packet is addressed to 'us', and what type of ICMP message it is
                     # Detect TTL Expired messages (icmp type 11, code 0)

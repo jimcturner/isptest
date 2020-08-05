@@ -556,7 +556,7 @@ class UI(object):
                     rtpTxStreamsDict, rtpTxStreamsDictMutex,
                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
                     rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
-                    UDP_RX_IP, UDP_RX_PORT):
+                    receiversAndSendersList):
 
         self.operationMode = operationMode
         self.specialFeaturesModeFlag = specialFeaturesModeFlag
@@ -566,10 +566,27 @@ class UI(object):
         self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
         self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
-        self.UDP_RX_IP = UDP_RX_IP
-        self.UDP_RX_PORT = UDP_RX_PORT
+
+        self.receiversAndSendersList = receiversAndSendersList # This will contain the UDP_RX_IP and  UDP_RX_PORT(s)
         self.pid = os.getpid() # Stores the processID (pid of this process. Used as a source id in
         # control messages sent back to the transmitter (so that the source of the message can be identified)
+
+
+        self.UDP_RX_IP = ""
+        self.UDP_RX_PORTS = 0
+        # try:
+        #     if len(self.receiversAndSendersList) > 0:
+        #         # Take the Rx IP address from the first RtpPacketReceiver in the list (we assume that we will only be
+        #         # listening on a single IP address, but might be listening to multiple ports on that interface)
+        #         self.UDP_RX_IP = self.receiversAndSendersList[0][0].UDP_RX_IP
+        #         # Take the Rx UDP port from the first RtpPacketReceiver
+        #         self.UDP_RX_PORT = self.receiversAndSendersList[0][0].UDP_RX_PORT
+        # except Exception as e:
+        #     Utils.Message.addMessage("ERR:UI.__init() Couldn't extract UDP_RX_IP and UDP_RX_PORT(s) from receiversAndSendersList " +\
+        #                              str(e))
+
+
+
 
         # If true, this will cause renderDisplayThread to put up a quit y/n? prompt
         self.displayQuitDialogueFlag = False
@@ -1176,8 +1193,32 @@ class UI(object):
         if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
             Term.printAt(self.operationMode + " MODE", 1, 1, Term.BLACK, Term.WHITE)
         elif self.operationMode == 'RECEIVE':
-            Term.printAt(self.operationMode + " " + str(self.UDP_RX_IP) + ":" + \
-                         str(self.UDP_RX_PORT), 1, 1, Term.BLACK, Term.WHITE)
+            try:
+                # Extract the receive IP and receive port(s) (if in RECEIVE mode - these are displayed on the top toolbar)
+                if len(self.receiversAndSendersList) > 0:
+                    # Take the Rx IP address from the first RtpPacketReceiver in the list (we assume that we will only be
+                    # listening on a single IP address, but might be listening to multiple ports on that interface)
+                    UDP_RX_IP = self.receiversAndSendersList[0][0].UDP_RX_IP
+                    # Get a list of Rx UDP ports from the RtpPacketReceiver objects and create a string
+                    UDP_RX_PORTS = ""
+                    for n in range(0,len(self.receiversAndSendersList)):
+                        # Extract the port no for the current RtpPacketReceiver object
+                        UDP_RX_PORTS += str(self.receiversAndSendersList[n][0].UDP_RX_PORT)
+                        # For all but the last port, append a "," to divide the port no.s
+                        if n == (len(self.receiversAndSendersList) - 1):
+                            # We're at the last item in the list, don't append a ','
+                            pass
+                        else:
+                            # If we're still in the middle of the list, append a ','
+                            UDP_RX_PORTS += ","
+
+
+            except Exception as e:
+                Utils.Message.addMessage(
+                    "ERR:UI.__init() Couldn't extract UDP_RX_IP and UDP_RX_PORT(s) from receiversAndSendersList " + \
+                    str(e))
+            Term.printAt(self.operationMode + " " + str(UDP_RX_IP) + ":" + \
+                         str(UDP_RX_PORTS), 1, 1, Term.BLACK, Term.WHITE)
 
     def __updateClock(self):
         # Update clock and CPU mon on top RHS of screen
@@ -2674,7 +2715,7 @@ class UI(object):
         Term.clearTerminalScrollbackBuffer()
 
         if self.operationMode == 'RECEIVE':
-            Utils.Message.addMessage("Waiting for incoming RTP streams on " + str(self.UDP_RX_IP) + ":" + str(self.UDP_RX_PORT))
+            Utils.Message.addMessage("Waiting for incoming RTP streams....")
         elif self.operationMode == 'TRANSMIT':
             Utils.Message.addMessage("Waiting for receiving end to make contact..... ")
 
@@ -4814,7 +4855,12 @@ def main(argv):
     # Create an associated mutex
     rtpTxStreamResultsDictMutex = threading.Lock()
 
-
+    # Create a list to hold the instances of RtpPacketReceiver and associated UDPMessageSender objects
+    # (which are the objects resposible for actually receiving and sending the rtp/udp data)
+    # This will be a list of tuples [[RtpPacketReceiver, UDPMessageSender]
+    # It will be passed to the UI object to allow the UI to access the data counters/port no.s etc within the
+    # RtpPacketReceiver/UDPMessageSender objects themselves
+    receiversAndSendersList = []
 
     # Register signal handler for SIGINT, SIGTERM and SIGKILL
     signal.signal(signal.SIGINT, requestShutdownSignalHandler) # Ctrl-C
@@ -4838,7 +4884,7 @@ def main(argv):
         rtpTxStreamsDict, rtpTxStreamsDictMutex,\
         rtpRxStreamsDict, rtpRxStreamsDictMutex,\
         rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,\
-        UDP_RX_IP, UDP_RX_PORT)
+        receiversAndSendersList)
 
     # Create new instance of WhoisResolver (which will create a background __whoisLookupThread)
     whoIsResolver = Utils.WhoisResolver()
@@ -4939,7 +4985,10 @@ def main(argv):
             # Once the socket has been created, pass it to the udpSend thread
             if rtpPacketReceiver.getSocket() is not None:
                 # Create a UDPMessageSender using to correspond to the RtpPacketReceiver sharing the same socket
-                uDPMessageSender = UDPMessageSender(txMessageQueue, rtpPacketReceiver.getSocket(), shutdownFlag)
+                udpMessageSender = UDPMessageSender(txMessageQueue, rtpPacketReceiver.getSocket(), shutdownFlag)
+
+            # Add the RtpPacketReceiver/UDPMessageSender pair to the receiversAndSenders[] list
+            receiversAndSendersList.append([rtpPacketReceiver, udpMessageSender])
 
 
     # Endless loop
