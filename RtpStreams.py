@@ -5127,12 +5127,13 @@ class RtpGenerator(RtpCommon):
                 # unpack header
                 try:
                     iph = struct.unpack('!BBHHHBBH4s4s', ip_header)
-                    # First byte pf header contains version (bits 4-7) and i[ header length (bits 0-3)
+                    # First byte of header contains version (bits 4-7) and ip header length (bits 0-3)
                     version_ihl = iph[0]
                     self.version = version_ihl >> 4
                     self.ipHeaderLength = version_ihl & 0xF
                     self.ttl = iph[5]
                     self.protocol = iph[6]
+                    self.checksum = iph[7]
                     self.s_addr = socket.inet_ntoa(iph[8])
                     self.d_addr = socket.inet_ntoa(iph[9])
                     # print('Version : ' + str(
@@ -5276,6 +5277,16 @@ class RtpGenerator(RtpCommon):
                     # Therefore we can infer that this particular ICMP message is our reply, otherwise we discard the
                     # message and listen again (within the timeout period)
                     ipHeaderOfOriginalSender = IPHeader(data[28:48])
+                    # Display the  header fields of the received packet
+                    Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                             " RtpGenerator.__tracerouteThread() ICMP packet fields " + \
+                                             "src:" + str(addr[0]) + \
+                                             ", type:" + str(icmpHeader.type) + \
+                                             ", code:" + str(icmpHeader.code) + \
+                                             ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
+                                             ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
+                                             ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
+                                             ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum))
 
                     # Test to see if this icmp packet is addressed to 'us', and what type of ICMP message it is
                     # Detect TTL Expired messages (icmp type 11, code 0)
@@ -5290,8 +5301,12 @@ class RtpGenerator(RtpCommon):
                         break
 
                     # Detect Destination Host Port unreachable, destination reached
+                    # NOTE: In this test we ignore the srcTTL value. We don't care because
+                    # we've reached the final destination
+                    # CHANGED 5/8/20: Previously this was set to srcTTL=1. But this gives annoying 'noise'
+                    # results when testing to a loopback interface with no receiver attached to 'sink' the packets
                     elif icmpReplyMatcher(icmpHeader, ipHeaderOfOriginalSender, icmpType=3, icmpCode=3, \
-                                        srcAddress=_srcAddr, srcTtl=1,
+                                        srcAddress=_srcAddr, srcTtl=None,
                                         destAddress=_destAddr):
                         # This is a Destination Port Unreachable address, destination reached
                         icmpSourceAddr = untestedIcmpSourceAddr
@@ -5330,7 +5345,8 @@ class RtpGenerator(RtpCommon):
                                                      ", code:" + str(icmpHeader.code)+\
                                                      ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
                                                      ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
-                                                     ", IPttl:" + str(ipHeaderOfOriginalSender.ttl))
+                                                     ", IPttl:" + str(ipHeaderOfOriginalSender.ttl)+\
+                                                     ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum))
                         except Exception as e:
                             # couldn't decode packet
                             Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
