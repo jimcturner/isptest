@@ -5,14 +5,6 @@
 # 
 from __future__ import unicode_literals # Required for prompt_toolkit
 
-import select
-import sys
-
-# from icmplib import ICMPv4Socket, TimeoutExceeded, ICMPRequest
-# from Custom_icmplib import customICMPv4Socket
-from functools import reduce
-from queue import SimpleQueue, Empty
-
 from Registry import Registry # This class contains constants/defaults used throughout the program
 
 # Tests the current Python interpreter version
@@ -56,6 +48,14 @@ else:
     # Python version not satisfied so exit
     exit()
 
+
+import select
+import sys
+
+# from icmplib import ICMPv4Socket, TimeoutExceeded, ICMPRequest
+# from Custom_icmplib import customICMPv4Socket
+from functools import reduce
+from queue import SimpleQueue, Empty
 
 import socket
 import os
@@ -3111,6 +3111,78 @@ def __sendUDPThread(txMessageQueue, udpSocket, shutdownFlag):
         # time.sleep(0.2)
     Utils.Message.addMessage("DBUG:__sendUDPThread Ending")
 
+# Autonomous object to send UDP messages. It spawns a thread that will permanently monitor the txMessageQueue
+# All other threads that need to send using the udpSocket can do so by putting items on the queue
+# The thread relies upon a UDP socket having been previously created
+# The messages themselves are
+class UDPMessageSender(object):
+
+    def __init__(self, txMessageQueue, udpSocket, shutdownFlag):
+        # Define some stats counters
+        self.sendUDPThreadTxPacketCounter = 0
+        self.sendUDPThreadMessageQueueSize = 0
+        # Set max safe UDP tx size to 576 (based on this:-
+        # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
+        self.MAX_UDP_TX_LENGTH = 576
+        self.txMessageQueue = txMessageQueue # of type Queue.SimpleQueue
+        self.udpSocket = udpSocket
+        self.shutdownFlag = shutdownFlag
+
+
+        # Check that udp socket is a valid socket by retrieving the receive port no it is bound to
+        # This will be used as the 'source port' for all udp packets sent by __udpTransmitterThread
+        try:
+            # Retrieve port no)
+            self.UDP_RX_PORT = self.udpSocket.getsockname()[1]
+            # If successful, socket is valid, so create the message transmitter thread
+            udpTransmitterThread = threading.Thread(target=self.__udpTransmitterThread, args=())
+            udpTransmitterThread.setName("__udpTransmitterThread("+ str(self.UDP_RX_PORT) + ")")
+            udpTransmitterThread.start()
+        except Exception as e:
+            Utils.Message.addMessage("DBUG:__udpTransmitterThread(" + str(self.UDP_RX_PORT) + \
+                                     ") Aborted. Invalid or no socket " + str(e))
+
+
+    # autonomous thread to monitor self.txMessageQueue for new messages
+    def __udpTransmitterThread(self):
+        Utils.Message.addMessage("DBUG:__udpTransmitterThread("+ str(self.UDP_RX_PORT) + ") starting")
+        while True:
+            # Check status of shutdownFlag
+            if self.shutdownFlag.is_set():
+                # If down, break out of the endless while loop
+                break
+            # Poll the message queue to see if it contains any data to be sent
+            # The txMessageQueue is a tuple of the form [byteString, destIPAddr, destport]
+            try:
+                self.sendUDPThreadMessageQueueSize = self.txMessageQueue.qsize()
+                txData = self.txMessageQueue.get(timeout=0.2)
+                txData_msg = txData[0]
+                txData_ipAddr = txData[1]
+                txData_udpPort = txData[2]
+
+                # Now break the message up into a list of fragments so that it can be fitted into a udp frame
+                fragmentedMessage = Utils.fragmentString(txData_msg, self.MAX_UDP_TX_LENGTH)
+
+                # iterate over fragments and send
+                if fragmentedMessage is not None and len(fragmentedMessage) > 0:
+                    # iterate over fragments and send
+                    for fragment in fragmentedMessage:
+                        # Each fragment is actually a tuple, so itself needs pickling before it can be sent
+                        # Pickle and send each fragment one at a time
+                        pickledFragment = pickle.dumps(fragment, protocol=2)
+                        self.udpSocket.sendto(pickledFragment, (txData_ipAddr, txData_udpPort))
+                        # Increment the counter
+                        self.sendUDPThreadTxPacketCounter += 1
+            # if Queue timed out without any data in it
+            except Empty:
+                pass
+            except Exception as e:
+                Utils.Message.addMessage("ERR:__udpTransmitterThread(" + str(self.UDP_RX_PORT) + \
+                                         ").txMessageQueue.get() " + str(e))
+
+        Utils.Message.addMessage("DBUG:__udpTransmitterThread(" + str(self.UDP_RX_PORT) + ") ending")
+
+
 
 # Autonomous thread to decode rtp streams and pass the data into the relevant RtpRXStream
 # The uiInstance allows this thread to access methods/variables within the UI class for the app
@@ -3705,6 +3777,7 @@ def __receiveRtpThread(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
     Utils.Message.addMessage("DBUG:__receiveRTPThread exiting")
 
 # A class that will spawn an rtp listener thread on a specified UDP port.
+# Based on the OS, and sudo/admin rights it will decide whether to listen on a raw or udp socket
 # As it detects an incoming rtp stream, it will spawn a new RtpReceiveStream object to capture and process the incoming stream
 # It will also create a txMessageQueue which is used by a corresponding object (UdpMessageTransmitter) to send packets
 # back to the transmitter using a shared UDP socket
@@ -4857,6 +4930,7 @@ def main(argv):
         rtpPacketReceiver = RtpPacketReceiver(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                    UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, ui, txMessageQueue)
 
+
         # Wait for socket (Created by rtpPacketReceiver) to become available
         while rtpPacketReceiver.getSocket() is None and not shutdownFlag.is_set():
             Utils.Message.addMessage("DBUG:Waiting for udp socket (port " + str(UDP_RX_PORT) + ") to be created")
@@ -4864,14 +4938,15 @@ def main(argv):
 
         # Once the socket has been created, pass it to the udpSend thread
         if rtpPacketReceiver.getSocket() is not None:
-            # Capture udp socket from RtpPacketReceiver object
-            udpSocket[0] = rtpPacketReceiver.getSocket()
-            # Create a thread to send the results back to the transmitter instances using UDP
-            sendUDPThread = threading.Thread(target=__sendUDPThread,
-                                             args=(txMessageQueue, udpSocket, shutdownFlag))
-            sendUDPThread.setName("__sendUDPThread")
-            sendUDPThread.start()
-
+            # # Capture udp socket from RtpPacketReceiver object
+            # udpSocket[0] = rtpPacketReceiver.getSocket()
+            # # Create a thread to send the results back to the transmitter instances using UDP
+            # sendUDPThread = threading.Thread(target=__sendUDPThread,
+            #                                  args=(txMessageQueue, udpSocket, shutdownFlag))
+            # sendUDPThread.setName("__sendUDPThread")
+            # sendUDPThread.start()
+            # Create a UDPMessageSender using to correspond to the RtpPacketReceiver sharing the same socket
+            uDPMessageSender = UDPMessageSender(txMessageQueue, rtpPacketReceiver.getSocket(), shutdownFlag)
 
 
     # Endless loop
