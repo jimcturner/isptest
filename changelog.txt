@@ -19,3 +19,6 @@ Also records the TTL value of the incoming packets. This allows a secondary sour
 Additional Event types for the report: Traceroute change, Received IP TTL, Source address/port, duplicate packets received, out of order packets received
 Help page shows the filenames/paths being saved to
 'Burst Mode'  - This will temporarily double the TX rate for a period of 5 secs to allow testing of Mikrotik queues to see what happens when there is a sudden increase in the amount of transmitted data
+V2.2 Rewritten traceroute. Shared code between Windows and Linux/OSX - much easier to maintain. Better error handling for links where the traceroute fails (because the routers in the way let through packets with ttls already decremented to zero. 
+Adds remote control of transmitter from receiver
+Coded added to allow listening on multiple ports at once
