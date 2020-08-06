@@ -75,3 +75,4 @@ class Registry(object):
 
     # Utils
     historicMessagesToKeepInMemory = 50
+    pastebinApiDeveloperkey = '78c625162b816673e6b3ecc2750ee741'

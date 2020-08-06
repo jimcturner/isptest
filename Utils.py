@@ -475,10 +475,10 @@ class Message(object):
 
 
 # Simple function, lifted from here: https://pastebin.com/m4kZey1v
-# Pastes text to PastBin.com (using either the default, or supplied Dev key)
+# Pastes text to PastBin.com (using either the default (pulled from the Registry), or supplied Dev key)
 # Returns a URL of the page showing the text
 # Note: Pastes are instructed to delete after 10 minutes
-def pasteBin(textToPaste, title='', api_dev_key='78c625162b816673e6b3ecc2750ee741'):
+def pasteBin(textToPaste, title='', api_dev_key=Registry.pastebinApiDeveloperkey):
     import urllib.parse
     import urllib.request
 
