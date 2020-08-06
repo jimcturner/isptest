@@ -5271,88 +5271,98 @@ class RtpGenerator(RtpCommon):
                     # The data after that is copy of the entire IPv4 header (20 bytes)
                     # ipHeaderOfReply = IPHeader(data[0:20])
                     # Decode the ICMP header
-                    icmpHeader = ICMPHeader(data[20:28])
-                    # Decode the ICMP payload, which contains a copy of the IP header originally sent
-                    # From this we can verify that the TTL and source IP address were the same as that sent
-                    # Therefore we can infer that this particular ICMP message is our reply, otherwise we discard the
-                    # message and listen again (within the timeout period)
-                    ipHeaderOfOriginalSender = IPHeader(data[28:48])
-                    # Display the  header fields of the received packet
-                    # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                    #                          " RtpGenerator.__tracerouteThread() ICMP packet fields " + \
-                    #                          "src:" + str(addr[0]) + \
-                    #                          ", type:" + str(icmpHeader.type) + \
-                    #                          ", code:" + str(icmpHeader.code) + \
-                    #                          ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
-                    #                          ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
-                    #                          ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
-                    #                          ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum))
-
-                    # Test to see if this icmp packet is addressed to 'us', and what type of ICMP message it is
-                    # Detect TTL Expired messages (icmp type 11, code 0)
-                    if icmpReplyMatcher(icmpHeader, ipHeaderOfOriginalSender, icmpType=11, icmpCode=0, \
-                                        srcAddress=_srcAddr, srcTtl=1, \
-                                        destAddress=_destAddr):
-                        # This is a TTL expired in transit message, for us - snapshot the address
-                        icmpSourceAddr = untestedIcmpSourceAddr
-                        icmpMessageType = 11
-                        icmpMessagecode = 0
-                        # Break out of this (the icmp receive) loop
-                        break
-
-                    # Detect Destination Host Port unreachable, destination reached
-                    # NOTE: In this test we ignore the srcTTL value. We don't care because
-                    # we've reached the final destination
-                    # CHANGED 5/8/20: Previously this was set to srcTTL=1. But this gives annoying 'noise'
-                    # results when testing to a loopback interface with no receiver attached to 'sink' the packets
-                    elif icmpReplyMatcher(icmpHeader, ipHeaderOfOriginalSender, icmpType=3, icmpCode=3, \
-                                        srcAddress=_srcAddr, srcTtl=None,
-                                        destAddress=_destAddr):
-                        # This is a Destination Port Unreachable address, destination reached
-                        icmpSourceAddr = untestedIcmpSourceAddr
-                        icmpMessageType = 3
-                        icmpMessagecode = 3
-                        # Break out of this (the icmp receive) loop
-                        break
-
-                    # Detect another weird condition whereby an icmp packet with ttl=0 is returned by an
-                    # upstream router. This should be impossible because routers should discard packets
-                    # whose TTL has decremented to 1 on receipt. Some routers appear to ignore the ttl
-                    # for existing traffic flows (Virgin Media home router, Dublin?) but still
-                    # decrement the ttl *and then* the subsequent router returns an ICMP packet containing
-                    # the IP header with a TTL of zero. This confuses the traceroute logic. We can't know
-                    # what the original source TTL was set to so the best we can do is discard this hop
-
-                    # Detect weird 'ttl=0' icmp packets
-                    elif icmpReplyMatcher(icmpHeader, ipHeaderOfOriginalSender, icmpType=11, icmpCode=0, \
-                                              srcAddress=_srcAddr, srcTtl=0,
-                                              destAddress=_destAddr):
-                        # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                        #                          " RtpGenerator.__tracerouteThread() ttl=0")
-                        icmpSourceAddr = untestedIcmpSourceAddr
-                        icmpMessageType = 44
-                        icmpMessagecode = 0
-                        break
-
-                    # this an unknown icmp packet
-                    # attempt to decode it
-                    else:
+                    if len(data) >= 48:
                         try:
-                            Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                                                     " RtpGenerator.__tracerouteThread() Unexpected packet " +\
-                                                     "src:" + str(addr[0]) +\
-                                                     ", type:" + str(icmpHeader.type)+\
-                                                     ", code:" + str(icmpHeader.code)+\
-                                                     ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
-                                                     ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
-                                                     ", IPttl:" + str(ipHeaderOfOriginalSender.ttl)+\
-                                                     ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum))
+                            icmpHeader = ICMPHeader(data[20:28])
+                            # Decode the ICMP payload, which contains a copy of the IP header originally sent
+                            # From this we can verify that the TTL and source IP address were the same as that sent
+                            # Therefore we can infer that this particular ICMP message is our reply, otherwise we discard the
+                            # message and listen again (within the timeout period)
+                            ipHeaderOfOriginalSender = IPHeader(data[28:48])
+                            # Display the  header fields of the received packet
+                            # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                            #                          " RtpGenerator.__tracerouteThread() ICMP packet fields " + \
+                            #                          "src:" + str(addr[0]) + \
+                            #                          ", type:" + str(icmpHeader.type) + \
+                            #                          ", code:" + str(icmpHeader.code) + \
+                            #                          ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
+                            #                          ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
+                            #                          ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
+                            #                          ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum))
+
+                            # Test to see if this icmp packet is addressed to 'us', and what type of ICMP message it is
+                            # Detect TTL Expired messages (icmp type 11, code 0)
+                            if icmpReplyMatcher(icmpHeader, ipHeaderOfOriginalSender, icmpType=11, icmpCode=0, \
+                                                srcAddress=_srcAddr, srcTtl=1, \
+                                                destAddress=_destAddr):
+                                # This is a TTL expired in transit message, for us - snapshot the address
+                                icmpSourceAddr = untestedIcmpSourceAddr
+                                icmpMessageType = 11
+                                icmpMessagecode = 0
+                                # Break out of this (the icmp receive) loop
+                                break
+
+                            # Detect Destination Host Port unreachable, destination reached
+                            # NOTE: In this test we ignore the srcTTL value. We don't care because
+                            # we've reached the final destination
+                            # CHANGED 5/8/20: Previously this was set to srcTTL=1. But this gives annoying 'noise'
+                            # results when testing to a loopback interface with no receiver attached to 'sink' the packets
+                            elif icmpReplyMatcher(icmpHeader, ipHeaderOfOriginalSender, icmpType=3, icmpCode=3, \
+                                                srcAddress=_srcAddr, srcTtl=None,
+                                                destAddress=_destAddr):
+                                # This is a Destination Port Unreachable address, destination reached
+                                icmpSourceAddr = untestedIcmpSourceAddr
+                                icmpMessageType = 3
+                                icmpMessagecode = 3
+                                # Break out of this (the icmp receive) loop
+                                break
+
+                            # Detect another weird condition whereby an icmp packet with ttl=0 is returned by an
+                            # upstream router. This should be impossible because routers should discard packets
+                            # whose TTL has decremented to 1 on receipt. Some routers appear to ignore the ttl
+                            # for existing traffic flows (Virgin Media home router, Dublin?) but still
+                            # decrement the ttl *and then* the subsequent router returns an ICMP packet containing
+                            # the IP header with a TTL of zero. This confuses the traceroute logic. We can't know
+                            # what the original source TTL was set to so the best we can do is discard this hop
+
+                            # Detect weird 'ttl=0' icmp packets
+                            elif icmpReplyMatcher(icmpHeader, ipHeaderOfOriginalSender, icmpType=11, icmpCode=0, \
+                                                      srcAddress=_srcAddr, srcTtl=0,
+                                                      destAddress=_destAddr):
+                                # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                #                          " RtpGenerator.__tracerouteThread() ttl=0")
+                                icmpSourceAddr = untestedIcmpSourceAddr
+                                icmpMessageType = 44
+                                icmpMessagecode = 0
+                                break
+
+                            # this an unknown icmp packet
+                            # attempt to decode it
+                            else:
+                                try:
+                                    Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                                             " RtpGenerator.__tracerouteThread() Unexpected packet " +\
+                                                             "src:" + str(addr[0]) +\
+                                                             ", type:" + str(icmpHeader.type)+\
+                                                             ", code:" + str(icmpHeader.code)+\
+                                                             ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
+                                                             ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
+                                                             ", IPttl:" + str(ipHeaderOfOriginalSender.ttl)+\
+                                                             ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum))
+                                except Exception as e:
+                                    # couldn't decode packet
+                                    Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                                             " RtpGenerator.__tracerouteThread() Unexpected packet from " + \
+                                                             str(addr[0]) + ", " + str(e))
                         except Exception as e:
-                            # couldn't decode packet
                             Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                                                     " RtpGenerator.__tracerouteThread() Unexpected packet from " + \
+                                                     " RtpGenerator.__tracerouteThread() ICMP decode error, from " + \
                                                      str(addr[0]) + ", " + str(e))
 
+                    else:
+                        Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                             " RtpGenerator.__tracerouteThread() Unexpected short length packet from " + \
+                                             str(addr[0]))
                 except socket.timeout:
                     # print("socket timeout")
                     pass
