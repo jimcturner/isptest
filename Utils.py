@@ -893,7 +893,8 @@ def displayTextUsingLess(textToDisplay):
 # Quitting less will return to the calling thread
 # more is installed by default on Windows, OSX and Linux
 def displayTextUsingMore(textToDisplay):
-    less = subprocess.Popen("more", stdin=subprocess.PIPE)
-    less.stdin.write(textToDisplay.encode("utf-8"))
-    less.stdin.close()
-    less.wait()
+    # less = subprocess.Popen("more", stdin=subprocess.PIPE)
+    # less.stdin.write(textToDisplay.encode("utf-8"))
+    # less.stdin.close()
+    # less.wait()
+    subprocess.run(["more"], input=textToDisplay, text=True, check=True)
