@@ -887,7 +887,7 @@ def displayTextUsingLess(textToDisplay):
     # less.stdin.write(textToDisplay.encode("utf-8"))
     # less.stdin.close()
     # less.wait()
-    subprocess.run(["less"], input=textToDisplay, text=True, check=True)
+    subprocess.run(["less", "testfile"], text=True, check=True, stdin=subprocess.PIPE)
 
 
 # This function is from here: https://stackoverflow.com/questions/3305287/python-how-do-you-view-output-that-doesnt-fit-the-screen
