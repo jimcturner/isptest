@@ -1536,6 +1536,9 @@ class UI(object):
                                                 "<Press a key to continue>".center(70), \
                                                 "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
                         try:
+                            # Clear the screen
+                            Term.clearScreen()
+                            # Open 'less' as a subprocess (blocking)
                             Utils.displayTextUsingLess(streamReport)
                         except Exception as e:
                             Utils.Message.addMessage("ERR: UI.__onCopyReportToClipboard (using less) " + str(e))
