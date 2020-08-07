@@ -883,11 +883,11 @@ def rawReceive():
 # Quitting less will return to the calling thread
 # less is installed by default on linux/OSX but probably isn;t present on Windows
 def displayTextUsingLess(textToDisplay):
-    # less = subprocess.Popen("less", stdin=subprocess.PIPE)
-    # less.stdin.write(textToDisplay.encode("utf-8"))
-    # less.stdin.close()
-    # less.wait()
-    subprocess.run(["less", "testfile"], text=True, check=True, stdin=subprocess.PIPE)
+    less = subprocess.Popen("less", stdin=subprocess.PIPE)
+    less.stdin.write(textToDisplay.encode("utf-8"))
+    less.stdin.close()
+    less.wait()
+    # subprocess.run(["less", "testfile"], text=True, check=True, stdin=subprocess.PIPE)
 
 
 # This function is from here: https://stackoverflow.com/questions/3305287/python-how-do-you-view-output-that-doesnt-fit-the-screen
