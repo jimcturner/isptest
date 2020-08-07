@@ -887,14 +887,16 @@ def displayTextUsingLess(textToDisplay):
     less.stdin.write(textToDisplay.encode("utf-8"))
     less.stdin.close()
     less.wait()
-    # subprocess.run(["less", "testfile"], text=True, check=True, stdin=subprocess.PIPE)
-
 
 # This function is from here: https://stackoverflow.com/questions/3305287/python-how-do-you-view-output-that-doesnt-fit-the-screen
 # It will launch the text viewer 'more' as a subprocess and display textToDisplay
 # Quitting less will return to the calling thread
 # more is installed by default on Windows, OSX and Linux
 def displayTextUsingMore(textToDisplay):
-    subprocess.run(["more", "-d"], input=textToDisplay, text=True, check=True)
+    # subprocess.run(["more", "-d"], input=textToDisplay, text=True, check=True)
     # subprocess.run(["more", "testfile"], text=True, check=True, stdin=subprocess.PIPE)
+    less = subprocess.Popen(["more", "-d"], stdin=subprocess.PIPE)
+    less.stdin.write(textToDisplay.encode("utf-8"))
+    less.stdin.close()
+    less.wait()
 

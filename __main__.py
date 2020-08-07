@@ -1495,11 +1495,11 @@ class UI(object):
                 streamReport = selectedRxOrResultsStream.generateReport(eventFilterList = self.filterListForDisplayedEvents)
                 # Attempt to copy the report to the local clipboard
                 try:
-                    Utils.displayTextUsingLess(streamReport)
-                    # pyperclip.copy(streamReport)
-                    # self.__renderMessageBox("Success!".center(30) + "\n\n" +\
-                    #         "<Press a key to continue>".center(30),\
-                    #         "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
+                    # Utils.displayTextUsingMore(streamReport)
+                    pyperclip.copy(streamReport)
+                    self.__renderMessageBox("Success!".center(30) + "\n\n" +\
+                            "<Press a key to continue>".center(30),\
+                            "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
 
                 except Exception as e:
                     Utils.Message.addMessage("DBUG: UI.__onCopyReportToClipboard (using less) " + str(e))
