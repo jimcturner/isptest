@@ -1495,15 +1495,13 @@ class UI(object):
                 streamReport = selectedRxOrResultsStream.generateReport(eventFilterList = self.filterListForDisplayedEvents)
                 # Attempt to copy the report to the local clipboard
                 try:
-                    Term.clearScreen()
-                    Utils.displayTextUsingMore(streamReport)
-                    # pyperclip.copy(streamReport)
-                    # self.__renderMessageBox("Success!".center(30) + "\n\n" +\
-                    #         "<Press a key to continue>".center(30),\
-                    #         "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
+                    pyperclip.copy(streamReport)
+                    self.__renderMessageBox("Success!".center(30) + "\n\n" +\
+                            "<Press a key to continue>".center(30),\
+                            "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
 
                 except Exception as e:
-                    Utils.Message.addMessage("ERR: UI.__onCopyReportToClipboard (using more) " + str(e))
+                    Utils.Message.addMessage("DBUG: UI.__onCopyReportToClipboard (using less) " + str(e))
 
                     # # Copy to clipboard failed. Paste to pastebin.com instead
                     # url = ""
@@ -1523,20 +1521,25 @@ class UI(object):
                     #         "<Press a key to continue>".center(70), \
                     #         "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
 
-                    # Copy to clipboard failed, attempt to launch 'less' viewer instead
-                    # Display a message box with a URL or an error message
-                    # self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" + \
-                    #                         "\nThis is mostly likely because you are connected to a text-only\n" + \
-                    #                         "terminal (e.g via an SSH session?)\n" + \
-                    #                         "\nAttempting to open the report in 'less' instead.\n" + \
-                    #                          "\nWhen done, press 'q' to return to isptest\n" +\
-                    #                         "TIP: When in less, press 'h' for help\n\n" +\
-                    #                         "<Press a key to continue>".center(70), \
-                    #                         "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
-                    # try:
-                    #     Utils.displayTextUsingMore(streamReport)
-                    # except Exception as e:
-                    #     Utils.Message.addMessage("ERR: UI.__onCopyReportToClipboard (using less) " + str(e))
+                    # Copy to clipboard failed, attempt to launch 'less' viewer instead - only works on Linux/OSX
+                    # Display a message box
+                    os = Utils.getOperatingSystem()
+                    if  os != "Windows":
+                        # Only attempt to launch 'less' oif we're not running Windows
+                        self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" + \
+                                                "\nThis is mostly likely because you are connected to a text-only\n" + \
+                                                "terminal (e.g via an SSH session?)\n" + \
+                                                "\nAttempting to open the report in 'less' instead.\n" + \
+                                                 "\nWhen done, press 'q' to return to isptest\n" +\
+                                                "TIP: When in less, press 'h' for help\n\n" +\
+                                                "<Press a key to continue>".center(70), \
+                                                "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
+                        try:
+                            Utils.displayTextUsingMore(streamReport)
+                        except Exception as e:
+                            Utils.Message.addMessage("ERR: UI.__onCopyReportToClipboard (using less) " + str(e))
+                    else:
+                        Utils.Message.addMessage("ERR: UI.__onCopyReportToClipboard (using less) . Wrong OS " + str(os))
 
     # This method will call the currently selected Receive (or TxResults writeReportToDisk() method
     # causing a report of the current stream to be saved to disk
