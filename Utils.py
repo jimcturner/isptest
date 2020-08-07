@@ -9,6 +9,7 @@ import platform
 # psutil seems to be broken on Linux
 # import psutil
 from collections import deque
+from functools import reduce
 from queue import SimpleQueue
 
 from Registry import Registry
@@ -474,10 +475,10 @@ class Message(object):
 
 
 # Simple function, lifted from here: https://pastebin.com/m4kZey1v
-# Pastes text to PastBin.com (using either the default, or supplied Dev key)
+# Pastes text to PastBin.com (using either the default (pulled from the Registry), or supplied Dev key)
 # Returns a URL of the page showing the text
 # Note: Pastes are instructed to delete after 10 minutes
-def pasteBin(textToPaste, title='', api_dev_key='78c625162b816673e6b3ecc2750ee741'):
+def pasteBin(textToPaste, title='', api_dev_key=Registry.pastebinApiDeveloperkey):
     import urllib.parse
     import urllib.request
 
@@ -818,3 +819,59 @@ class ICMPHeader(object):
             self.type, self.code, self.checksum, self.p_id, self.sequence = struct.unpack('bbHHh', icmp_header)
         except Exception as e:
             raise ICMPHeader.DecodeException(str(e))
+
+# Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
+def createTracerouteChecksum(hopsList):
+    if len(hopsList) > 0:
+        try:
+            # Create lambda function to xor two values
+            xor = lambda x, y: x ^ y
+            # Use reduce() to iterate over a the list of octets in sequence using our lambda function
+            xorSingleHop = lambda hopOctets:reduce(xor, hopOctets)
+
+            output = 0
+            # Iterate over the all the hops, xor'ing each hop in turn
+            for hop in hopsList:
+                output = output ^ xorSingleHop(hop)
+            return output
+        except Exception as e:
+            return None
+    else:
+        return None
+
+#### Experimental functions
+def rawReceive():
+    import select
+    UDP_RX_PORT = 5000
+    UDP_RX_IP = "127.0.0.1"
+    # create UDP socket
+    udpSocket = socket.socket(socket.AF_INET,  # Internet
+                              socket.SOCK_DGRAM)  # UDP
+
+    # Create  a raw socket. This *should* get copies of the data received by udpSocket but including the IP header
+    rawSocket = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_UDP)
+    rawSocket.setblocking(0)
+
+
+    udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+    # rawSocket.settimeout(1)
+    rawSocket.bind((UDP_RX_IP, UDP_RX_PORT))
+    print ("udpSocket :" +str(udpSocket))
+    print("rawSocket :" + str(rawSocket))
+    while True:
+        r, w, x = select.select([rawSocket], [], [])
+        for i in r:
+            receiveSocket = i
+            data, addr = receiveSocket.recvfrom(131072)
+            print(str(receiveSocket.type) + ", " + str(data))
+        # rawData, rawAddr = rawSocket.recvfrom(131072)
+        # print("raw " + str(rawData))
+
+            # # extract IP Header
+            # ipHeader = Utils.IPHeader(data[:20])
+            # udpHeader = Utils.UDPHeader(data[20:28])
+            # icmpMessage = Utils.ICMPHeader(data[20:28])
+            # message = data[28:]
+            # # print(str(i) + ", " + str(i.recvfrom(131072)))
+            # print(str(ipHeader.d_addr) + ":" + ", " + str(ipHeader.protocol) + ", type:" + str(icmpMessage.type) +\
+            #       ", code:" + str(icmpMessage.code))

@@ -12,7 +12,9 @@ import datetime
 import threading
 import random
 import string
+import textwrap
 import platform
+from functools import reduce
 from queue import SimpleQueue, Queue, Empty, Full
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
@@ -657,10 +659,34 @@ class RtpData(object):
         # jitter will store the diff between the timeDelta of this and the prev packet
         self.jitter = 0
 
+# Define a Super Class for all RTP objects (Generators, ReceiveStreams, ReceiveResults..)
+# This will contain methods that are useful to all
+class RtpCommon(object):
+    # Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
+    # Returns None on failure, otherwise returns an int
+    def createTracerouteChecksum(self, hopsList):
+        try:
+            if len(hopsList) > 0:
+                # Create lambda function to xor two values
+                xor = lambda x, y: x ^ y
+                # Use reduce() to iterate over a the list of octets in sequence using our lambda function
+                xorSingleHop = lambda hopOctets: reduce(xor, hopOctets)
+                # Create variable to hold the output
+                output = 0
+                # Iterate over the all the hops, xor'ing each hop in turn
+                for hop in hopsList:
+                    # XOR current hop with all previous hops
+                    output = output ^ xorSingleHop(hop)
+                return output
+            else:
+                return 0
+        except Exception as e:
+            return None
+
+
 # Define a Super Class for RTP Receive streams. This will contain methods that are common to both
 # RtpReceiveStream and RtpStreamResults
-class RtpReceiveCommon(object):
-
+class RtpReceiveCommon(RtpCommon):
     def __init__(self):
         # Create a 'leaderboard' for the worst 10 glitches
         # In futire this will be a list of Glitch events
@@ -717,33 +743,11 @@ class RtpReceiveCommon(object):
 
     # Thread-safe method to return a list of the traceroute hops
     # If trimEndOfList=True, all the trailing '0.0.0.0' hops will omitted from the returned list
-    def getTraceRouteHopsList(self, trimEndOfList=True):
+    def getTraceRouteHopsList(self):
         self.tracerouteHopsListMutex.acquire()
         tracerouteHopsList = deepcopy(self.tracerouteHopsList)
         self.tracerouteHopsListMutex.release()
-        if trimEndOfList and len(tracerouteHopsList) > 1:
-            # Clean up the tail end of the hops list which is liable to be full of 0.0.0.0's if
-            # a series of routers didn't respond. This isn't very helpful, so get rid of them
-            # Iterate over the list starting at the last element. matching [0,0,0,0]
-            # If matched, delete that element
-            elementsToTrim = 0
-            for x in range(len(tracerouteHopsList) - 1, 0, -1):
-                if tracerouteHopsList[x] == [0,0,0,0]:
-                    elementsToTrim +=1
-                else:
-                    # Otherwise a non-0.0.0.0 address present, so break out of the loop
-                    break
-            # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
-            if elementsToTrim > 0:
-                try:
-                    # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
-                    tracerouteHopsList = tracerouteHopsList[:(len(tracerouteHopsList) - elementsToTrim)]
-                except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveCommon.getTracerouteHopsList() trim trailing 0.0.0.0s " + str(e))
-            return tracerouteHopsList
-        else:
-            # Otherwise, return the list as-is
-            return tracerouteHopsList
+        return tracerouteHopsList
 
     # Thread-safe method to set the self.tracerouteHopsList[]
     # This completely replaces the existing list with a new supplied list
@@ -857,12 +861,43 @@ class RtpReceiveCommon(object):
         else:
             worstGlitchesListAsString += "No glitches to report\r\n"
 
+        # if available, create route change stats
+        routeChangeStats = "Route Change stats:\r\n"
+        try:
+        # Get traceroute change stats
+            if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
+                routeChangeStats += "No. of traceroute changes: ".rjust(labelWidth) + \
+                                              str(stats["route_change_events_total"]) + "\r\n"
+                routeChangeStats += "Mean interval between route changes: ".rjust(labelWidth) +\
+                                              str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
+                routeChangeStats += "Time of last route change: ".rjust(labelWidth) + \
+                                    str(stats["route_time_of_last_route_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
+
+
+            # Get RxTTL stats (if available)
+            if stats["packet_ttl_decrement_count"] is not None:
+                routeChangeStats += "No of hops according to received TTL: ".rjust(labelWidth) + \
+                                              str(stats["packet_ttl_decrement_count"]) + "\r\n"
+            if stats["packet_instantaneous_ttl"] is not None:
+                routeChangeStats += "No of received TTL changes: ".rjust(labelWidth) + \
+                                    str(stats["route_TTl_change_events_total"]) + "\r\n"
+                routeChangeStats += "Mean interval between TTL changes: ".rjust(labelWidth) + \
+                                    str(Utils.dtstrft(stats["route_mean_time_between_TTl_change_events"])) + "\r\n"
+                routeChangeStats += "Time of last TTL change: ".rjust(labelWidth) + \
+                                    str(stats["route_time_of_last_TTL_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
+            else:
+                routeChangeStats += "No received TTL information available" + "\r\n"
+
+        except Exception as e:
+            Utils.Message.addMessage("RtpreceiveCommon.generateReport() route stats " + str(e))
+
+
         # Create a traceroute list of hops.
         tracerouteHopsListAsString = "Traceroute:\r\n"
-        tracerouteHopsListAsString += "No. of route changes: ".rjust(labelWidth) + \
-                                      str(stats["route_change_events_total"]) + "\r\n"
-        tracerouteHopsListAsString += "Mean interval between route changes: ".rjust(labelWidth) +\
-                                      str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
+        # tracerouteHopsListAsString += "No. of route changes: ".rjust(labelWidth) + \
+        #                               str(stats["route_change_events_total"]) + "\r\n"
+        # tracerouteHopsListAsString += "Mean interval between route changes: ".rjust(labelWidth) +\
+        #                               str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
         if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
             for hopNo in range(len(tracerouteHopsList)):
                 try:
@@ -879,7 +914,7 @@ class RtpReceiveCommon(object):
 
                 except Exception as e:
                     Utils.Message.addMessage("DBUG: RtpReceiveCommon.generateReport() Create traceroute string: " + str(e))
-                    tracerouteHopsListAsString += "--Invalid traceroute data--"
+                    tracerouteHopsListAsString += "--Invalid traceroute data--\r\n"
         else:
             tracerouteHopsListAsString += "No traceroute info available" + "\r\n"
 
@@ -895,7 +930,8 @@ class RtpReceiveCommon(object):
 
         outputString = title + subtitle + separator + streamIPDetails + transmitterDetails + \
                        separator + streamPerformance + separator +\
-                    tracerouteHopsListAsString + separator +\
+                        routeChangeStats + separator +\
+                        tracerouteHopsListAsString + separator +\
                        worstGlitchesListAsString + separator + eventsListAsAString
 
         # Return a string containing the output
@@ -947,13 +983,14 @@ class RtpReceiveCommon(object):
             Utils.Message.addMessage("ERR: RtpReceiveCommon.writeReportToDisk() " + str(e))
             return str(e)
 
+
 # Define a class to represent a stream of received rtp packets (and associated stats)
 class RtpReceiveStream(RtpReceiveCommon):
     # Constructor method.
     # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
-    def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold, rxSocket,
-                 rtpRxStreamsDict, rtpRxStreamsDictMutex):
+    def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold,
+                 rtpRxStreamsDict, rtpRxStreamsDictMutex, txMessageQueue):
         # Call super constructor
         super().__init__()
         # Create Queue to accept the received packets
@@ -962,9 +999,11 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
         self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
 
+        self.resultsTxQueue = txMessageQueue    # Shared queue for sending results back to the transmitter
+
         self.rtpRxStreamsDict = rtpRxStreamsDict
         self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
-        # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
+        # # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
         self.__stats = {}
         # Assign to instance variable
         self.__stats["stream_syncSource"] = syncSource
@@ -979,14 +1018,11 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_transmitter_destAddress"] = "" # Will be populated by incoming isptest header data
         self.__stats["stream_transmitterVersion"] = 0
         self.__stats["stream_transmitter_txRate_bps"] = 0 # Will be populated by incoming isptest header data
-
+        self.__stats["stream_transmitter_TimeToLive_sec"] = 0  # Will be populated by incoming isptest header data
         Utils.Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
 
-        # This is a reference to the UDP listening socket created in main() (to receive all incoming streams)
-        # We need it, because we want to be able to reply to the sending end using the same src/dest UDP ports
-        # that were used in sending the data to us (by the corresponding RtpGenerator at the far end
-        self.socket = rxSocket
-
+        # Var to store the traceroute checksum value extracted from the isptestheader data
+        self.tracerouteReceivedChecksum = 0
         # Create a mutex lock to be used by the a thread
         # To set the lock use: __accessRtpDataMutex.acquire(), To release use: __accessRtpDataMutex.release()
         self.__accessRtpDataMutex = threading.Lock()
@@ -1022,6 +1058,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__packet_last_seen_received_timestamp = datetime.timedelta()
         self.__packetCounterTransmittedTotal = 0# Will be populated by incoming isptest header data
         self.__streamTransmitterTxRateBps = 0  # Will be populated by incoming isptest header data
+        self.__txStreamTimeToLive = 0 # Will be populated by incoming isptest header data
         self.__rxTTL = 0 # The most recent TTL value from the IP Header (that conveyed the Rtp packet)
 
         # Counter to be used by __calculateJitter()
@@ -1101,13 +1138,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.jitter_max_uS = 0
         self.jitter_range_uS = 0
 
-        # self.__stats["stream_processor_utilisation_percent"] = 0
-
         # % ratio of 1S Jitter_uS to packet_mean_receive_period_uS that will trigger an excessJitterEvent
-
         # self.__stats["jitter_excessive_alarm_threshold_percent"] = \
         #     Registry.rtpReceiveStreamJitterExcessiveAlarmThresholdPercent
-
         # self.excessJitterThresholdFactor = (self.__stats["jitter_excessive_alarm_threshold_percent"] / 100.0)
 
         # No of seconds to inhibit an excessive jitter alarm
@@ -1156,18 +1189,6 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.samplingThread.setName(str(self.__stats["stream_syncSource"]) + ":samplingThread")
         self.samplingThread.start()
 
-        # # Create a __calculateThread
-        # self.calculateThreadActiveFlag = True # Used as a signal to shut down the calculateThread
-        # self.calculateThread = threading.Thread(target=self.__calculateThread, args=())
-        # self.calculateThread.daemon = False  # Thread will auto shutdown when the prog ends
-        # self.calculateThread.setName(str(self.__stats["stream_syncSource"]) + ":calculateThread")
-        # # self.calculateThread.start()
-
-        # create a potential stream results transmitter object for this rx stream
-        # (this will only transmit data if the stream being received can be verified as being generated by
-        # an instance of isptest running in TRANSMIT mode (detected in __calculateThread)
-        self.resultsTransmitter = ResultsTransmitter(self)
-
         # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
         self.rtpRxStreamsDictMutex.acquire()
         self.rtpRxStreamsDict[self.__stats["stream_syncSource"]] = self
@@ -1175,14 +1196,6 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
     def killStream(self):
-        # This kills the ResultsTransmitter object created by this stream  - because
-        # Resultstransmitter runs as an automonomous thread created by this object.
-        # Therefore unless we kill it, this RtpReceiveStream object will never be allowed to die
-        self.resultsTransmitter.kill()
-
-        # # Also kill the __calculateThread associated with this receive stream
-        # self.calculateThreadActiveFlag = False
-
         # Kill the  __queueReceiverThread associated with this receive stream
         self.queueReceiverThreadActiveFlag = False
         self.queueReceiverThread.join()
@@ -1203,276 +1216,6 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpRxStreamsDictMutex.release()
 
 
-    def getSocket(self):
-        # Thread-safe method that returns the receive UDP socket associated with this stream
-        self.__udpSocketMutex.acquire()
-        sock = self.socket
-        self.__udpSocketMutex.release()
-        return sock
-
-    def setSocket(self, newSocket):
-        # Thread-safe method that sets the UDP receive/transmit socket associated with the stream
-        # Utils.Message.addMessage("RtpReceiveStream.setSocket -old() " + str(id(self.socket)))
-        self.__udpSocketMutex.acquire()
-        self.socket = newSocket
-        self.__udpSocketMutex.release()
-        # Utils.Message.addMessage("RtpReceiveStream.setSocket -New() " + str(id(self.socket)))
-
-    # def __calculateJitter(self, prevRtpPacket):
-    #     # Iterate over self.rtpStream to get total count of data received in this batch of data, no. of packets and also calculate
-    #     # rx time deltas and jitter
-    #     sumOfInterPacketJitter = 0
-    #     sumOfTimeDeltas = 0
-    #
-    #     # Keep prevRtpPacket value safe for later (because we'll be overwriting it as we iterate over self.rtpStream[])
-    #     z = prevRtpPacket
-    #     # Iterate over packets received
-    #     for y in self.rtpStream:
-    #         # Calculate and write time delta into RtpData object
-    #         y.timeDelta = y.timestamp - prevRtpPacket.timestamp
-    #
-    #         # Now calculate the diff (jitter) between consecutive timeDelta values (should be in order of mS)
-    #         # It should be simple. Just take mean of interPacketJitter
-    #         # interPacketJitter=abs(x.timeDelta.microseconds-prevRtpPacket.timeDelta.microseconds)
-    #         y.jitter = y.timeDelta.microseconds - prevRtpPacket.timeDelta.microseconds
-    #         # print y.timestamp,y.timeDelta,y.jitter,"\r"
-    #         # Calculate minimum and maximum jitter
-    #         # But wait until 'steady' state reached by testing for totalPacketsReceived>10
-    #         if self.__stats["packet_counter_received_total"] > 10:
-    #             if self.__stats["jitter_min_uS"] == 0:
-    #                 # Set initial value
-    #                 self.__stats["jitter_min_uS"] = y.jitter
-    #             if y.jitter < self.__stats["jitter_min_uS"]:
-    #                 self.__stats["jitter_min_uS"] = y.jitter
-    #             # Calculate maximum jitter
-    #             if self.__stats["jitter_max_uS"] == 0:
-    #                 # Set initial value
-    #                 self.__stats["jitter_max_uS"] = y.jitter
-    #             if y.jitter > self.__stats["jitter_max_uS"]:
-    #                 self.__stats["jitter_max_uS"] = y.jitter
-    #             self.__stats["jitter_range_uS"] = self.__stats["jitter_max_uS"] - self.__stats["jitter_min_uS"]
-    #
-    #         # Sum the abs interPacketJitter values  for the subsequent jitter calculation
-    #         # For 'instantaneous' jitter value
-    #         sumOfInterPacketJitter += abs(y.jitter)
-    #         # For 1 second jitter value
-    #         self.sumOfJitter_1s += abs(y.jitter)
-    #
-    #         # Sum the timeDeltas to calculate the instantaneous average time between packets arriving
-    #         sumOfTimeDeltas += y.timeDelta.microseconds
-    #
-    #         # Update prevTimestamp for next time around loop
-    #         prevRtpPacket = y
-    #
-    #     # Calculate jitter
-    #     # Find the mean value of the microsecond portion of the jitter values in self.rtpStream
-    #     # and also the instantaneous  time period between packets arriving (should, on average match the rtp
-    #     # generator period)
-    #     if len(self.rtpStream) > 1:
-    #         self.__stats["jitter_instantaneous"] = sumOfInterPacketJitter / (len(self.rtpStream) - 1)
-    #         self.__stats["packet_instantaneous_receive_period_uS"] = sumOfTimeDeltas / (len(self.rtpStream) - 1)
-    #
-    #     else:
-    #         # This batch of data only contains a single packet.
-    #         # as this requires at least two packets worth of data (the difference of a difference!)
-    #         # The meanRxPeriod is possible to deduce by comparing this new single packet with the last received
-    #         self.__stats["jitter_instantaneous"] = self.rtpStream[-1].jitter - z.jitter
-    #         self.__stats["packet_instantaneous_receive_period_uS"] = self.rtpStream[-1].timeDelta.microseconds
-    #
-    #
-    #     ### Calculate long term mean packet receive period
-    #     # Aggregate the time deltas for ever to calculate the long term average time between packets arriving
-    #     self.aggregateSumOfTimeDeltas += sumOfTimeDeltas
-    #     self.__stats["packet_mean_receive_period_uS"] = \
-    #         self.aggregateSumOfTimeDeltas / self.__stats["packet_counter_received_total"]
-    #
-    #     # Now attempt to detect excessive jitter by comparing the 1S jitter with the mean receive period.
-    #     # Jitter should only be a problem if the packets start crashing into each other on receipt.
-    #     # Check that long term value has actually been calculated
-    #     if self.__stats["packet_mean_receive_period_uS"] > 0:
-    #         if self.__stats["jitter_mean_1S_uS"] > \
-    #                 (self.excessJitterThresholdFactor * self.__stats["packet_mean_receive_period_uS"]):
-    #             # If jitter alarms not inhibited, add a new jitter event
-    #             # Take diff between time.now() and the time of the last event
-    #             if self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds() >= \
-    #                     self.__stats["jitter_alarm_event_timeout_S"] or \
-    #                     self.__stats["jitter_excess_jitter_events_total"] == 0:
-    #                 excessiveJitterEvent = ExcessiveJitter(self.__stats, self.rtpStream[-1])
-    #                 # Add the event to the event list
-    #                 self.__eventList.append(excessiveJitterEvent)
-    #                 # Increment the all_events counter
-    #                 self.__stats["stream_all_events_counter"] += 1
-    #                 Utils.Message.addMessage(excessiveJitterEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
-    #
-    #             # Update the event counter for Excess Jitter
-    #             self.__stats["jitter_excess_jitter_events_total"] += 1
-    #
-    #             # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean period between events)
-    #             self.sumOfTimeElapsedSinceLastExcessJitterEvents += self.__stats[
-    #                 "jitter_time_elapsed_since_last_excess_jitter_event"]
-    #
-    #             # Take timestamp fo this (the most recent) Excess Jitter event
-    #             self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.datetime.now()
-    #     # Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
-    #     if self.__stats["jitter_excess_jitter_events_total"] > 0:
-    #         self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = datetime.datetime.now() - \
-    #                                                                              self.__stats[
-    #                                                                                  "jitter_time_of_last_excess_jitter_event"]
-    #
-    #     # Calculate meanTimeBetweenExcessJitterEvents (requires at least two jitter events)
-    #     if self.__stats["jitter_excess_jitter_events_total"] > 1:
-    #         self.__stats["jitter_mean_time_between_excess_jitter_events"] = \
-    #             (self.sumOfTimeElapsedSinceLastExcessJitterEvents + self.__stats[
-    #                 "jitter_time_elapsed_since_last_excess_jitter_event"]) / \
-    #             self.__stats["jitter_excess_jitter_events_total"]
-    #
-    # def __updateGlitchStats(self, latestGlitch):
-    #     # This method takes code out of __detectGlitches to reduce duplication
-    #     # It's primary purpose is to update __stats keys relating to glitches (depending upon whether the
-    #     # size of the glitch exceeds self.__stats["glitch_Event_Trigger_Threshold_packets"] or not)
-    #
-    #     # Update packets lost counter
-    #     self.__stats["glitch_packets_lost_total_count"] += latestGlitch.packetsLost
-    #
-    #     # If the glitch is insignificant, increment the 'ignored' counter so we record that it happened
-    #     if latestGlitch.packetsLost <= self.__stats["glitch_Event_Trigger_Threshold_packets"]:
-    #         self.__stats["glitch_glitches_ignored_counter"] += 1
-    #
-    #     # If the glitch is significant then it's worth updating the stats
-    #     # if latestGlitch.packetsLost > self.__stats["glitch_Event_Trigger_Threshold_packets"]:
-    #     else:
-    #         # update running total glitch stats
-    #         self.__stats["glitch_length_total_time"] += latestGlitch.glitchLength
-    #         self.__stats["glitch_counter_total_glitches"] += 1
-    #
-    #         # Add event to moving counters
-    #         for x in self.movingGlitchCounters:
-    #             x.addEvent(1)
-    #
-    #         # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
-    #         self.sumOfTimeElapsedSinceLastGlitch += self.__stats["glitch_time_elapsed_since_last_glitch"]
-    #
-    #         # Update running total
-    #         # Calculate aggregate mean glitch stats
-    #         if self.__stats["glitch_counter_total_glitches"] > 1:
-    #             self.__stats["glitch_mean_glitch_duration"] = \
-    #                 self.__stats["glitch_length_total_time"] / self.__stats["glitch_counter_total_glitches"]
-    #             self.__stats["glitch_packets_lost_per_glitch_mean"] = \
-    #                 math.ceil(self.__stats["glitch_packets_lost_total_count"] / self.__stats["glitch_counter_total_glitches"])
-    #
-    #         # Update glitch min/max packet loss stats
-    #         if self.__stats["glitch_packets_lost_per_glitch_min"] < 1:
-    #             self.__stats["glitch_packets_lost_per_glitch_min"] = latestGlitch.packetsLost
-    #
-    #         # Update min/max counters
-    #         if latestGlitch.packetsLost < self.__stats["glitch_packets_lost_per_glitch_min"]:
-    #             self.__stats["glitch_packets_lost_per_glitch_min"] = latestGlitch.packetsLost
-    #
-    #         if latestGlitch.packetsLost > self.__stats["glitch_packets_lost_per_glitch_max"]:
-    #             self.__stats["glitch_packets_lost_per_glitch_max"] = latestGlitch.packetsLost
-    #
-    #         # update glitch min/max duration stats
-    #         # Test for 'zero' duration (the initial value)
-    #         if self.__stats["glitch_min_glitch_duration"] == datetime.timedelta():
-    #             self.__stats["glitch_min_glitch_duration"] = latestGlitch.glitchLength
-    #
-    #         if latestGlitch.glitchLength < self.__stats["glitch_min_glitch_duration"]:
-    #             self.__stats["glitch_min_glitch_duration"] = latestGlitch.glitchLength
-    #
-    #         if latestGlitch.glitchLength > self.__stats["glitch_max_glitch_duration"]:
-    #             self.__stats["glitch_max_glitch_duration"] = latestGlitch.glitchLength
-    #
-    #         # Add the glitch to the worstGlitches leaderboard Where it will be analysed to see if it's in the top 'n')
-    #         self.addToWorstGlitchesList(latestGlitch)
-    #         # Get a text version of the worst glitches, and copy to the __stats[] dict
-    #         self.__stats["glitch_worst_glitches_list"] = self.getWorstGlitches(returnSummaries=True)
-    #
-    #     # Inhibit immediate jitter-event triggering by setting self.__stats["jitter_time_of_last_excess_jitter_event"]
-    #     # to the current time
-    #     self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.datetime.now()
-    #
-    #     # # Finally, reset min/max/range jitter values as they're corrupted by a glitch
-    #     # self.__stats["jitter_min_uS"] = 0
-    #     # self.__stats["jitter_max_uS"] = 0
-    #     # self.__stats["jitter_range_uS"] = 0
-    #
-    # def __detectGlitches(self, lastReceivedRtpPacket):
-    #
-    #     # Test for out of sequence packet by comparing last received sequence no with that of first rtpObject in new list of data in self.rtpStream[]
-    #     # Inhibit this for the first second (because there's nothing to compare the first packet to)
-    #     # Also, when the seq no hits 65535 it will wrap around to zero giving a false diff. Musn't interpret this as a glitch
-    #     if lastReceivedRtpPacket.rtpSequenceNo == 65535:
-    #         lastReceivedRtpPacket.rtpSequenceNo = -1
-    #
-    #     if (lastReceivedRtpPacket.rtpSequenceNo != (self.rtpStream[0].rtpSequenceNo - 1)) and \
-    #             self.__stats["stream_time_elapsed_total"].seconds > 0:
-    #
-    #         # Capture packets either side of the 'hole' and store them in the event list
-    #         # Create an object representing the glitch
-    #         glitch = Glitch(self.__stats, lastReceivedRtpPacket, self.rtpStream[0])
-    #
-    #         # Check to see if this glitch is significant enough to be considered an event
-    #         if glitch.packetsLost > self.__stats["glitch_Event_Trigger_Threshold_packets"]:
-    #             # Take timestamp of most recent glitch
-    #             self.__stats["glitch_most_recent_timestamp"] = datetime.datetime.now()
-    #             # Add the latest glitch to the evenList[]
-    #             self.__eventList.append(glitch)
-    #             # Increment the all_events counter
-    #             self.__stats["stream_all_events_counter"] += 1
-    #             # Post a message
-    #             Utils.Message.addMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'])
-    #         else:
-    #             Utils.Message.addMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'] + " (ignore)")
-    #         # update glitch stats
-    #         self.__updateGlitchStats(glitch)
-    #
-    #     # Now test for sequence errors within current data set
-    #     # Take a copy of the first item in the list
-    #     prevRtpPacket = self.rtpStream[0]
-    #
-    #     # Test if the seq no hits 65535 it will wrap around to zero giving a false diff. Musn't interpret this as a glitch
-    #     if prevRtpPacket.rtpSequenceNo == 65535:
-    #         prevRtpPacket.rtpSequenceNo = -1
-    #
-    #     # Iterate over the the remainder of the list (starting at index 1 to the end '-1')
-    #     for rtpPacket in self.rtpStream[1:]:
-    #         # Test if the seq no hits 65535 it will wrap around to zero giving a false diff. Musn't interpret this as a glitch
-    #         if prevRtpPacket.rtpSequenceNo == 65535:
-    #             prevRtpPacket.rtpSequenceNo = -1
-    #
-    #         # Test sequence no of current packet against previous packet
-    #         if rtpPacket.rtpSequenceNo != (prevRtpPacket.rtpSequenceNo + 1):
-    #
-    #             # Capture packets either side of the 'hole' and store them in the event list
-    #             # Create an object representing the glitch
-    #             glitch = Glitch(self.__stats, prevRtpPacket, rtpPacket)
-    #
-    #             # Check to see if this glitch is significant enough to be considered an event
-    #             if glitch.packetsLost > self.__stats["glitch_Event_Trigger_Threshold_packets"]:
-    #                 # Take timestamp of most recent glitch
-    #                 self.__stats["glitch_most_recent_timestamp"] = datetime.datetime.now()
-    #                 # Add the latest glitch to the evenList[]
-    #                 self.__eventList.append(glitch)
-    #                 # Increment the all_events counter
-    #                 self.__stats["stream_all_events_counter"] += 1
-    #                 # Post a message
-    #                 Utils.Message.addMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'])
-    #             else:
-    #                 Utils.Message.addMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'] + " (ignore)")
-    #
-    #             # update glitch stats
-    #             self.__updateGlitchStats(glitch)
-    #
-    #         # Store current rtp packet for the next iteration around the loop
-    #         prevRtpPacket = rtpPacket
-    #
-    #
-    #     if self.__stats["glitch_counter_total_glitches"] > 1:
-    #         # Calculate mean of new and prev value
-    #         self.__stats["glitch_mean_time_between_glitches"] = \
-    #             (self.sumOfTimeElapsedSinceLastGlitch + self.__stats["glitch_time_elapsed_since_last_glitch"]) / \
-    #             self.__stats["glitch_counter_total_glitches"]
-
     # This method will parse the isptest header data (and update the instance variables accordingly)
     def __parseIsptestHeaderData(self, isptestHeaderData):
         try:
@@ -1490,7 +1233,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # hopAddr = [isptestHeaderData[4], isptestHeaderData[5],
                 #            isptestHeaderData[6], isptestHeaderData[7]]
                 # update the self.__tracerouteHopsList[] with the latest received address/hopNo
-                self.updateTraceRouteHopsList(hopNo, noOfHops, isptestHeaderData[4:])
+                self.updateTraceRouteHopsList(hopNo, noOfHops, isptestHeaderData[4:8])
+                # Element 8 contains the traceroute hops checksum generated by the transmitter
+                # This allows the receiver to confirm that it has received a complete set of traceroute hops,
+                # rather than just different parts of a traceroute
+                self.tracerouteReceivedChecksum = isptestHeaderData[8]
                 # Now pass the hop address to WhoisResolver.queryWhoisCache
                 # to populate the whois cache for later use
                 hopAddrAsString = str(isptestHeaderData[4]) + "." + str(isptestHeaderData[5]) + "." +\
@@ -1524,7 +1271,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # This is a message containing the intended tx rate of the stream (as an unsigned long, 4 bytes)
                 try:
                     # Convert the 4 bytes back to an int
-                    self.__streamTransmitterTxRateBps = struct.unpack_from("!L", bytes(isptestHeaderData[4:]))[0]
+                    self.__streamTransmitterTxRateBps = struct.unpack_from("!L", bytes(isptestHeaderData[4:8]))[0]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 4 " + str(e))
 
@@ -1532,9 +1279,17 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # This is a message containing a count of the tx'd packets (as an unsigned long, 4 bytes)
                 try:
                     # Convert the 4 bytes back to an int
-                    self.__packetCounterTransmittedTotal = struct.unpack_from("!L", bytes(isptestHeaderData[4:]))[0]
+                    self.__packetCounterTransmittedTotal = struct.unpack_from("!L", bytes(isptestHeaderData[4:8]))[0]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 5 " + str(e))
+
+            elif isptestHeaderData[1] == 6:
+                # This is a message containing the stream time to live (as an signed long, 4 bytes)
+                try:
+                    # Convert the 4 bytes back to a signed int
+                    self.__txStreamTimeToLive = struct.unpack_from("!i", bytes(isptestHeaderData[4:8]))[0]
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
 
         except Exception as e:
             Utils.Message.addMessage("DBUG:__RtpReceiveStream.__pasrseIsptestHeader " + str(e))
@@ -1552,7 +1307,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             # substring the part of the data holding the friendly name of the stream
             isptestHeaderDataFriendlyName = str(rtpPayload[numericalHeaderDataLength:].decode('utf-8'))
             # unpack the values from the struct
-            isptestHeaderData = struct.unpack("!HBBBBBBB", isptestHeaderDataStruct)
+            isptestHeaderData = struct.unpack("!HBBBBBBBB", isptestHeaderDataStruct)
             # Utils.Message.addMessage("INFO: Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
             # Check to see if we've managed to unpack the data
             if len(isptestHeaderData) > 0:
@@ -1561,7 +1316,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # If so, make use the friendly name field to name this receive stream
                     self.__stats["stream_friendly_name"] = isptestHeaderDataFriendlyName
                     # And enable transmission of results back to sender
-                    self.resultsTransmitter.transmitActiveFlag = True
+                    # self.resultsTransmitter.transmitActiveFlag = True
                     # Utils.Message.addMessage(isptestHeaderDataFriendlyName)
                     # Now decode the messages contained within the isptest header
                     self.__parseIsptestHeaderData(isptestHeaderData)
@@ -1576,6 +1331,235 @@ class RtpReceiveStream(RtpReceiveCommon):
 
     # This thread updates the 1sec averages, moving counters and also housekeeps
     def __samplingThread(self):
+        # Tests the decision making within detectRouteChanges by seeding it with a range of possible traceroute combinations
+        def detectRouteChangesTest():
+            # testList is an array of tuples
+            # [prevHopsList[], hopsList[], prevRxTTL, rxTTL, expected result, description"
+            testList = [
+                [
+                    [],
+                    [],
+                    None,
+                    None,
+                    False,
+                    "0)Zero length current and prev hops lists, rxTTL and prevRxTTL are None"
+                ]
+                ,
+                [
+                    [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
+                    [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 0], [127, 0, 0, 4]],
+                    None,
+                    None,
+                    False,
+                    "1) same length current and prev hops lists, current hops list flaps to 0  rxTTL and prevRxTTL are None. Should carry forward"
+                ]
+                ,
+                [
+                    [[0, 0, 0, 0]],
+                    [[0, 0, 0, 0]],
+                    None,
+                    None,
+                    False,
+                    "2) prv and current hoplist are 0.0.0.0"
+                ]
+                ,
+                [
+                    [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
+                    [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 7], [127, 0, 0, 4]],
+                    None,
+                    None,
+                    True,
+                    "3) prv and current hoplist are same length but different"
+                ]
+                ,
+                [
+                    [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
+                    [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3]],
+                    4,
+                    4,
+                    False,
+                    "4) prv and current hoplist are different lengths but prevTTL and currentTTL are the same"
+                ]
+                ,
+                [
+                    [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
+                    [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3]],
+                    4,
+                    3,
+                    True,
+                    "5) prv and current hoplist are different lengths. prevTTL and currentTTL have also changed"
+                ]
+                ,
+                [
+                    [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
+                    [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3]],
+                    None,
+                    None,
+                    True,
+                    "6) prv and current hoplist are different lengths. prevTTL and currentTTL have not been set"
+                ]
+            ]
+
+            # iterate over test list
+            for testNo in range(0, len(testList)):
+                test = testList[testNo]
+                result = detectRouteChanges(test[0], test[1], test[2], test[3])
+                # Test result against expected result
+                if result == test[4]:
+                    print(str(test[5]) + ", " + str(result) + ", PASS\n")
+                else:
+                    print(str(test[5]) + ", " + str(result) + ", FAIL\n")
+
+        # Compares prev and current traceroute hops lists to determine whether the route has changed
+        # if prevRxTTL and rxTTL values are None, they will be ignored, and the decision about whether a
+        # route has changed will be made solely on the length/contents of prevHopsList[], hopsList[]
+        def detectRouteChanges(prevHopsList, hopsList, prevRxTTL=None, rxTTL=None):
+            ######## Detect route changes using traceroute hops list
+            # Compare each of the traceroute hops to the previous value for that hop
+            #  If it has changed, signal a route change.
+            # Note: some routers don't always respond (so that hop value oscillates between a valid IP address
+            # and 0.0.0.0. Even though the rest of the hops have stayed the same, this could look like a
+            # route change
+            # Therefore we can also look at the IP TTl value to see if that has changed or not.
+            # if it hasn't then that suggests it's just an intermediate router not responding rather than a route change
+
+            # Flag to signal the detection of a route change
+            hopsListHasChanged = False
+
+            # Shorthand for 0.0.0.0 (i.e no response)
+            noResponse = [0, 0, 0, 0]
+
+            # Wait until all the traceroute hops have been populated with values before calculating
+            if len(hopsList) > 0 and None not in hopsList:
+                # Set initial value for prevHopsList
+                if len(prevHopsList) == 0:
+                    prevHopsList = hopsList
+                    hopsListHasChanged = True
+
+
+
+                # Test If length of list has changed then set hopsListHasChanged flag
+                # However, if the rxTTL value hasn't also changed*, this suggests an erroneous
+                # traceroute hops list possibly caused by a series of routers not responding.
+                # * Note if prevRxTTL is 'None' (because the rxTTL isn't able to be decoded)
+                # then all we have to go on is the length of the hops list
+
+                # Test If length of list has changed, then test rxTTL for confirmation of the change (if possible)
+                elif (len(hopsList) != len(prevHopsList)):
+                    # Test to see if rxTTL values contain any further info on which to base a route-change decision
+                    if prevRxTTL is not None and rxTTL is not None:
+                        # rxTTL does contain a value which we can use to see if the route has changed.
+                        # Compare current and prev rxTTL values
+                        if prevRxTTL == rxTTL:
+                            # This change in the length of hopsList is a red herring because rxTTL did not change.
+                            # Therefore ignore.
+                            hopsListHasChanged = False
+                            Utils.Message.addMessage("DBUG:hopsList len changed but rxTTL didn't. Ignored hopList change " +\
+                                "prevLen: " + str(len(prevHopsList)) + ", Len:" + str(len(hopsList)) + ", prevTTL:" + \
+                                                     str(prevRxTTL) + ", TTL:" + str(rxTTL))
+                        else:
+                            # rxTTL has changed, therefore the route must have changed
+                            hopsListHasChanged = True
+                    else:
+                        # It doesn't, so we can only go on the change in length of hopsList[]
+                        hopsListHasChanged = True
+
+                # If the lengths of the two lists are the same, test the contents
+                else:
+                    # Otherwise, if list length is the same compare latest and previous hopsList members
+                    for hopNo in range(len(hopsList)):
+                        # Iterate over hopsList, comparing the the octets of the individual hops
+                        prevHop = prevHopsList[hopNo]
+                        currentHop = hopsList[hopNo]
+
+                        # Check to see if either the current or previous values are NOT 0.0.0.0.
+                        if prevHop != noResponse and currentHop != noResponse:
+                            # These hops contains a value, so see if they have changed
+                            if currentHop == prevHop:
+                                # The hop value has remained the same, no route change
+                                hopsListHasChanged = False
+                            else:
+                                # The hop value has changed. New route
+                                hopsListHasChanged = True
+
+                        # Check to see if either and current values are zero
+                        elif prevHop == noResponse and currentHop == noResponse:
+                            hopsListHasChanged = False
+
+
+                        # Now check to see if we previously had a zero hop value but we now have a non zero value
+                        # If so, this suggests a route change
+                        elif prevHop == noResponse and currentHop != noResponse:
+                            hopsListHasChanged = True
+
+                        # Now check to see if we previously had a non-zero value for this hop. If so, make
+                        # an educated guess and carry the prev hop value into the current hop value
+                        # This means that we might have something to compare this hop value to if it changes
+                        # to another non-zero value
+                        elif prevHop != noResponse and currentHop == noResponse:
+                            # print("carry forward hop " + str(hopNo))
+                            hopsList[hopNo] = prevHopsList[hopNo]
+                            hopsListHasChanged = False
+                        else:
+                            # We don't know if the route has changed or not
+                            hopsListHasChanged = False
+
+                        # At the end of each hop comparison check the status of hopsListHasChanged
+                        # If it has, break out of the loop, otherwise continue onto the next hop
+                        if hopsListHasChanged:
+                            return True
+                        else:
+                            # Continue on the the next hop comparison
+                            pass
+                # At the end of the iteration over all hops, return the latest value of hopsListHasChanged
+                return hopsListHasChanged
+            else:
+                return False
+
+        # Puts the current stream stats and events (the results) in a queue to be transmitted back to the transmitter
+        # (if the transmitter is an instance of isptest)
+        # Rather than sending the entire events list, we only send the last five events.
+        # The correspoinding results receiver is able to ignore any events it has already received
+        def addResultsToTxQueue(stats, eventsToBeSent, resultsTxQueue, destAddr, destPort):
+            try:
+                # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
+                msg = {"stats": stats, "eventList": eventsToBeSent}
+                pickledMessage = pickle.dumps(msg, protocol=2)
+                # add the pickled message to the txMessageQueue
+                resultsTxQueue.put([pickledMessage, destAddr, destPort])
+
+            except Exception as e:
+                Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread.addResultsToTxQueue() " + str(e))
+
+        # This function attempts to calculate the mean period between events (such as glitch, or jitter)
+        # to provide a value of how often, on average, the event has occurred
+        # To give a glimpse into the future, it will also take into account the time elapsed since the
+        # last event happened. Once this elapsed time is greater than the calculated mean of the time
+        # between the events, it will also take this time period into account - in effect increasing the
+        # average time between events
+        def calculateMeanPeriodBetweenEvents(sumOfTimePeriodsBetweenEvents,
+                                             timeElapsedSinceMostRecentEvent,
+                                             totalNoOfEvents):
+            try:
+                # Calculate mean period between the events that have already happened
+                actualPeriodBetweenEvents = sumOfTimePeriodsBetweenEvents / totalNoOfEvents
+                # Now look to see if time elapsed since the last event is longer than the mean between events
+                if timeElapsedSinceMostRecentEvent > actualPeriodBetweenEvents:
+                    # This 'pretends' that a event has 'just happened' which will have the effect of increasing
+                    # the apparent time between events. Therefore as time moves on, with no more events
+                    # recorded, the 'mean period between events' will improve (i.e get larger)
+                    meanPeriodBetweenEvents = (sumOfTimePeriodsBetweenEvents + timeElapsedSinceMostRecentEvent) / \
+                                              (totalNoOfEvents + 1)
+                    return meanPeriodBetweenEvents
+                else:
+                    # The time elapsed since the last event is less than the calculated actual mean.
+                    # Therefore we ignore the effect of it, as it will only worsen the mean period
+                    return actualPeriodBetweenEvents
+            except Exception as e:
+                Utils.Message.addMessage("RtpReceiveStream.__samplingThread.calculateMeanPeriodBetweenEvents() " + \
+                                         str(e))
+                return None
+
         Utils.Message.addMessage("DBUG: __samplingThread started for stream " + str(self.__stats["stream_syncSource"]))
         # Initialise variables to be used within the loop
         loopCounter = 0
@@ -1622,6 +1606,15 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Stores the previous traceroute hops list. Used to detect route changes
         prevHopsList = []
+        # Stores the most recent hops list
+        hopsList = []
+        # This flag will be set high by any changes detected in the rxTTL value.
+        # rxTTL will change immediately, but it takes time for any traceroute hopslist changes to be transmitted
+        # Therefore we need a mechanism to to tell the route change detection to expect a hopList change, and also
+        # until that new list is picked up, ignore the prevRxTTl and rxTTL values.
+        # Once the new hopList has been received the detection routine will acknowledge the change and clear the
+        # hopsListChangeExpected flag. At this point it will resume monitoring prev rxTTl and rxTTL
+        hopsListChangeExpected = False
         # Stores the previous rx TTL value - Used to detect route changes
         prevRxTTL = None
         # Stores previous source address and UDP port. Used to detect changes
@@ -1650,10 +1643,13 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.__stats["stream_transmitter_txRate_bps"] = self.__streamTransmitterTxRateBps
             # Snapshot latest packet IP TTL value
             self.__stats["packet_instantaneous_ttl"] = self.__rxTTL
+            # self.__stats["packet_instantaneous_ttl"] = 10
             # Snapshot latest src address
             self.__stats["stream_srcAddress"] = self.__srcAddress
             # Snapshot latest src port
             self.__stats["stream_srcPort"] = self.__srcPort
+            # Snampshot latest stream time to live
+            self.__stats["stream_transmitter_TimeToLive_sec"] = self.__txStreamTimeToLive
 
             try:
                 ########### Calculate how many packets received in the latest 200mS period - required for 'mean' calculations
@@ -1757,28 +1753,28 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # last event happened. Once this elapsed time is greater than the calculated mean of the time
                 # between the events, it will also take this time period into account - in effect increasing the
                 # average time between events
-                def calculateMeanPeriodBetweenEvents(sumOfTimePeriodsBetweenEvents,
-                                                     timeElapsedSinceMostRecentEvent,
-                                                     totalNoOfEvents):
-                    try:
-                        # Calculate mean period between the events that have already happened
-                        actualPeriodBetweenEvents = sumOfTimePeriodsBetweenEvents / totalNoOfEvents
-                        # Now look to see if time elapsed since the last event is longer than the mean between events
-                        if timeElapsedSinceMostRecentEvent > actualPeriodBetweenEvents:
-                            # This 'pretends' that a event has 'just happened' which will have the effect of increasing
-                            # the apparent time between events. Therefore as time moves on, with no more events
-                            # recorded, the 'mean period between events' will improve (i.e get larger)
-                            meanPeriodBetweenEvents = (sumOfTimePeriodsBetweenEvents + timeElapsedSinceMostRecentEvent)/\
-                                                      (totalNoOfEvents + 1)
-                            return meanPeriodBetweenEvents
-                        else:
-                            # The time elapsed since the last event is less than the calculated actual mean.
-                            # Therefore we ignore the effect of it, as it will only worsen the mean period
-                            return actualPeriodBetweenEvents
-                    except Exception as e:
-                        Utils.Message.addMessage("RtpReceiveStream.__samplingThread.calculateMeanPeriodBetweenEvents() " +\
-                                                 str(e))
-                        return None
+                # def calculateMeanPeriodBetweenEvents(sumOfTimePeriodsBetweenEvents,
+                #                                      timeElapsedSinceMostRecentEvent,
+                #                                      totalNoOfEvents):
+                #     try:
+                #         # Calculate mean period between the events that have already happened
+                #         actualPeriodBetweenEvents = sumOfTimePeriodsBetweenEvents / totalNoOfEvents
+                #         # Now look to see if time elapsed since the last event is longer than the mean between events
+                #         if timeElapsedSinceMostRecentEvent > actualPeriodBetweenEvents:
+                #             # This 'pretends' that a event has 'just happened' which will have the effect of increasing
+                #             # the apparent time between events. Therefore as time moves on, with no more events
+                #             # recorded, the 'mean period between events' will improve (i.e get larger)
+                #             meanPeriodBetweenEvents = (sumOfTimePeriodsBetweenEvents + timeElapsedSinceMostRecentEvent)/\
+                #                                       (totalNoOfEvents + 1)
+                #             return meanPeriodBetweenEvents
+                #         else:
+                #             # The time elapsed since the last event is less than the calculated actual mean.
+                #             # Therefore we ignore the effect of it, as it will only worsen the mean period
+                #             return actualPeriodBetweenEvents
+                #     except Exception as e:
+                #         Utils.Message.addMessage("RtpReceiveStream.__samplingThread.calculateMeanPeriodBetweenEvents() " +\
+                #                                  str(e))
+                #         return None
 
                 try:
                     ########### Update Mean Jitter averages
@@ -1930,10 +1926,15 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
                         self.sumOfTimeElapsedSinceLastRxTTLChange \
                             += self.__stats["route_time_elapsed_since_last_TTL_change_event"]
+                        # Since the rxTTl has changed, we can expect a subsequent change in the received hopslist
+                        hopsListChangeExpected = True
+                        # Flush the contents of the current hopsList because it's now been invalidated
+                        # Utils.Message.addMessage("DBUG: hopsListChangeExpected.")
+                        # self.setTraceRouteHopsList([])
                         # Post a message
                         Utils.Message.addMessage(ipRoutingTTLChange.getSummary(includeStreamSyncSourceID=False)['summary'])
-                        # Snapshot current rxTTL value
-                        prevRxTTL = self.__stats["packet_instantaneous_ttl"]
+                        # # Snapshot current rxTTL value
+                        # prevRxTTL = self.__stats["packet_instantaneous_ttl"]
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect rxTTL changes " + str(e))
@@ -1980,124 +1981,36 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate ttl decrements " + str(e))
 
-
+                ######## Detect route changes using traceroute hops list (and rxTTL if available)
                 try:
-                    ######## Detect route changes using traceroute hops list
-                    # Compare the diff of the sum of the each of the traceroute hops to the previous value for that hop
-                    #  If it has changed, signal a route change.
-                    # Note: some routers don't always respond (so that hop value oscillates between a valid IP address
-                    # and 0.0.0.0. Even though the rest of the hops have stayed the same, this could look like a
-                    # route change
-                    # Therefore, if we take the abs() of the diff, we can ignore that false positive
-                    # generate a route changed event
                     # Get the current hops list
                     hopsList = self.getTraceRouteHopsList()
-                    # Flag to signal the detection of a route change
-                    hopsListHasChanged = False
-
-
-                    # Wait until all the traceroute hops have been populated with values before calculating
-                    if len(hopsList) > 0 and None not in hopsList:
-                        # Set initial value for prevHopsList
-                        if len(prevHopsList) == 0:
-                            prevHopsList = hopsList
-                            hopsListHasChanged = True
-                            Utils.Message.addMessage("Initial traceroute received for stream " +\
-                                                     str(self.__stats["stream_syncSource"]))
-
-                        # # Test to see if the rxTTL value has changed, if so, set hopsListHasChanged flag
-                        # elif self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
-                        #     hopsListHasChanged = True
-
-                        # Test If length of list has changed then set hopsListHasChanged flag
-                        # However, if the rxTTL value hasn't also changed*, this suggests an erroneous
-                        # traceroute hops list possibly caused by a series of routers not responding.
-                        # * Note if prevRxTTL is 'None' (because the rxTTL isn't able to be decoded)
-                        # then all we have to go on is the length of the hops list
-
-                        # Test If length of list has changed then set hopsListHasChanged flag
-                        elif (len(hopsList) != len(prevHopsList)):
-                            hopsListHasChanged = True
-                            # # Test to see if stats["packet_instantaneous_ttl"] contains any useful info
-                            # # on which to base a route-change decision
-                            # if self.__stats["packet_instantaneous_ttl"] is None:
-                            #     # It doesn't, so we can only go on the change in length of hopsList[]
-                            #     hopsListHasChanged = True
-                            # else:
-                            #     # stats["packet_instantaneous_ttl"] does contain a value which we can use to see if the
-                            #     # route has changed. Compare current and prev rxTTL values
-                            #     if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
-                            #         hopsListHasChanged = True
-                            #     else:
-                            #         # This change in the length of hopsList is a red herring because rxTTL did not change.
-                            #         # Therefore ignore.
-                            #         hopsListHasChanged = False
-                            #         Utils.Message.addMessage("DBUG: False route change. hopsList len changed " +\
-                            #                                  str(len(prevHopsList)) + ">>" + str(len(prevHopsList)) +\
-                            #                                  " but rxTTL val didn't " + str(prevRxTTL) + ">>" +\
-                            #                                  str(self.__stats["packet_instantaneous_ttl"]))
-
-
-                        # If the lengths of the two lists are the same, test the contents
+                    # Calculate checksum of current hops list. Does it match that of self.tracerouteReceivedChecksum?
+                    # if it doesn't, that suggests we have an incomplete or jumbled up hopsList
+                    # This could happen if the traceroute hops have jjst changed but the transmitter bitrate is slow
+                    # leading to a long time for the entire traceroute hops list to be transmitted
+                    localTracerouteChecksum = self.createTracerouteChecksum(hopsList)
+                    if localTracerouteChecksum == self.tracerouteReceivedChecksum:
+                        # If the checksum's match, we can be reasonably confident our hopsList data is valid
+                        # Utils.Message.addMessage("Checksums match local " +str(localTracerouteChecksum) + ", rx" +\
+                        #               str(self.tracerouteReceivedChecksum))
+                        # Attempt to detect a route change
+                        if hopsListChangeExpected is False:
+                            # Under normal circumstances, take the rxTTL into account to determine route changes
+                            # This *should* mean that even if the hopList lengths differ, if the RxTTL values *haven't*
+                            # changed, we can ignore the change in prevHopsList/hopsList
+                            routeHasChanged = detectRouteChanges(prevHopsList, hopsList,
+                                                                prevRxTTL=prevRxTTL,
+                                                                 rxTTL=self.__stats["packet_instantaneous_ttl"])
                         else:
-                            # Otherwise, if list length is the same compare sums of latest and previous sumOfHopsList members
-                            for hopNo in range(len(hopsList)):
-                                # Iterate over hopsList, comparing the sums of the octets of the individual hops
-                                # Subtract abs(current_value - prev_value) from current value
-                                # If the result is 0, the hop hasn't changed
-                                sumPrevHop = sum(prevHopsList[hopNo])
-                                sumCurrentHop = sum(hopsList[hopNo])
+                            # Otherwise, if the rxTTL has recently changed, we can only go on the prevHopsList and hopsList
+                            # to determine route changes because the hopsList changes will lag behind those of rxTTL
+                            routeHasChanged = detectRouteChanges(prevHopsList, hopsList)
 
-                                # If the sum of the current and prev hops are different, the route may have changed
-                                # But if that change is to/from a value of '0.0.0.0' (i.e the sum is 0) then the
-                                # change doesn't
-
-                                # Check to see if either the current or previous values are zero. If so, ignore
-                                if sumPrevHop != 0 and sumCurrentHop != 0:
-                                    if sumCurrentHop == sumPrevHop:
-                                        # The hop value has remained the same, no route change
-                                        hopsListHasChanged = False
-                                        # Utils.Message.addMessage(
-                                        #     "No Change" + str(prevHopsList[hopNo]) + "-->" + \
-                                        #     str(hopsList[hopNo]))
-
-                                    else:
-                                        # The hop value has changed. New route
-                                        hopsListHasChanged = True
-                                        # Utils.Message.addMessage(
-                                        #     "Change" + str(prevHopsList[hopNo]) + "-->" + \
-                                        #     str(hopsList[hopNo]))
-
-                                # Now check to see if we previously had a zero hop value but we now have a non zero value
-                                # If so, this suggests a route change
-                                elif sumCurrentHop != 0 and sumPrevHop == 0:
-                                    hopsListHasChanged = True
-                                    # Utils.Message.addMessage(
-                                    #     "Change" + str(prevHopsList[hopNo]) + "-->" + \
-                                    #     str(hopsList[hopNo]))
-
-                                # Now check to see if we previously had a non-zero value for this hop. If so, make
-                                # an educated guess and carry the prev hop value into the current hop value
-                                # This means that we might have something to compare this hop value to if it changes
-                                # to another non-zero value
-                                elif sumCurrentHop == 0 and sumPrevHop != 0:
-                                    hopsList[hopNo] = prevHopsList[hopNo]
-                                    # Utils.Message.addMessage(
-                                    #     "Copy prev value forward " + str(prevHopsList[hopNo]) + "-->" + \
-                                    #     str(hopsList[hopNo]))
-                                    hopsListHasChanged = False
-
-                                else:
-                                    # We don't know if the route has changed or not, because either the current or
-                                    # prev sum value was/is zero
-                                    # Utils.Message.addMessage(
-                                    # "Don't know" + str(prevHopsList[hopNo]) + "-->" + \
-                                    # str(hopsList[hopNo]))
-                                    hopsListHasChanged = True
-
-
-                        if hopsListHasChanged:
+                        if routeHasChanged:
                             # Route change detected, create a new IPRoutingChange event
+                            # Acknowledge the route change and clear the flag
+                            hopsListChangeExpected = False
                             iPRoutingTracerouteChange = IPRoutingTracerouteChange(self.__stats, hopsList)
                             # Add the event to the event list
                             self.__eventList.append(iPRoutingTracerouteChange)
@@ -2111,19 +2024,23 @@ class RtpReceiveStream(RtpReceiveCommon):
                             self.sumOfTimeElapsedSinceLastRouteChange \
                                     += self.__stats["route_time_elapsed_since_last_route_change_event"]
 
-                            # # Post a message
+                            # Post a message
                             Utils.Message.addMessage(iPRoutingTracerouteChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+                            # Utils.Message.addMessage("old tr " + str(prevHopsList))
                             # Utils.Message.addMessage("new tr " + str(hopsList))
-                            pass
 
-                        # Snapshot latest hopsList
+                        # Snapshot latest hopsList (regardless of whether a route change was detected)
                         prevHopsList = hopsList
                     else:
-                        # Utils.Message.addMessage("empty hopslist")
+                        # Utils.Message.addMessage("Traceroute checksums don't match " + str(localTracerouteChecksum) + ":" +\
+                        #               str(self.tracerouteReceivedChecksum))
                         pass
+
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect route changes " + str(e))
 
+                # Snapshot current rxTTL value
+                prevRxTTL = self.__stats["packet_instantaneous_ttl"]
 
                 ########## Calculate traceroute route change stats
                 try:
@@ -2146,7 +2063,25 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Route Change stats " + str(e))
 
+                ############ Now send results back to transmitter
+                try:
+                    # Confirm that the stream is being sent from an instance of isptest AND only send if we're
+                    # currently receiving bytes
+                    if (self.__stats["stream_transmitterVersion"] > 0) and \
+                            self.__stats["packet_data_received_1S_bytes"] > 0:
 
+                            # Get the last 5 events for this stream
+                            NO_OF_PREV_EVENTS_TO_SEND = 5
+                            eventsList = self.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
+                            addResultsToTxQueue(self.__stats, eventsList, self.resultsTxQueue,
+                                                self.__stats["stream_srcAddress"],
+                                                self.__stats["stream_srcPort"])
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
+                                             str(self.__stats["stream_syncSource"]) + ", " + str(e))
+
+
+                # Utils.Message.addMessage("TX stream ttl: " + str(self.__stats["stream_transmitter_TimeToLive_sec"]))
                 ######## 1 second counter end of code ########
 
             try:
@@ -2366,6 +2301,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             try:
                 # Wait for a packet to arrive in the receive queue
                 rtpPacketData = self.rtpStreamQueue.get(timeout=0.2)
+
                 # Take a copy of the latest sequence no.
                 latestSeqNo = rtpPacketData.rtpSequenceNo
 
@@ -2400,6 +2336,16 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Update total bytes received
                 self.__packetDataReceivedTotalBytes += rtpPacketData.payloadSize
 
+                ########### Extract isptest header from most recent packet
+                self.__extractIsptestHeaderData(rtpPacketData.isptestHeaderData)
+
+                ############ Snapshot the 'latest IP TTL' value
+                # Note: This TTL value might be 'None' (i.e not set)
+                self.__rxTTL = rtpPacketData.rxTTL
+                ############ Snapshot the 'latest src addr' value
+                self.__srcAddress = rtpPacketData.srcAddr
+                ############ Snapshot the 'latest src port' value
+                self.__srcPort = rtpPacketData.srcPort
 
                 # Add the packet to the circular packet buffer (for glitch, receive period and jitter analysis)
                 rtpPackets.append(rtpPacketData)
@@ -2491,8 +2437,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # to the current time
                         self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.datetime.now()
 
-                    # Calculate receive period of latest packet
-                    receivePeriod = (rtpPackets[-1].timestamp - rtpPackets[-2].timestamp).microseconds
+                    # Calculate receive period of latest packet (taking into account seconds and microseconds)
+                    receivePeriodTimeDelta = (rtpPackets[-1].timestamp - rtpPackets[-2].timestamp)
+                    # Consider the seconds and microseconds components/Convert secs to microsecs
+                    receivePeriod = (receivePeriodTimeDelta.seconds * 1000000) + receivePeriodTimeDelta.microseconds
+
                     # Add latest receive period value to running total, for averaging
                     self.__receivePeriodRunningTotal += receivePeriod
 
@@ -2537,18 +2486,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # re-enable jitter detection
                         jitterDetectionEnabledFlag = True
 
-                    ########### Extract isptest header from most recent packet
-                    self.__extractIsptestHeaderData(rtpPackets[-1].isptestHeaderData)
-
-                    ############ Snapshot the 'latest IP TTL' value
-                    # Note: This TTL value might be 'None' (i.e not set)
-                    self.__rxTTL = rtpPackets[-1].rxTTL
-                    ############ Snapshot the 'latest src addr' value
-                    self.__srcAddress = rtpPackets[-1].srcAddr
-                    ############ Snapshot the 'latest src port' value
-                    self.__srcPort = rtpPackets[-1].srcPort
-
-
                     # x = rtpPackets[-1].rtpSequenceNo
                     # if x % 20 == 0:
                     #     # Utils.Message.addMessage("__queueReceiverThread " + str(x) + " Packets Rx'd: " +\
@@ -2572,323 +2509,6 @@ class RtpReceiveStream(RtpReceiveCommon):
         Utils.Message.addMessage("DBUG: Ending __queueReceiverThread for stream " + \
                                  str(self.__stats["stream_syncSource"]))
 
-    # Define a private calculation method that will run autonomously as a thread
-    # DEPRECATED: Replaced with combaination of __samplingThread and __queueReceiverThread() (using Queue)
-    # def __calculateThread(self):
-    #     Utils.Message.addMessage("DBUG: Starting __calculateThread with sync Source: " + \
-    #                        str(self.__stats["stream_syncSource"]))
-    #
-    #     # Prev timestamp doesn't exist yet as this is the first packet, so create datetime object with value 0
-    #     lastReceivedRtpPacket = RtpData(0, 0, datetime.timedelta(), self.__stats["stream_syncSource"], "")
-    #
-    #     # Start the loop timer (used to provide a 1sec interval)
-    #     loopTimerStart = timer()
-    #     # Timer used to detect loss of streams against an alarm threshold
-    #     lossOfStreamTimerStart = timer()
-    #
-    #     runningTotalPacketsPerSecond = 0
-    #     runningTotalDataReceivedPerSecond = 0
-    #
-    #     historicJitter = []
-    #     sumOfJitter_1s = 0
-    #
-    #     # Declare flags
-    #     lossOfStreamFlag = True
-    #     possibleLossOfStreamFlag = False
-    #
-    #     # Constants. Used in calculation of received data rate
-    #     UDP_HEADER_LENGTH_BYTES = 8
-    #     RTP_HEADER_LENGTH_BYTES = 12
-    #
-    #     # Endless loop whilst permitted by the flag
-    #     while self.calculateThreadActiveFlag == True:
-    #
-    #         # Lock the access mutex
-    #         self.__accessRtpDataMutex.acquire()
-    #         # Copy the contents of self.rtpStreamData into a temporary list so the accessRtpDataMutex can be released
-    #         self.rtpStream = list(self.rtpStreamData)
-    #
-    #         # Now we have a working copy of rtpStreamData[] we can clear the original source list
-    #         del self.rtpStreamData[:]
-    #         # Release the mutex
-    #         self.__accessRtpDataMutex.release()
-    #
-    #         # Take a timestamp in order to calculate the processor time required for packet analysis
-    #         calculationStartTime = timer()
-    #         # Lock self.__stats and self.__eventList mutexes
-    #         self.__accessRtpStreamStatsMutex.acquire()
-    #         self.__accessRtpStreamEventListMutex.acquire()
-    #         # Test for new data
-    #         if len(self.rtpStream) > 0:
-    #             # Data is present
-    #             # Take timestamp of the very first packet received of this rtpStream
-    #             if self.__stats["packet_counter_received_total"] < 1:
-    #                 self.__stats["packet_first_packet_received_timestamp"] = self.rtpStream[0].timestamp
-    #                 # Add a StreamStarted event to the event list
-    #                 streamStartedEvent = StreamStarted(self.__stats, self.rtpStream[0])
-    #                 self.__eventList.append(streamStartedEvent)
-    #                 # Increment the all_events counter
-    #                 self.__stats["stream_all_events_counter"] += 1
-    #                 Utils.Message.addMessage(streamStartedEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
-    #
-    #             # Stream now being received so clear flag
-    #             if lossOfStreamFlag == True:
-    #                 # We're now receiving a stream, so clear alarm flag
-    #                 lossOfStreamFlag = False
-    #
-    #             if possibleLossOfStreamFlag == True:
-    #                 possibleLossOfStreamFlag = False
-    #
-    #             # Get copy of final packet of prev data set
-    #             if self.__stats["packet_counter_received_total"] < 1:
-    #                 # For the very first packet, take the prev packet to be that of the first packet received (to give a
-    #                 # delta of zero, otherwise the delta will be the diff between 0 and today's date!
-    #                 # prevRtpPacket=self.rtpStream[0]
-    #                 lastReceivedRtpPacket = self.rtpStream[0]
-    #
-    #             # Calculate and update per second and aggregate data counters
-    #             for x in self.rtpStream:
-    #                 # Per second counter
-    #                 runningTotalDataReceivedPerSecond += x.payloadSize
-    #                 # Total aggregate
-    #                 self.__stats["packet_data_received_total_bytes"] += x.payloadSize
-    #
-    #             # Calculate and update per second and aggregate packet counters
-    #             # Per second counter
-    #             runningTotalPacketsPerSecond += len(self.rtpStream)
-    #             # Total aggregate
-    #             self.__stats["packet_counter_received_total"] += len(self.rtpStream)
-    #
-    #             # Calculate jitter ###############################################################
-    #             self.__calculateJitter(lastReceivedRtpPacket)
-    #
-    #             # Glitch Detection ###############################################################
-    #             self.__detectGlitches(lastReceivedRtpPacket)
-    #
-    #             # Capture most recent packet (last item of current data set) for next time around loop
-    #             lastReceivedRtpPacket = self.rtpStream[-1]
-    #             # Take timestamp of last packet in this batch
-    #             self.__stats["packet_last_seen_received_timestamp"] = lastReceivedRtpPacket.timestamp
-    #
-    #             # Extract isptest header using data from first packet in this batch
-    #             self.__extractIsptestHeaderData(self.rtpStream[0].isptestHeaderData)
-    #
-    #         else:
-    #             # No data, so set lossOfStreamFlag (unless it's already been set)
-    #             # Check for changes and that we also have an active stream. If so, set the flag and add an event to the eventlist
-    #
-    #             if possibleLossOfStreamFlag == False:
-    #                 # Set the flag
-    #                 possibleLossOfStreamFlag = True
-    #                 # And start the lossOfStream Timer
-    #                 lossOfStreamTimerStart = timer()
-    #
-    #             if (timer() - lossOfStreamTimerStart) >= self.lossOfStreamAlarmThreshold_s \
-    #                     and lossOfStreamFlag == False and self.__stats["packet_counter_received_total"] > 0:
-    #                 # Set flag
-    #                 lossOfStreamFlag = True
-    #                 # Add event to the list (but only do this once)
-    #                 streamLostEvent = StreamLost(self.__stats, lastReceivedRtpPacket)
-    #                 self.__eventList.append(streamLostEvent)
-    #                 # Increment the all_events counter
-    #                 self.__stats["stream_all_events_counter"] += 1
-    #                 Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
-    #                 ######## POSSIBLY REVISIT THIS.....
-    #                 # # Finally, reset min/max/range jitter values as they're corrupted by a loss of signal
-    #                 # self.__stats["jitter_min_uS"] = 0
-    #                 # self.__stats["jitter_max_uS"] = 0
-    #                 # self.__stats["jitter_range_uS"] = 0
-    #                 #
-    #                 # # Think these should be cleared too, but there could be consequences
-    #                 # self.__stats["jitter_instantaneous"] = 0
-    #                 # self.__stats["packet_instantaneous_receive_period_uS"] = 0
-    #
-    #         # Calculate elapsed since last glitch
-    #         # But only if there has actually been a glitch in the past to measure against
-    #         if self.__stats["glitch_counter_total_glitches"] > 0:
-    #             # Calculate new value
-    #             self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats[
-    #                 "glitch_most_recent_timestamp"]
-    #
-    #         # Calculate % packet loss
-    #         if self.__stats["packet_counter_received_total"] > 0:
-    #             totalExpectedPackets = self.__stats["packet_counter_received_total"] + \
-    #                                    self.__stats["glitch_packets_lost_total_count"]
-    #             # Guard against divide by zero errors
-    #             if totalExpectedPackets > 0:
-    #                 self.__stats["glitch_packets_lost_total_percent"] = \
-    #                     self.__stats["glitch_packets_lost_total_count"] * 100 / totalExpectedPackets
-    #
-    #         ################# 1 second timer
-    #         if (timer() - loopTimerStart) >= 1:
-    #             # Reset loop timer starting reference
-    #             loopTimerStart = timer()
-    #             # Increment seconds elapsed
-    #             self.__stats["stream_time_elapsed_total"] += datetime.timedelta(seconds=1)
-    #             # Take snapshots of running totals
-    #             self.__stats["packet_counter_1S"] = runningTotalPacketsPerSecond
-    #             # Calculate rx data rate including UDP and RTP headers
-    #             bytesPerSecIncHeaders = runningTotalDataReceivedPerSecond + \
-    #                                     runningTotalPacketsPerSecond * (UDP_HEADER_LENGTH_BYTES+RTP_HEADER_LENGTH_BYTES)
-    #             self.__stats["packet_data_received_1S_bytes"] = bytesPerSecIncHeaders
-    #
-    #             # Calculate self.__stats["packet_payload_size_mean_1S_bytes"]
-    #             # Need to deduct 20 (8 bytes for the UDP header and 12 bytes for the RTP header)
-    #             totalHeaderLength_bytes = UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES
-    #             if self.__stats["packet_counter_1S"] > 0:
-    #                 self.__stats["packet_payload_size_mean_1S_bytes"] = \
-    #                     int(self.__stats["packet_data_received_1S_bytes"] / self.__stats["packet_counter_1S"]) -\
-    #                         totalHeaderLength_bytes
-    #             # Clear running totals
-    #             runningTotalPacketsPerSecond = 0
-    #             runningTotalDataReceivedPerSecond = 0
-    #
-    #             # Calculate 1 second jitter
-    #             if self.__stats["packet_counter_1S"] > 0:
-    #                 self.__stats["jitter_mean_1S_uS"] = self.sumOfJitter_1s / self.__stats["packet_counter_1S"]
-    #
-    #
-    #             # Reset self.sumOfJitter_1s
-    #             self.sumOfJitter_1s = 0
-    #
-    #             # Calculate 10s jitter moving average using a 10 element array of the prev 10 1s values
-    #             # Add the latest 1s jitter value to the moving 10s jitter results array
-    #             historicJitter.append(self.__stats["jitter_mean_1S_uS"])
-    #             # Calculate a long-term jitter value by averaging all meanJitter_1s value over time elapsed
-    #             sumOfJitter_1s += self.__stats["jitter_mean_1S_uS"]
-    #             self.__stats["jitter_long_term_uS"] = sumOfJitter_1s / self.__stats["stream_time_elapsed_total"].seconds
-    #             # Check that we have enough results (10s worth) to calculate the 10s value
-    #             if len(historicJitter) > 10:
-    #                 # Remove the oldest value
-    #                 historicJitter.remove(historicJitter[0])
-    #                 # Clear sum var prior to recalculation of mean
-    #                 sumOfJitter_10s = 0
-    #                 # Calculate mean of previous 10 1s jitter values
-    #                 for x in historicJitter:
-    #                     sumOfJitter_10s += x
-    #                 self.__stats["jitter_mean_10S_uS"] = sumOfJitter_10s / len(historicJitter)
-    #
-    #             # Dynamically modify POLL_INTERVAL based on a value of 10 times the Rx packet rate
-    #             # This will ensure that self.rtpStream[] length never gets too large.
-    #             # Otherwise, for high packet receive rates, the calculation time will become excessive
-    #             # Wait a second, in order to know we're in a steady state
-    #             if self.__stats["packet_instantaneous_receive_period_uS"] > 0 and \
-    #                     self.__stats["stream_time_elapsed_total"].seconds > 1:
-    #                 # self.__stats["calculate_thread_sampling_interval_S"] = 10.0 * \
-    #                 #                                                        self.__stats[
-    #                 #                                                            "packet_instantaneous_receive_period_uS"] / 1000000.0
-    #                 ### NEW CODE TO HELP WITH CHOPPY LOSSY LINKS - OLD CODE USED TO CAUSE EXXCESSIVE CPU USAGE ###
-    #                 ###ERROR:  File "/usr/local/Cellar/python/3.7.7/Frameworks/Python.framework/Versions/3.7/lib/python3.7/threading.py",$
-    #                 #     self._target(*self._args, **self._kwargs)
-    #             #   File "/Volumes/Transcend/Dropbox (BBC)/Software_Dev/Python/isptest/RtpStreams.py", line 1470, in __calcula$
-    #             #     time.sleep(self.__stats["calculate_thread_sampling_interval_S"])
-    #             # ValueError: sleep length must be non-negative
-    #
-    #
-    #                 # snapshot the previous timing interval
-    #                 oldSamplingRateInterval = self.__stats["calculate_thread_sampling_interval_S"]
-    #                 # Calculate the current timing interval based on the current rate of incoming packets
-    #                 newSamplingRateInterval = 10.0 *self.__stats["packet_instantaneous_receive_period_uS"] / 1000000.0
-    #                 # If the timing interval has to be reduced, apply the change immediately
-    #                 if newSamplingRateInterval < oldSamplingRateInterval:
-    #                     self.__stats["calculate_thread_sampling_interval_S"] = newSamplingRateInterval
-    #                 else:
-    #                     # If the timing interval can be increased, apply the change more slowly
-    #                     diff = newSamplingRateInterval - oldSamplingRateInterval
-    #
-    #                     self.__stats["calculate_thread_sampling_interval_S"] += 0.2 * diff
-    #
-    #             # Utils.Message.addMessage("sampling interval " + str(self.__stats["calculate_thread_sampling_interval_S"])+\
-    #             #                          " Len " + str(len(self.rtpStream)))
-    #             ######### Now calculate moving glitch counters by iterating over the self.movingGlitchCounters array
-    #             # firstly recalculate, then generate stats keys automatically for any moving totals counters
-    #             # within self.movingGlitchCounters
-    #             for x in self.movingGlitchCounters:
-    #                 # Force the moving counters to increment their timers and recalculate totals
-    #                 x.recalculate()
-    #                 name, movingTotal, events = x.getResults()
-    #                 # Dynamically create new stats keys using the name field of the moving glitch counter
-    #                 self.__stats[name] = movingTotal
-    #                 self.__stats[name + "_events"] = events
-    #
-    #             ######### Now housekeep
-    #             # Purge __eventList[] to remove the oldest events
-    #             self.__houseKeepEventList()
-    #
-    #             # Check to see if this is a truly dead receive stream. If so, auto generate and save a stream report,
-    #             # and kill the associated this calculateThread and corresponding ResultsTransmitter.__resultsTransmitterThread.
-    #             #  Finally, remove this RtpStream object from the dictionary
-    #             try:
-    #                 if (datetime.datetime.now() - self.__stats["packet_last_seen_received_timestamp"]) > \
-    #                         datetime.timedelta(seconds=self.streamIsDeadThreshold_s):
-    #                     # Set the 'to be deleted' flag
-    #                     self.believedDeadFlag = True
-    #
-    #
-    #             except Exception as e:
-    #                 Utils.Message.addMessage("ERR: RtpStream.__calc..Thread. Testing for dead receive stream: " + str(e))
-    #
-    #
-    #         # Calculate how long it has taken for the stats analysis to have been performed
-    #         calculationEndTime = timer()
-    #         # Take the calculation time in microseconds and combine with the period between
-    #         # packets arriving multiplied by the no of packets in this batch of rtpStream
-    #         # to work out how much processor headroom there is (as a ratio of times).
-    #         # If the total calculation time for rtpStream[] is > than the gap between packets
-    #         # arriving then the the processor can't keep up, so generate an event
-    #         # This is to guard against false-positives
-    #         # Calculate calculationDuration (in uS)
-    #         #   the %1 throws away the whole number part, *1000000 converts from s to uS
-    #         self.__stats["calculate_thread_calculation_duration_uS"] = \
-    #             ((calculationEndTime - calculationStartTime) % 1) * 1000000
-    #
-    #         if len(self.rtpStream) > 0 and self.__stats["packet_instantaneous_receive_period_uS"] > 0:
-    #             # Calculate processorUtilisationPercent. All time values in uS
-    #             self.__stats["stream_processor_utilisation_percent"] = \
-    #                 self.__stats["calculate_thread_calculation_duration_uS"] * 100.0 / (
-    #                         self.__stats["packet_instantaneous_receive_period_uS"] * len(self.rtpStream))
-    #         else:
-    #             self.__stats["stream_processor_utilisation_percent"] = 0
-    #
-    #         # If the CPU is >99% utilised, add event to the list (but only do this once)
-    #         if self.__stats["stream_processor_utilisation_percent"] > 99:
-    #             processorOverloadEvent = ProcessorOverload(self.__stats, lastReceivedRtpPacket)
-    #             # Check to see if processorOverloadEvent Event creation is enabled
-    #             if Registry.allowProcessorOverloadEventGeneration:
-    #                 # if so, add the event
-    #                 self.__eventList.append(processorOverloadEvent)
-    #                 # Increment the all_events counter
-    #                 self.__stats["stream_all_events_counter"] += 1
-    #             Utils.Message.addMessage(processorOverloadEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
-    #             Utils.Message.addMessage("["+ str(self.__stats["stream_syncSource"]) +"][" + \
-    #                                      str(self.__stats["stream_friendly_name"]).rstrip() +
-    #                                      "] Bursty incoming data " + str(len(self.rtpStream)) + " packets")
-    #
-    #
-    #
-    #         # Unlock  self.__stats and self.__eventList mutexes
-    #         self.__accessRtpStreamStatsMutex.release()
-    #         self.__accessRtpStreamEventListMutex.release()
-    #
-    #         # Empty the self.rtpStream list
-    #         del self.rtpStream
-    #
-    #         # Now test self.believedDeadFlag, and if set, auto generate and save areport to disk, and
-    #         # kill the RtpReceiveStream
-    #         if self.believedDeadFlag == True:
-    #             Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
-    #                                "(" + str(self.__stats["stream_friendly_name"]).rstrip() + \
-    #                                ") believed dead, removing from list")
-    #
-    #             # Generate and save a report
-    #             # Retrieve the auto-generated filename
-    #             _filename = self.createFilenameForReportExport()
-    #             # Write a report to disk
-    #             self.writeReportToDisk(fileName=_filename)
-    #             # Kill itself
-    #             self.killStream()
-    #
-    #         time.sleep(self.__stats["calculate_thread_sampling_interval_S"])
 
     # Define setter methods
     def setFriendlyName(self, friendlyName):
@@ -3063,132 +2683,160 @@ class RtpReceiveStream(RtpReceiveCommon):
         except Exception as e:
             Utils.Message.addMessage("RtpReceiveStream.addData() " + str(e))
 
+    # Sends a control message to the isptest Transmitter associated with this ReceiverStream object
+    # by pickling the supplied message and wrapping it up in another dict along with
+    # a destination ip and port (so that the  udpTransmit routine knows where to send it)
+    # Returns a sucess/fail message transmit status in the form of a dict
+    # Messages sent by this method will be parsed by RtpGenerator.parseControlMessage()
+    def sendControlMessageToTransmitter(self, msg):
+        # Test to see if the rtp source of this stream is actually an instance of isptest
+        if self.__stats["stream_transmitterVersion"] > 0:
+            Utils.Message.addMessage("DBUG:sendControlMessageToTransmitter() msg to send: " + str(msg))
+            try:
+                # wrap the message in a dict with the "control" key. This will be detected in ResultsReceiver.__resultsReceiverThread()
+                wrappedMessage = {"control": msg}
+                # pickle the wrapped message
+                pickledMessage = pickle.dumps(wrappedMessage, protocol=2)
+                # add the pickled message to the txMessageQueue
+                self.resultsTxQueue.put(\
+                    [pickledMessage, self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"]])
+                return {"status": True, "error": None}
 
-# An object that will transmit stream results back from the receiving end to to the sender
-# It is designed as a counterpart to class ResultsReceiver
-# Note. This will reply from the same UDP binding as used in main() socket.recvfrom
-class ResultsTransmitter(object):
-    def __init__(self, rtpStream):
-        self.parentRtpRxStream = rtpStream
-        self.udpSocket = 0
-        self.destAddr = 0
-        self.destPort = 0
-        self.syncSource = 0
-        self.friendlyName = ""
-        self.threadActiveFlag = True # Used to control the lifespan of __resultsTransmitterThread
-        self.transmitActiveFlag = False  # Used to enable/disable transmit of UDP packets
-                                    # For RTP stream sources not identified as being from isptest (eg an NTT), this will
-                                    # inhibit needless reverse traffic
-                                    # At start-up, inhibit tx traffic by default.
-                                    # The corresponding RtpReceiveStream.__calculateThread() will enable it,
-                                    # if approproate
-
-        self.sendtoErrorCounter = 0 # Count's the no. of socket.sendto() errors
-        self.sendtoErrorCounterThreshold = 10 # No of consecutive socket.sendto() errors that the thread will
-                                            # tolerate before it gives up
-
-        # Get the destination addr and src port from the supplied rtpStream object
-        self.syncSource, self.destAddr, self.destPort, self.friendlyName =\
-            self.parentRtpRxStream.getRTPStreamID()
-
-        # Start the transmitter thread
-        self.resultsTransmitterThread = threading.Thread(target=self.__resultsTransmitterThread, args=())
-        self.resultsTransmitterThread.daemon = True
-        self.resultsTransmitterThread.setName(str(self.syncSource) + ":ResultsTransmitter")
-        self.resultsTransmitterThread.start()
-
-    def kill(self):
-        # Forces the self.transmitterActiveFlag to False which will cause the __resultsTransmitterThread
-        # to end
-        self.threadActiveFlag = False
+            except Exception as e:
+                return {"status": False, "error": str(e)}
+        else:
+            return {"status": False, "error": "Rtp stream " + str(self.__stats["stream_syncSource"]) +\
+                                                        " can't be remotely controlled. Not generated by isptest"}
 
 
-    def __resultsTransmitterThread(self):
-        Utils.Message.addMessage("INFO: __resultsTransmitterThread started for stream: "+ str(self.syncSource))
-
-        # oldSocket = self.parentRtpRxStream.getSocket()
-        # Utils.Message.addMessage("__resultsTransmitterThread. Initial socket" + str(id(oldSocket)))
-        selectTimeout = 1 # timeout for the select() function used to poll the OS for the availability of the socket
-        while self.threadActiveFlag:
-            self.udpSocket = self.parentRtpRxStream.getSocket()
-            # if oldSocket is not self.udpSocket:
-            #     Utils.Message.addMessage("__resultsTransmitterThread. Socket changed to " + str(id(self.udpSocket)))
-            #     oldSocket = self.udpSocket
-
-            # Check that the the socket is a valid socket.socket object
-            if type(self.udpSocket) == socket.socket:
-                # Confirm that transmission is active
-                if self.transmitActiveFlag == True:
-                    # Utils.Message.addMessage("__resultsTransmitterThread. Current TX socket " + str(id(self.udpSocket)))
-                    # Get the destination addr and src port from the supplied rtpStream object
-                    self.syncSource, self.destAddr, self.destPort, self.friendlyName = \
-                        self.parentRtpRxStream.getRTPStreamID()
-
-                    try:
-                        # We have a valid socket binding we can use, so transmit the data
-                        # Use pickle to serialise the data we want to send
-                        stats = self.parentRtpRxStream.getRtpStreamStats()
-
-                        # Get the last 5 events for this stream
-                        NO_OF_PREV_EVENTS_TO_SEND = 5
-                        eventsList = self.parentRtpRxStream.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
-
-                        # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
-
-                        msg = {"stats": stats, "eventList": eventsList}
-                        pickledMessage = pickle.dumps(msg,protocol=2)
-
-                        # Set max safe UDP tx size to 576 (based on this:-
-                        # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
-                        MAX_UDP_TX_LENGTH = 512
-                        # Split the message up
-                        fragmentedMessage = Utils.fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
-                        if fragmentedMessage is not None and len(fragmentedMessage) > 0:
-
-                            # iterate over fragments and send
-                            for fragment in fragmentedMessage:
-                                # Pickle and send each fragment one at a time
-                                txMessage = pickle.dumps(fragment,protocol=2)
-                                # Wait for socket to become available
-                                # r, w, x = select.select([self.udpSocket], [], [], selectTimeout)
-                                # select() will return a list w containing the writable sockets
-                                # if self.udpSocket is present in that list, we can safely write to it
-                                # Utils.Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
-                                # if self.udpSocket in w:
-                                self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
-                                # clear the socket.sendto() error counter
-                                self.sendtoErrorCounter = 0
-                                # else:
-                                #     # tx socket is not available within the timeout period
-                                #     # Increment the counter
-                                #     self.sendtoErrorCounter += 1
-                                #     Utils.Message.addMessage("__resultsTransmitterThread tx error count " + \
-                                #                              str(self.sendtoErrorCounter) + ", " +\
-                                #                              str(self.udpSocket))
-                                #     # Abort the transmission of all fragments
-                                #     break
-                        else:
-                            # Utils.Message.addMessage("DBUG:__resultsTransmitterThread  - fragmentedMessage[] is None or empty")
-                            pass
-
-                    except Exception as e:
-                        # Increment the error counter
-                        self.sendtoErrorCounter += 1
-                        Utils.Message.addMessage("ERR:__resultsTransmitterThread sendto() socket id:" + str(id(self.udpSocket)) +", " + str(e))
-                        # Test to see if we've exceeeded the no of consequtive tolerable socket errors
-                        if self.sendtoErrorCounter >= self.sendtoErrorCounterThreshold:
-                            Utils.Message.addMessage("__resultsTransmitterThread. socket.sendto() error threshold exceeded (" +
-                                                     str(self.sendtoErrorCounterThreshold) +\
-                                                        "). Killing object for stream: " + str(self.syncSource))
-                            # Now kill the object itself
-                            self.kill()
-
-                else:
-                    # Results transmission inhibited
-                    pass
-            else:
-                Utils.Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
-            time.sleep(0.5)
+# # An object that will transmit stream results back from the receiving end to to the sender
+# # It is designed as a counterpart to class ResultsReceiver
+# # Note. This will reply from the same UDP binding as used in main() socket.recvfrom
+# class ResultsTransmitter(object):
+#     def __init__(self, rtpStream):
+#         self.parentRtpRxStream = rtpStream
+#         self.udpSocket = 0
+#         self.destAddr = 0
+#         self.destPort = 0
+#         self.syncSource = 0
+#         self.friendlyName = ""
+#         self.threadActiveFlag = True # Used to control the lifespan of __resultsTransmitterThread
+#         self.transmitActiveFlag = False  # Used to enable/disable transmit of UDP packets
+#                                     # For RTP stream sources not identified as being from isptest (eg an NTT), this will
+#                                     # inhibit needless reverse traffic
+#                                     # At start-up, inhibit tx traffic by default.
+#                                     # The corresponding RtpReceiveStream.__calculateThread() will enable it,
+#                                     # if approproate
+#
+#         self.sendtoErrorCounter = 0 # Count's the no. of socket.sendto() errors
+#         self.sendtoErrorCounterThreshold = 10 # No of consecutive socket.sendto() errors that the thread will
+#                                             # tolerate before it gives up
+#
+#         # Get the destination addr and src port from the supplied rtpStream object
+#         self.syncSource, self.destAddr, self.destPort, self.friendlyName =\
+#             self.parentRtpRxStream.getRTPStreamID()
+#
+#         # Start the transmitter thread
+#         self.resultsTransmitterThread = threading.Thread(target=self.__resultsTransmitterThread, args=())
+#         self.resultsTransmitterThread.daemon = True
+#         self.resultsTransmitterThread.setName(str(self.syncSource) + ":ResultsTransmitter")
+#         self.resultsTransmitterThread.start()
+#
+#     def kill(self):
+#         # Forces the self.transmitterActiveFlag to False which will cause the __resultsTransmitterThread
+#         # to end
+#         self.threadActiveFlag = False
+#
+#
+#     def __resultsTransmitterThread(self):
+#         Utils.Message.addMessage("INFO: __resultsTransmitterThread started for stream: "+ str(self.syncSource))
+#
+#         # oldSocket = self.parentRtpRxStream.getSocket()
+#         # Utils.Message.addMessage("__resultsTransmitterThread. Initial socket" + str(id(oldSocket)))
+#         selectTimeout = 1 # timeout for the select() function used to poll the OS for the availability of the socket
+#         while self.threadActiveFlag:
+#             self.udpSocket = self.parentRtpRxStream.getSocket()
+#             # if oldSocket is not self.udpSocket:
+#             #     Utils.Message.addMessage("__resultsTransmitterThread. Socket changed to " + str(id(self.udpSocket)))
+#             #     oldSocket = self.udpSocket
+#
+#             # Check that the the socket is a valid socket.socket object
+#             if type(self.udpSocket) == socket.socket:
+#                 # Confirm that transmission is active
+#                 if self.transmitActiveFlag == True:
+#                     # Utils.Message.addMessage("__resultsTransmitterThread. Current TX socket " + str(id(self.udpSocket)))
+#                     # Get the destination addr and src port from the supplied rtpStream object
+#                     self.syncSource, self.destAddr, self.destPort, self.friendlyName = \
+#                         self.parentRtpRxStream.getRTPStreamID()
+#
+#                     try:
+#                         # We have a valid socket binding we can use, so transmit the data
+#                         # Use pickle to serialise the data we want to send
+#                         stats = self.parentRtpRxStream.getRtpStreamStats()
+#
+#                         # Get the last 5 events for this stream
+#                         NO_OF_PREV_EVENTS_TO_SEND = 5
+#                         eventsList = self.parentRtpRxStream.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
+#
+#                         # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
+#
+#                         msg = {"stats": stats, "eventList": eventsList}
+#                         pickledMessage = pickle.dumps(msg,protocol=2)
+#
+#                         # add the pickled message to the txMessageQueue
+#                         # self.parentRtpRxStream.resultsTxQueue.put([pickledMessage, self.destAddr, self.destPort])
+#
+#                         # Set max safe UDP tx size to 576 (based on this:-
+#                         # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
+#                         MAX_UDP_TX_LENGTH = 512
+#                         # Split the message up
+#                         fragmentedMessage = Utils.fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
+#                         if fragmentedMessage is not None and len(fragmentedMessage) > 0:
+#
+#                             # iterate over fragments and send
+#                             for fragment in fragmentedMessage:
+#                                 # Pickle and send each fragment one at a time
+#                                 txMessage = pickle.dumps(fragment,protocol=2)
+#                                 # Wait for socket to become available
+#                                 # r, w, x = select.select([self.udpSocket], [], [], selectTimeout)
+#                                 # select() will return a list w containing the writable sockets
+#                                 # if self.udpSocket is present in that list, we can safely write to it
+#                                 # Utils.Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
+#                                 # if self.udpSocket in w:
+#                                 # self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
+#                                 # clear the socket.sendto() error counter
+#                                 self.sendtoErrorCounter = 0
+#                                 # else:
+#                                 #     # tx socket is not available within the timeout period
+#                                 #     # Increment the counter
+#                                 #     self.sendtoErrorCounter += 1
+#                                 #     Utils.Message.addMessage("__resultsTransmitterThread tx error count " + \
+#                                 #                              str(self.sendtoErrorCounter) + ", " +\
+#                                 #                              str(self.udpSocket))
+#                                 #     # Abort the transmission of all fragments
+#                                 #     break
+#                         else:
+#                             # Utils.Message.addMessage("DBUG:__resultsTransmitterThread  - fragmentedMessage[] is None or empty")
+#                             pass
+#
+#                     except Exception as e:
+#                         # Increment the error counter
+#                         self.sendtoErrorCounter += 1
+#                         Utils.Message.addMessage("ERR:__resultsTransmitterThread sendto() socket id:" + str(id(self.udpSocket)) +", " + str(e))
+#                         # Test to see if we've exceeeded the no of consequtive tolerable socket errors
+#                         if self.sendtoErrorCounter >= self.sendtoErrorCounterThreshold:
+#                             Utils.Message.addMessage("__resultsTransmitterThread. socket.sendto() error threshold exceeded (" +
+#                                                      str(self.sendtoErrorCounterThreshold) +\
+#                                                         "). Killing object for stream: " + str(self.syncSource))
+#                             # Now kill the object itself
+#                             self.kill()
+#
+#                 else:
+#                     # Results transmission inhibited
+#                     pass
+#             else:
+#                 Utils.Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
+#             time.sleep(0.5)
 
 # Define a class to encompass the results sent back from the receiving to the transmitting side (via the
 # ResultsTransmitter and ResultsReceiver objects)
@@ -3376,7 +3024,7 @@ class RtpStreamResults(RtpReceiveCommon):
 
 
 # Define an RTP Generator that can run autonomously as a thread
-class RtpGenerator(object):
+class RtpGenerator(RtpCommon):
     # How this works:
     # When started:-
     #   The RtpGenerator constructor  creates an instance of ResultsReceiver
@@ -3398,7 +3046,7 @@ class RtpGenerator(object):
 
     # The size of the messages sent in the RtpGenerator payload
     # This can be queried by the class method getIsptestHeaderSize() (and is consumed by RtpReceiveStream and main())
-    ISPTEST_HEADER_SIZE = 19
+    ISPTEST_HEADER_SIZE = 20
 
     # The maximum allowed stream friendly name length
     # This can be queried by the class method getMaxFriendlyNameLength() (and is consumed by RtpReceiveStream and main())
@@ -3464,19 +3112,22 @@ class RtpGenerator(object):
         self.rtpSequenceNo = 0 # The incrementing index within the rtp header
         self.elapsedTime = datetime.timedelta()
         self.friendlyName = ""
-        self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ipopctet4]
-        self.tracerouteHopsListMutex = threading.Lock()
+        self._tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ipopctet4]
+                                        # Should only be accessed by the setter/getter methods
+        self.tracerouteHopsListMutex = threading.Lock() # Protects tracerouteHopsListMutex
         self.tracerouteCarouselIndexNo = 0  # Keeps track of which traceroute hop value is currently being transmitted
                                             # in the isptest header (in RtpGenerator.generateIsptestHeader()
 
+        self.tracerouteChecksum = 0# Calculated by XORing an entire hops list, once it's been successfully validated
         self.isptestHeaderMessageIndex = 0 # Keeps track of which type of message we are sending in the header
-        self.noOfMessageTypes = 6 # The current message types are:
+        self.noOfMessageTypes = 7 # The current message types are:
                                     # 0 Traceroute
                                     # 1 private LAN Address of the local interface used for transmitting
                                     # 2 The 'public' destination address
                                     # 3 The current version of isptest
                                     # 4 The specified TX rate
                                     # 5 The transmitted packet count
+                                    # 6 The stream time to live (in seconds)
 
         self.uiInstance = uiInstance   # This allows access to the methods of the UI class
         # self.minSleepTime = None
@@ -3529,31 +3180,74 @@ class RtpGenerator(object):
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
 
         self.burstTimer = 0 # Used to count seconds when Generator is in Burst mode
+        # Slowstart variables - This creates a logarithmic increase in the  tx rate at the start of the stream.
+        # Its purpose is to allow the network hardware/CPUs to ramp up resources gradually when using high bitrates
+        # No of packets to have been transmitted between each increase in the controlled tx rate
+        self.slowStartPacketInterval = 10 # Eg Every 10 packets sent, the rate will be allowed to increase
+        self.slowStartTxRateDivisor = 1.5 # The amount by which the prev tx period is divided by, to get the next
+                                            # A smaller number will mean a longer ramp-up time
+                                            # A bigger number will mean a much quicker ramp up to the target tx rate
+        self.slowStartActiveFlag = True    # Flag to indicate whether slowStart is active
+        self.slowStartInitialTxPeriod = 0.1    # The starting tx period, i.e 100 mS, or 10 packets per second
 
+        # Create a FIFO queue to hold control messages/instructions. These will be picked up in the __samplingThread
+        # This messages can be used to modify the RtpGenrator parameters as an alternative to calling the
+        # various setxx() methods directly
+        # The ResultsReceiver.__resultsReceiverThread() is able to receive control messages from the corresponding
+        # RECEIVER instance, and will put the received control messages onto the controlMessageQueue
+        # self.addControlMessage() will put a message onto the queue
+        # self.parseControlMessage() will decode a message
+
+        # Each message is a dictionary of at least length = 3
+        #{syncSourceID: int, source: String, type: String}
+        # The first element of the list is a number which identifies the sync source ID
+        # The second element is a string that identifies the source of message (bot sure how this will be used yet)
+        # The third  element is a string that identifies the type of message
+        # current message types are:
+        #   {"txbps_inc"} Increase the tx bitrate
+        #   {"txbps_dec"} Decrease the tx bitrate
+        self.__controlMessageQueue = SimpleQueue()
+
+
+        ######## Actual code starts here
         # Start the traffic generator thread
         self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
         self.rtpGeneratorThread.daemon = False
         self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
         self.rtpGeneratorThread.start()
 
-        # Query the OS to determine which traceroute routine to run
-        os = Utils.getOperatingSystem()
-        # os = "Windows"
-        if (os == "Windows"):
-            # Start the Windows (Scapy-based) traceroute thread
-            # self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindows, args=())
-            self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindowsRewrite, args=())
-            self.tracerouteThread.daemon = False
-            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteScapyRewrite (" + str(os) + ")")
+        self.tracerouteFunctionInUse = None     # Will be a label set by __traceRouteThread. Indicates which OS-dependant
+        # traceroute function is to be used
 
-        else:
-            # Start the Linux/OSX traceroute thread
-            self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
-            self.tracerouteThread.daemon = False
-            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinuxOSX ("+ str(os) + ")")
-        # Test the Registry var. If traceroute is enabled, start the thread
+        # # Query the OS to determine which traceroute routine to run
+        # os = Utils.getOperatingSystem()
+        # # os = "Windows"
+        # if (os == "Windows"):
+        #     # Start the Windows (Scapy-based) traceroute thread
+        #     # self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindows, args=())
+        #     self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindowsRewrite, args=())
+        #     self.tracerouteThread.daemon = False
+        #     self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteScapyRewrite (" + str(os) + ")")
+        #
+        # else:
+        #     # Start the Linux/OSX traceroute thread
+        #     # self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
+        #     # self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinuxOSX (" + str(os) + ")")
+        #     self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
+        #     self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteThread(" + str(os) + ")")
+        #     self.tracerouteThread.daemon = False
+        #
+        # # Test the Registry var. If traceroute is enabled, start the thread
+        # if Registry.rtpGeneratorEnableTraceroute:
+        #     self.tracerouteThread.start()
+
+        # Test the Registry var. If traceroute is enabled, create and start the thread
         if Registry.rtpGeneratorEnableTraceroute:
+            self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
+            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteThread")
+            self.tracerouteThread.daemon = False
             self.tracerouteThread.start()
+
 
         # create a stream results receiver object for this tx stream
         self.rtpStreamResultsReceiver = ResultsReceiver(self)
@@ -3631,13 +3325,14 @@ class RtpGenerator(object):
     # Generates the isptest (this program) specific header to convey extra info (like the friendly name) to the receiver
     def generateIsptestHeader(self):
         # Generate the 'isptest' header
-        # Header currently consists of 19 bytes of data NOTE. This is defined in RtpGenerator.getIsptestHeaderSize():
+        # Header currently consists of 20 bytes of data NOTE. This is defined in RtpGenerator.getIsptestHeaderSize():
         # [uniqueValue(David's birthday)(short, 2 bytes)
         # plus....
         # [byte1] Message type (0: Traceroute)
         # [byte2] Hop no
         # [byte3] Total no of hops
         # [byte4][byte5][byte6][byte7] Hop id address octets
+        # [byte8] traceroute Checksum value (consisisting of all the hop Octets XORd together)
         # [friendlyName] 10 bytes
 
         # OR
@@ -3645,6 +3340,7 @@ class RtpGenerator(object):
         #         # [byte2] src port (MSB)
         #         # [byte3] src port (LSB)
         #         # [byte4][byte5][byte6][byte7] local ip address octets
+        #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
         # OR
@@ -3652,6 +3348,7 @@ class RtpGenerator(object):
         #         # [byte2] 0/not used
         #         # [byte3] 0/not used
         #         # [byte4][byte5][byte6][byte7] dest ip address octets
+        #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
         # OR
@@ -3659,6 +3356,7 @@ class RtpGenerator(object):
         #         # [byte2] major version no
         #         # [byte3] minor version no
         #         # [byte4][byte5][byte6][byte7] all 0/not used
+        #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
         # OR
@@ -3666,43 +3364,86 @@ class RtpGenerator(object):
         #         # [byte2]
         #         # [byte3]
         #         # [byte4][byte5][byte6][byte7] tx bitrate as an unsigned long (4 bytes)
+        #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
         # OR
         # [byte1] Message type (5: Transmitter tx total packets sent.
         #         # [byte2]
         #         # [byte3]
-        #         # [byte4][byte5][byte6][byte7] all 0/not used
+        #         # [byte4][byte5][byte6][byte7] total packets sent as an unsigned long (4 bytes)
+        #         # [byte8] not used
         #         # [friendlyName] 10 bytes
+
+        # OR
+        # [byte1] Message type (6: Tx stream time to live (in seconds).
+        #         # [byte2]
+        #         # [byte3]
+        #         # [byte4][byte5][byte6][byte7] time to live as a signed int (4 bytes) (ttl can be -ve)
+        #         # [byte8] not used
+        #         # [friendlyName] 10 bytes
+
 
         header = b""  # Specify byte string
         # Initialise messageData to zero
         messageData = [0,0,0,0,0,0,0]
-
         try:
             # Note: a short is 16 bits - max value 65535
             uniqueValue = RtpGenerator.UNIQUE_ID_FOR_ISPTEST_STREAMS & 0xFFFF
             # Test what type of message we are scheduled to send
             if self.isptestHeaderMessageIndex == 0:
                 # This is traceroute message - Get copy of tracerouteHopsList[]
-                tracerouteHopsList = self.getTraceRouteHopsList()
-                # Transmit each element of the self.tracerouteHopsList sequentially (as a carousel)
-                if len(tracerouteHopsList) > 0:
-                    try:
-                        messageData = [0 & 0xFF,  # Message type 0: traceroute
-                                       self.tracerouteCarouselIndexNo & 0xFF,  # Traceroute Hop no
-                                       len(tracerouteHopsList) & 0xFF,  # # Traceroute total no of hops
-                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][0] & 0xFF,  # IP address octet 1
-                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][1] & 0xFF,  # IP address octet 2
-                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][2] & 0xFF,  # IP address octet 3
-                                      tracerouteHopsList[self.tracerouteCarouselIndexNo][3] & 0xFF]  # IP address octet 4
-                        # Now increment the carousel index so that the next hop value will be transmitted the next time this
-                        # method is called
-                        self.tracerouteCarouselIndexNo += 1
+                # We don't want to hold up the transmission of packets, so instruct getTraceRouteHopsList to not block
+                tracerouteHopsList = self.getTraceRouteHopsList(allowBlocking=False)
+                # Check to see that we have received a valid hopslist
+                if tracerouteHopsList is not None:
+                    # Transmit each element of the self.tracerouteHopsList sequentially (as a carousel)
+                    hopsListLength = len(tracerouteHopsList)
+                    if hopsListLength > 0:
+                        # Get the hop to be transmitted
+                        # Initialise with default value
+                        hopToBeTransmitted = [0,0,0,0]
+                        try:
+                            # Test to ensure that self.tracerouteCarouselIndexNo array index is within range
+                            if self.tracerouteCarouselIndexNo > (hopsListLength - 1):
+                                # If so, reset it to zero to avoid an out-of-range index error
+                                self.tracerouteCarouselIndexNo = 0
+                            # Now grab the hop pointed to by self.tracerouteCarouselIndexNo
+                            hopToBeTransmitted = tracerouteHopsList[self.tracerouteCarouselIndexNo]
+                        except Exception as e:
+                            Utils.Message.addMessage(
+                                "ERR: RtpGenerator.generateIsptestHeader():traceroute_gethopToBeTransmitted index no:" +\
+                                str(self.tracerouteCarouselIndexNo) + ", len(tracerouteHopsList): " + \
+                                str(len(tracerouteHopsList)) + ", " + str(e))
+                        # Now construct the actual message
+                        try:
+                            messageData = [0 & 0xFF,  # Message type 0: traceroute
+                                           self.tracerouteCarouselIndexNo & 0xFF,  # Traceroute Hop no
+                                           hopsListLength & 0xFF,  # # Traceroute total no of hops
+                                          hopToBeTransmitted[0] & 0xFF,  # IP address octet 1
+                                          hopToBeTransmitted[1] & 0xFF,  # IP address octet 2
+                                          hopToBeTransmitted[2] & 0xFF,  # IP address octet 3
+                                          hopToBeTransmitted[3] & 0xFF,  # IP address octet 4
+                                            self.tracerouteChecksum & 0xFF]  # hopList checksum
+                            # Now increment the carousel index so that the next hop value will be transmitted the next time this
+                            # method is called
+                            self.tracerouteCarouselIndexNo += 1
 
-                    except Exception as e:
-                        Utils.Message.addMessage("DBUG: RtpGenerator.generateIsptestHeader():tracerouteHopsList[] " + str(e))
+                        except Exception as e:
+                            Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader():traceroute_create message " + str(e))
+                    else:
+                        # Rettrieved tracerouteHopsList was empty
+                        # Create a dummy traceroute message
+                        messageData = [0 & 0xFF,  # Message type 0: traceroute
+                                       0 & 0xFF,  # Traceroute Hop no
+                                       0 & 0xFF,  # Traceroute total no of hops
+                                       0 & 0xFF,  # IP address octet 1
+                                       0 & 0xFF,  # IP address octet 2
+                                       0 & 0xFF,  # IP address octet 3
+                                       0 & 0xFF,  # IP address octet 4
+                                       0 & 0xFF]  # hopList checksum
                 else:
+                    # Unable to retrieve tracerouteHopsList
                     # Create a dummy traceroute message
                     messageData = [0 & 0xFF,  # Message type 0: traceroute
                                    0 & 0xFF,  # Traceroute Hop no
@@ -3710,12 +3451,8 @@ class RtpGenerator(object):
                                    0 & 0xFF,  # IP address octet 1
                                    0 & 0xFF,  # IP address octet 2
                                    0 & 0xFF,  # IP address octet 3
-                                   0 & 0xFF]  # IP address octet 4
-
-                # Bounds check tracerouteCarouselIndexNo
-                if self.tracerouteCarouselIndexNo > (len(tracerouteHopsList) - 1):
-                    # Reset the carousel value
-                    self.tracerouteCarouselIndexNo = 0
+                                   0 & 0xFF,  # IP address octet 4
+                                   0 & 0xFF]  # hopList checksum
 
             elif self.isptestHeaderMessageIndex == 1:
                 # This is a 'local adapter IP address and src port' message
@@ -3730,7 +3467,8 @@ class RtpGenerator(object):
                                    int(localAddr[0]) & 0xFF,  # IP address octet 1
                                    int(localAddr[1]) & 0xFF,  # IP address octet 2
                                    int(localAddr[2]) & 0xFF,  # IP address octet 3
-                                   int(localAddr[3]) & 0xFF]  # IP address octet 4
+                                   int(localAddr[3]) & 0xFF,  # IP address octet 4
+                                    0 & 0xFF]  # not used
                 except Exception as e:
                     messageData = [1 & 0xFF,  # Message type 0: traceroute
                                    0 & 0xFF,  # Top byte (MSB) of the source port
@@ -3738,7 +3476,8 @@ class RtpGenerator(object):
                                    0 & 0xFF,  # IP address octet 1
                                    0 & 0xFF,  # IP address octet 2
                                    0 & 0xFF,  # IP address octet 3
-                                   0 & 0xFF]  # IP address octet 4
+                                   0 & 0xFF,  # IP address octet 4
+                                    0 & 0xFF]  # not used
                     Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx local adapter addr " + str(e))
 
             elif self.isptestHeaderMessageIndex == 2:
@@ -3752,7 +3491,8 @@ class RtpGenerator(object):
                                    int(destAddr[0]) & 0xFF,  # IP address octet 1
                                    int(destAddr[1]) & 0xFF,  # IP address octet 2
                                    int(destAddr[2]) & 0xFF,  # IP address octet 3
-                                   int(destAddr[3]) & 0xFF]  # IP address octet 4
+                                   int(destAddr[3]) & 0xFF,  # IP address octet 4
+                                   0 & 0xFF]  # not used
                 except Exception as e:
                     messageData = [2 & 0xFF,  # Message type 2: destination addr
                                    0 & 0xFF,  # not used
@@ -3760,7 +3500,8 @@ class RtpGenerator(object):
                                    0 & 0xFF,  # IP address octet 1
                                    0 & 0xFF,  # IP address octet 2
                                    0 & 0xFF,  # IP address octet 3
-                                   0 & 0xFF]  # IP address octet 4
+                                   0 & 0xFF,  # IP address octet 4
+                                   0 & 0xFF]  # not used
                     Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx dest addr " + str(e))
 
             elif self.isptestHeaderMessageIndex == 3:
@@ -3774,11 +3515,13 @@ class RtpGenerator(object):
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
                                    0 & 0xFF]  # not used
                 except Exception as e:
                     messageData = [3 & 0xFF,  # Message type 3: Destination addr
                                    0 & 0xFF,  # Major version no
                                    0 & 0xFF,  # Minor version no
+                                   0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
@@ -3797,12 +3540,14 @@ class RtpGenerator(object):
                                    txRateAsBytes[0] & 0xFF,  # MSB
                                    txRateAsBytes[1] & 0xFF,  #
                                    txRateAsBytes[2] & 0xFF,  #
-                                   txRateAsBytes[3] & 0xFF]  # LSB
+                                   txRateAsBytes[3] & 0xFF,  # LSB
+                                   0 & 0xFF]  # not used
 
                 except Exception as e:
                     messageData = [4 & 0xFF,  # Message type 4: Transmit rate (the specified rate)
                                    0 & 0xFF,  #
                                    0 & 0xFF,  #
+                                   0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
@@ -3820,7 +3565,8 @@ class RtpGenerator(object):
                                    txdPackets[0] & 0xFF,  # MSB
                                    txdPackets[1] & 0xFF,  #
                                    txdPackets[2] & 0xFF,  #
-                                   txdPackets[3] & 0xFF]  # LSB
+                                   txdPackets[3] & 0xFF,  # LSB
+                                   0 & 0xFF]  # not used
 
                 except Exception as e:
                     messageData = [5 & 0xFF,  # Message type 5: Transmit rate (the specified rate)
@@ -3829,9 +3575,36 @@ class RtpGenerator(object):
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
                                    0 & 0xFF]  # not used
                     Utils.Message.addMessage(
                         "DBUG:RtpGenerator.generateIsptestHeader(): Message type 5: Transmit total packets " + str(e))
+
+            elif self.isptestHeaderMessageIndex == 6:
+                # Transmitter tx stream time to live (in seconds)
+                try:
+                    # Split ttl into a series of bytes
+                    timeToLive = struct.pack("!i", self.timeToLive)
+                    messageData = [6 & 0xFF,  # Message type 6: # Transmitter tx stream time to live (in seconds)
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   timeToLive[0] & 0xFF,  # MSB
+                                   timeToLive[1] & 0xFF,  #
+                                   timeToLive[2] & 0xFF,  #
+                                   timeToLive[3] & 0xFF,  # LSB
+                                   0 & 0xFF]  # not used
+
+                except Exception as e:
+                    messageData = [6 & 0xFF,  # Message type 6: # Transmitter tx stream time to live (in seconds)
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF]  # not used
+                    Utils.Message.addMessage(
+                        "DBUG:RtpGenerator.generateIsptestHeader(): Message type 6: Transmit tx stream time to live " + str(e))
 
             # Now That the message data list has been created, increment the message type index
             self.isptestHeaderMessageIndex += 1
@@ -3844,8 +3617,8 @@ class RtpGenerator(object):
 
 
             # Now assemble the header
-            header = struct.pack("!HBBBBBBB", uniqueValue, messageData[0], messageData[1], messageData[2], \
-                                 messageData[3], messageData[4], messageData[5], messageData[6])
+            header = struct.pack("!HBBBBBBBB", uniqueValue, messageData[0], messageData[1], messageData[2], \
+                                 messageData[3], messageData[4], messageData[5], messageData[6], messageData[7])
 
             # Append friendly name to header digits
             header += str(self.friendlyName).encode('ascii')
@@ -3862,7 +3635,7 @@ class RtpGenerator(object):
                 header = b""
 
         except Exception as e:
-            Utils.Message.addMessage("ERR: RtpGenerator.generatePayload(). Header err: " + str(e))
+            Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader(). Header err: " + str(e))
 
         # Return the isptestheader data (as a bytestring)
         return header
@@ -3884,24 +3657,76 @@ class RtpGenerator(object):
         txPeriod = (self.payloadLength + UDP_HEADER_LENGTH_BYTES + RTP_HEADER_LENGTH_BYTES) * 8.0 / newTxRate_bps
         return txPeriod
 
-    def setTxRate(self, newTxRate_bps):
-        # Specify Minimum tx rate 100kbps
-        minimumRate=102400
-        if newTxRate_bps < minimumRate:
-            newTxRate_bps = minimumRate
+    # Modify the tx rate of the RtpGenerator stream.
+    # Additionally, if autoIncrement or autoDecrement are set, the first argument (newTxRate_bps) will be ignored
+    # and instead, the method will increase/decrease the tx rate by a fixed amount relative to the current rate
+    # if autoIncrement = 1, the rate will increase, if autoIncrement = -1, the rate will decrease
+    def setTxRate(self, newTxRate_bps, autoIncrement=None):
+        # Snaps the incoming value to 1024 so that autoIncrements/decrements will settle on a nat value (i.e in
+        # steps of 1024bps). See https://stackoverflow.com/questions/2272149/round-to-5-or-other-number-in-python
+        # Snap value is overridden by setting base= value
+        def snapTo(x, base=1024):
+            return base * round(x / base)
+        txRateChange_bps = 0
+        # calculate step change value (up or down) based on current txRate
+        # If 100kbps or less, change in 10kbps steps
+        if self.txRate <= 102400:
+            txRateChange_bps = 10240
+        # Special case. If tx rate is currently 256kbps or less AND is being decremented, use 10kbps steps
+        elif (self.txRate <= 262144) and (autoIncrement == -1):
+            txRateChange_bps = 10240
+        # Else if tx rate between 100kbps and 1Mbps, change in 256kbps steps
+        elif self.txRate <= 1048576:
+            txRateChange_bps = 262144
+        # Otherwise change in 512kbps steps
+        else:
+            txRateChange_bps = 524288
+
+        # Check to see if autoIncrement or autoDecrement have been set. If so, override newTxRate_bps value
+        if autoIncrement == 1:
+            # Auto increment is set
+            newTxRate_bps = snapTo(self.txRate + txRateChange_bps, base=txRateChange_bps)
+        elif autoIncrement == -1:
+            # Auto decrement is set
+            newTxRate_bps = snapTo(self.txRate - txRateChange_bps, base=txRateChange_bps)
+
+
+        # Confirm that the new TX rate isn't below the minimum permitted
+        if newTxRate_bps < Registry.minimumPermittedTXRate_bps:
+            newTxRate_bps = Registry.minimumPermittedTXRate_bps
+
+        Utils.Message.addMessage("Setting new tx rate " + str(Utils.bToMb(newTxRate_bps)) + \
+                                 "bps, for stream " + str(self.syncSourceIdentifier))
+
         # Update instance variable
         self.txRate = newTxRate_bps
-        # Calculates then set the new txPeriod for a given newTxRate_bps
-        txPeriod = self.calculateTxPeriod(newTxRate_bps)
-        self.txPeriod = txPeriod
+        # Calculate then set the new txPeriod for a given newTxRate_bps
+        self.txPeriod = self.calculateTxPeriod(newTxRate_bps)
 
+    # Modifies the payload length of this RTP TX stream
+    # If autoIncrement is set to -1 or 1, payload will be incremented or decremented by 10 bytes
+    # and the payloadLength_bytes argument will be ignored
+    def setPayloadLength(self, payloadLength_bytes, autoIncrement=None):
+        # Function used to ensure a nice snap-to value when auto incrementing/decrementing
+        def snapTo(x, base=10):
+            return base * round(x / base)
 
-    def setPayloadLength(self, payloadLength_bytes):
-        # Modifies the payload length of this RTP TX stream
+        if autoIncrement == 1:
+            # override supplied value and just increment existing value
+            payloadLength_bytes = self.payloadLength + 10
+        elif autoIncrement == -1:
+            # override supplied value and just increment existing value
+            payloadLength_bytes = self.payloadLength - 10
+
+        # Snap the value to the nearest '10'
+        payloadLength_bytes = snapTo(payloadLength_bytes)
+
+        # Bounds check new supplied/calculated value
         if payloadLength_bytes > 1488:
             payloadLength_bytes = 1488
         if payloadLength_bytes < 20:
             payloadLength_bytes =20
+
         # Set instance variable
         self.payloadLength = payloadLength_bytes
         # Trigger regeneration of entire udp data frame (rtp header + isptest header + dummy payload)
@@ -3910,10 +3735,38 @@ class RtpGenerator(object):
         # Recalculates the tx period based on the new packet length
         self.txPeriod = self.calculateTxPeriod(self.txRate)
 
-    def setTimeToLive(self, newTimeToLive):
-        # Modifies the existing time to live value
-        # Setting this to a -ve value will mean the tx stream object last for ever
-        self.timeToLive = newTimeToLive
+    # Modifies the existing time to live value
+    # Setting this to a -ve value will mean the tx stream object last for ever
+    # If autoIncrement = 1, the method will auto add a certain amount of time to the lifetime
+    # If autoIncrement = -1, the method will auto decrement a certain amount of time from the lifepan
+    def setTimeToLive(self, newTimeToLive, autoIncrement=None):
+        if autoIncrement is None:
+            self.timeToLive = newTimeToLive
+        else:
+            # Calculate the amount to decrement by
+            # If current time to live less than 1hr, change time in 10 min increments
+            # Otherwise change ttl by 1hr
+            if self.timeToLive < 3600: # 1hr
+                delta = 600 # 10 minutes
+            elif (self.timeToLive < 4300) and (autoIncrement == -1): # 1hr 10mins and decrementing
+                delta = 600
+            else:
+                delta = 3600 # 1 hr
+
+            # calculate new ttl
+            newTTL = 0
+            if autoIncrement == -1:
+                newTTL = self.timeToLive - delta
+            elif autoIncrement == 1:
+                newTTL = self.timeToLive + delta
+            # Bounds check new TTL value. -1 is the lowest allowed value (-1 means 'forever')
+            if newTTL < -1:
+                newTTL = -1
+            # Set the instance variable
+            self.timeToLive = newTTL
+            Utils.Message.addMessage("Setting new time to live " + str(datetime.timedelta(seconds=self.timeToLive)) + \
+                                     " for stream " + str(self.syncSourceIdentifier))
+
 
     def killStream(self):
         # Kills the stream by setting the time to live to zero. This will cause the main thread to exit
@@ -3995,6 +3848,49 @@ class RtpGenerator(object):
         # returns a reference to the socket created by __rtpGeneratorThread
         return self.udpTxSocket
 
+    # Puts a control message into self.__controlMessageQueue
+    def addControlMessage(self, controlMessage):
+        self.__controlMessageQueue.put(controlMessage)
+
+    # Takes a control message (as stored in self.__controlMessageQueue) and parses it
+    def parseControlMessage(self, controlMessage):
+        # Messages are a dict of the form
+        # {syncSourceID: int, source: String, type: String}
+        Utils.Message.addMessage("INFO:parseControlMessage() " + str(self.syncSourceIdentifier) + ":" + str(controlMessage))
+        # parse the incoming message
+        try:
+            # Get message type
+            messageSyncSourceID = controlMessage["syncSourceID"]
+            messageType = controlMessage["type"]
+            # Confirm that this is a message destined for this RtpGenerator Object
+            if messageSyncSourceID == self.syncSourceIdentifier:
+                if messageType == "txbps_inc":
+                    self.setTxRate(0, autoIncrement=1)
+                elif messageType == "txbps_dec":
+                    self.setTxRate(0, autoIncrement=-1)
+                elif messageType == "txttl_inc":
+                    self.setTimeToLive(0, autoIncrement=1)
+                elif messageType == "txttl_dec":
+                    self.setTimeToLive(0, autoIncrement=-1)
+                elif messageType == "txpayload_inc":
+                    self.setPayloadLength(0, autoIncrement=1)
+                elif messageType == "txpayload_dec":
+                    self.setPayloadLength(0, autoIncrement=-1)
+                elif messageType == "txburst":
+                    self.enableBurstMode()
+                # Set friendly name
+                elif messageType == "txname" and "name" in controlMessage:
+                    self.setFriendlyName(controlMessage["name"])
+
+            else:
+                Utils.Message.addMessage("Misrouted RTPGenerator control message. Dest:" + \
+                                         str(messageSyncSourceID) + ", Recipient:" + str(self.syncSourceIdentifier))
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR:RtpGenerator.parseControlMessage() (stream " + \
+                                     str(self.syncSourceIdentifier) + "), " + str(e))
+
+
     # This thread samples the actual transmitter tx rate and also housekeeps
     def __samplingThread(self):
         Utils.Message.addMessage(
@@ -4012,7 +3908,21 @@ class RtpGenerator(object):
             sleepTime = 0.2
             # sleep
             time.sleep(sleepTime)
-            ########### Timed loop starts -  Now do 'the thing'
+            ########### Timed loop starts
+
+            # Check to see if there are any control messages in the queue
+            while self.__controlMessageQueue.qsize() > 0:
+                # Attempt to retrieve the message(s) from the queue
+                try:
+                    # Take the message from the queue
+                    msg = self.__controlMessageQueue.get(timeout=0.2)
+                    # parse the message
+                    self.parseControlMessage(msg)
+                # If not possible to get message/timeout reached
+                except Empty as e:
+                    Utils.Message.addMessage("ERR:RtpGenerator.__samplingThread. __controlMessageQueue.get() (stream " + \
+                                             str(self.syncSourceIdentifier) + "), " + str(e))
+
             # Take snapshot of current tx byte counter
             currentTxCounter_Bytes = self.txCounter_bytes
             # Append the latest bytes transmitted (during the last 0.2 seconds) to the list
@@ -4032,7 +3942,8 @@ class RtpGenerator(object):
                 # Calculate the transmitted bits per second
                 self.txActualTxRate_bps = bytesPerSec * 8
                 # Check to see if actual TX rate is exceeding the specified rate (but ignore if burst mode is enabled)
-                if (self.txActualTxRate_bps > self.txRate) and self.burstTimer == 0:
+                if (self.txActualTxRate_bps > self.txRate) and (self.burstTimer == 0) and\
+                        (Registry.enableExcessTxSpeedWarnings is True):
                     # If actual tx rate is > 25% higher than the rate specified by txRate, force the txScheduler to
                     # restart its timing calculations
                     # For the sake of speed, shift txRate by '2 bits' to divide by 4 rather than using division
@@ -4054,11 +3965,16 @@ class RtpGenerator(object):
                                              str(Utils.bToMb(self.txRate)) + "(" +\
                                              str(Utils.bToMb(self.txActualTxRate_bps)) + ")bps")
 
-
-
             ######## 1 second counter
             if loopCounter % 5 == 0:
                 # 1 Second has elapsed
+
+                # Check to see if the tx source IP address has changed (transmitting via different interface/Wifi network?)
+                currentSrcIPAddr = Utils.get_ip(self.UDP_TX_IP)
+                # if it has changed, update the instance variable. The traceroute thread depends upon this
+                if self.SRC_IP_ADDR != currentSrcIPAddr:
+                    self.SRC_IP_ADDR = currentSrcIPAddr
+
                 # Decrement timeToLive seconds counter but only if current value is +ve
                 # A -ve value is used to denote 'live for ever'
                 if self.timeToLive > 0:
@@ -4074,18 +3990,7 @@ class RtpGenerator(object):
                                       ". Reverting to " + str(Utils.bToMb(self.txRate)) + "bps")
 
 
-                # # Now housekeep the associated rtpTxStreamResults object for this stream
-                # # Check to see that rtpTxStreamResultsDict contains this stream objects
-                # if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
-                #     try:
-                #         # Get a handle on the rtpTxStreamResults object
-                #         rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                #         if type(rtpTxStreamResults) == RtpStreamResults:
-                #             # Invoke the housekeeping method to purge any really old events
-                #             rtpTxStreamResults.houseKeepEventList()
-                #     except Exception as e:
-                #         Utils.Message.addMessage(
-                #             "ERR: __samplingThread rtpTxStreamResults.houseKeepEventList(): " + str(e))
+
             ######## 1 second counter end of code ########
 
             # Increment 1 sec loop counter
@@ -4310,13 +4215,49 @@ class RtpGenerator(object):
                 else:
                     return sleepTime
 
+            # This function deliberately increases the tx period at the start of transmission, to start the initial
+            # tx rate much slower than the specified rate
+            # it is a generator function, so it will remember it's previous value
+            def calculateSlowStartSleepPeriod():
+                # Every x packets, reduce the txPeriod until it matches the calculated tx rate
+                count = 0
+                # Capture the initial tx period from the instance var
+                txPeriod = rtpGeneratorInstance.slowStartInitialTxPeriod
+                while True:
+                    # Increment count with each call to calculateSlowStartSleepPeriod
+                    count += 1
+                    if count > 1:
+                        # With each successive call, halve the txPeriod
+                        txPeriod = txPeriod / rtpGeneratorInstance.slowStartTxRateDivisor
+                    # Return the latest value of txPeriod
+                    yield txPeriod
+
+
             # This is the infinite loop that actually transmits the rtp packet at an interval determined
             # by the tx period. The sleep period is determined by the calculateSleepPeriod() 'generator' function
             # Infinite loop until timeToLive == 0
             # Create a Generator function (which is a bit like an object, in that it will continue to exist after returning)
             g = calculateSleepPeriod()
+            # Create a Generator function to calculate the SlowStart tx period timings
+            slowStartTxPeriodGenerator = calculateSlowStartSleepPeriod()
+            # Declare sleeptime with a dfrault value
+            sleepTime = rtpGeneratorInstance.slowStartInitialTxPeriod
             while rtpGeneratorInstance.timeToLive != 0:
-                if rtpGeneratorInstance.jitterGenerationFlag is False:
+                if rtpGeneratorInstance.slowStartActiveFlag is True:
+                    # Every x packets, request a regeneration of the slowstart tx Period
+                    # by using modulo division on the number oif packets sent
+                    if rtpGeneratorInstance.txCounter_packets % rtpGeneratorInstance.slowStartPacketInterval == 0:
+                        sleepTime = next(slowStartTxPeriodGenerator)
+                        # Now check to see if the sleepTime has decreased to/beyond the target tx Period
+                        if sleepTime <= rtpGeneratorInstance.txPeriod:
+                            Utils.Message.addMessage("DBUG:target tx Period reached for stream " +\
+                                                     str(rtpGeneratorInstance.syncSourceIdentifier) + \
+                                                     ". Clearing slowStartActiveFlag")
+                            # Clear the slowStartActiveFlag. The Regular calculateSleepPeriod will take over now
+                            rtpGeneratorInstance.slowStartActiveFlag = False
+
+                elif rtpGeneratorInstance.jitterGenerationFlag is False:
+
                     # Get (dynamic) sleep interval. This should ensure that the next packet is sent at precisely the correct
                     # time with any processing delays compensated for
                     sleepTime = next(g)
@@ -4372,6 +4313,53 @@ class RtpGenerator(object):
                 #         Utils.Message.addMessage("TR test " + str(e))
                 #         rtpGeneratorInstance.tracerouteHopsList.append([0, 0, 0, 0])
 
+                # # Deliberately modify the traceroute hops list every 50 packets
+                # paths = [[
+                #     [192, 168, 224, 252],
+                #     [82, 194, 125, 65],
+                #     [212, 74, 66, 251],
+                #     [62, 214, 37, 134],
+                #     [80, 81, 192, 59],
+                #     [0, 0, 0, 0],
+                #     [0, 0, 0, 0],
+                #     [0, 0, 0, 0],
+                #     [132, 185, 249, 7],
+                #     [212, 58, 231, 65]]
+                #     ,
+                #     [
+                #         [192, 168, 224, 252],
+                #         [82, 194, 125, 65],
+                #         [212, 74, 66, 251],
+                #         [62, 214, 37, 134],
+                #         [80, 81, 192, 59],
+                #         [0, 0, 0, 0],
+                #         [0, 0, 0, 0],
+                #         [0, 0, 0, 0],
+                #         [132, 185, 249, 7]]
+                #     ,
+                #         [
+                #         [192, 168, 224, 253],
+                #         [62, 96, 44, 73],
+                #         [212, 74, 66, 251],
+                #         [212, 74, 66, 251],
+                #         [80, 81, 192, 59],
+                #         [0, 0, 0, 0],
+                #         [0, 0, 0, 0],
+                #         [0, 0, 0, 0],
+                #         [132, 185, 249, 9],
+                #         [212, 58, 231, 65]
+                #     ]]
+                # packetThreshold = 400
+                # if rtpGeneratorInstance.txCounter_packets % packetThreshold < (packetThreshold / 2):
+                #     # Modify the path
+                #     rtpGeneratorInstance.tracerouteHopsList = paths[0]
+                # else:
+                #     rtpGeneratorInstance.tracerouteHopsList = paths[1]
+                # # calculate the checksum
+                # rtpGeneratorInstance.tracerouteChecksum = \
+                #     rtpGeneratorInstance.createTracerouteChecksum(rtpGeneratorInstance.tracerouteHopsList)
+
+
                 # Update sleepTime stats
                 updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
 
@@ -4421,34 +4409,30 @@ class RtpGenerator(object):
             Utils.Message.addMessage("ERR:__newImprovedRtpGeneratorThread " + str(e))
 
     # Thread-safe method to return a list of the traceroute hops
-    # If trimEndOfList=True, all the trailing '0.0.0.0' hops will omitted from the returned list
-    def getTraceRouteHopsList(self, trimEndOfList=True):
-        self.tracerouteHopsListMutex.acquire()
-        tracerouteHopsList = deepcopy(self.tracerouteHopsList)
-        self.tracerouteHopsListMutex.release()
-        if trimEndOfList and len(tracerouteHopsList) > 1:
-            # Clean up the tail end of the hops list which is liable to be full of 0.0.0.0's if
-            # a series of routers didn't respond. This isn't very helpful, so get rid of them
-            # Iterate over the list starting at the last element. matching [0,0,0,0]
-            # If matched, delete that element
-            elementsToTrim = 0
-            for x in range(len(tracerouteHopsList) - 1, 0, -1):
-                if tracerouteHopsList[x] == [0,0,0,0]:
-                    elementsToTrim +=1
-                else:
-                    # Otherwise a non-0.0.0.0 address present, so break out of the loop
-                    break
-            # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
-            if elementsToTrim > 0:
-                try:
-                    # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
-                    tracerouteHopsList = tracerouteHopsList[:(len(tracerouteHopsList) - elementsToTrim)]
-                except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveCommon.getTracerouteHopsList() trim trailing 0.0.0.0s " + str(e))
+    # Optional allowBlocking argument. If True, the method will block until the data is available
+    # If allowBlocking is False, the method will check to see if the data is available in this instance and, if not
+    # it will return None
+    def getTraceRouteHopsList(self, allowBlocking=True):
+        # Check status of lock before attempting to lock it
+        isAccessible = self.tracerouteHopsListMutex.acquire(blocking=allowBlocking)
+        if isAccessible:
+            # Data is available
+            tracerouteHopsList = deepcopy(self._tracerouteHopsList)
+            self.tracerouteHopsListMutex.release()
             return tracerouteHopsList
         else:
-            # Otherwise, return the list as-is
-            return tracerouteHopsList
+            # Data is currently locked by another process
+            Utils.Message.addMessage("DBUG:RtpGenerator.getTraceRouteHopsList() blocked")
+            return None
+
+    # Thread-safe method to set the traceroute hops list
+    def setTraceRouteHopsList(self, newHopsList):
+        # Decouple the method from any changs to the input source list by taking a deepcopy
+        tempList = deepcopy(newHopsList)
+        self.tracerouteHopsListMutex.acquire()
+        self._tracerouteHopsList = tempList
+        self.tracerouteHopsListMutex.release()
+
 
     def __tracerouteLinuxOSXThread(self):
     # def __tracerouteLinuxOSXThread(self, ipAddrofSendingInterface, destHost, destPort, fallbackPort=33434,
@@ -4573,7 +4557,7 @@ class RtpGenerator(object):
         # The first attempt will be to use the destination port for the stream
         # If that fails, a fallback port specified in the Registry will be used. Routers are more likely to respond
         # on this other port (33434)
-        noOfRetries = 4
+        noOfRetries = 6
         # Get the max no of hops before traceroute gives up
         maxNoOfHops = Registry.tracerouteMaxHops
         # Get the UDP 'fallback' port
@@ -4608,15 +4592,19 @@ class RtpGenerator(object):
                     Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
                                              str(e))
 
-        # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
-        # consecqutive identical lists have been determined can we say that we have a static route
         tracerouteHopsListMustMatchThreshold = 2
+        # Additionally, it's possible a mismatch would occur if a hop flapped to/from zero. This is likely to be quite a
+        # frequent occurance. And, given the length of time it takes a traceroute to complete, we don't necessarily want
+        # to write-off the results we have
+        tracerouteHopsListMismatchCounterThreshold = 5 # No of consecutive failures before clearing the hopsList
+        tracerouteHopsListMismatchCounter = 0 # Counts the no of consecutive failures
         try:
             # Perform the traceroute in an infinite loop as long as the transmit stream is alive
             # The traceroute is performed n times. Only when the same route has been confirmed will the
             # tracerouteHopsList be updated. This is to guard against situations where the route changes mid-traceroute
-
             while self.timeToLive != 0 and socketsCreatedSuccesfullyFlag:
+                # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
+                # consecqutive identical lists have been determined can we say that we have a 'stable' route
                 # Create empty list to put the results of each traceroute attempt into
                 tracerouteResultsList = []
                 for tracerouteAttempt in range (0,tracerouteHopsListMustMatchThreshold):
@@ -4626,6 +4614,7 @@ class RtpGenerator(object):
                     ttl = 0
                     # This list will be populated with the results of the traceroute
                     hopsList = []
+                    noResponseCounter = 0
                     # Utils.Message.addMessage("Starting traceroute....ttl = 1")
                     while ttl < maxNoOfHops and self.timeToLive != 0:
                         attemptsCount = 1
@@ -4637,7 +4626,9 @@ class RtpGenerator(object):
                         while (attemptsCount < noOfRetries) and self.timeToLive != 0:
                             # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
                             # Send UDP packet
+                            ######## OS specific traceroute code starts here ########
                             # determine which destination port we should be using (based on the no of attempts so far)
+
                             if attemptsCount % 2 == 1:
                                 udpTxPort = self.UDP_TX_PORT
                             else:
@@ -4647,8 +4638,7 @@ class RtpGenerator(object):
                             except Exception as e:
                                 Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread.sendUDP() . Aborting" + str(e))
                             # Increment the attempts counter
-                            attemptsCount += 1
-
+                            # attemptsCount += 1
 
                             # Receive ICMP packet(s)
                             # This loop waits to receive icmp packets
@@ -4668,7 +4658,9 @@ class RtpGenerator(object):
                                 #   If matcher matches an icmp reply
                                 elapsedTime = timer() - startTime
                                 if elapsedTime > (timeOut * 2) or self.timeToLive == 0:
-                                    # print("elapsedTimer exceeded twice timeout " + str(round(elapsedTime,1)) + "/" + str(timeOut * 2))
+                                    # Utils.Message.addMessage("ttl:" + str(ttl) +\
+                                    #                          ", try:" + str(attemptsCount) +\
+                                    #                          ", elapsedTimer exceeded " + str(round(elapsedTime,1)) + "/" + str(timeOut * 2))
                                     break
                                 try:
                                     # Receive from socket
@@ -4688,14 +4680,17 @@ class RtpGenerator(object):
                                     # message and listen again (within the timeout period)
                                     ipHeaderOfOriginalSender = IPHeader(data[28:48])
 
-                                    # print(str(ttl) + ":" + "tx src addr: " + str(ipHeaderOfOriginalSender.s_addr) +\
-                                    #         ", ttl when received: " + str(ipHeaderOfOriginalSender.ttl) +\
-                                    #         ", attempt: " + str(attemptsCount) +\
-                                    #         ", tx port: " + str(udpTxPort) +\
-                                    #           ", icmp type: " + str(icmpHeader.type) +\
-                                    #           ", icmp code: " + str(icmpHeader.code) + \
-                                    #           ", reply from addr: " + str(addr[0]) +\
-                                    #       " elapsed time: " + str(round(elapsedTime,1)))
+
+                                    Utils.Message.addMessage("txTTL:" + str(ttl)+ \
+                                                             ", try:" + str(attemptsCount) + \
+                                                             ", txPort:" + str(udpTxPort) +\
+                                                             ", icmpSrc:" + str(str(addr[0]))+\
+                                                             ", type:" + str(icmpHeader.type) +\
+                                                             ", code:" + str(icmpHeader.code) +\
+                                                             ", src:" + str(ipHeaderOfOriginalSender.s_addr) +\
+                                                             ", dst:" + str(ipHeaderOfOriginalSender.d_addr)+\
+                                                             ", ttlOnReceipt:" + str(ipHeaderOfOriginalSender.ttl))
+
 
                                     # Test to see if this icmp packet is addressed to 'us'
                                     # Detect TTL Expired messages (icmp type 11, code 0)
@@ -4732,6 +4727,8 @@ class RtpGenerator(object):
                                     udpTx.close()
                                     icmpRx.close()
                                     raise ICMPRxError("ICMPRxError " + str(e))
+                            # Increment the attempts counter
+                            attemptsCount += 1
                         # At the end of each attempts count per hop, append the address to the hops list
                         # To remain comptibilty with the original traceroute, break the address into a list of octets
 
@@ -4744,7 +4741,7 @@ class RtpGenerator(object):
                             # Utils.Message.addMessage("tracerouteLinux icmpSrcAddr " + str(icmpSrcAddr))
                             # Query the WhoisResolver to find the owner of the domain
                             Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
-                            # If so, break the address up into a list of octets - this is how they're stored in self.tracerouteHopsList
+                            # If so, break the address up into a list of octets - this is how they're stored in self._tracerouteHopsList
                             icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
                             hopsList.append([int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]), int(icmpSrcAddrOctets[2]),
                                                int(icmpSrcAddrOctets[3])])
@@ -4755,17 +4752,41 @@ class RtpGenerator(object):
                             noResponseCounter += 1
                             # If there was no router response for this hop, add 0.0.0.0 as the hop address
                             hopsList.append([0,0,0,0])
+                        # Check to see what was added
+                        Utils.Message.addMessage("ttl:" + str(ttl) + ":" + str(hopsList[-1]) + " added")
 
+                        ######## OS specific traceroute code ends here
                         # Now check to see if we've received five 'no replies' in a row, if so, give up
                         # Or else, if we've reached the max no of hops, give up
                         if (noResponseCounter > maxNoOfNoResponse) or (ttl == maxNoOfHops):
                             # print ("5 in a row, aborting")
-                            # Utils.Message.addMessage(str(noResponseCounter) + " None's in a row or hop limit reached. Aborting")
+                            Utils.Message.addMessage(" " +str(noResponseCounter) + " None's in a row or hop limit reached. Aborting")
                             # Cause the outer-outer hops counter loop to break
                             ttl = maxNoOfHops
                             # Break out of this (hops) loop
                             break
-                    # Traceroute pass completed, now append to tracerouteResultsList for later validation
+
+
+                    # Traceroute pass completed,Now strip off any trailing 0.0.0.0 (no responses)
+                    if len(hopsList) > 0:
+                        elementsToTrim = 0
+                        # Work backwards from the end of the list
+                        for x in range(len(hopsList) - 1, 0, -1):
+                            if hopsList[x] == [0, 0, 0, 0]:
+                                elementsToTrim += 1
+                            else:
+                                # Otherwise a non-0.0.0.0 address present, so break out of the loop
+                                break
+                        # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
+                        if elementsToTrim > 0:
+                            try:
+                                # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
+                                hopsList = hopsList[:(len(hopsList) - elementsToTrim)]
+                            except Exception as e:
+                                Utils.Message.addMessage(
+                                    "ERR:__tracerouteLinuxOSXThread() trim trailing 0.0.0.0s " + str(e))
+
+                    # Traceroute pass completed and hopslist trimmed. Now append to tracerouteResultsList for later validation
                     # Add the latest traceroute result to tracerouteResultsList
                     tracerouteResultsList.append(hopsList)
 
@@ -4781,22 +4802,55 @@ class RtpGenerator(object):
                             # If the lists aren't equal, set the flag and break out of the loop
                             listsAreEqual = False
                             break
+
                     if listsAreEqual is True:
-                        # If the lists are all identical that means that n consecqutive traceroutes gave the same result
+                        # If the lists are all identical that means that n consecutive traceroutes gave the same result
                         # so the traceroute has been validated
-                        # copy the new tracerouteHopsList back into the instance variable version
-                        # Utils.Message.addMessage("traceroute results are identical, updating tracerouteHopsList")
+                        # Check to see if the existing instance variable version of hopsList is different to
+                        # the latest validated traceroute hopslist. If it's different, update the instance variable version
+                        # Otherwise leave it alone. This should minimise the risk of access violations
                         self.tracerouteHopsListMutex.acquire()
                         self.tracerouteHopsList = hopsList
                         self.tracerouteHopsListMutex.release()
+                        # Successful (replicated) traceroute has completed, so reset the mismatch counter
+                        tracerouteHopsListMismatchCounter = 0
+                        # Recalculate the checksum for the hopsList
+                        self.tracerouteChecksum = self.createTracerouteChecksum(hopsList)
+                        # # Dump successful hopslist to the log
+                        # hopsListAsString = ""
+                        # for x in hopsList:
+                        #     hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
+                        # Utils.Message.addMessage(
+                        #     "DBUG:Traceroute successful match: (" + str(len(hopsList)) + "), " + str(hopsListAsString))
                     else:
                         # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
-                        # Empty the tracerouteHopsList - it can't now be trusted
-                        Utils.Message.addMessage("DBUG:Traceroute results discrepency. emptying tracerouteHopsList ")
-                        self.tracerouteHopsListMutex.acquire()
-                        self.tracerouteHopsList = []
-                        self.tracerouteHopsListMutex.release()
+                        # Increment the mismatch counter
+                        tracerouteHopsListMismatchCounter += 1
+                        # # Dump attempt 1 to the log
+                        # hopsListAsString = ""
+                        # for x in tracerouteResultsList[0]:
+                        #     hopsListAsString += str(x[0])+"."+str(x[1])+"."+str(x[2])+"."+str(x[3])+","
+                        # Utils.Message.addMessage(
+                        #     "DBUG:Traceroute results discrepency (attempt 1). MismatchCounter: " + \
+                        #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
+                        # # Dump attempt 2 to the log
+                        # hopsListAsString = ""
+                        # for x in tracerouteResultsList[1]:
+                        #     hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
+                        # Utils.Message.addMessage(
+                        #     "DBUG:Traceroute results discrepency (attempt 2). MismatchCounter: " + \
+                        #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
 
+                        # Now test to see if we have exceeded the max no of allowed mismatches
+                        if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
+                            Utils.Message.addMessage(\
+                                "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
+                                ") Exceeded consecutive mismatch Threshold, clearing hopsList ")
+                            self.tracerouteHopsListMutex.acquire()
+                            self.tracerouteHopsList = []
+                            self.tracerouteHopsListMutex.release()
+                            # Clear the traceroute checksum
+                            self.tracerouteChecksum = 0
 
                 # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
                 # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
@@ -4859,6 +4913,7 @@ class RtpGenerator(object):
             while self.timeToLive != 0:
                 # Create empty list to put the results of each traceroute attempt into
                 tracerouteResultsList = []
+
                 for tracerouteAttempt in range(0, tracerouteHopsListMustMatchThreshold):
                     # This is the main outer traceroute loop and counts the hops
                     # Set initial ttl
@@ -4876,6 +4931,7 @@ class RtpGenerator(object):
                         while (attemptsCount < noOfRetries) and self.timeToLive != 0:
                             # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
                             # Send UDP packet
+                            ######## OS specific traceroute code starts here
                             # determine which destination port we should be using (based on the no of attempts so far)
                             # and create a packet accordingly
                             if attemptsCount % 2 == 1:
@@ -4905,6 +4961,8 @@ class RtpGenerator(object):
                                 # We have a reply for this hop, so break out of the attempts loop
                                 # This will cause the ttl to increment (to the next hop value)
                                 break
+
+                        ############# The 'result' (if there was a response) of the current hop is in var icmpSrcAddr.
                         # Has icmpSrcAddr been populated with an address?
                         if icmpSrcAddr is not None:
                             # It has - the upstream router did respond
@@ -4916,11 +4974,12 @@ class RtpGenerator(object):
                                 [int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]), int(icmpSrcAddrOctets[2]),
                                  int(icmpSrcAddrOctets[3])])
                         else:
-                            # icmpSrcAddr has not been overwritten with an addres so the upstream did not respond
+                            # icmpSrcAddr has not been overwritten with an address so the upstream did not respond
                             # Increment the 'no response' counter
                             noResponseCounter += 1
                             # As there was no router response for this hop, add 0.0.0.0 as the hop address
                             hopsList.append([0, 0, 0, 0])
+                        ######## OS specific traceroute code ends here
 
                         # Now check to see if we've received five 'no replies' in a row, if so, give up
                         # Or else, if we've reached the max no of hops, give up
@@ -4934,6 +4993,8 @@ class RtpGenerator(object):
                     # Traceroute pass completed, now append to tracerouteResultsList for later validation
                     # Add the latest traceroute result to tracerouteResultsList
                     tracerouteResultsList.append(hopsList)
+
+
 
                 # Now compare the contents of the lists within tracerouteResultsList for equality
                 if len(tracerouteResultsList) > 0:
@@ -5001,6 +5062,665 @@ class RtpGenerator(object):
                                              str(e))
         Utils.Message.addMessage("DBUG:__tracerouteThreadScapyWindows ending for stream " + str(self.syncSourceIdentifier))
 
+    def __tracerouteThread(self):
+    # def __tracerouteLinuxOSXThread(self, ipAddrofSendingInterface, destHost, destPort, fallbackPort=33434,
+    #                                noOfRetries=6, timeOut=0.5, \
+    #                                maxNoOfHops=16):
+        # Declare some custom Exceptions
+        class UDPTxSocketSetupError(Exception):
+            pass
+        class ICMPRxSocketSetupError(Exception):
+            pass
+        class UDPTxError(Exception):
+            pass
+        class ICMPRxError(Exception):
+            pass
+        class TracerouteLinuxOSXThreadError(Exception):
+            pass
+
+        # Creates and returns two separate sockets, one for tx (udp) and one for rx (icmp)
+        # Returns a UDPTxSocketSetupError or ICMPRxSocketSetupError Exception
+        def createSockets(ipAddrofInterface):
+            ipAddrofInterface = "0.0.0.0"
+            # Set up udp transmit socket
+            try:
+                # Create UDP socket
+                udpTx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                udpTx.settimeout(timeOut)
+            except Exception as createSocketsError:
+                raise UDPTxSocketSetupError(str(createSocketsError))
+                # print("udpTxSocket socket setup error " + str(e))
+                # exit()
+
+            # Set up icmp receiving socket to receive ICMP
+            try:
+                # Create raw socket
+                icmpRx = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+                icmpRx.settimeout(timeOut)
+                # Bind to the ip address of the interface specified by ipAddrofInterface
+                icmpRx.bind((ipAddrofInterface, 0))
+            except Exception as createSocketsError:
+                raise ICMPRxSocketSetupError(str(createSocketsError))
+                # print("reply socket setup error " + str(e))
+                # exit()
+            # Return the rx and tx sockets
+            return udpTx, icmpRx
+
+        # Decodes the supplied icmp header (which should be 8 bytes long)
+        class ICMPHeader(object):
+            # Custom Exception to be raised if the supplied icmpHeader data can't be unpacked
+            class DecodeException(Exception):
+                pass
+            def __init__(self, icmp_header):
+                # Attempt to unpack the header
+                try:
+                    self.type, self.code, self.checksum, self.p_id, self.sequence = struct.unpack('bbHHh', icmp_header)
+                except Exception as e:
+                    raise ICMPHeader.DecodeException(str(e))
+
+        # Decodes the supplied IP header (which should be 20 bytes long)
+        class IPHeader(object):
+            # Custom Exception to be raised if the supplied IP header data can't be unpacked
+            class DecodeException(Exception):
+                pass
+            def __init__(self, ip_header):
+                # unpack header
+                try:
+                    iph = struct.unpack('!BBHHHBBH4s4s', ip_header)
+                    # First byte of header contains version (bits 4-7) and ip header length (bits 0-3)
+                    version_ihl = iph[0]
+                    self.version = version_ihl >> 4
+                    self.ipHeaderLength = version_ihl & 0xF
+                    self.ttl = iph[5]
+                    self.protocol = iph[6]
+                    self.checksum = iph[7]
+                    self.s_addr = socket.inet_ntoa(iph[8])
+                    self.d_addr = socket.inet_ntoa(iph[9])
+                    # print('Version : ' + str(
+                    #     self.version) + ' IP Header Length : ' + str(
+                    #     self.ipHeaderLength) + ' TTL : ' + str(
+                    #     self.ttl) + ' Protocol : ' + str(
+                    #     self.protocol) + ' Source Address : ' + str(
+                    #     self.s_addr) + ' Destination Address : ' + str(self.d_addr))
+                except Exception as e:
+                    raise IPHeader.DecodeException(str(e))
+
+        # This function decodes the icmp Header and icmp payload (which should contain a copy of the header
+        # that caused the icmp reply to be generated).
+        # It expects an ICMPHeader and IPHeader object as arguments
+        # If the function can match the srcAddress, srcTtl, icmpType and icmpCode to that of the original sending
+        # message we can infer that this ICMP message is for us.
+        # Returns True if all the  optional parameters were matched, False if not, or None of there was an error
+        def icmpReplyMatcher(__icmpHeader, __ipHeaderOfSrc, srcAddress=None, destAddress=None, \
+                             srcTtl=None, icmpType=None, icmpCode=None):
+
+            # Test the fields within __icmpHeader and __ipHeaderOfSrc to see if they're what we're looking for
+            try:
+                if ((srcAddress == __ipHeaderOfSrc.s_addr) or (srcAddress is None)) and \
+                        ((destAddress == __ipHeaderOfSrc.d_addr) or (destAddress is None)) and \
+                        ((srcTtl == __ipHeaderOfSrc.ttl) or (srcTtl is None)) and \
+                          ((icmpType == __icmpHeader.type) or (icmpType is None)) and \
+                        ((icmpCode == __icmpHeader.code) or (icmpCode is None)):
+                    return True
+                else:
+                    return False
+            except:
+                return None
+
+        # Utility function to tidy up the main loop. Sends a UDP message, allowing IP Header TTL parameter to be set
+        def sendUDP(txSock, txTTL, payload, destIPAddr, destUDPPort):
+            try:
+                # Update socket with latest ttl value
+                txSock.setsockopt(socket.SOL_IP, socket.IP_TTL, txTTL)
+                # Send the UDP message
+                bytesSent = txSock.sendto(payload, (destIPAddr, destUDPPort))
+                return bytesSent
+            except Exception as e:
+                raise UDPTxError("UDPTxError " + str(e))
+
+        # Utility function to tidy up the main loop. Strips any trailing 0.0.0.0s from the list of traceroute hops
+        # Returns a sliced version of the list
+        def trimHopsList(srcList):
+            destList = []
+            if len(srcList) > 0:
+                elementsToTrim = 0
+                # Work backwards from the end of the list
+                for x in range(len(srcList) - 1, 0, -1):
+                    # Test to see if hop value is 0.0.0.0
+                    if srcList[x] == [0, 0, 0, 0]:
+                        elementsToTrim += 1
+                    else:
+                        # Otherwise a non-0.0.0.0 address present, so break out of the loop
+                        break
+                # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
+                if elementsToTrim > 0:
+                    try:
+                        # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
+                        destList = srcList[:(len(srcList) - elementsToTrim)]
+                    except Exception as e:
+                        Utils.Message.addMessage(
+                            "ERR:__tracerouteThread.trimHopsList() " + str(e))
+                else:
+                    destList = srcList
+            return destList
+
+        # Utility function to tidy up main loop. Compares a list of lists for equality. If identical, returns True, else False
+        def testHopsListsForEquality(srcList):
+            listsAreEqual = False    # Default return value
+            if len(srcList) > 1:    # Need to have more than 1 result to compare
+                for n in range(1, len(tracerouteResultsList)):
+                    # compare lists n and n-1 for equality
+                    if tracerouteResultsList[n - 1] == tracerouteResultsList[n]:
+                        # If equal, move onto the next pair
+                        listsAreEqual = True
+                    else:
+                        # If the lists aren't equal, set the flag and break out of the loop
+                        listsAreEqual = False
+                        break
+                return listsAreEqual
+            elif len(srcList) > 0:
+                # If len(srcList) == 1 (I.e only a single item), return True
+                return True
+            else:
+                return False
+
+        # Linux/OSX compatible function to send a UDP packet with a specfied TTL value, and then immediately wait for
+        # an ICMP reply. Makes use of a previously created raw and UDP socket
+        # Takes: rawSocket, udpSocket, source address, destAddr, destPort, ttl, receive timeout
+        # Note: _icmpSocket and _udpSocket have to be overridden
+        # Returns: IcmpSourceAddr, icmp type, icmp code
+        def sendUdpRecvIcmpRawSockets(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None):
+            icmpSourceAddr = None
+            icmpMessageType = None
+            icmpMessagecode = None
+
+            # Send the UDP message (with a custom ttl value)
+            try:
+                sendUDP(_udpSocket, _ttl, b'isptest',  _destAddr, _destPort)
+            except Exception as e:
+                raise UDPTxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.sendUDP " + str(e))
+
+            # Receive ICMP packet(s)
+            # This loop waits to receive icmp packets
+            # It's possible we might receive icmp packets not destined for us. Therfore we can't just accept
+            # the first icmp packet we receive. We have to examine its contents
+            # Either a socket.timeout, an elapsedTime timeout or a icmpReplyMatcher=True will cause this while
+            # loop to break
+
+            # Create elapsed timer
+            startTime = timer()
+            while True:
+                # Infinite loop to receive *all* icmp packets
+                # Break out of loop:
+                #   If timeOut period has been exceeded
+                #   if socket timeout exception raised
+                #   If matcher matches an icmp reply
+                elapsedTime = timer() - startTime
+                if elapsedTime > _timeout:
+                    # print("elapsedTimer exceeded twice timeout " + str(round(elapsedTime,1)) + "/" + str(timeOut * 2))
+                    break
+                # Receive ICMP data from socket
+                # Keep waiting until we get a matched packet or the timeout occurs
+                try:
+                    data, addr = _icmpSocket.recvfrom(5012)
+                    # Snapshot the source address (of the received icmp packet)
+                    untestedIcmpSourceAddr = addr[0]
+                    # Create ICMPHeader object from the received data. This will unpack and decode the fields
+                    # The IP Header is contained within the first 20 bytes
+                    # The ICMP Message Header is contained within the next 8 bytes
+                    # The data after that is copy of the entire IPv4 header (20 bytes)
+                    # ipHeaderOfReply = IPHeader(data[0:20])
+                    # Decode the ICMP header
+                    if len(data) >= 48:
+                        try:
+                            icmpHeader = ICMPHeader(data[20:28])
+                            # Decode the ICMP payload, which contains a copy of the IP header originally sent
+                            # From this we can verify that the TTL and source IP address were the same as that sent
+                            # Therefore we can infer that this particular ICMP message is our reply, otherwise we discard the
+                            # message and listen again (within the timeout period)
+                            ipHeaderOfOriginalSender = IPHeader(data[28:48])
+                            # Display the  header fields of the received packet
+                            # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                            #                          " RtpGenerator.__tracerouteThread() ICMP packet fields " + \
+                            #                          "src:" + str(addr[0]) + \
+                            #                          ", type:" + str(icmpHeader.type) + \
+                            #                          ", code:" + str(icmpHeader.code) + \
+                            #                          ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
+                            #                          ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
+                            #                          ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
+                            #                          ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum))
+
+                            # Test to see if this icmp packet is addressed to 'us', and what type of ICMP message it is
+                            # Detect TTL Expired messages (icmp type 11, code 0)
+                            if icmpReplyMatcher(icmpHeader, ipHeaderOfOriginalSender, icmpType=11, icmpCode=0, \
+                                                srcAddress=_srcAddr, srcTtl=1, \
+                                                destAddress=_destAddr):
+                                # This is a TTL expired in transit message, for us - snapshot the address
+                                icmpSourceAddr = untestedIcmpSourceAddr
+                                icmpMessageType = 11
+                                icmpMessagecode = 0
+                                # Break out of this (the icmp receive) loop
+                                break
+
+                            # Detect Destination Host Port unreachable, destination reached
+                            # NOTE: In this test we ignore the srcTTL value. We don't care because
+                            # we've reached the final destination
+                            # CHANGED 5/8/20: Previously this was set to srcTTL=1. But this gives annoying 'noise'
+                            # results when testing to a loopback interface with no receiver attached to 'sink' the packets
+                            elif icmpReplyMatcher(icmpHeader, ipHeaderOfOriginalSender, icmpType=3, icmpCode=3, \
+                                                srcAddress=_srcAddr, srcTtl=None,
+                                                destAddress=_destAddr):
+                                # This is a Destination Port Unreachable address, destination reached
+                                icmpSourceAddr = untestedIcmpSourceAddr
+                                icmpMessageType = 3
+                                icmpMessagecode = 3
+                                # Break out of this (the icmp receive) loop
+                                break
+
+                            # Detect another weird condition whereby an icmp packet with ttl=0 is returned by an
+                            # upstream router. This should be impossible because routers should discard packets
+                            # whose TTL has decremented to 1 on receipt. Some routers appear to ignore the ttl
+                            # for existing traffic flows (Virgin Media home router, Dublin?) but still
+                            # decrement the ttl *and then* the subsequent router returns an ICMP packet containing
+                            # the IP header with a TTL of zero. This confuses the traceroute logic. We can't know
+                            # what the original source TTL was set to so the best we can do is discard this hop
+
+                            # Detect weird 'ttl=0' icmp packets
+                            elif icmpReplyMatcher(icmpHeader, ipHeaderOfOriginalSender, icmpType=11, icmpCode=0, \
+                                                      srcAddress=_srcAddr, srcTtl=0,
+                                                      destAddress=_destAddr):
+                                # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                #                          " RtpGenerator.__tracerouteThread() ttl=0")
+                                icmpSourceAddr = untestedIcmpSourceAddr
+                                icmpMessageType = 44
+                                icmpMessagecode = 0
+                                break
+
+                            # this an unknown icmp packet
+                            # attempt to decode it
+                            else:
+                                try:
+                                    Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                                             " RtpGenerator.__tracerouteThread() Unexpected packet " +\
+                                                             "src:" + str(addr[0]) +\
+                                                             ", type:" + str(icmpHeader.type)+\
+                                                             ", code:" + str(icmpHeader.code)+\
+                                                             ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
+                                                             ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
+                                                             ", IPttl:" + str(ipHeaderOfOriginalSender.ttl)+\
+                                                             ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum))
+                                except Exception as e:
+                                    # couldn't decode packet
+                                    Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                                             " RtpGenerator.__tracerouteThread() Unexpected packet from " + \
+                                                             str(addr[0]) + ", " + str(e))
+                        except Exception as e:
+                            Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                                     " RtpGenerator.__tracerouteThread() ICMP decode error, from " + \
+                                                     str(addr[0]) + ", " + str(e))
+
+                    else:
+                        Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                             " RtpGenerator.__tracerouteThread() Unexpected short length packet from " + \
+                                             str(addr[0]))
+                except socket.timeout:
+                    # print("socket timeout")
+                    pass
+
+                except Exception as e:
+                    raise ICMPRxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpRawSocket.recvICMP " + str(e))
+
+            return icmpSourceAddr, icmpMessageType, icmpMessagecode
+
+        # Windows compatible function to send a UDP packet with a specfied TTL value, and then immediately wait for
+        # an ICMP reply. Makes use of the Scapy library to receive raw packets/decode ICMP
+        # Takes: rawSocket, udpSocket, destAddr, destPort, ttl
+        # Returns: IcmpSourceAddr, icmp type, icmp code
+        def sendUdpRecvIcmpScapy(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None):
+            icmpSourceAddr = None
+            icmpMessageType = None
+            icmpMessagecode = None
+            try:
+                # Create a packet template
+                pkt = IP(dst=_destAddr, ttl=_ttl) / UDP(dport=_destPort)
+                # Send the packet and wait for a reply
+                reply = sr1(pkt, verbose=0, timeout=_timeout)
+                # Now parse the reply
+                if reply is not None:
+                    # Detect TTL Expired messages (icmp type 11, code 0)
+                    if reply.type == 11:
+                        # This is a TTL expired in transit message, for us - snapshot the address
+                        icmpSourceAddr = reply.src
+                        icmpMessageType = reply.type
+                    # Detect Destination Host Port unreachable, destination reached
+                    elif reply.type == 3 or reply.src == _destAddr:
+                        icmpSourceAddr = reply.src
+                        icmpMessageType = reply.type
+
+            except Exception as e:
+                Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sendUdpRecvIcmpScapy() " + str(e))
+                # Clear return vars
+                icmpSourceAddr = None
+                icmpMessageType = None
+                icmpMessagecode = None
+
+            return icmpSourceAddr, icmpMessageType, icmpMessagecode
+
+        # Define a socket timeout value
+        timeOut = 0.1
+        # Define the number of times the traceroute will attempt to illicit a response from the router.
+        # This is becuse some routers will fail to respond due to rate limiting of requests.
+        # Note: Each subsquent attempt alternates between two possible ports
+        # The first attempt will be to use the destination port for the stream
+        # If that fails, a fallback port specified in the Registry will be used. Routers are more likely to respond
+        # on this other port (33434)
+        maxNoOfRetries = 6
+        # Get the max no of hops before traceroute gives up
+        maxNoOfHops = Registry.tracerouteMaxHops
+        # Get the UDP 'fallback' port
+        fallbackPort = Registry.tracerouteFallbackUDPDestPort
+        # The no. of consecqutive 'no response from router' requests we'll tolerate before giving up
+        maxNoOfNoResponse = 5
+
+        # Flag to signal that the tx udp and icmp rx sockets were created successfully (in Linux/OSX mode)
+        setupSuccessfulFlag = False
+        udpTx = None        # placeholder for udp transmit socket
+        icmpRx = None       # placeholder for  icmp receive socket
+        sendUdpRecvIcmp = None # Operating system-dependant pointer to the traceroute send/recv function
+        setupErrorMessage = None
+
+        Utils.Message.addMessage("DBUG:__tracerouteThread starting for stream " + str(self.syncSourceIdentifier))
+
+        # Determine which Operating System is in use, and therfore which udp tx/icmp rx function we will use
+        os = Utils.getOperatingSystem()
+        # os = "Windows"
+        if os == "Windows":
+            # Windows detected
+            # Create pointer to the correct function for this OS
+            sendUdpRecvIcmp = sendUdpRecvIcmpScapy
+            self.tracerouteFunctionInUse = "sendUdpRecvIcmpScapy"
+            # Do a simple test using Scapy.sr1() to check it will work (by sending a single raw packet to localhost)
+            # If it raises an exception, traceroute won't work
+            try:
+                pkt = IP(dst="127.0.0.1", ttl=1) / UDP(dport=5000)
+                # Send the packet and wait for a reply
+                reply = sr1(pkt, verbose=0, timeout=0.1)
+                Utils.Message.addMessage(
+                    "DBUG:RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv successful " + str(reply))
+                setupSuccessfulFlag = True
+
+            except Exception as e:
+                # Scapy failed
+                Utils.Message.addMessage("DBUG:RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv test failed " +\
+                                         str(e))
+                setupSuccessfulFlag = False
+                # Store the error message
+                setupErrorMessage = str(e)
+        else:
+            # Linux or OSX detected
+            # Create pointer to correct function for this OS
+            sendUdpRecvIcmp = sendUdpRecvIcmpRawSockets
+            self.tracerouteFunctionInUse = "sendUdpRecvIcmpRawSockets"
+            # Now create udp tx and icmp rx sockets
+            try:
+                # Create tx (udp) and rx (icmp) sockets, specifying the ip address we will be transmitting from
+                udpTx, icmpRx = createSockets(self.SRC_IP_ADDR)
+                # Set the 'sockets okay' flag so that the main while loop will start
+                setupSuccessfulFlag = True
+
+            except Exception as e:
+                # Failed to set up sockets
+                Utils.Message.addMessage(
+                    "DBUG:RtpGeneratorThread.__tracerouteThread() createSockets() failed " + \
+                    str(e))
+                setupSuccessfulFlag = False
+                # Store the error message
+                setupErrorMessage = str(e)
+
+        if setupSuccessfulFlag:
+            Utils.Message.addMessage("DBUG:__tracerouteThread Stream " + str(self.syncSourceIdentifier) + " using " +\
+                          str(self.tracerouteFunctionInUse))
+        else:
+            # If setup failed
+            Utils.Message.addMessage("ERR: __tracerouteThread setup error: " + str(setupErrorMessage))
+            Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
+            # If a UI instance (user interface) reference was supplied, display an error message on the UI
+            maxWidth = 60
+            # errorText = textwrap.fill(setupErrorMessage, width=maxWidth) + \
+            # Truncate setupErrorMessage if necessary, to fit screen
+            if setupErrorMessage is not None and len(setupErrorMessage) >= maxWidth:
+                setupErrorMessage = setupErrorMessage[:maxWidth]
+            errorText = str(setupErrorMessage).center(maxWidth) + \
+                                    "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) + \
+                        "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
+                        "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
+                        "\n\n" + "<Press any key to continue>".center(maxWidth)
+            if self.uiInstance is not None:
+                try:
+                    self.uiInstance.showErrorDialogue("Traceroute error", errorText)
+                except Exception as e:
+                    Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
+                                             str(e))
+
+        # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
+        # consecutive identical lists have been determined can we say that we have a 'stable' route
+        # Create empty list to put the results of each traceroute attempt into
+
+        tracerouteHopsListMustMatchThreshold = 2
+        tracerouteResultsList = deque(maxlen=tracerouteHopsListMustMatchThreshold)
+        # Additionally, it's possible a mismatch would occur if a hop flapped to/from zero. This is likely to be quite a
+        # frequent occurance. And, given the length of time it takes a traceroute to complete, we don't necessarily want
+        # to write-off the results we have
+        tracerouteHopsListMismatchCounterThreshold = 5 # No of consecutive failures before clearing the hopsList
+        tracerouteHopsListMismatchCounter = 0 # Counts the no of consecutive failures
+        try:
+            # Perform the traceroute in an infinite loop as long as the transmit stream is alive
+            # The traceroute is performed n times. Only when the same route has been confirmed will the
+            # tracerouteHopsList be updated. This is to guard against situations where the route changes mid-traceroute
+            while self.timeToLive != 0 and setupSuccessfulFlag:
+                # This is the main traceroute loop and counts the hops
+                # Set initial ttl
+                ttl = 0
+                # Counter for the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
+                # Reset the 'no response' counter
+                noResponseCounter = 0
+                # This list will be populated with the results of the traceroute
+                hopsList = []
+                # Counts the no of retries for each hop
+                retryCount = 1
+                # Utils.Message.addMessage("Starting traceroute....ttl = 1")
+                while ttl < maxNoOfHops and self.timeToLive != 0:
+                    retryCount = 1
+                    ttl += 1
+                    # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
+                    icmpSrcAddr = None
+
+                    # This loop counts the attempts for each hop
+                    while (retryCount < maxNoOfRetries) and self.timeToLive != 0:
+                        # Utils.Message.addMessage("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(retryCount))
+                        # Send UDP packet
+                        # Determine which UDP destination port to use
+                        if retryCount % 2 == 1:
+                            udpTxPort = self.UDP_TX_PORT
+                        else:
+                            udpTxPort = fallbackPort
+
+                        # Perform the UDP Send/ICMP receive
+                        try:
+                            icmpSrcAddr, icmpType, icmpCode = sendUdpRecvIcmp(\
+                                self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
+                                _udpSocket=udpTx, _icmpSocket=icmpRx)
+                        except UDPTxError as e:
+                            Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
+                                                     "__tracerouteThread UDPTxError. Recreating udp Tx socket" + str(
+                                type(e)) + ", " + str(e))
+                            # close existing socket
+                            try:
+                                udpTx.close()
+                            except:
+                                Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
+                                                         "__tracerouteThread UDPTxError.  udpTx.close()" + str(
+                                    type(e)) + ", " + str(e))
+                            # Recreate the udp tx socket
+                            try:
+                                # close existing socket
+                                udpTx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                                Utils.Message.addMessage("DBUG:Stream" + str(self.syncSourceIdentifier) + \
+                                                         "__tracerouteThread UDPTxError.  udpTx socket recreated successfully " + str(
+                                    type(e)) + ", " + str(e))
+                            except:
+                                Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
+                                                         "__tracerouteThread UDPTxError.  udpTx socket recreation failed " + str(
+                                    type(e)) + ", " + str(e))
+
+                        # Test the icmp response:-
+                        # If the traceroute hop router did not respond, we get None, otherwise we should get an ip addr
+                        if icmpSrcAddr is not None:
+                            # Utils.Message.addMessage(
+                            #     "icmp response: ttl:" + str(ttl) + ", retry:" + str(retryCount) + \
+                            #     ", [" + str(icmpSrcAddr) + ":" + str(icmpType) + ":" +
+                            #     str(icmpCode))
+                            # Detect Destination Host Port unreachable, destination reached
+                            if icmpType == 3 or icmpSrcAddr == self.UDP_TX_IP:
+                                # Utils.Message.addMessage("icmpType == 3 or icmpSrcAddr == self.UDP_TX_IP")
+                                # Cause the outer-outer hops counter loop to break. The traceroute is complete
+                                ttl = maxNoOfHops
+                            # Detect TTL Expired messages (icmp type 11, code 0) - we're mid-traceroute
+                            elif icmpType == 11:
+                                pass
+                            # Detect erroneous messages (I use type 44 to trap ttl=0 messages
+                            elif icmpType == 44:
+                                Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + \
+                                        " Erroneous ttl=0 ICMP message for traceroute hop " + str(ttl) + ". Caution!")
+                            # Store the address
+                            # Query the WhoisResolver to find the owner of the domain
+                            Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
+                            # If so, break the address up into a list of octets - this is how they're stored in self._tracerouteHopsList
+                            icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
+                            hopsList.append([int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]),
+                                                 int(icmpSrcAddrOctets[2]),
+                                                 int(icmpSrcAddrOctets[3])])
+                            # Reset the 'no response' counter
+                            noResponseCounter = 0
+                            # Cause the inner attempts loop to break - we have a response for this hop
+                            # retryCount = maxNoOfRetries
+                            break
+                        # Else, the router did not respond
+                        else:
+                            # Increment the attempts counter
+                            retryCount += 1
+                            # If this is the final attempt but still no response, append 0.0.0.0 to hopsList
+                            if retryCount == maxNoOfRetries:
+                                hopsList.append([0, 0, 0, 0])
+                                # Increment the 'no response' counter
+                                noResponseCounter += 1
+
+                    # Now check to see if we've received five 'no replies' in a row, if so, give up
+                    # Or else, if we've reached the max no of hops, give up
+                    if (noResponseCounter > maxNoOfNoResponse) or (ttl >= maxNoOfHops):
+                        # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread:" + str(noResponseCounter) + \
+                        #                          " None's in a row or hop limit reached. Aborting")
+                        # Cause the outer-outer hops counter loop to break
+                        # ttl = maxNoOfHops
+                        break
+                    # Utils.Message.addMessage("[TTL:" + str(ttl) + ", Retry:" + str(retryCount) +"]" + str(hopsList[-1]))
+
+
+                # Traceroute pass completed,
+
+                # Now strip off any trailing 0.0.0.0 (no responses)
+                if len(hopsList) > 0:
+                    hopsList = trimHopsList(hopsList)
+                    # Utils.Message.addMessage("hopsList: " + str(hopsList))
+                    # Traceroute pass completed and hopslist trimmed. Now append to tracerouteResultsList for later validation
+                    # Add the latest traceroute result to tracerouteResultsList
+
+                    tracerouteResultsList.append(hopsList)
+                    # Utils.Message.addMessage("DBUG: stream " + str(self.syncSourceIdentifier) + \
+                    #                          " traceroute len:" + str(len(hopsList)) + \
+                    #                          ", ttl:" + str(ttl) + ", retry:" + str(retryCount) + ")" + \
+                    #                          str(hopsList))
+                #
+                # # Wait for tracerouteResultsList to be populated with the required no of traceroute passes
+                # # When ready, compare the contents of the lists within tracerouteResultsList for equality
+                if len(tracerouteResultsList) >= tracerouteHopsListMustMatchThreshold:
+                    if testHopsListsForEquality(tracerouteResultsList):
+                        # If the lists are all identical that means that n consecutive traceroutes gave the same result
+                        # so the traceroute has been validated. Update the instance variable (via the setter method)
+
+                        self.setTraceRouteHopsList(hopsList)
+                        # Successful (replicated) traceroute has completed, so reset the mismatch counter
+                        tracerouteHopsListMismatchCounter = 0
+                        # Recalculate the checksum for the (transmitted( hopsList
+                        self.tracerouteChecksum = self.createTracerouteChecksum(hopsList)
+
+                        # # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
+                        # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
+                        # # So has to be updated manually here
+                        try:
+                            # get the instance of the corresponding RtpStreamResults object
+                            rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                            # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+                            rtpStreamResults.setTraceRouteHopsList(hopsList)
+
+                        except Exception as e:
+                            # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
+                            pass
+
+                    else:
+                        # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
+                        # Increment the mismatch counter
+                        tracerouteHopsListMismatchCounter += 1
+                        # Now test to see if we have exceeded the max no of allowed consecutive mismatches
+                        if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
+                            Utils.Message.addMessage(\
+                                "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
+                                ") Exceeded consecutive mismatch Threshold (" +\
+                                str(tracerouteHopsListMismatchCounterThreshold) + \
+                                "), clearing hopsList. Most recent " + str(hopsList))
+
+                            # Empty the current tracerouteHopsList (by filling with an empty list)
+                            self.setTraceRouteHopsList([])
+                            # Clear the traceroute checksum
+                            self.tracerouteChecksum = 0
+                            # reset the mismatch counter
+                            tracerouteHopsListMismatchCounter = 0
+                            # # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
+                            # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
+                            # # So has to be updated manually here
+                            try:
+                                # get the instance of the corresponding RtpStreamResults object
+                                rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                                # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+                                rtpStreamResults.setTraceRouteHopsList([])
+
+                            except Exception as e:
+                                # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
+                                pass
+
+
+                # Sleep for 1 sec between completed traceroutes
+                time.sleep(1)
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
+                                     "__tracerouteThread outer loop error. " + str(type(e)) + ", " + str(e))
+
+        finally:
+            try:
+                if setupSuccessfulFlag:
+                    # Thread is ending. Close sockets (but only if they were ever created)
+                    if udpTx is not None:
+                        udpTx.close()
+                    if icmpRx is not None:
+                        icmpRx.close()
+            except Exception as e:
+                Utils.Message.addMessage(
+                    "ERR:Stream " + + str(self.syncSourceIdentifier) + \
+                    " __tracerouteThread couldn't close sockets. " + str(type(e)) + ", " + str(e))
+
+        Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                 " __tracerouteThread ending ")
 
 
 # An object that will act as a UDP receiver. It will receive server reports from ResultsTransmitter
@@ -5112,8 +5832,17 @@ class ResultsReceiver(object):
 
                                 # Attempt to extract the stats dictionary and eventsList list
                                 try:
-                                    stats = unPickledMessage["stats"]
-                                    latestEventsList = unPickledMessage["eventList"]
+                                    if "stats" in unPickledMessage:
+                                        stats = unPickledMessage["stats"]
+                                    if "eventList" in unPickledMessage:
+                                        latestEventsList = unPickledMessage["eventList"]
+                                    if "control" in unPickledMessage:
+                                        controlMessage = unPickledMessage["control"]
+                                        Utils.Message.addMessage("DBUG:__resultsReceiverThread() Control Message Rx'd: " + \
+                                                                 str(controlMessage))
+                                        # Pass the message to the RtpGenerator Control Message queue
+                                        self.relatedRtpGenerator.addControlMessage(controlMessage)
+
                                 except Exception as e:
                                     Utils.Message.addMessage(
                                         "ERR: __resultsReceiverThread (error unpacking stats and eventList): " + str(e))
@@ -5213,14 +5942,7 @@ class ResultsReceiver(object):
                         except Exception as e:
                             Utils.Message.addMessage("ERR:_resultsReceiverThread(): rtpStreamResults.updateEventsList() " + str(e))
 
-                    # if len(stats) > 0:
-                    #     try:
-                    #         stream= self.rtpTxStreamResultsDict[stats["stream_syncSource"]]
-                    #         x=stream.getRTPStreamEventList(1)
-                    #         if len(x) > 0:
-                    #             Utils.Message.addMessage("DBUG: Last known event: " + str(x[-1].type))
-                    #     except Exception as e:
-                    #         Utils.Message.addMessage("DBUG: wtf " + str(e))
+
                 # socket is set with a timeout, so need to catch timeouts but can ignore them
                 except socket.timeout:
                     # Utils.Message.addMessage("DBUG: ResultsReceiver socket.recvfrom() timeout")

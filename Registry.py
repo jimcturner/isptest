@@ -4,7 +4,7 @@
 # This will be used as the source of default values
 class Registry(object):
     streamReportFilename = "Stream_report_"
-    version = "2.1"
+    version = "2.2"
     pythonMinimumVersionRequired_Major = 3  # Specfify the minimum version of the Python interpreter required
     pythonMinimumVersionRequired_Minor = 7  # This equates to Python version 3.7
 
@@ -26,9 +26,14 @@ class Registry(object):
                          ["a", "Show 'About' dialogue"]
                          ]
 
+
     ######### RtpReceiveStream
+    receiveStreamAcceptThreshold = 15 # The minimum no of rtp packets for particular sync source ID to be received
+                                    # before the stream is accepted as a valid incoming stream
+    nonExistentStreamTimout_seconds = 5 # How long to wait before deciding that a received packet isn't part of any stream
+
     lossOfStreamAlarmThreshold_s = 10 # Specifies how long before a loss of stream Event is triggered by RtpReceiveStream
-    streamIsDeadThreshold_s = 90 # Specifies how long to wait with no incoming rtp packets before a stream is presumed dead
+    streamIsDeadThreshold_s = 60 * 60 * 12 # Specifies how long to wait with no incoming rtp packets before a stream is presumed dead (12 hrs)
     autoRemoveDeadRxStreamsEnable = True # Determines whether dead streams should automaticaslly be removed from the
                                             # list of received streams
 
@@ -46,6 +51,7 @@ class Registry(object):
     # two receive periods worth of time) an Event will be created
     # then an Event will be generated
     rtpReceiveStreamJitterExcessiveAlarmThreshold = 2
+    rtpReceiveStreamGlitchThreshold = 4 # The default no of packets that have to be lost before a Glitch Event is generated
 
 
     # RtpGenerator
@@ -55,6 +61,13 @@ class Registry(object):
     tracerouteFallbackUDPDestPort = 33434  # The 'fallback' port used by the RtpGenerator.traceroute thread if no reply
     # is received from a host
     simulatedJitterPercent = 50 # The amount of 'simulated jitter' to add to the tx packets, if the feature is enabled
+    # Specify min/max/default RtpGenerator tx parameters
+    minimumPermittedTXRate_bps = 10240 # Specifies the minimum RtpGenerator tx rate as 10kbps
+    defaultTXRate_bps = 1 * 1024 * 1024 # Specifies the default RtpGenerator tx rate as 1Mbps
+    defaultPayloadLength_bytes = 1300
+    defaultTxStreamTimeToLive_sec = 3600
+    maximumPayloadSize_bytes = 1500 - 12 # Maximum Ethernet frame size is 1500 bytes (minus 12 bytes for the RTP header)
+    enableExcessTxSpeedWarnings = True   # Inhibits excessive tx speed warnings
 
     # RtpStreamResults
     # No of historic events to keep in memory (before events are purged)
@@ -62,3 +75,4 @@ class Registry(object):
 
     # Utils
     historicMessagesToKeepInMemory = 50
+    pastebinApiDeveloperkey = '78c625162b816673e6b3ecc2750ee741'
