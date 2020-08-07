@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # Defines useful non-core objects for use by isptest
 import struct
+import subprocess
+import sys
 import time
 import datetime
 import socket
@@ -875,3 +877,26 @@ def rawReceive():
             # # print(str(i) + ", " + str(i.recvfrom(131072)))
             # print(str(ipHeader.d_addr) + ":" + ", " + str(ipHeader.protocol) + ", type:" + str(icmpMessage.type) +\
             #       ", code:" + str(icmpMessage.code))
+
+# This function is from here: https://stackoverflow.com/questions/3305287/python-how-do-you-view-output-that-doesnt-fit-the-screen
+# It will launch the linux/OSX viewer 'less' as a subprocess and display textToDisplay
+# Quitting less will return to the calling thread
+# less is installed by default on linux/OSX but probably isn;t present on Windows
+def displayTextUsingLess(textToDisplay):
+    less = subprocess.Popen("less", stdin=subprocess.PIPE)
+    less.stdin.write(textToDisplay.encode("utf-8"))
+    less.stdin.close()
+    less.wait()
+
+# This function is from here: https://stackoverflow.com/questions/3305287/python-how-do-you-view-output-that-doesnt-fit-the-screen
+# It will launch the text viewer 'more' as a subprocess and display textToDisplay
+# Quitting less will return to the calling thread
+# more is installed by default on Windows, OSX and Linux
+def displayTextUsingMore(textToDisplay):
+    # subprocess.run(["more", "-d"], input=textToDisplay, text=True, check=True)
+    # subprocess.run(["more", "testfile"], text=True, check=True, stdin=subprocess.PIPE)
+    less = subprocess.Popen(["more", "-d"], stdin=subprocess.PIPE)
+    less.stdin.write(textToDisplay.encode("utf-8"))
+    less.stdin.close()
+    less.wait()
+

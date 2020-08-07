@@ -1495,33 +1495,59 @@ class UI(object):
                 streamReport = selectedRxOrResultsStream.generateReport(eventFilterList = self.filterListForDisplayedEvents)
                 # Attempt to copy the report to the local clipboard
                 try:
+                    # Utils.displayTextUsingMore(streamReport)
                     pyperclip.copy(streamReport)
                     self.__renderMessageBox("Success!".center(30) + "\n\n" +\
                             "<Press a key to continue>".center(30),\
                             "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
 
-                except:
-                    # Copy to clipboard failed. Paste to pastebin.com instead
-                    url = ""
-                    try:
-                        url = Utils.pasteBin(streamReport, "isptest stream report for stream " +\
-                                    str(self.selectedStreamID)).decode('utf-8')
-                    except Exception as e:
-                        url = "Error pasting to pastebin:- \n" + str(e)
+                except Exception as e:
+                    Utils.Message.addMessage("DBUG: UI.__onCopyReportToClipboard (using less) " + str(e))
 
+                    # # Copy to clipboard failed. Paste to pastebin.com instead
+                    # url = ""
+                    # try:
+                    #     url = Utils.pasteBin(streamReport, "isptest stream report for stream " +\
+                    #                 str(self.selectedStreamID)).decode('utf-8')
+                    # except Exception as e:
+                    #     url = "Error pasting to pastebin:- \n" + str(e)
+                    #
+                    #
+                    # # Display a message box with a URL or an error message
+                    # self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" +\
+                    #         "\nThis is mostly likely because you are connected to a text-only\n" +\
+                    #         "terminal (e.g via an SSH session?)\n" +\
+                    #         "\nSending the report to pastebin.com instead. Please follow this URL:-\n" +\
+                    #         "\n " + str(url).center(70) + "\n\n" +\
+                    #         "<Press a key to continue>".center(70), \
+                    #         "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
 
-                    # Display a message box with a URL or an error message
-                    self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" +\
-                            "\nThis is mostly likely because you are connected to a text-only\n" +\
-                            "terminal (e.g via an SSH session?)\n" +\
-                            "\nSending the report to pastebin.com instead. Please follow this URL:-\n" +\
-                            "\n " + str(url).center(70) + "\n\n" +\
-                            "<Press a key to continue>".center(70), \
-                            "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
+                    # Copy to clipboard failed, attempt to launch 'less' viewer instead - only works on Linux/OSX
+                    # Display a message box
+                    os = Utils.getOperatingSystem()
+                    if  os != "Windows":
+                        # Only attempt to launch 'less' oif we're not running Windows
+                        self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" + \
+                                                "\nThis is mostly likely because you are connected to a text-only\n" + \
+                                                "terminal (e.g via an SSH session?)\n" + \
+                                                "\nAttempting to open the report in 'less' instead.\n" + \
+                                                 "\nWhen done, press 'q' to return to isptest\n" +\
+                                                "TIP: When in less, press 'h' for help\n\n" +\
+                                                "<Press a key to continue>".center(70), \
+                                                "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
+                        try:
+                            # Clear the screen
+                            Term.clearScreen()
+                            # Open 'less' as a subprocess (blocking)
+                            Utils.displayTextUsingLess(streamReport)
+                        except Exception as e:
+                            Utils.Message.addMessage("ERR: UI.__onCopyReportToClipboard (using less) " + str(e))
+                    else:
+                        Utils.Message.addMessage("ERR: UI.__onCopyReportToClipboard (using less) . Wrong OS " + str(os))
 
     # This method will call the currently selected Receive (or TxResults writeReportToDisk() method
     # causing a report of the current stream to be saved to disk
-    # Note, this option is obly available if the Events Table is currently being displayed
+    # Note, this option is only available if the Events Table is currently being displayed
     def __onSaveReportToDisk(self):
         if self.displayEventsTable == True:
             selectedRxOrResultsStream = None
@@ -1654,7 +1680,7 @@ class UI(object):
         if self.selectedTableRow > (len(self.views[self.selectedView][2]) - 1):
             self.selectedTableRow = len(self.views[self.selectedView][2]) - 1
 
-    # 's' pressed
+    # 'l' pressed
     def __onEnterFriendlyName(self):
         # Confirm that this operation is allowed on  the current stream type
         if type(self.selectedStream) == RtpStreamResults:
@@ -1961,8 +1987,14 @@ class UI(object):
                 Utils.Message.addMessage(
                     "INFO: streamToDelete: " + str(self.selectedStreamID) + " of type " + str(type(self.selectedStream)))
 
+                # Confirm that this operation is allowed on  the current stream type
+                if type(self.selectedStream) == RtpStreamResults:
+                    # We must be in TRANSMIT mode, currently viewing one of the results panes
+                    #  - you can't Put up an info message
+                    Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
                 # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
-                if type(self.selectedStream) == RtpGenerator:
+                elif type(self.selectedStream) == RtpGenerator:
                     # It is a generator object
                     Utils.Message.addMessage("[d] Deleting Tx Stream: " + str(self.selectedStreamID))
                     # Instruct the RtpGenerator object to die (and it's associated corrseponding RtpStreamResults, if it exists)
@@ -1976,9 +2008,6 @@ class UI(object):
                     # Safely shutdown the RtpStream object itself
                     self.selectedStream.killStream()
 
-                elif type(self.selectedStream) == RtpStreamResults:
-                    Utils.Message.addMessage("Can't delete Results line for stream. " + str(self.selectedStreamID) + \
-                                       " Did you mean to delete the transmit stream instead?")
 
             except Exception as e:
                 Utils.Message.addMessage(
@@ -1988,9 +2017,15 @@ class UI(object):
 
     # '4' pressed
     def __onIncreaseTxRate(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Construct the control message:-
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                                  "source": "Transmitter" + str(self.pid),
                                                                  "type": "txbps_inc"})
@@ -2003,8 +2038,14 @@ class UI(object):
 
     # '3' pressed
     def __onDecreaseTxRate(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                                  "source": "Transmitter" + str(self.pid),
                                                                  "type": "txbps_dec"})
@@ -2016,8 +2057,14 @@ class UI(object):
 
     # '6'
     def __onIncreaseTimeToLive(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                              "source": "Transmitter" + str(self.pid),
                                                              "type": "txttl_inc"})
@@ -2029,8 +2076,14 @@ class UI(object):
 
     # '5'
     def __onDecreaseTimeToLive(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                                  "source": "Transmitter" + str(self.pid),
                                                                  "type": "txttl_dec"})
@@ -2042,8 +2095,14 @@ class UI(object):
 
     # 'b'
     def __onEnableBurstMode(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                    "source": "Transmitter" + str(self.pid),
                                                    "type": "txburst"})
@@ -2056,8 +2115,14 @@ class UI(object):
 
     # '2'
     def __onIncreasePayloadSize(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                    "source": "Transmitter" + str(self.pid),
                                                    "type": "txpayload_inc"})
@@ -2069,8 +2134,14 @@ class UI(object):
 
     # '1'
     def __onDecreasePayloadSize(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                    "source": "Transmitter" + str(self.pid),
                                                    "type": "txpayload_dec"})
@@ -3825,42 +3896,11 @@ def createTracerouteChecksum(hopsList):
 
 
 def main(argv):
-    # hopsList=[[0,0,0,0],[0,0,0,10],[10,0,0,0],[10,0,0,1], [1,0,0,10], [10,0,0,10], [10,12,6,10], [10,6,12,15]]
-    # tracerouteHopLists = [
-    #     [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
-    #     [[0, 0, 0, 0], [0, 0, 0, 10], [10, 0, 0, 0], [10, 0, 0, 1], [1, 0, 0, 10], [10, 0, 0, 10], [10, 12, 6, 10],
-    #      [10, 6, 12, 15]],
-    #     [[255,255,255,255], [0,0,0,0], [255,0,0,0]],
-    #     [[127,0,0,1]]
+    # print("main thread")
+    # textToDisplay = "Say you're writing a program in Python and all it does is pretty print some stuff. The output is in prettiest_print_ever. You already do weird tricks importing fcntl, termios, struct and friends to get the terminal size so that you can use the full width of the terminal (if any); that also gives you the screen height, so it makes sense to use it. (That also means you've long given up any pretenses of cross-platform compatibility, too.)"
     #
-    # ]
-    # # for hop in hopsList:
-    # #     x = createTracerouteChecksum(hop)
-    # #     print(str(hop) + ":" + str(x))
-    # for test in tracerouteHopLists:
-    #     x = createTracerouteChecksum(test)
-    #     print(str(x))
-    # exit()
-
-    # y = calculateSlowStartSleepPeriod()
-    # for x in range (0,10):
-    #     print (str(next(y)))
-    # exit()
-
-    # detectRouteChangesTest()
-    # exit()
-
-    # Get ip address of interface to be used to send/receive
-    # ipAddrOfInterface = Utils.get_ip()
-    # try:
-    #     hops=tracerouteLinuxOSX(ipAddrOfInterface, "www.google.com", 5000)
-    #     for x in range(len(hops)):
-    #         print(str(x) + ": " + str(hops[x]))
-    # except Exception as e:
-    #     print ("Error tracerouteLinuxOSX() " + str(e))
-    # print(str(Utils.getOperatingSystem()))
-    # icmpListener()
-    # icmplibTraceroute()
+    # Utils.smart_print(textToDisplay,terminal_height=3)
+    # print("back in main thread")
     # exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)

@@ -22,3 +22,5 @@ Help page shows the filenames/paths being saved to
 V2.2 Rewritten traceroute. Shared code between Windows and Linux/OSX - much easier to maintain. Better error handling for links where the traceroute fails (because the routers in the way let through packets with ttls already decremented to zero. 
 Adds remote control of transmitter from receiver
 Coded added to allow listening on multiple ports at once
+V2.3 Pastebin is done away with. Now, if the local clipboard copy fails (when generating a report), isptest will launch 'less' as a subprocess to allow the full report text to be copied
+
