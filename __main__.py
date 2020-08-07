@@ -1502,7 +1502,10 @@ class UI(object):
                             "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
 
                 except Exception as e:
-                    Utils.Message.addMessage("DBUG: UI.__onCopyReportToClipboard (using less) " + str(e))
+                    # pyperclip error messages typically have newline chars in them. This will mess up my message
+                    # table! So need to strip them - reaplce \n chars with ,
+                    modifiedErrorString = str(e).replace("\n", ", ")
+                    Utils.Message.addMessage("DBUG: UI.__onCopyReportToClipboard (using less) " + modifiedErrorString)
 
                     # # Copy to clipboard failed. Paste to pastebin.com instead
                     # url = ""
