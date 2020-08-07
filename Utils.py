@@ -897,4 +897,4 @@ def displayTextUsingMore(textToDisplay):
     # less.stdin.write(textToDisplay.encode("utf-8"))
     # less.stdin.close()
     # less.wait()
-    subprocess.run(["more"], input=textToDisplay, text=True, check=True)
+    subprocess.run(["more"], input=textToDisplay, text=True, check=True, shell=True)
