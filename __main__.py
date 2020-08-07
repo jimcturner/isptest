@@ -1680,7 +1680,7 @@ class UI(object):
         if self.selectedTableRow > (len(self.views[self.selectedView][2]) - 1):
             self.selectedTableRow = len(self.views[self.selectedView][2]) - 1
 
-    # 's' pressed
+    # 'l' pressed
     def __onEnterFriendlyName(self):
         # Confirm that this operation is allowed on  the current stream type
         if type(self.selectedStream) == RtpStreamResults:
@@ -1987,8 +1987,14 @@ class UI(object):
                 Utils.Message.addMessage(
                     "INFO: streamToDelete: " + str(self.selectedStreamID) + " of type " + str(type(self.selectedStream)))
 
+                # Confirm that this operation is allowed on  the current stream type
+                if type(self.selectedStream) == RtpStreamResults:
+                    # We must be in TRANSMIT mode, currently viewing one of the results panes
+                    #  - you can't Put up an info message
+                    Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
                 # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
-                if type(self.selectedStream) == RtpGenerator:
+                elif type(self.selectedStream) == RtpGenerator:
                     # It is a generator object
                     Utils.Message.addMessage("[d] Deleting Tx Stream: " + str(self.selectedStreamID))
                     # Instruct the RtpGenerator object to die (and it's associated corrseponding RtpStreamResults, if it exists)
@@ -2002,9 +2008,6 @@ class UI(object):
                     # Safely shutdown the RtpStream object itself
                     self.selectedStream.killStream()
 
-                elif type(self.selectedStream) == RtpStreamResults:
-                    Utils.Message.addMessage("Can't delete Results line for stream. " + str(self.selectedStreamID) + \
-                                       " Did you mean to delete the transmit stream instead?")
 
             except Exception as e:
                 Utils.Message.addMessage(
@@ -2014,9 +2017,15 @@ class UI(object):
 
     # '4' pressed
     def __onIncreaseTxRate(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Construct the control message:-
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                                  "source": "Transmitter" + str(self.pid),
                                                                  "type": "txbps_inc"})
@@ -2029,8 +2038,14 @@ class UI(object):
 
     # '3' pressed
     def __onDecreaseTxRate(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                                  "source": "Transmitter" + str(self.pid),
                                                                  "type": "txbps_dec"})
@@ -2042,8 +2057,14 @@ class UI(object):
 
     # '6'
     def __onIncreaseTimeToLive(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                              "source": "Transmitter" + str(self.pid),
                                                              "type": "txttl_inc"})
@@ -2055,8 +2076,14 @@ class UI(object):
 
     # '5'
     def __onDecreaseTimeToLive(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                                  "source": "Transmitter" + str(self.pid),
                                                                  "type": "txttl_dec"})
@@ -2068,8 +2095,14 @@ class UI(object):
 
     # 'b'
     def __onEnableBurstMode(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                    "source": "Transmitter" + str(self.pid),
                                                    "type": "txburst"})
@@ -2082,8 +2115,14 @@ class UI(object):
 
     # '2'
     def __onIncreasePayloadSize(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                    "source": "Transmitter" + str(self.pid),
                                                    "type": "txpayload_inc"})
@@ -2095,8 +2134,14 @@ class UI(object):
 
     # '1'
     def __onDecreasePayloadSize(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
         # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
+        elif type(self.selectedStream) == RtpGenerator:
             self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
                                                    "source": "Transmitter" + str(self.pid),
                                                    "type": "txpayload_dec"})

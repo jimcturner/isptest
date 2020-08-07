@@ -870,7 +870,11 @@ class RtpReceiveCommon(RtpCommon):
                                               str(stats["route_change_events_total"]) + "\r\n"
                 routeChangeStats += "Mean interval between route changes: ".rjust(labelWidth) +\
                                               str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
-                routeChangeStats += "Time of last route change: ".rjust(labelWidth) + \
+                if type(stats["route_time_of_last_route_change_event"]) == datetime.datetime:
+                    # At creation, this parameter is a datetime.timedelta object, which means that it won't have a
+                    # strftime() method. Therefore, we need to check that it's been turned into a timestamp (which is a
+                    # datetime.datetime object) which will have a strftime() method
+                    routeChangeStats += "Time of last route change: ".rjust(labelWidth) + \
                                     str(stats["route_time_of_last_route_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
 
 
@@ -883,7 +887,11 @@ class RtpReceiveCommon(RtpCommon):
                                     str(stats["route_TTl_change_events_total"]) + "\r\n"
                 routeChangeStats += "Mean interval between TTL changes: ".rjust(labelWidth) + \
                                     str(Utils.dtstrft(stats["route_mean_time_between_TTl_change_events"])) + "\r\n"
-                routeChangeStats += "Time of last TTL change: ".rjust(labelWidth) + \
+                if type(stats["route_time_of_last_TTL_change_event"]) == datetime.datetime:
+                    # At creation, this parameter is a datetime.timedelta object, which means that it won't have a
+                    # strftime() method. Therefore, we need to check that it's been turned into a timestamp (which is a
+                    # datetime.datetime object) which will have a strftime() method
+                    routeChangeStats += "Time of last TTL change: ".rjust(labelWidth) + \
                                     str(stats["route_time_of_last_TTL_change_event"].strftime("%d/%m %H:%M:%S")) + "\r\n"
             else:
                 routeChangeStats += "No received TTL information available" + "\r\n"
