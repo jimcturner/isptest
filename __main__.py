@@ -1495,7 +1495,7 @@ class UI(object):
                 streamReport = selectedRxOrResultsStream.generateReport(eventFilterList = self.filterListForDisplayedEvents)
                 # Attempt to copy the report to the local clipboard
                 try:
-                    Utils.displayTextUsingLess(streamReport)
+                    Utils.displayTextUsingMore(streamReport)
                     # pyperclip.copy(streamReport)
                     # self.__renderMessageBox("Success!".center(30) + "\n\n" +\
                     #         "<Press a key to continue>".center(30),\
