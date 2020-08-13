@@ -5139,6 +5139,8 @@ class RtpGenerator(RtpCommon):
                     version_ihl = iph[0]
                     self.version = version_ihl >> 4
                     self.ipHeaderLength = version_ihl & 0xF
+                    self.id_field = iph[3]      # We'll use this field to verify that this was the packet we expected
+                    self.flags_frag_offset = iph[4] # Composite field. Not used yet, so left alone
                     self.ttl = iph[5]
                     self.protocol = iph[6]
                     self.checksum = iph[7]
