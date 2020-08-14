@@ -4,8 +4,11 @@ import array
 import socket
 import struct
 
+from scapy.layers.inet import IP, UDP
+from scapy.packet import Raw
+from scapy.sendrecv import sr1
 
-# Creates a returns a customised UDP packet
+# Creates and returns a customised UDP packet
 def createCustomUdpPacket(srcAddr, destAddr, id_field, TTL, srcPort, dstPort, payload):
     # Creates an IP header - specifying the source/dest address, ID field, TTL and protocol carried within
     def createIPHeader(srcAddr, destAddr, ID, TTL, protocol):
@@ -97,30 +100,26 @@ s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
 
 # Set socket.IP_HDRINCL = 1. This means we must supply the IP header ourselves (although the OS will calculate the checksum)
 s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-srcAddr = "192.168.0.2"
+srcAddr = "127.0.0.1"
 srcPort = 1000
-destAddr = "8.8.8.8"
-dstPort = 5000
-payload = b'Hello'
+destAddr = "127.0.0.1"
+dstPort = 2392
+payload = b'Hello from Swords\n'
 id_field =15151
 TTL = 25
 
-# # Create a custom UDP Datagram (IP length field will be filled in later, IP checksum to be calculated by the OS)
-# pkt = createIPHeader(srcAddr, destAddr, id_field, TTL, socket.IPPROTO_UDP) + \
-#       createUdpDatagram(srcAddr, destAddr, srcPort, dstPort, payload)
-# # overwrite total length field of IP header in 'host or 'native' byte order' otherwise sendto() will complain
-# # under OSX with an unhelpful 'invalid argument' error
-# # It seems (on OSX at least) that this field is the only value that's validated by the OS
-# # All other fields seem to be able to be spoofed.
-# # See http://cseweb.ucsd.edu/~braghava/notes/freebsd-sockets.txt and
-# # https://stackoverflow.com/questions/32575558/creating-raw-packets-with-go-1-5-on-macosx
-# # Calculate total length of packet
-# totalLength = len(pkt)
-# # Re-insert packet length into IP header (in native byte order, so no ! in struct.pack)
-# pkt = pkt[:2] + struct.pack("H", totalLength) + pkt[4:]
+# Create a custom UDP Datagram
+# udpPacket = createCustomUdpPacket(srcAddr, destAddr, id_field, TTL, srcPort, dstPort, payload)
+# s.sendto(udpPacket, (destAddr,0))
 
-udpPacket = createCustomUdpPacket(srcAddr, destAddr, id_field, TTL, srcPort, dstPort, payload)
-s.sendto(udpPacket, (destAddr,0))
+# Craft Scapy packet
+pkt = IP(dst=destAddr, ttl=1, id = id_field) / UDP(sport = srcPort, dport=dstPort) /Raw(load=payload)
+                # Send the packet and wait for a reply
+reply = sr1(pkt, verbose=0, timeout=0.1)
+# Extract ID field from "IP in ICMP" layer of reply
+print ("[IP in ICMP].id: " + str(reply["IP in ICMP"].id))
+# Or, to show all fields of the reply
+# reply.show()
 
 
 
