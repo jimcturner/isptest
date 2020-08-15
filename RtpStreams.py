@@ -5165,7 +5165,7 @@ class RtpGenerator(RtpCommon):
         # message we can infer that this ICMP message is for us.
         # Returns True if all the  optional parameters were matched, False if not, or None of there was an error
         def icmpReplyMatcher(__icmpHeader, __ipHeaderOfSrc, srcAddress=None, destAddress=None, \
-                             srcTtl=None, icmpType=None, icmpCode=None):
+                             srcTtl=None, icmpType=None, icmpCode=None, id_field=None):
 
             # Test the fields within __icmpHeader and __ipHeaderOfSrc to see if they're what we're looking for
             try:
@@ -5173,7 +5173,8 @@ class RtpGenerator(RtpCommon):
                         ((destAddress == __ipHeaderOfSrc.d_addr) or (destAddress is None)) and \
                         ((srcTtl == __ipHeaderOfSrc.ttl) or (srcTtl is None)) and \
                           ((icmpType == __icmpHeader.type) or (icmpType is None)) and \
-                        ((icmpCode == __icmpHeader.code) or (icmpCode is None)):
+                        ((icmpCode == __icmpHeader.code) or (icmpCode is None)):# and \
+                        #((id_field == __icmpHeader.id_field) or (id_field is None)):
                     return True
                 else:
                     return False
@@ -5244,7 +5245,7 @@ class RtpGenerator(RtpCommon):
         # Note: _icmpSocket and _udpSocket have to be overridden
         # Returns: IcmpSourceAddr, icmp type, icmp code
         def sendUdpRecvIcmpRawSockets(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None,\
-                                      _srcPort = 1515, _id_field=15151):
+                                      _srcPort=1515, _id_field=0):
             icmpSourceAddr = None
             icmpMessageType = None
             icmpMessagecode = None
@@ -5297,15 +5298,17 @@ class RtpGenerator(RtpCommon):
                             # message and listen again (within the timeout period)
                             ipHeaderOfOriginalSender = IPHeader(data[28:48])
                             # Display the  header fields of the received packet
-                            # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                            #                          " RtpGenerator.__tracerouteThread() ICMP packet fields " + \
-                            #                          "src:" + str(addr[0]) + \
-                            #                          ", type:" + str(icmpHeader.type) + \
-                            #                          ", code:" + str(icmpHeader.code) + \
-                            #                          ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
-                            #                          ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
-                            #                          ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
-                            #                          ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum))
+                            Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                                     " RtpGenerator.__tracerouteThread() ICMP packet fields " + \
+                                                     "src:" + str(addr[0]) + \
+                                                     ", type:" + str(icmpHeader.type) + \
+                                                     ", code:" + str(icmpHeader.code) + \
+                                                     ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
+                                                     ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
+                                                     ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
+                                                     ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum) +\
+                                                     ", id:" + str(ipHeaderOfOriginalSender.id_field))
+
 
                             # Test to see if this icmp packet is addressed to 'us', and what type of ICMP message it is
                             # Detect TTL Expired messages (icmp type 11, code 0)
@@ -5563,10 +5566,12 @@ class RtpGenerator(RtpCommon):
                             udpTxPort = fallbackPort
 
                         # Perform the UDP Send/ICMP receive
+                        # Set the IP id_field to match that of the current ttl. We should then be able to
+                        # match the packet send to the received response
                         try:
                             icmpSrcAddr, icmpType, icmpCode = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
-                                _udpSocket=udpTx, _icmpSocket=icmpRx)
+                                _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=ttl)
                         except UDPTxError as e:
                             Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
                                                      "__tracerouteThread UDPTxError. Recreating udp Tx socket" + str(
