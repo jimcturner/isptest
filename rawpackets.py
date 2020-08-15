@@ -4,11 +4,23 @@ import array
 import socket
 import struct
 
+import Utils
 from scapy.layers.inet import IP, UDP
 from scapy.packet import Raw
 from scapy.sendrecv import sr1
 
+import pager
+
 # Creates and returns a customised UDP packet
+# To send these packets, you need admin rights because you have to create a raw socket as follows:-
+# Create a layer 3 socket  - we will interface at IP level (socket.IPPROTO_RAW)
+#       s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+# Set socket.IP_HDRINCL = 1. This means we must supply the IP header ourselves (although the OS will calculate the checksum)
+#   s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+# Finally we can send using:-
+#   s.sendto(udpPacket, (destAddr,0))
+# NOTE: On OSX at least, the destAddr in sendo() doesn't have to match that specified in the IP header
+# This means that it *is* possible to spoof packets
 def createCustomUdpPacket(srcAddr, destAddr, id_field, TTL, srcPort, dstPort, payload):
     # Creates an IP header - specifying the source/dest address, ID field, TTL and protocol carried within
     def createIPHeader(srcAddr, destAddr, ID, TTL, protocol):
@@ -100,26 +112,27 @@ s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
 
 # Set socket.IP_HDRINCL = 1. This means we must supply the IP header ourselves (although the OS will calculate the checksum)
 s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
-srcAddr = "127.0.0.1"
+srcAddr = "192.168.0.10"
 srcPort = 1000
 destAddr = "127.0.0.1"
 dstPort = 2392
-payload = b'Hello from Swords\n'
+payload = b'Hello'
 id_field =15151
 TTL = 25
 
 # Create a custom UDP Datagram
-# udpPacket = createCustomUdpPacket(srcAddr, destAddr, id_field, TTL, srcPort, dstPort, payload)
-# s.sendto(udpPacket, (destAddr,0))
+udpPacket = createCustomUdpPacket(srcAddr, destAddr, id_field, TTL, srcPort, dstPort, payload)
+s.sendto(udpPacket, (destAddr,0))
 
 # Craft Scapy packet
-pkt = IP(dst=destAddr, ttl=1, id = id_field) / UDP(sport = srcPort, dport=dstPort) /Raw(load=payload)
-                # Send the packet and wait for a reply
-reply = sr1(pkt, verbose=0, timeout=0.1)
-# Extract ID field from "IP in ICMP" layer of reply
-print ("[IP in ICMP].id: " + str(reply["IP in ICMP"].id))
+# pkt = IP(dst=destAddr, ttl=1, id = id_field) / UDP(sport = srcPort, dport=dstPort) /Raw(load=payload)
+#                 # Send the packet and wait for a reply
+# reply = sr1(pkt, verbose=0, timeout=0.1)
+# # Extract ID field from "IP in ICMP" layer of reply
+# print ("[IP in ICMP].id: " + str(reply["IP in ICMP"].id))
 # Or, to show all fields of the reply
-# reply.show()
+# source = reply.show()
 
+# p = pager.page(source)
 
 

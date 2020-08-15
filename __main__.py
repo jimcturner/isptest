@@ -70,7 +70,6 @@ import string
 import platform
 import getopt  # Used to parse command line arguments
 import re  # Regex 'regular expression' module
-
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
 import json

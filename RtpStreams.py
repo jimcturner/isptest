@@ -5092,9 +5092,12 @@ class RtpGenerator(RtpCommon):
             ipAddrofInterface = "0.0.0.0"
             # Set up udp transmit socket
             try:
-                # Create UDP socket
-                udpTx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                udpTx.settimeout(timeOut)
+                # Create a layer 3 socket  - we will interface at IP level (socket.IPPROTO_RAW) but will send UDP through it
+                udpTx = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
+                # Set socket.IP_HDRINCL = 1. This means we must supply the IP header ourselves (although the OS will calculate the checksum)
+                udpTx.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+
+
             except Exception as createSocketsError:
                 raise UDPTxSocketSetupError(str(createSocketsError))
                 # print("udpTxSocket socket setup error " + str(e))
@@ -5178,12 +5181,13 @@ class RtpGenerator(RtpCommon):
                 return None
 
         # Utility function to tidy up the main loop. Sends a UDP message, allowing IP Header TTL parameter to be set
-        def sendUDP(txSock, txTTL, payload, destIPAddr, destUDPPort):
+        def sendUDP(txSock, txTTL, payload, destIPAddr, destUDPPort, srcAddr, srcPort, id_field):
             try:
-                # Update socket with latest ttl value
-                txSock.setsockopt(socket.SOL_IP, socket.IP_TTL, txTTL)
-                # Send the UDP message
-                bytesSent = txSock.sendto(payload, (destIPAddr, destUDPPort))
+                # Create a UDP packet with custom header
+                # srcAddr, destAddr, id_field, TTL, srcPort, dstPort, payload
+                udpPkt = Utils.createCustomUdpPacket(srcAddr, destIPAddr, id_field, txTTL, srcPort, destUDPPort, payload)
+                # Send the packet
+                bytesSent = txSock.sendto(udpPkt, (destIPAddr, 0))
                 return bytesSent
             except Exception as e:
                 raise UDPTxError("UDPTxError " + str(e))
@@ -5239,14 +5243,17 @@ class RtpGenerator(RtpCommon):
         # Takes: rawSocket, udpSocket, source address, destAddr, destPort, ttl, receive timeout
         # Note: _icmpSocket and _udpSocket have to be overridden
         # Returns: IcmpSourceAddr, icmp type, icmp code
-        def sendUdpRecvIcmpRawSockets(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None):
+        def sendUdpRecvIcmpRawSockets(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None,\
+                                      _srcPort = 1515, _id_field=15151):
             icmpSourceAddr = None
             icmpMessageType = None
             icmpMessagecode = None
 
-            # Send the UDP message (with a custom ttl value)
+            # Send the UDP message (with a custom ttl and id_field value)
             try:
-                sendUDP(_udpSocket, _ttl, b'isptest',  _destAddr, _destPort)
+                # sendUDP(_udpSocket, _ttl, b'isptest',  _destAddr, _destPort)
+                sendUDP(_udpSocket, _ttl, b'isptest',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
+
             except Exception as e:
                 raise UDPTxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.sendUDP " + str(e))
 
