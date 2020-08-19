@@ -5281,8 +5281,6 @@ class RtpGenerator(RtpCommon):
                 # Keep waiting until we get a matched packet or the timeout occurs
                 try:
                     data, addr = _icmpSocket.recvfrom(5012)
-                    # Snapshot the source address (of the received icmp packet)
-                    untestedIcmpSourceAddr = addr[0]
                     # Create ICMPHeader object from the received data. This will unpack and decode the fields
                     # The IP Header is contained within the first 20 bytes
                     # The ICMP Message Header is contained within the next 8 bytes
@@ -5317,6 +5315,11 @@ class RtpGenerator(RtpCommon):
                             if ipHeaderOfOriginalSender.id_field == _id_field and \
                                     ipHeaderOfOriginalSender.s_addr == _srcAddr:
                                 # The received icmp contents are as expected
+                                # Extract any extra data (beyond the IP in ICMP payload) if it exists
+                                IPinICMP_payload = None # Set default value
+                                if len(data) > 48:
+                                    IPinICMP_payload = data[48:]
+
                                 # Return a dictionary containing the unpacked fields of the icmp message
                                 return {"ICMP_Type": icmpHeader.type,
                                         "ICMP_Code": icmpHeader.code,
@@ -5325,7 +5328,9 @@ class RtpGenerator(RtpCommon):
                                         "IPinICMP_id_field": ipHeaderOfOriginalSender.id_field,
                                         "IPinICMP_srcAddr": ipHeaderOfOriginalSender.s_addr,
                                         "IPinICMP_dstAddr": ipHeaderOfOriginalSender.d_addr,
-                                        "IPinICMP_checksum": ipHeaderOfOriginalSender.checksum
+                                        "IPinICMP_checksum": ipHeaderOfOriginalSender.checksum,
+                                        "length": len(data),
+                                        "IPinICMP_payload": IPinICMP_payload
                                         }
                             else:
                                 # Display the  header fields of the unexpected packet
@@ -5337,8 +5342,10 @@ class RtpGenerator(RtpCommon):
                                                          ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
                                                          ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
                                                          ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
+                                                        ", tx'd ttl:" + str(_ttl) + \
                                                          ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum) + \
-                                                         ", id:" + str(ipHeaderOfOriginalSender.id_field))
+                                                         ", id:" + str(ipHeaderOfOriginalSender.id_field) +\
+                                                         ", tx'd id:" + str(_id_field))
 
                             # # Test to see if this icmp packet is addressed to 'us', and what type of ICMP message it is
                             # # Detect TTL Expired messages (icmp type 11, code 0)
@@ -5571,7 +5578,7 @@ class RtpGenerator(RtpCommon):
             while self.timeToLive != 0 and setupSuccessfulFlag:
                 # This is the main traceroute loop and counts the hops
                 # Set initial ttl
-                ttl = 0
+                ttl = 1
                 # Counter for the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
                 # Reset the 'no response' counter
                 noResponseCounter = 0
@@ -5600,11 +5607,9 @@ class RtpGenerator(RtpCommon):
                         # Set the IP id_field to match that of the current ttl. We should then be able to
                         # match the packet send to the received response
                         icmpMsg = None # Stores the icmp response (in the form of a dictonary) returned by sendUdpRecvIcmp()
+                        # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
+                        icmpSrcAddr = None
                         try:
-                            # icmpSrcAddr, icmpType, icmpCode = sendUdpRecvIcmp(\
-                            #     self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
-                            #     _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=ttl)
-
                             icmpMsg = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
                                 _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=ttl)
@@ -5640,7 +5645,10 @@ class RtpGenerator(RtpCommon):
                             try:
                                 # Extract reply-from addr
                                 icmpSrcAddr = icmpMsg["IP_replyFromAddr"]
-                                # Utils.Message.addMessage("ttl " + str(ttl) + ", " + str(icmpMsg))
+                                Utils.Message.addMessage("ttl " + str(ttl) + ", " + str(icmpSrcAddr) + ", id: " +\
+                                                         str(icmpMsg["IPinICMP_id_field"]) + ", len: " +\
+                                                         str(icmpMsg["length"]) + ", payload: " +\
+                                                         str(icmpMsg["IPinICMP_payload"]))
 
 
                                 # Detect erroneous messages to trap messages with an unexpected ttl at the point of
@@ -5691,8 +5699,8 @@ class RtpGenerator(RtpCommon):
                             retryCount += 1
                             # If this is the final attempt but still no response, append 0.0.0.0 to hopsList
                             if retryCount == maxNoOfRetries:
-                                # Utils.Message.addMessage(
-                                #     "no response for hop " + str(ttl) + ", retry " + str(retryCount))
+                                Utils.Message.addMessage(
+                                    "retries exceeded for hop " + str(ttl) + ", retry " + str(retryCount))
                                 hopsList.append([0, 0, 0, 0])
                                 # Increment the 'no response' counter
                                 noResponseCounter += 1
