@@ -5437,9 +5437,6 @@ class RtpGenerator(RtpCommon):
         # sendUdpRecvIcmpRawSockets function
         def sendUdpRecvIcmpScapy(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None,\
                                  _srcPort=1515, _id_field=0):
-            icmpSourceAddr = None
-            icmpMessageType = None
-            icmpMessagecode = None
             try:
                 # Create a packet template
                 payload = b'isptest'
@@ -5448,37 +5445,43 @@ class RtpGenerator(RtpCommon):
                 # Send the packet and wait for a reply
                 reply = sr1(pkt, verbose=0, timeout=_timeout)
                 # Now parse the reply
-                if reply is not None:
+                # Confirm tjat we have a response, and also that reply contains the ["IP in ICMP"] dict key
+                if reply is not None and "IP in ICMP" in reply:
                     # Confirm the ICMP message tallies with the sent UDP packet, by comparing the id_field parameter
                     # # Extract ID field from "IP in ICMP" layer of reply
                     if reply["IP in ICMP"].id == _id_field:
-                        # Detect TTL Expired messages (icmp type 11, code 0)
-                        if reply.type == 11:
-                            # This is a TTL expired in transit message, for us - snapshot the address
-                            icmpSourceAddr = reply.src
-                            icmpMessageType = reply.type
-                        # Detect Destination Host Port unreachable, destination reached
-                        elif reply.type == 3 or reply.src == _destAddr:
-                            icmpSourceAddr = reply.src
-                            icmpMessageType = reply.type
+                        # # Detect TTL Expired messages (icmp type 11, code 0)
+                        # if reply.type == 11:
+                        #     # This is a TTL expired in transit message, for us - snapshot the address
+                        #     icmpSourceAddr = reply.src
+                        #     icmpMessageType = reply.type
+                        # # Detect Destination Host Port unreachable, destination reached
+                        # elif reply.type == 3 or reply.src == _destAddr:
+                        #     icmpSourceAddr = reply.src
+                        #     icmpMessageType = reply.type
 
                         # Return a dictionary containing the unpacked fields of the icmp message
                         return {"ICMP_Type": reply.type,
                                 "ICMP_Code": reply.code,
                                 "IP_replyFromAddr": reply.src,
-                                "IPinICMP_ttlReceived": None,
+                                "IPinICMP_ttlReceived": reply["IP in ICMP"].ttl,
                                 "IPinICMP_id_field": reply["IP in ICMP"].id,
-                                "IPinICMP_srcAddr": None,
-                                "IPinICMP_dstAddr": None,
-                                "IPinICMP_checksum": None,
-                                "length": None,
-                                "IPinICMP_payload": None
+                                "IPinICMP_srcAddr": reply["IP in ICMP"].src,
+                                "IPinICMP_dstAddr": reply["IP in ICMP"].dst,
+                                "IPinICMP_checksum": reply["IP in ICMP"].chksum,
+                                "length": reply.len,
+                                "IPinICMP_payload": reply["UDP in ICMP"].payload
                                 }
                     else:
                         Utils.Message.addMessage("__tracerouteThread.sendUdpRecvIcmpScapy() Unexpected ICMP packet fields " + \
                                                  "src:" + str(reply.src) + \
                                                  ", type:" + str(reply.type) + \
                                                  ", code:" + str(reply.code) + \
+                                                 ", IPsrc:" + str(reply["IP in ICMP"].src) + \
+                                                 ", IPdst:" + str(reply["IP in ICMP"].dst) + \
+                                                 ", IPttl:" + str(reply["IP in ICMP"].ttl) + \
+                                                 ", tx'd ttl:" + str(_ttl) + \
+                                                 ", IPchecksum:" + str(reply["IP in ICMP"].chksum) + \
                                                  ", id:" + str(reply["IP in ICMP"].id) + \
                                                  ", tx'd id:" + str(_id_field))
 
@@ -5489,10 +5492,6 @@ class RtpGenerator(RtpCommon):
 
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sendUdpRecvIcmpScapy() " + str(e))
-                # # Clear return vars
-                # icmpSourceAddr = None
-                # icmpMessageType = None
-                # icmpMessagecode = None
                 return None
 
 
@@ -5524,7 +5523,7 @@ class RtpGenerator(RtpCommon):
 
         # Determine which Operating System is in use, and therfore which udp tx/icmp rx function we will use
         os = Utils.getOperatingSystem()
-        # os = "Windows"
+        os = "Windows"
         if os == "Windows":
             # Windows detected
             # Create pointer to the correct function for this OS
@@ -5689,7 +5688,7 @@ class RtpGenerator(RtpCommon):
                                 # a previous router has allowed a packet through whose ttl has already decremented to
                                 # zero. Therefore we can't trust this response
                                 if icmpMsg["IPinICMP_ttlReceived"] != 1:
-                                    Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + \
+                                    Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
                                             " Erroneous ttl=" + str(icmpMsg["IPinICMP_ttlReceived"]) + \
                                                              " ICMP message for traceroute hop " + str(ttl) + \
                                                              " Setting hop value to 0.0.0.0")

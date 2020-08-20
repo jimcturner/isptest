@@ -114,25 +114,25 @@ s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
 s.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
 srcAddr = "192.168.0.10"
 srcPort = 1000
-destAddr = "127.0.0.1"
+destAddr = "8.8.8.8"
 dstPort = 2392
 payload = b'Hello'
 id_field =15151
-TTL = 25
+TTL = 3
 
 # Create a custom UDP Datagram
-udpPacket = createCustomUdpPacket(srcAddr, destAddr, id_field, TTL, srcPort, dstPort, payload)
-s.sendto(udpPacket, (destAddr,0))
+# udpPacket = createCustomUdpPacket(srcAddr, destAddr, id_field, TTL, srcPort, dstPort, payload)
+# s.sendto(udpPacket, (destAddr,0))
 
 # Craft Scapy packet
-# pkt = IP(dst=destAddr, ttl=1, id = id_field) / UDP(sport = srcPort, dport=dstPort) /Raw(load=payload)
-#                 # Send the packet and wait for a reply
-# reply = sr1(pkt, verbose=0, timeout=0.1)
-# # Extract ID field from "IP in ICMP" layer of reply
-# print ("[IP in ICMP].id: " + str(reply["IP in ICMP"].id))
+pkt = IP(dst=destAddr, ttl=1, id = id_field) / UDP(sport = srcPort, dport=dstPort) /Raw(load=payload)
+                # Send the packet and wait for a reply
+reply = sr1(pkt, verbose=0, timeout=0.1)
+# Extract ID field from "IP in ICMP" layer of reply
+print ("[IP in ICMP].id: " + str(reply["IP in ICMP"].id))
+print ("payload " + str(bytes(reply["UDP in ICMP"].payload)))
 # Or, to show all fields of the reply
-# source = reply.show()
-
+source = reply.show()
 # p = pager.page(source)
 
 
