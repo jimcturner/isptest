@@ -27,6 +27,7 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 # from scapy.all import *
 from scapy.layers.inet import IP, UDP
 from scapy.sendrecv import sr1
+from scapy.packet import Raw
 from Utils import WhoisResolver
 
 
@@ -5242,13 +5243,11 @@ class RtpGenerator(RtpCommon):
         # Linux/OSX compatible function to send a UDP packet with a specfied TTL value, and then immediately wait for
         # an ICMP reply. Makes use of a previously created raw and UDP socket
         # Takes: rawSocket, udpSocket, source address, destAddr, destPort, ttl, receive timeout
-        # Note: _icmpSocket and _udpSocket have to be overridden
-        # Returns: IcmpSourceAddr, icmp type, icmp code
+        # Note: _icmpSocket and _udpSocket *must* be overridden
+        # Returns: a dictionary containing the decoded fields from the ICMP message or None if there is no/an invalid response
         def sendUdpRecvIcmpRawSockets(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None,\
                                       _srcPort=1515, _id_field=0):
-            # icmpSourceAddr = None
-            # icmpMessageType = None
-            # icmpMessagecode = None
+
 
             # Send the UDP message (with a custom ttl and id_field value)
             try:
@@ -5272,7 +5271,7 @@ class RtpGenerator(RtpCommon):
                 # Break out of loop:
                 #   If timeOut period has been exceeded
                 #   if socket timeout exception raised
-                #   If matcher matches an icmp reply
+                #   If matcher matches an icmp reply with the correct id_field
                 elapsedTime = timer() - startTime
                 if elapsedTime > _timeout:
                     # print("elapsedTimer exceeded twice timeout " + str(round(elapsedTime,1)) + "/" + str(timeOut * 2))
@@ -5433,36 +5432,70 @@ class RtpGenerator(RtpCommon):
         # Windows compatible function to send a UDP packet with a specfied TTL value, and then immediately wait for
         # an ICMP reply. Makes use of the Scapy library to receive raw packets/decode ICMP
         # Takes: rawSocket, udpSocket, destAddr, destPort, ttl
-        # Returns: IcmpSourceAddr, icmp type, icmp code
-        def sendUdpRecvIcmpScapy(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None):
+        # Returns: a dictionary containing the decoded fields from the ICMP message or None if there is no valid response
+        # Note: The _icmpSocket=None, _udpSocket arguments are ignored. They are there to retain consistency with the
+        # sendUdpRecvIcmpRawSockets function
+        def sendUdpRecvIcmpScapy(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None,\
+                                 _srcPort=1515, _id_field=0):
             icmpSourceAddr = None
             icmpMessageType = None
             icmpMessagecode = None
             try:
                 # Create a packet template
-                pkt = IP(dst=_destAddr, ttl=_ttl) / UDP(dport=_destPort)
+                payload = b'isptest'
+                # pkt = IP(dst=_destAddr, ttl=_ttl) / UDP(dport=_destPort)
+                pkt = IP(dst=_destAddr, ttl=_ttl, id = _id_field) / UDP(sport = _srcPort, dport=_destPort) /Raw(load=payload)
                 # Send the packet and wait for a reply
                 reply = sr1(pkt, verbose=0, timeout=_timeout)
                 # Now parse the reply
                 if reply is not None:
-                    # Detect TTL Expired messages (icmp type 11, code 0)
-                    if reply.type == 11:
-                        # This is a TTL expired in transit message, for us - snapshot the address
-                        icmpSourceAddr = reply.src
-                        icmpMessageType = reply.type
-                    # Detect Destination Host Port unreachable, destination reached
-                    elif reply.type == 3 or reply.src == _destAddr:
-                        icmpSourceAddr = reply.src
-                        icmpMessageType = reply.type
+                    # Confirm the ICMP message tallies with the sent UDP packet, by comparing the id_field parameter
+                    # # Extract ID field from "IP in ICMP" layer of reply
+                    if reply["IP in ICMP"].id == _id_field:
+                        # Detect TTL Expired messages (icmp type 11, code 0)
+                        if reply.type == 11:
+                            # This is a TTL expired in transit message, for us - snapshot the address
+                            icmpSourceAddr = reply.src
+                            icmpMessageType = reply.type
+                        # Detect Destination Host Port unreachable, destination reached
+                        elif reply.type == 3 or reply.src == _destAddr:
+                            icmpSourceAddr = reply.src
+                            icmpMessageType = reply.type
+
+                        # Return a dictionary containing the unpacked fields of the icmp message
+                        return {"ICMP_Type": reply.type,
+                                "ICMP_Code": reply.code,
+                                "IP_replyFromAddr": reply.src,
+                                "IPinICMP_ttlReceived": None,
+                                "IPinICMP_id_field": reply["IP in ICMP"].id,
+                                "IPinICMP_srcAddr": None,
+                                "IPinICMP_dstAddr": None,
+                                "IPinICMP_checksum": None,
+                                "length": None,
+                                "IPinICMP_payload": None
+                                }
+                    else:
+                        Utils.Message.addMessage("__tracerouteThread.sendUdpRecvIcmpScapy() Unexpected ICMP packet fields " + \
+                                                 "src:" + str(reply.src) + \
+                                                 ", type:" + str(reply.type) + \
+                                                 ", code:" + str(reply.code) + \
+                                                 ", id:" + str(reply["IP in ICMP"].id) + \
+                                                 ", tx'd id:" + str(_id_field))
+
+
+                else:
+                    # Reply timed out, or reply couldn't be matched with sent packet
+                    return None
 
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sendUdpRecvIcmpScapy() " + str(e))
-                # Clear return vars
-                icmpSourceAddr = None
-                icmpMessageType = None
-                icmpMessagecode = None
+                # # Clear return vars
+                # icmpSourceAddr = None
+                # icmpMessageType = None
+                # icmpMessagecode = None
+                return None
 
-            return icmpSourceAddr, icmpMessageType, icmpMessagecode
+
 
         # Define a socket timeout value
         timeOut = 0.1
