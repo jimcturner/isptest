@@ -5577,8 +5577,8 @@ class RtpGenerator(RtpCommon):
             # tracerouteHopsList be updated. This is to guard against situations where the route changes mid-traceroute
             while self.timeToLive != 0 and setupSuccessfulFlag:
                 # This is the main traceroute loop and counts the hops
-                # Set initial ttl
-                ttl = 1
+                # Set initial ttl (notee, start by decrementing 1, as the increment happens in the loop)
+                ttl = Registry.tracerouteStartingTTL - 1
                 # Counter for the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
                 # Reset the 'no response' counter
                 noResponseCounter = 0
@@ -5589,6 +5589,7 @@ class RtpGenerator(RtpCommon):
                 # Utils.Message.addMessage("Starting traceroute....ttl = 1")
                 while ttl < maxNoOfHops and self.timeToLive != 0:
                     retryCount = 1
+                    # We want to start at ttl = 1. Increment
                     ttl += 1
                     # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
                     icmpSrcAddr = None
@@ -5645,11 +5646,9 @@ class RtpGenerator(RtpCommon):
                             try:
                                 # Extract reply-from addr
                                 icmpSrcAddr = icmpMsg["IP_replyFromAddr"]
-                                Utils.Message.addMessage("ttl " + str(ttl) + ", " + str(icmpSrcAddr) + ", id: " +\
-                                                         str(icmpMsg["IPinICMP_id_field"]) + ", len: " +\
-                                                         str(icmpMsg["length"]) + ", payload: " +\
-                                                         str(icmpMsg["IPinICMP_payload"]))
-
+                                # Utils.Message.addMessage("ttl " + str(ttl) + ", " + str(icmpSrcAddr) + ", id: " +\
+                                #                          str(icmpMsg["IPinICMP_id_field"]) + ", len: " +\
+                                #                          str(icmpMsg["length"]))
 
                                 # Detect erroneous messages to trap messages with an unexpected ttl at the point of
                                 # arrival at the router.
@@ -5678,8 +5677,6 @@ class RtpGenerator(RtpCommon):
                                                          " Decode icmpMsg{} dict. Setting hop  " + str(ttl) + \
                                                          " to 0.0.0.0. "+ str(e))
 
-
-
                             # Store the address
                             # Query the WhoisResolver to find the owner of the domain
                             Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
@@ -5699,8 +5696,8 @@ class RtpGenerator(RtpCommon):
                             retryCount += 1
                             # If this is the final attempt but still no response, append 0.0.0.0 to hopsList
                             if retryCount == maxNoOfRetries:
-                                Utils.Message.addMessage(
-                                    "retries exceeded for hop " + str(ttl) + ", retry " + str(retryCount))
+                                # Utils.Message.addMessage(
+                                #     "retries exceeded for hop " + str(ttl) + ", retry " + str(retryCount))
                                 hopsList.append([0, 0, 0, 0])
                                 # Increment the 'no response' counter
                                 noResponseCounter += 1
