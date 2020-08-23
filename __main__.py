@@ -3121,7 +3121,13 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                         # Empty the latestEvents list
                         del latestEvents[:]
                     except Exception as e:
-                        Utils.Message.addMessage("DBUG: __diskLoggerThread - appending to file" + str(e))
+                        Utils.Message.addMessage("DBUG: __diskLoggerThread - appending to file" + str(e) +\
+                                                 " len(latestEvents) " + str(len(latestEvents)) +\
+                                                ", lastWrittenEventNo " + str(lastWrittenEventNo) +\
+                                                 ", " + str(latestEvents))
+                        Utils.Message.addMessage("ERR:__diskLoggerThread() Possibly corrupted event. Skipping event " +\
+                                                 str(lastWrittenEventNoDict[currentRtpStream[0]] + 1))
+                        lastWrittenEventNoDict[currentRtpStream[0]] += 1
 
         # Finally, iterate over lastWrittenEventNoDict{} to confirm that all the stream objects listed
         # inside it still exist in rtpStreamsDict{} (in other words, synchronise the deletions within

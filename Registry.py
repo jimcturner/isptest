@@ -59,7 +59,7 @@ class Registry(object):
     rtpGeneratorEnableTraceroute = True # Enables/inhbits the traceroute thread from starting
     tracerouteMaxHops = 20  # The maximum no of hops traceroute will consider before resetting
     tracerouteStartingTTL = 1   # The starting TTL for the traceroute
-    tracerouteFallbackUDPDestPort = 33434  # The 'fallback' port used by the RtpGenerator.traceroute thread if no reply
+    tracerouteFallbackUDPDestPort = 8002  # 33434 The 'fallback' port used by the RtpGenerator.traceroute thread if no reply
     # is received from a host
     simulatedJitterPercent = 50 # The amount of 'simulated jitter' to add to the tx packets, if the feature is enabled
     # Specify min/max/default RtpGenerator tx parameters

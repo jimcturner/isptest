@@ -2909,7 +2909,12 @@ class RtpStreamResults(RtpReceiveCommon):
         self.lastUpdatedTimestamp = datetime.datetime.now()
         # Now create a message for each event added (showing the summary for each event)
         for event in eventsList:
-            Utils.Message.addMessage(event.getSummary()["summary"])
+            try:
+                Utils.Message.addMessage(event.getSummary()["summary"])
+            except Exception as e:
+                Utils.Message.addMessage("ERR:RtpStreamresults.updateEventsList(), len " + str(len(eventsList)) +\
+                                         ", " + str(e))
+
 
     # This method will remove this stream object from the rtpTxStreamResultsDict dictionary
     def killStream(self):
@@ -5523,7 +5528,7 @@ class RtpGenerator(RtpCommon):
 
         # Determine which Operating System is in use, and therfore which udp tx/icmp rx function we will use
         os = Utils.getOperatingSystem()
-        os = "Windows"
+        # os = "Windows"
         if os == "Windows":
             # Windows detected
             # Create pointer to the correct function for this OS
@@ -5977,7 +5982,7 @@ class ResultsReceiver(object):
                             Utils.Message.addMessage("ERR: __resultsReceiverThread. More fragments received than expected")
 
                     except Exception as e:
-                            Utils.Message.addMessage("ERR: __resultsReceiverThread(single fragment): Is Receiving running Python2 If so, switch to Python 2 at this end - Incompatible pickles?" + str(e))
+                            Utils.Message.addMessage("ERR: __resultsReceiverThread(single fragment): Is Receiver running Python2 If so, switch to Python 2 at this end - Incompatible pickles?" + str(e))
 
                     # Check if we have some new stats data
                     if len(stats) > 0:
