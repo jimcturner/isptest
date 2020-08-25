@@ -5450,7 +5450,9 @@ class RtpGenerator(RtpCommon):
                 # Create a packet template
                 payload = b'isptest'
                 # pkt = IP(dst=_destAddr, ttl=_ttl) / UDP(dport=_destPort)
-                pkt = IP(dst=_destAddr, ttl=_ttl, id = _id_field) / UDP(sport = _srcPort, dport=_destPort) /Raw(load=payload)
+                # pkt = IP(dst=_destAddr, ttl=_ttl, id = _id_field) / UDP(sport = _srcPort, dport=_destPort) /Raw(load=payload)
+                pkt = IP(dst=_destAddr, ttl=_ttl, id=_id_field) / UDP(sport=(_srcPort+1), dport=_destPort) / Raw(
+                    load=payload)
                 # Send the packet and wait for a reply
                 reply = sr1(pkt, verbose=0, timeout=_timeout)
                 # Now parse the reply
