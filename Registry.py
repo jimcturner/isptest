@@ -59,8 +59,12 @@ class Registry(object):
     rtpGeneratorEnableTraceroute = True # Enables/inhbits the traceroute thread from starting
     tracerouteMaxHops = 20  # The maximum no of hops traceroute will consider before resetting
     tracerouteStartingTTL = 1   # The starting TTL for the traceroute
-    tracerouteFallbackUDPDestPort = 8002  # 33434 The 'fallback' port used by the RtpGenerator.traceroute thread if no reply
-    # is received from a host
+    tracerouteFallbackUDPDestPort = None  # 33434 The 'fallback' port used by the RtpGenerator.traceroute thread if no reply
+    # is received from a host. If this is set, traceroute will firstly send to thje udp port specified by the tx stream.
+    # if it gets no response it will use the fallback. It will continue to alternate between the two dest ports
+    # until it runs out of attempts. this feature exists because some routers will only reply with ICMP messages
+    # if traceroute (ie ttl=1) messages are sent to port 33434. Otherwise they may silently drop them, which isn't
+    # much use if you're trying to derive a list of hops taken by the transmitted packets
     simulatedJitterPercent = 50 # The amount of 'simulated jitter' to add to the tx packets, if the feature is enabled
     # Specify min/max/default RtpGenerator tx parameters
     minimumPermittedTXRate_bps = 10240 # Specifies the minimum RtpGenerator tx rate as 10kbps

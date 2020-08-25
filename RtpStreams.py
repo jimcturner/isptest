@@ -5640,9 +5640,14 @@ class RtpGenerator(RtpCommon):
                         # Utils.Message.addMessage("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(retryCount))
                         # Send UDP packet
                         # Determine which UDP destination port to use
-                        if retryCount % 2 == 1:
+                        if fallbackPort is None:
+                            # If fallback port is not set, only ever use self.UDP_TX_PORT as the traceroute probe port no
+                            udpTxPort = self.UDP_TX_PORT
+                        elif retryCount % 2 == 1:
+                            # Otherwise, for odd numbered attempts, use self.UDP_TX_PORT
                             udpTxPort = self.UDP_TX_PORT
                         else:
+                            # and for even numbered attempts use the fallback port specified in Registry.tracerouteFallbackUDPDestPort
                             udpTxPort = fallbackPort
 
                         # Perform the UDP Send/ICMP receive
