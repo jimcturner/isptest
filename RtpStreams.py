@@ -2894,7 +2894,9 @@ class RtpStreamResults(RtpReceiveCommon):
     def updateEventsList(self, eventsList, replaceExistingList=False):
         # Will take a list of new events and, by default, append them to the existing eventsList list
         # If replaceExistingList is set, it will completely replace the old list with the new list
-        # NOTE: It won't check for duplicate entries. It will blindly just append to what's already there
+        # NOTE: It won't check for duplicate entries or validate the list items,
+        # it will blindly just append to what's already there
+
         # Take control of the mutex
         self.__accessRtpStreamEventListMutex.acquire()
         if replaceExistingList is False:
@@ -6011,60 +6013,85 @@ class ResultsReceiver(object):
                     # Check to see if the new eventList contains any data and also that there exists a stream object to add the data to
                     if len(latestEventsList) > 0 and len(stats) > 0:
                         try:
-                            # Utils.Message.addMessage("DBUG: **latestEventsList: " + str(latestEventsList[-1].eventNo))
-                            # Get handle on an (existing) rtpStreamResults object
-                            syncSourceID = stats["stream_syncSource"]
-                            rtpStreamResults = self.rtpTxStreamResultsDict[syncSourceID]
+                            # validate each of the newly received events to check that they have not been corrupted by
+                            # the pickling/unpickling process.
+                            # Validate by calling the events getJson() method. If this succeeds, we can assume that
+                            # the received Event object is intact (because it accesses all stored data within the Event)
+                            # Iterate over all the events in latestEventsList. If there's a failure, an exception
+                            # will be raised and this batch of received events discarded
+                            eventsValidated = False
+                            lastValidatedEventNo = 0
+                            for event in latestEventsList:
+                                try:
+                                    # 'Test' that the event works, by calling its getJSON() method
+                                    validatedEvent = event.getJSON()
+                                    # Update lastValidatedEventNo - used for debugging
+                                    lastValidatedEventNo = event.eventNo
+                                    # Event validated, so set the flag
+                                    eventsValidated = True
+                                except Exception as e:
+                                    Utils.Message.addMessage("ERR:__resultsReceiverThread Event validation failed. Last validated event: " +\
+                                                             str(lastValidatedEventNo))
+                                    # Validation failed so clear the flag
+                                    eventsValidated = False
+                                    # Break out of the loop
+                                    break
 
-                            # Work out whether the eventList contains any new events that we haven't already seen
-                            firstEventNoInNewList = latestEventsList[0].eventNo
-                            lastEventNoInNewList = latestEventsList[-1].eventNo
+                            # If all the received events in latestEventsList are valid, update the events list for the specified stream
+                            if eventsValidated:
+                                # Utils.Message.addMessage("DBUG: **latestEventsList: " + str(latestEventsList[-1].eventNo))
+                                # Get handle on an (existing) RtpStreamResults object
+                                syncSourceID = stats["stream_syncSource"]
+                                rtpStreamResults = self.rtpTxStreamResultsDict[syncSourceID]
 
-                            # # Get latest known event no from the rtpStreamResults stream object
-                            existingEventsList = []
-                            try:
-                                existingEventsList = rtpStreamResults.getRTPStreamEventList(1) # Request last event in the list
+                                # Work out whether the eventList contains any new events that we haven't already seen
+                                firstEventNoInNewList = latestEventsList[0].eventNo
+                                lastEventNoInNewList = latestEventsList[-1].eventNo
 
-                                if len(existingEventsList) > 0:
-                                    # rtpStreamResults.updateEventsList(latestEventsList)
-                                    # # Extract the event no from the last known event
-                                    lastKnownEventNo = existingEventsList[-1].eventNo
-                                    # Utils.Message.addMessage("DBUG: firstEventNoInNewList: " + str(firstEventNoInNewList) + \
-                                    #                    ", lastEventNoInNewList: " + str(lastEventNoInNewList) + \
-                                    #                    ", lastKnownEventNo: " + str(lastKnownEventNo))
+                                # # Get latest known event no from the rtpStreamResults stream object
+                                existingEventsList = []
+                                try:
+                                    existingEventsList = rtpStreamResults.getRTPStreamEventList(1) # Request last event in the list
 
-                                    # Check to see if the latest event no appears to be less than the previous known
-                                    # event no. This could be because the stats at the Receiver were reset mid test.
-                                    # If this is the case, delete the existing stored event list and restart the list
-                                    if lastEventNoInNewList < lastKnownEventNo:
-                                        Utils.Message.addMessage("Stats/Event list for stream " + str(syncSourceID) +\
-                                                                 " has been reset by receiver")
-                                        # Remove the old events list and start again
-                                        rtpStreamResults.updateEventsList(latestEventsList, replaceExistingList=True)
+                                    if len(existingEventsList) > 0:
+                                        # # Extract the event no from the last known event
+                                        lastKnownEventNo = existingEventsList[-1].eventNo
+                                        # Utils.Message.addMessage("DBUG: firstEventNoInNewList: " + str(firstEventNoInNewList) + \
+                                        #                    ", lastEventNoInNewList: " + str(lastEventNoInNewList) + \
+                                        #                    ", lastKnownEventNo: " + str(lastKnownEventNo))
 
-                                    # Check if the latest item in the new list is more recent than the last item of the known list
-                                    elif lastEventNoInNewList > lastKnownEventNo:
-                                        # Calculate how many new events have arrived
-                                        eventsToAdd = lastEventNoInNewList - lastKnownEventNo
+                                        # Check to see if the latest event no appears to be less than the previous known
+                                        # event no. This could be because the stats at the Receiver were reset mid test.
+                                        # If this is the case, delete the existing stored event list and restart the list
+                                        if lastEventNoInNewList < lastKnownEventNo:
+                                            Utils.Message.addMessage("Stats/Event list for stream " + str(syncSourceID) +\
+                                                                     " has been reset by receiver")
+                                            # Remove the old events list and start again
+                                            rtpStreamResults.updateEventsList(latestEventsList, replaceExistingList=True)
 
-                                        # append the last n new events to the existing eventList
-                                        # check to see if the no of new events since last update exceeds
-                                        # length of latestEventsList[]
-                                        if eventsToAdd > len(latestEventsList):
-                                            eventsToAdd = len (latestEventsList)
-                                        # Slice latestEventsList to get a sublist of just the new events
-                                        newEvents = latestEventsList[(eventsToAdd * -1):]
-                                        # and append to existing events list
-                                        rtpStreamResults.updateEventsList(newEvents)
-                                else:
-                                    # existingEventsList is empty so append the entirety of latestEventsList
-                                    rtpStreamResults.updateEventsList(latestEventsList)
-                                # Utils.Message.addMessage("DBUG:**" + str(rtpStreamResults.getRTPStreamEventList(1)))
-                            except Exception as e:
-                                Utils.Message.addMessage(
-                                    "ERR:_resultsReceiverThread(). rtpStreamResults.getRTPStreamEventList(1) " + str(e))
+                                        # Check if the latest item in the new list is more recent than the last item of the known list
+                                        elif lastEventNoInNewList > lastKnownEventNo:
+                                            # Calculate how many new events have arrived
+                                            eventsToAdd = lastEventNoInNewList - lastKnownEventNo
+
+                                            # append the last n new events to the existing eventList
+                                            # check to see if the no of new events since last update exceeds
+                                            # length of latestEventsList[]
+                                            if eventsToAdd > len(latestEventsList):
+                                                eventsToAdd = len (latestEventsList)
+                                            # Slice latestEventsList to get a sublist of just the new events
+                                            newEvents = latestEventsList[(eventsToAdd * -1):]
+                                            # and append to existing events list
+                                            rtpStreamResults.updateEventsList(newEvents)
+                                    else:
+                                        # existingEventsList is empty so append the entirety of latestEventsList
+                                        rtpStreamResults.updateEventsList(latestEventsList)
+                                    # Utils.Message.addMessage("DBUG:**" + str(rtpStreamResults.getRTPStreamEventList(1)))
+                                except Exception as e:
+                                    Utils.Message.addMessage(
+                                        "ERR:_resultsReceiverThread(). rtpStreamResults.getRTPStreamEventList(1) " + str(e))
                         except Exception as e:
-                            Utils.Message.addMessage("ERR:_resultsReceiverThread(): rtpStreamResults.updateEventsList() " + str(e))
+                            Utils.Message.addMessage("ERR:_resultsReceiverThread(): rtpStreamResults. validate/updateEventsList() " + str(e))
 
 
                 # socket is set with a timeout, so need to catch timeouts but can ignore them

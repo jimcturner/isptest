@@ -3127,6 +3127,7 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                                                  ", " + str(latestEvents))
                         Utils.Message.addMessage("ERR:__diskLoggerThread() Possibly corrupted event. Skipping event " +\
                                                  str(lastWrittenEventNoDict[currentRtpStream[0]] + 1))
+                        # inncrement lastWrittenEventNoDict for this stream id
                         lastWrittenEventNoDict[currentRtpStream[0]] += 1
 
         # Finally, iterate over lastWrittenEventNoDict{} to confirm that all the stream objects listed
