@@ -5444,14 +5444,15 @@ class RtpGenerator(RtpCommon):
         # Returns: a dictionary containing the decoded fields from the ICMP message or None if there is no valid response
         # Note: The _icmpSocket=None, _udpSocket arguments are ignored. They are there to retain consistency with the
         # sendUdpRecvIcmpRawSockets function
+        # IMPORTANT: Unlike the Linux/OSX equivalent function, we cannot reuse the same UDP source port as the rtp
+        # stream. Therefore we just let the OS decide
         def sendUdpRecvIcmpScapy(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None,\
                                  _srcPort=1515, _id_field=0):
             try:
-                # Create a packet template
+                # Create a packet template 'craft a Scapy packet'
                 payload = b'isptest'
-                # pkt = IP(dst=_destAddr, ttl=_ttl) / UDP(dport=_destPort)
-                # pkt = IP(dst=_destAddr, ttl=_ttl, id = _id_field) / UDP(sport = _srcPort, dport=_destPort) /Raw(load=payload)
-                pkt = IP(dst=_destAddr, ttl=_ttl, id=_id_field) / UDP(sport=(_srcPort+1), dport=_destPort) / Raw(
+                # NOTE: Source port is specified as 1
+                pkt = IP(dst=_destAddr, ttl=_ttl, id=_id_field) / UDP(dport=_destPort) / Raw(
                     load=payload)
                 # Send the packet and wait for a reply
                 reply = sr1(pkt, verbose=0, timeout=_timeout)
