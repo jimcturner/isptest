@@ -3172,6 +3172,10 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
 # The messages themselves are a tuple of the form [byteString, destIPAddr, destport]
 # The thread will monitor the status of shutdownFlag (type Threading.Event) and automatically shut down
 # when this is detected to have been set
+# This class fragments the message to be sent so that it will fit within self.MAX_UDP_TX_LENGTH
+# Utils.fragmentString() is used to create seperate fragmnents in the form of a tuple which contains things like
+# the no of fragments in the message, which fragment this is etc
+# pickle is then used to actually send this tuple containing the fragment through the udp socket
 class UDPMessageSender(object):
 
     def __init__(self, txMessageQueue, udpSocket, shutdownFlag):
@@ -3231,7 +3235,8 @@ class UDPMessageSender(object):
                     for fragment in fragmentedMessage:
                         # Each fragment is actually a tuple, so itself needs pickling before it can be sent
                         # Pickle and send each fragment one at a time
-                        pickledFragment = pickle.dumps(fragment, protocol=2)
+                        # pickledFragment = pickle.dumps(fragment, protocol=2)
+                        pickledFragment = pickle.dumps(fragment)
                         self.udpSocket.sendto(pickledFragment, (txData_ipAddr, txData_udpPort))
                         # Increment the counter
                         self.sendUDPThreadTxPacketCounter += 1

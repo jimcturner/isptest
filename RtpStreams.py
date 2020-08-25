@@ -1533,7 +1533,8 @@ class RtpReceiveStream(RtpReceiveCommon):
             try:
                 # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
                 msg = {"stats": stats, "eventList": eventsToBeSent}
-                pickledMessage = pickle.dumps(msg, protocol=2)
+                # pickledMessage = pickle.dumps(msg, protocol=2)
+                pickledMessage = pickle.dumps(msg)
                 # add the pickled message to the txMessageQueue
                 resultsTxQueue.put([pickledMessage, destAddr, destPort])
 
@@ -2705,7 +2706,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # wrap the message in a dict with the "control" key. This will be detected in ResultsReceiver.__resultsReceiverThread()
                 wrappedMessage = {"control": msg}
                 # pickle the wrapped message
-                pickledMessage = pickle.dumps(wrappedMessage, protocol=2)
+                # pickledMessage = pickle.dumps(wrappedMessage, protocol=2)
+                pickledMessage = pickle.dumps(wrappedMessage)
                 # add the pickled message to the txMessageQueue
                 self.resultsTxQueue.put(\
                     [pickledMessage, self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"]])
@@ -5984,7 +5986,7 @@ class ResultsReceiver(object):
                             Utils.Message.addMessage("ERR: __resultsReceiverThread. More fragments received than expected")
 
                     except Exception as e:
-                            Utils.Message.addMessage("ERR: __resultsReceiverThread(single fragment): Is Receiver running Python2 If so, switch to Python 2 at this end - Incompatible pickles?" + str(e))
+                            Utils.Message.addMessage("ERR: __resultsReceiverThread(single fragment): Unpickling error " + str(e))
 
                     # Check if we have some new stats data
                     if len(stats) > 0:
