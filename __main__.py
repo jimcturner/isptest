@@ -3351,6 +3351,7 @@ class RtpPacketReceiver(object):
                         payload = None
                     return rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort
                 else:
+                    Utils.Message.addMessage("parseRawPacket() protocol is not UDP")
                     return None, None, None, None, None
             # Otherwise check to see if this packet is only large enough to accommodate a UDP header
             # Even if it doesn't contain an RTP header, we can still extract the rxTTL, srcUDPPort and  destUDPPort
@@ -3364,9 +3365,11 @@ class RtpPacketReceiver(object):
                 if ipProtocol == 17:  # Contains a UDP header
                     # Extract the src and dest port from the UDP header
                     srcUDPPort, destUDPPort = struct.unpack("!HH", udpHeader[0:4])
+                    Utils.Message.addMessage("parseRawPacket() no rtp header or payload")
                     return None, None, rxTTL, srcUDPPort, destUDPPort
             # Otherwise this packet doesn't contain a UDP packet
             else:
+                Utils.Message.addMessage("parseRawPacket() unrecognised payload")
                 return None, None, None, None, None
         except Exception as e:
             Utils.Message.addMessage("ERR: Exception within parseRawPacket () " + str(e))
