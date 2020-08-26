@@ -3626,7 +3626,10 @@ class RtpPacketReceiver(object):
                         # Attempt to get data from the raw socket first.
                         if rawSocket in r:
                             # The raw socket contains data to be read
-                            rawData, rawAddr = rawSocket.recvfrom(4096)  # buffer size is 4096 bytes
+                            # buffer size is 65535 bytes. This is the maximum possible size for UDP We need to set it
+                            # to this size for Windows (which is running in promiscuous mode). Otherwise packets received
+                            # larger we can accept would kill the socket
+                            rawData, rawAddr = rawSocket.recvfrom(65535)
                             rawTimestamp = datetime.datetime.now()
                         else:
                             # If no data to be read, clear the rawData and rawAddr lists
@@ -3636,7 +3639,7 @@ class RtpPacketReceiver(object):
 
                         # Next, flush the corresponding UDP port binding (if it contains data, which it should)
                         if udpSocket in r:
-                            udpSocketData, udpSocketAddr = udpSocket.recvfrom(4096)
+                            udpSocketData, udpSocketAddr = udpSocket.recvfrom(65535)
                             udpTimestamp = datetime.datetime.now()
                         else:
                             # If no data to be read, clear the udpSocketData and udpSocketAddr lists
