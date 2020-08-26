@@ -18,19 +18,40 @@ from queue import SimpleQueue
 from Registry import Registry
 from ipwhois import IPWhois, exceptions
 import math
-# Formats a datetime.timedelta object as a simple string hh:mm:ss
-def dtstrft(timeDelta):
-    try:
-        total_seconds = int(timeDelta.total_seconds())
-        hours, remainder = divmod(total_seconds, 60 * 60)
-        minutes, seconds = divmod(remainder, 60)
 
-        return str(hours).zfill(2)+":"+str(minutes).zfill(2)+":"+str(seconds).zfill(2)
+# Formats a datetime.timedelta object as a simple string hh:mm:ss
+# If showDays=True, returns dd:hh:mm:ss
+def dtstrft(timeDelta, showDays=False):
+    try:
+        daysString = ""
+        # Get the timedelta as a total in seconds
+        total_seconds = int(timeDelta.total_seconds())
+        if showDays is False:
+            # return hh:mm:ss
+            hours, remainder = divmod(total_seconds, 60 * 60)
+            minutes, seconds = divmod(remainder, 60)
+            # return str(hours).zfill(2)+":"+str(minutes).zfill(2)+":"+str(seconds).zfill(2)
+        else:
+            # return dd:mm:ss
+
+            # Calculate how many complete days have elapsed
+            days, remainder = divmod(total_seconds, 60 * 60 * 24)
+            if days > 0:
+                # Construct a string containing the no of days
+                daysString= str(days) +"d"
+            # Calculate the remaining no of hours
+            hours, remainder = divmod(remainder, 60 * 60)
+            # Calculate the remaining no of minutes/seconds
+            minutes, seconds = divmod(remainder, 60)
+            # return ret + str(hours).zfill(2)+":"+str(minutes).zfill(2)+":"+str(seconds).zfill(2)
+        # Construct the string to be returned
+        return daysString + str(hours).zfill(2) + ":" + str(minutes).zfill(2) + ":" + str(seconds).zfill(2)
+
     except:
         return None
 
 # Returns the IP address of the network interface currently used as the default route to the internet (if no args supplied)
-# Alternatively, for a supplied ip address, it will return ip address of the interface that, according to the OS
+# Alternatively, for a supplied destination ip address, it will return ip address of the interface that, according to the OS
 # routing table will be used to send from.
 def get_ip(ipAddrToTest = '10.255.255.255'):
     # Lifted from here https://stackoverflow.com/questions/166506/finding-local-ip-addresses-using-pythons-stdlib

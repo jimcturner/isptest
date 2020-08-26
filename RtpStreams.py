@@ -839,7 +839,7 @@ class RtpReceiveCommon(RtpCommon):
 
         labelWidth = 33
         streamPerformance = \
-            "Duration of test: ".rjust(labelWidth) + str(Utils.dtstrft(stats["stream_time_elapsed_total"])) + "\r\n" + \
+            "Duration of test: ".rjust(labelWidth) + str(Utils.dtstrft(stats["stream_time_elapsed_total"], showDays=True)) + "\r\n" + \
         "Total bytes received: ".rjust(labelWidth) + str(Utils.bToMb(stats["packet_data_received_total_bytes"])) + "B" +\
             "\r\n" + \
         "Packet loss: ".rjust(labelWidth) + str("%0.2f" % stats["glitch_packets_lost_total_percent"]) + "%" + "\r\n" + \
@@ -851,7 +851,7 @@ class RtpReceiveCommon(RtpCommon):
             "Maximum glitch dur: ".rjust(labelWidth) + str(Utils.dtstrft(stats["glitch_max_glitch_duration"])) + "\r\n" + \
             "Mean glitch dur: ".rjust(labelWidth) + str(Utils.dtstrft(stats["glitch_mean_glitch_duration"])) + "\r\n" + \
             "Mean interval between glitches: ".rjust(labelWidth) + str(
-                Utils.dtstrft(stats["glitch_mean_time_between_glitches"])) + "\r\n"
+                Utils.dtstrft(stats["glitch_mean_time_between_glitches"], showDays=True)) + "\r\n"
         worstGlitchesListAsString = "Worst Glitches:\r\n"
 
 
@@ -870,7 +870,7 @@ class RtpReceiveCommon(RtpCommon):
                 routeChangeStats += "No. of traceroute changes: ".rjust(labelWidth) + \
                                               str(stats["route_change_events_total"]) + "\r\n"
                 routeChangeStats += "Mean interval between route changes: ".rjust(labelWidth) +\
-                                              str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
+                                              str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"], showDays=True)) + "\r\n"
                 if type(stats["route_time_of_last_route_change_event"]) == datetime.datetime:
                     # At creation, this parameter is a datetime.timedelta object, which means that it won't have a
                     # strftime() method. Therefore, we need to check that it's been turned into a timestamp (which is a
@@ -887,7 +887,7 @@ class RtpReceiveCommon(RtpCommon):
                 routeChangeStats += "No of received TTL changes: ".rjust(labelWidth) + \
                                     str(stats["route_TTl_change_events_total"]) + "\r\n"
                 routeChangeStats += "Mean interval between TTL changes: ".rjust(labelWidth) + \
-                                    str(Utils.dtstrft(stats["route_mean_time_between_TTl_change_events"])) + "\r\n"
+                                    str(Utils.dtstrft(stats["route_mean_time_between_TTl_change_events"], showDays=True)) + "\r\n"
                 if type(stats["route_time_of_last_TTL_change_event"]) == datetime.datetime:
                     # At creation, this parameter is a datetime.timedelta object, which means that it won't have a
                     # strftime() method. Therefore, we need to check that it's been turned into a timestamp (which is a
@@ -916,7 +916,7 @@ class RtpReceiveCommon(RtpCommon):
                               str(tracerouteHopsList[hopNo][3])
                     tracerouteHopsListAsString += str(hopNo + 1) + "\t" + hopAddr.ljust(16)
                     # Now query the hop name to see if it's in the whois cache
-                    hopName = WhoisResolver.queryWhoisCache(hopAddr)
+                    hopName = Utils.WhoisResolver.queryWhoisCache(hopAddr)
                     if hopName is not None:
                         tracerouteHopsListAsString += hopName[0]['asn_description']
                     tracerouteHopsListAsString += "\r\n"
