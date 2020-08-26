@@ -3176,9 +3176,10 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
 # Utils.fragmentString() is used to create seperate fragmnents in the form of a tuple which contains things like
 # the no of fragments in the message, which fragment this is etc
 # pickle is then used to actually send this tuple containing the fragment through the udp socket
+# The receiverInstance arg allows the UDPMessageSender object to access the udp socket created within receiverInstance
 class UDPMessageSender(object):
 
-    def __init__(self, txMessageQueue, udpSocket, shutdownFlag):
+    def __init__(self, txMessageQueue, receiverInstance, shutdownFlag):
         # Define some stats counters
         self.sendUDPThreadTxPacketCounter = 0
         self.sendUDPThreadMessageQueueSize = 0
@@ -3186,15 +3187,15 @@ class UDPMessageSender(object):
         # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
         self.MAX_UDP_TX_LENGTH = 576
         self.txMessageQueue = txMessageQueue # of type Queue.SimpleQueue
-        self.udpSocket = udpSocket
+        self.rxInstance = receiverInstance
         self.shutdownFlag = shutdownFlag
 
 
         # Check that udp socket is a valid socket by retrieving the receive port no it is bound to
         # This will be used as the 'source port' for all udp packets sent by __udpTransmitterThread
         try:
-            # Retrieve port no)
-            self.UDP_RX_PORT = self.udpSocket.getsockname()[1]
+            # Retrieve port no from socket created by rtpReceiver instance associated with this transmitter
+            self.UDP_RX_PORT = self.rxInstance.getSocket().getsockname()[1]
             # If successful, socket is valid, so create the message transmitter thread
             udpTransmitterThread = threading.Thread(target=self.__udpTransmitterThread, args=())
             udpTransmitterThread.setName("__udpTransmitterThread("+ str(self.UDP_RX_PORT) + ")")
@@ -3237,7 +3238,9 @@ class UDPMessageSender(object):
                         # Pickle and send each fragment one at a time
                         # pickledFragment = pickle.dumps(fragment, protocol=2)
                         pickledFragment = pickle.dumps(fragment)
-                        self.udpSocket.sendto(pickledFragment, (txData_ipAddr, txData_udpPort))
+                        # Calling getSocket() means that we'll always have the latest version of the socket, were it
+                        # to be recreated by the corresponding RtpPacketReceiver
+                        self.rxInstance.getSocket().sendto(pickledFragment, (txData_ipAddr, txData_udpPort))
                         # Increment the counter
                         self.sendUDPThreadTxPacketCounter += 1
             # if Queue timed out without any data in it
@@ -3629,7 +3632,7 @@ class RtpPacketReceiver(object):
                             # buffer size is 65535 bytes. This is the maximum possible size for UDP We need to set it
                             # to this size for Windows (which is running in promiscuous mode). Otherwise packets received
                             # larger we can accept would kill the socket
-                            rawData, rawAddr = rawSocket.recvfrom(65535)
+                            rawData, rawAddr = rawSocket.recvfrom(Registry.rtpPacketRecieverRecvFromBufferSize)
                             rawTimestamp = datetime.datetime.now()
                         else:
                             # If no data to be read, clear the rawData and rawAddr lists
@@ -3639,7 +3642,7 @@ class RtpPacketReceiver(object):
 
                         # Next, flush the corresponding UDP port binding (if it contains data, which it should)
                         if udpSocket in r:
-                            udpSocketData, udpSocketAddr = udpSocket.recvfrom(65535)
+                            udpSocketData, udpSocketAddr = udpSocket.recvfrom(Registry.rtpPacketRecieverRecvFromBufferSize)
                             udpTimestamp = datetime.datetime.now()
                         else:
                             # If no data to be read, clear the udpSocketData and udpSocketAddr lists
@@ -4451,8 +4454,7 @@ def main(argv):
             # Once the socket has been created, pass it to the udpSend thread
             if rtpPacketReceiver.getSocket() is not None:
                 # Create a UDPMessageSender using to correspond to the RtpPacketReceiver sharing the same socket
-                udpMessageSender = UDPMessageSender(txMessageQueue, rtpPacketReceiver.getSocket(), shutdownFlag)
-
+                udpMessageSender = UDPMessageSender(txMessageQueue, rtpPacketReceiver, shutdownFlag)
             # Add the RtpPacketReceiver/UDPMessageSender pair to the receiversAndSenders[] list
             receiversAndSendersList.append([rtpPacketReceiver, udpMessageSender])
 
