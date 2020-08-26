@@ -3642,7 +3642,15 @@ class RtpPacketReceiver(object):
                                 # If the data has been rx'd via the raw socket, we have to extract the data as a raw packet
                                 # Increment the counter
                                 self.rawPacketsReceivedByRxThreadCount += 1
-                                rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = self.parseRawPacket(rawData)
+                                try:
+                                    rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = self.parseRawPacket(rawData)
+                                except Exception as e:
+                                    Utils.Message.addMessage("ERR:parseRawPacket() " + str(e))
+                                    rtpHeader = None
+                                    payload = None
+                                    rxTTL = None
+                                    srcUDPPort = None
+                                    destUDPPort = None
                                 # Note: On Windows, the raw port is running in promiscuous mode. That means it will receive
                                 # ALL incoming packets addressed to that interface.
                                 # Therefore we need to check that this packet is for us, by comparing the udp dest port
@@ -3652,7 +3660,17 @@ class RtpPacketReceiver(object):
 
                                     if rtpHeader is not None:
                                         # Packet payload is large enough to contain an rtp header. but does it?
-                                        version, type, seqNo, timestamp, syncSourceID = self.parseRTPHeader(rtpHeader)
+                                        try:
+                                            version, type, seqNo, timestamp, syncSourceID = self.parseRTPHeader(rtpHeader)
+                                        except Exception as e:
+                                            Utils.Message.addMessage("ERR:parseRTPHeader() " + str(e))
+                                            version = None
+                                            type = None
+                                            seqNo = None
+                                            timestamp = None
+                                            syncSourceID = None
+
+
                                         if syncSourceID is not None:
                                             # Increment the global counter
                                             self.rawPacketsDecodedByRxThreadCount += 1
