@@ -3367,6 +3367,10 @@ class RtpPacketReceiver(object):
                     srcUDPPort, destUDPPort = struct.unpack("!HH", udpHeader[0:4])
                     Utils.Message.addMessage("parseRawPacket() no rtp header or payload")
                     return None, None, rxTTL, srcUDPPort, destUDPPort
+                else:
+                    Utils.Message.addMessage("parseRawPacket() no udp header, too short for rtp ")
+                    return None, None, rxTTL, None, None
+
             # Otherwise this packet doesn't contain a UDP packet
             else:
                 Utils.Message.addMessage("parseRawPacket() unrecognised payload")
