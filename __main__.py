@@ -3368,7 +3368,8 @@ class RtpPacketReceiver(object):
                     # Utils.Message.addMessage("parseRawPacket() no rtp header or payload")
                     return None, None, rxTTL, srcUDPPort, destUDPPort
                 else:
-                    Utils.Message.addMessage("parseRawPacket() no udp header, too short for rtp ")
+                    # Packet doesn't a UDP header
+                    # Utils.Message.addMessage("parseRawPacket() no udp header, too short for rtp ")
                     return None, None, None, None, None
 
             # Otherwise this packet doesn't contain a UDP packet
@@ -3652,7 +3653,7 @@ class RtpPacketReceiver(object):
                                 try:
                                     rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = self.parseRawPacket(rawData)
                                 except Exception as e:
-                                    Utils.Message.addMessage("ERR:parseRawPacket() " + str(e))
+                                    Utils.Message.addMessage("ERR:__rtpPacketReceiverThread.parseRawPacket() " + str(e))
                                     rtpHeader = None
                                     payload = None
                                     rxTTL = None
@@ -3670,7 +3671,7 @@ class RtpPacketReceiver(object):
                                         try:
                                             version, type, seqNo, timestamp, syncSourceID = self.parseRTPHeader(rtpHeader)
                                         except Exception as e:
-                                            Utils.Message.addMessage("ERR:parseRTPHeader() " + str(e))
+                                            Utils.Message.addMessage("ERR:__rtpPacketReceiverThread.parseRTPHeader() " + str(e))
                                             version = None
                                             type = None
                                             seqNo = None
