@@ -3369,7 +3369,7 @@ class RtpPacketReceiver(object):
             else:
                 return None, None, None, None, None
         except Exception as e:
-            # Utils.Message.addMessage("ERR:parseRawPacket " + str(e))
+            Utils.Message.addMessage("ERR: Exception within parseRawPacket () " + str(e))
             return None, None, None, None, None
 
     # Takes a udp packet and splits off the RTP header and payload
