@@ -1076,6 +1076,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__streamTransmitterTxRateBps = 0  # Will be populated by incoming isptest header data
         self.__txStreamTimeToLive = 0 # Will be populated by incoming isptest header data
         self.__rxTTL = 0 # The most recent TTL value from the IP Header (that conveyed the Rtp packet)
+        self.__latestReceivedRtpPacket = None   # A copy of the most recently received Rtp packet (populated by __queueReceiverThread)
 
         # Counter to be used by __calculateJitter()
         # self.sumOfJitter_1s = 0
@@ -1872,6 +1873,28 @@ class RtpReceiveStream(RtpReceiveCommon):
                     if packetsRxdPerSecond > 0:
                         # Packets have been received so clear the timer
                         secondsWithNoBytesRxdTimer = 0
+                        # If lossOfStreamFlag was previously True but is about to be cleared, create a StreamStarted Event to
+                        # signify that the stream has restarted
+                        if lossOfStreamFlag == True:
+                            # Create a 'stream started' event
+                            # NOTE: The info within self.__latestReceivedRtpPacket will be the latest according to
+                            # the __queueReceiverThread which means that seq no contained within is not necessarily the
+                            # first seq no received after the stream started.
+                            # This is because the __samplingThread runs much slower than the __queuReceiverThread
+                            try:
+                                streamStartedEvent = StreamStarted(self.__stats, self.__latestReceivedRtpPacket)
+                                # Append the event to the events list
+                                self.__eventList.append(streamStartedEvent)
+                                # Increment the Event counter
+                                self.__stats["stream_all_events_counter"] += 1
+                                # Display a message
+                                Utils.Message.addMessage(
+                                    streamStartedEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
+                            except Exception as e:
+                                Utils.Message.addMessage(
+                                    "ERR:RtpReceiveStream.__samplingThread add StreamStarted Event " + str(e))
+
+
                         # Clear the flag so another StreamLost Event can be generated
                         lossOfStreamFlag = False
                     else:
@@ -2318,9 +2341,11 @@ class RtpReceiveStream(RtpReceiveCommon):
             try:
                 # Wait for a packet to arrive in the receive queue
                 rtpPacketData = self.rtpStreamQueue.get(timeout=0.2)
+                # Copy the latest received rtp packet into the instance variable (so it can be referenced elsewhere)
+                self.__latestReceivedRtpPacket = rtpPacketData
 
-                # Take a copy of the latest sequence no.
-                latestSeqNo = rtpPacketData.rtpSequenceNo
+                # # Take a copy of the latest sequence no.
+                # latestSeqNo = rtpPacketData.rtpSequenceNo
 
                 # Monitor the size of the queue
                 # If the queue size starts creeping up, this suggests the CPU can't can't keep up with the rate
