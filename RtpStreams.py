@@ -5633,9 +5633,16 @@ class RtpGenerator(RtpCommon):
                         # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
                         icmpSrcAddr = None
                         try:
+                            # Calculate a unique id field based on the syncSourceID (which should be unique) + current
+                            # TTL value to be tested
+                            # This is necessary because for a multiple TX streams, if the id_fields weren't unique
+                            # between the streams, the ICMP receiver code might get confused about which reply
+                            # went with which stream
+                            # This can only be a 16 bit value so needs to be masked to ensure that it doesn't wrap
+                            tracerouteID = (self.syncSourceIdentifier + ttl) & 0xFFFF
                             icmpMsg = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
-                                _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=ttl)
+                                _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=tracerouteID)
                         except UDPTxError as e:
                             Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
                                                      "__tracerouteThread UDPTxError. Recreating udp Tx socket" + str(
