@@ -1692,8 +1692,8 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
                 ########### Calculate elapsed time
-                elapsedTime = datetime.datetime.now() - self.__stats["packet_first_packet_received_timestamp"]
-                self.__stats["stream_time_elapsed_total"] = elapsedTime
+                self.__stats["stream_time_elapsed_total"] = datetime.datetime.now() - \
+                                                            self.__stats["packet_first_packet_received_timestamp"]
 
                 if packetsReceivedThisPeriod > 0:
                     ########### Calculate mean packet length (1 sec)
@@ -2316,7 +2316,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 latestSeqNo = rtpPacketData.rtpSequenceNo
 
                 # Monitor the size of the queue
-                # If the queue size starts creeping up, this suggests the CPU csan't can't keep up with the rate
+                # If the queue size starts creeping up, this suggests the CPU can't can't keep up with the rate
                 # of incoming packets
                 self.rtpStreamQueueCurrentSize = self.rtpStreamQueue.qsize()
                 if self.rtpStreamQueueCurrentSize > self.rtpStreamQueueMaxSize:
