@@ -329,7 +329,8 @@ class ExcessiveJitter(Event):
 # Define an event that represent a glitch
 # This will be in the form of the packets (RtpData objects) either side of the 'hole' in received data
 class Glitch(Event):
-    def __init__(self, stats, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap, packetsLost):
+    # def __init__(self, stats, lastReceivedPacketBeforeGap, firstPackedReceivedAfterGap, packetsLost):
+    def __init__(self, stats, rtpPackets, packetsLost):
         # Create timestamp of event
         self.timeCreated = datetime.datetime.now()
         # Take local copy of stats dictionary
@@ -339,20 +340,26 @@ class Glitch(Event):
         # By default, take the name of the class as the 'type'. This could be overwritten
         self.type = self.__class__.__name__
         # Add additional instance variables as required
-        self.startOfGap = lastReceivedPacketBeforeGap
-        self.endOfGap = firstPackedReceivedAfterGap
+        # self.startOfGap = lastReceivedPacketBeforeGap
+        self.startOfGap = rtpPackets[-2]
+        # self.endOfGap = firstPackedReceivedAfterGap
+        self.endOfGap = rtpPackets[-1]
 
         self.packetsLost = packetsLost
-        # # Calculate packets lost by taking the diff of the sequence nos at the end and start of hole
-        # # The '-1' is because it's fences and fenceposts
-        # self.packetsLost = abs(
-        #     firstPackedReceivedAfterGap.rtpSequenceNo - lastReceivedPacketBeforeGap.rtpSequenceNo) - 1
-        # # Guard against the possibility of a -ve packetsLost value
-        # if self.packetsLost < 0:
-        #     self.packetsLost =0
 
         # Calculate length of this glitch
-        self.glitchLength = firstPackedReceivedAfterGap.timestamp - lastReceivedPacketBeforeGap.timestamp
+        ### NOTE: Initially I calculated this by taking the diff between the two packets where there was a seq no
+        # discrepency (as it seems logical to assume that the glitch duration would correlate with the no of packets lost).
+        # However, I've observed a situation whereby a stream is lost and when it re-emerges at the Receiver, the
+        # two packets at the boundary of the glitch arrive bunched together. This means that the packet loss calculation
+        # is correct (because it relies upon sequence numbers) but the glitch duration is incorrect.
+        # Therefore I am attempting to get around this by taking the timestamp diff between rtpPackets[-1] (the most recent)
+        # and rtpPackets[-3] which is assumed to be the last 'on time' packet.
+        # At worst, this will have the effect of adding one 'packet period's worth of time to the calculated glitch period
+
+        # self.glitchLength = firstPackedReceivedAfterGap.timestamp - lastReceivedPacketBeforeGap.timestamp
+        self.glitchLength = rtpPackets[-1].timestamp - rtpPackets[-3].timestamp
+
         # Calculate useful values showing expected and actual rtpSequence no
         self.expectedSequenceNo = self.startOfGap.rtpSequenceNo + 1
         self.actualReceivedSequenceNo = self.endOfGap.rtpSequenceNo
@@ -2359,8 +2366,9 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                 # Add the packet to the circular packet buffer (for glitch, receive period and jitter analysis)
                 rtpPackets.append(rtpPacketData)
-                # We need to have received at least two packets before we can detect a glitch
-                # and three packets before we can calculate the jitter
+                # We need to have received at least two packets before we can detect a glitch seq error
+                # and three packets before we can calculate the glitch period
+                # also three packets required before we can calculate the jitter
                 if len(rtpPackets) > 2:
                     ### Detect sequence no. anomoly (i.e a glitch)
                     # Test the latest seq no against the previous
@@ -2414,7 +2422,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Create a Glitch Event
                         # Calculate packets lost
                         packetslost = sequenceNoGap - 1
-                        glitch = Glitch(self.__stats, rtpPackets[-2], rtpPackets[-1], packetslost)
+                        # glitch = Glitch(self.__stats, rtpPackets[-2], rtpPackets[-1], packetslost)
+                        glitch = Glitch(self.__stats, rtpPackets, packetslost)
                         # Update the packets lost count
                         self.__stats["glitch_packets_lost_total_count"] += glitch.packetsLost
                         # Test to see how many packets have been lost
