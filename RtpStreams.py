@@ -670,6 +670,10 @@ class RtpData(object):
 # Define a Super Class for all RTP objects (Generators, ReceiveStreams, ReceiveResults..)
 # This will contain methods that are useful to all
 class RtpCommon(object):
+    def __init__(self) -> None:
+        pass
+
+
     # Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
     # Returns None on failure, otherwise returns an int
     def createTracerouteChecksum(self, hopsList):
@@ -707,14 +711,42 @@ class RtpReceiveCommon(RtpCommon):
         self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
         self.tracerouteHopsListMutex = threading.Lock()
 
-        # A mutex-protected 'viewing' version of self.tracerouteHopsList
+        # A mutex-protected *viewing* copy of self.tracerouteHopsList
         # This is also a list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
+        # Explanation:
+        #   For a Transmitter, there is no StableTracerouteHopsList
+        # This is because a Transmitter instance of isptest actually collects the traceroute data
+        # therefore it knows that it's valid, because it collected it!
+        # Since an RtpStreamResults can only exist as partner of an RtpGenerator, it makes no
+        # sense to have two copies of the same list (as required in a RtpReceiveStream object. see below).
+
+        # The RtpReceiveStream object, on the other hand is getting traceroute data dribbled to it so
+        # TraceRouteHopsList and StableTracerouteHopsList contents may well be different
+        # (StableTracerouteHopsList is populated once it is known that all
+        # data for the whole of the traceroute has been received - through the use of the traceroute checksum)
+
         self.__stableTracerouteHopsList = []
         # A timestamp showing representing this list was last updated
         self.__stableTracerouteHopsListLastUpdated = None
         self.__stableTracerouteHopsListMutex = threading.Lock()
 
+    # Thread-safe method to return the latest stable (complete) copy of the traceroute hops list
+    # It returns a timestamp of when the list was last updated and the list itself
+    def getStableTracerouteHopsList(self):
+        self.__stableTracerouteHopsListMutex.acquire()
+        tracerouteHopsList = deepcopy(self.__stableTracerouteHopsList)
+        self.__stableTracerouteHopsListMutex.release()
+        return self.__stableTracerouteHopsListLastUpdated, tracerouteHopsList
 
+    # Thread-safe method to replace the current stable (complete) copy of the traceroute hops list
+    # It will overwrite self.__stableTracerouteHopsList and update the timestamp self.__stableTracerouteHopsListLastUpdated
+    def setStableTracerouteHopsList(self, newList):
+        self.__stableTracerouteHopsListMutex.acquire()
+        # Overwrite the existing list
+        self.__stableTracerouteHopsList = deepcopy(newList)
+        self.__stableTracerouteHopsListMutex.release()
+        # update the timestamp for the list
+        self.__stableTracerouteHopsListLastUpdated = datetime.datetime.now()
 
     # Thread-safe method to return a list of the worst glitches
     # If returnSummaries is True, will return a list of summary strings. Otherwise will return a list of events
@@ -3211,6 +3243,7 @@ class RtpGenerator(RtpCommon):
                                             # in the isptest header (in RtpGenerator.generateIsptestHeader()
 
         self.tracerouteChecksum = 0# Calculated by XORing an entire hops list, once it's been successfully validated
+
         self.isptestHeaderMessageIndex = 0 # Keeps track of which type of message we are sending in the header
         self.noOfMessageTypes = 7 # The current message types are:
                                     # 0 Traceroute
@@ -5816,8 +5849,10 @@ class RtpGenerator(RtpCommon):
                         try:
                             # get the instance of the corresponding RtpStreamResults object
                             rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                            # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+
+                            ### Copy the traceroute hops list into the object instance var
                             rtpStreamResults.setTraceRouteHopsList(hopsList)
+
 
                         except Exception as e:
                             # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
