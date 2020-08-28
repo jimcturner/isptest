@@ -21,7 +21,7 @@ import math
 
 # Formats a datetime.timedelta object as a simple string hh:mm:ss
 # If showDays=True, returns dd:hh:mm:ss
-def dtstrft(timeDelta, showDays=False):
+def dtstrft(timeDelta, showDays=True):
     try:
         daysString = ""
         # Get the timedelta as a total in seconds
