@@ -702,8 +702,19 @@ class RtpReceiveCommon(RtpCommon):
         self.worstGlitchesList = []
         self.worstGlitchesMutex = threading.Lock()
 
+        # A list to contain the *live* traceroute hops as received as part of the isptestheader data
+        # Note: This list is liable to be in a state of flux as it's being continuaously updated
         self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
         self.tracerouteHopsListMutex = threading.Lock()
+
+        # A mutex-protected 'viewing' version of self.tracerouteHopsList
+        # This is also a list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
+        self.__stableTracerouteHopsList = []
+        # A timestamp showing representing this list was last updated
+        self.__stableTracerouteHopsListLastUpdated = None
+        self.__stableTracerouteHopsListMutex = threading.Lock()
+
+
 
     # Thread-safe method to return a list of the worst glitches
     # If returnSummaries is True, will return a list of summary strings. Otherwise will return a list of events
@@ -747,6 +758,25 @@ class RtpReceiveCommon(RtpCommon):
         self.worstGlitchesMutex.acquire()
         self.worstGlitchesList = deepcopy(worstGlitchesList)
         self.worstGlitchesMutex.release()
+
+
+    # Thread-safe method to return the latest stable (complete) copy of the traceroute hops list
+    # It returns a timestamp of when the list was last updated and the list itself
+    def getStableTracerouteHopsList(self):
+        self.__stableTracerouteHopsListMutex.acquire()
+        tracerouteHopsList = deepcopy(self.__stableTracerouteHopsList)
+        self.__stableTracerouteHopsListMutex.release()
+        return self.__stableTracerouteHopsListLastUpdated, tracerouteHopsList
+
+    # Thread-safe method to replace the current stable (complete) copy of the traceroute hops list
+    # It will overwrite self.__stableTracerouteHopsList and update the timestamp self.__stableTracerouteHopsListLastUpdated
+    def setStableTracerouteHopsList(self, newList):
+        self.__stableTracerouteHopsListMutex.acquire()
+        # Overwrite the existing list
+        self.__stableTracerouteHopsList = deepcopy(newList)
+        self.__stableTracerouteHopsListMutex.release()
+        # update the timestamp for the list
+        self.__stableTracerouteHopsListLastUpdated = datetime.datetime.now()
 
 
     # Thread-safe method to return a list of the traceroute hops
@@ -810,7 +840,8 @@ class RtpReceiveCommon(RtpCommon):
         # The '\r\n' escape sequence is required for Windows
         eventsList = self.getRTPStreamEventList(filterList=eventFilterList)
         worstGlitchesList = self.getWorstGlitches(returnSummaries=True)
-        tracerouteHopsList = self.getTraceRouteHopsList()
+        # tracerouteHopsList = self.getTraceRouteHopsList()
+        tracerouteLastUpdate, tracerouteHopsList = self.getStableTracerouteHopsList()
 
         # Simple local function to determine the current operation mode based on the type of 'this' object instance
         # and return a string
@@ -910,10 +941,6 @@ class RtpReceiveCommon(RtpCommon):
 
         # Create a traceroute list of hops.
         tracerouteHopsListAsString = "Traceroute:\r\n"
-        # tracerouteHopsListAsString += "No. of route changes: ".rjust(labelWidth) + \
-        #                               str(stats["route_change_events_total"]) + "\r\n"
-        # tracerouteHopsListAsString += "Mean interval between route changes: ".rjust(labelWidth) +\
-        #                               str(Utils.dtstrft(stats["route_mean_time_between_route_change_events"])) + "\r\n"
         if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
             for hopNo in range(len(tracerouteHopsList)):
                 try:
@@ -931,6 +958,13 @@ class RtpReceiveCommon(RtpCommon):
                 except Exception as e:
                     Utils.Message.addMessage("DBUG: RtpReceiveCommon.generateReport() Create traceroute string: " + str(e))
                     tracerouteHopsListAsString += "--Invalid traceroute data--\r\n"
+            if tracerouteLastUpdate is not None:
+                try:
+                    tracerouteHopsListAsString += "Last updated: " + tracerouteLastUpdate.strftime("%d/%m %H:%M:%S") + "\r\n"
+                except Exception as e:
+                    Utils.Message.addMessage("ERR: RtpReceiveCommon.generateReport() add traceroute last updated " + str(e))
+
+
         else:
             tracerouteHopsListAsString += "No traceroute info available" + "\r\n"
 
@@ -2022,6 +2056,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate ttl decrements " + str(e))
 
                 ######## Detect route changes using traceroute hops list (and rxTTL if available)
+                # Also update self.__stableTracerouteHopsList if the checksum has been validated
                 try:
                     # Get the current hops list
                     hopsList = self.getTraceRouteHopsList()
@@ -2034,6 +2069,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # If the checksum's match, we can be reasonably confident our hopsList data is valid
                         # Utils.Message.addMessage("Checksums match local " +str(localTracerouteChecksum) + ", rx" +\
                         #               str(self.tracerouteReceivedChecksum))
+
+                        # Update the __stableTracerouteHopsList (this will be used for reports/display purposes)
+                        self.setStableTracerouteHopsList(hopsList)
+                        # Utils.Message.addMessage("stable tr: " + str(self.getStableTracerouteHopsList()))
+
                         # Attempt to detect a route change
                         if hopsListChangeExpected is False:
                             # Under normal circumstances, take the rxTTL into account to determine route changes

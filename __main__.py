@@ -2444,10 +2444,12 @@ class UI(object):
 
         friendlyName = ""
         syncSourceID = 0
+        lastUpdated = None
         if selectedStream is not None:
             try:
-                # Get tracerouteHopsList from selected stream
-                tracerouteHopsList = selectedStream.getTraceRouteHopsList()
+                # Get latest stable tracerouteHopsList from selected stream
+                # tracerouteHopsList = selectedStream.getTraceRouteHopsList()
+                lastUpdated, tracerouteHopsList = selectedStream.getStableTracerouteHopsList()
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
                 friendlyName = str(selectedStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
                 syncSourceID = str(selectedStream.getRtpStreamStatsByKey("stream_syncSource"))
@@ -2488,8 +2490,13 @@ class UI(object):
             else:
                 tableContents.append(["", "", "No traceroute data to display yet. Please wait".ljust(maxWidth)])
             # Now actually display the paged table list
+            # Create a title for the table
             title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ") " +\
                     str(len(tracerouteHopsList)) + " hops"
+            # Append the last-updated timestamp of the tracsroute data
+            if lastUpdated is not None:
+                title += ", updated " + lastUpdated.strftime("%H:%M:%S")
+
             footer = ["", "", "[<][>]page, [^][v] select stream, [t]exit\nTo save/export, go to [report] page"]
             self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15), "Whois".ljust(maxWidth)], tableContents,
                                    footerRow=footer,

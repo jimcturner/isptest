@@ -269,7 +269,7 @@ class Message(object):
                 cls.__writeMessagesToDiskThreadIsActive = False
 
 
-        # Add the supplied message to the messages list as a tuple containing a timestamp
+        # Add the supplied message to the messages list as a tuple containing a timestamp and the message
         # newMessage = [datetime.datetime.now().strftime("%H:%M:%S"), message]
         newMessage = [datetime.datetime.now(), message]
         cls.messages.append(newMessage)
