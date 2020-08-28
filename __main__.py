@@ -1164,6 +1164,9 @@ class UI(object):
                             message[1] += paddingString
                         except Exception as e:
                             Utils.Message.addMessage("__displayThread: Invalid message")
+                # Convert message timestamp column from a datetime object to a string so it can be displayed
+                message[0] = message[0].strftime("%H:%M:%S")
+
 
             if len(messages) > 0:
                 width, height, tableData = Term.createTable(messages, "Messages")

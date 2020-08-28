@@ -270,7 +270,8 @@ class Message(object):
 
 
         # Add the supplied message to the messages list as a tuple containing a timestamp
-        newMessage = [datetime.datetime.now().strftime("%H:%M:%S"), message]
+        # newMessage = [datetime.datetime.now().strftime("%H:%M:%S"), message]
+        newMessage = [datetime.datetime.now(), message]
         cls.messages.append(newMessage)
 
         # Now put the new message in the queue, to be picked up by the disk writer thread
@@ -323,6 +324,7 @@ class Message(object):
             except Exception as e:
                 Message.addMessage("DBUG: Messages:getMessage(" + str(args[0]) + ":" +
                                    str(args[1]) + ") requested start and end indexes out of range: " + str(e))
+                return None
         elif len(args) == 1:
             # If one arg supplied, return the last n messages.
             try:
@@ -354,7 +356,7 @@ class Message(object):
                         # Check the length of the item matches what we expect (a tuple)
                         if len(latestItem) > 0:
                             # Format the string to be written to the file
-                            logString = latestItem[0] + ":" + latestItem[1] + "\n"
+                            logString = latestItem[0].strftime("%Y:%m:%d-%H:%M:%S") + ":" + latestItem[1] + "\n"
                             # Append to the file
                             fh.write(logString)
                     fh.close()
