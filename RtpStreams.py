@@ -1780,7 +1780,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Snapshot latest jitter count
             latestJitterPeriodCount = self.__jitterRunningtotal
             # Snapshot last packet seen timestamp
-            self.__stats["packet_last_seen_received_timestamp"] = self.__packet_last_seen_received_timestamp
+            self.__stats["packet_last_seen_received_timestamp"] = self.__latestReceivedRtpPacket.timestamp
             # Snapshot packetCounterTransmittedTotal (packets Tx'd according to the transmitter
             self.__stats["packet_counter_transmitted_total"] = self.__packetCounterTransmittedTotal
             # Snapshot streamTransmitterTxRateBps (intended tx rate, according to the transmitter)
@@ -1891,35 +1891,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread calc 10 sec jitter " + str(e))
 
 
-                # This function attempts to calculate the mean period between events (such as glitch, or jitter)
-                # to provide a value of how often, on average, the event has occurred
-                # To give a glimpse into the future, it will also take into account the time elapsed since the
-                # last event happened. Once this elapsed time is greater than the calculated mean of the time
-                # between the events, it will also take this time period into account - in effect increasing the
-                # average time between events
-                # def calculateMeanPeriodBetweenEvents(sumOfTimePeriodsBetweenEvents,
-                #                                      timeElapsedSinceMostRecentEvent,
-                #                                      totalNoOfEvents):
-                #     try:
-                #         # Calculate mean period between the events that have already happened
-                #         actualPeriodBetweenEvents = sumOfTimePeriodsBetweenEvents / totalNoOfEvents
-                #         # Now look to see if time elapsed since the last event is longer than the mean between events
-                #         if timeElapsedSinceMostRecentEvent > actualPeriodBetweenEvents:
-                #             # This 'pretends' that a event has 'just happened' which will have the effect of increasing
-                #             # the apparent time between events. Therefore as time moves on, with no more events
-                #             # recorded, the 'mean period between events' will improve (i.e get larger)
-                #             meanPeriodBetweenEvents = (sumOfTimePeriodsBetweenEvents + timeElapsedSinceMostRecentEvent)/\
-                #                                       (totalNoOfEvents + 1)
-                #             return meanPeriodBetweenEvents
-                #         else:
-                #             # The time elapsed since the last event is less than the calculated actual mean.
-                #             # Therefore we ignore the effect of it, as it will only worsen the mean period
-                #             return actualPeriodBetweenEvents
-                #     except Exception as e:
-                #         Utils.Message.addMessage("RtpReceiveStream.__samplingThread.calculateMeanPeriodBetweenEvents() " +\
-                #                                  str(e))
-                #         return None
-
                 try:
                     ########### Update Mean Jitter averages
                     if (self.__stats["jitter_excess_jitter_events_total"] > 0) and (streamIsDeadFlag is False):
@@ -2002,17 +1973,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # If lossOfStreamFlag was previously True but is about to be cleared, create a StreamResumed Event to
                         # signify that the stream has restarted
                         if lossOfStreamFlag == True:
-                            # Create a 'stream started' event
-                            # NOTE: The info within self.__latestReceivedRtpPacket will be the latest according to
-                            # the __queueReceiverThread which means that seq no contained within is not necessarily the
-                            # first seq no received after the stream started.
-                            # This is because the __samplingThread runs much slower than the __queuReceiverThread
                             # Create a 'stream resumed' event
                             try:
-                                # streamStartedEvent = StreamStarted(self.__stats, self.__latestReceivedRtpPacket)
                                 streamResumedEvent = StreamResumed(self.__stats, lossOfStreamEventTimestamp)
                                 # Append the event to the events list
-                                # self.__eventList.append(streamStartedEvent)
                                 self.__eventList.append(streamResumedEvent)
                                 # Increment the Event counter
                                 self.__stats["stream_all_events_counter"] += 1
@@ -4165,9 +4129,14 @@ class RtpGenerator(RtpCommon):
                 if self.SRC_IP_ADDR != currentSrcIPAddr:
                     self.SRC_IP_ADDR = currentSrcIPAddr
 
-                # Decrement timeToLive seconds counter but only if current value is +ve
+                # Decrement timeToLive seconds counter but only if current value is +ve and >= 1
                 # A -ve value is used to denote 'live for ever'
-                if self.timeToLive > 0:
+                # A value of 1 is used to denote 'expired' . At this point, the _rtpGeneratorThread.txScheduler() will
+                # cease transmitting rtp packets, and will, instead transmit a 1 second 'keepalive' udp packet in order
+                # to keep the 'connection tracking' on the NAT/Firewall of the outgoing router alive.
+                # This should mean that the Receiver never loses control of the Transmitter, even after the stream
+                # has expired
+                if self.timeToLive > 1:
                     self.timeToLive -= 1
 
                 # Decrement the burst timer, but only if current value is +ve
@@ -4464,94 +4433,108 @@ class RtpGenerator(RtpCommon):
                     # as the generator function tries to catch up
                     rtpGeneratorInstance.resetSleepPeriodFlag = True
 
-                # sleep
-                time.sleep(sleepTime)
-                # start timer
-                # processingStartTime = timer()
-                # send previously prepared packet
-                sendPacket(rtpGeneratorInstance)
-                # Prepare the next packet
-                rtpGeneratorInstance.prepareNextRtpPacket()
+                # Sleep between UDP emmissions
+                # Special case: If the stream timeToLive has decremented to '1 second' the stream is considered to
+                # have expired. At this point, the RtpGenerator will enter a dormant state whereby it will send a
+                # non-RTP udp 'connection keepalive udp packet' once a second
+                if rtpGeneratorInstance.timeToLive == 1:
+                    time.sleep(1)
+                    # Send keepalive packet here
+                    keepAliveString = b'keepAlive' + str(rtpGeneratorInstance.syncSourceIdentifier).encode('ascii')
+                    sentBytes = rtpGeneratorInstance.udpTxSocket.sendto(keepAliveString,
+                                                                        (rtpGeneratorInstance.UDP_TX_IP,
+                                                                         rtpGeneratorInstance.UDP_TX_PORT))
 
-                # # Deliberately cause a glitch
-                # if rtpGeneratorInstance.rtpSequenceNo == 65530:
-                #     Utils.Message.addMessage("seq no = 65530, insert 100 packet glitch")
-                #     rtpGeneratorInstance.packetsToSkip = 100
+                else:
+                    # Sleep for a dynamically calculated period to satisfy the bps tx rate
+                    time.sleep(sleepTime)
 
-                # # Deliberately cause a duplicate seq no every 500 packets
-                # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
-                #     Utils.Message.addMessage("Cause duplicate sequence no error")
-                #     rtpGeneratorInstance.rtpSequenceNo -= 1
+                    # start timer
+                    # processingStartTime = timer()
+                    # send previously prepared packet
+                    sendPacket(rtpGeneratorInstance)
+                    # Prepare the next packet
+                    rtpGeneratorInstance.prepareNextRtpPacket()
 
-                # # Deliberately cause an out of seq packet every 500 packets
-                # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
-                #     Utils.Message.addMessage("Cause out of sequence error")
-                #     rtpGeneratorInstance.rtpSequenceNo -= 2
+                    # # Deliberately cause a glitch
+                    # if rtpGeneratorInstance.rtpSequenceNo == 65530:
+                    #     Utils.Message.addMessage("seq no = 65530, insert 100 packet glitch")
+                    #     rtpGeneratorInstance.packetsToSkip = 100
 
-                # # Deliberately modify the traceroute hops list every 500 packets
-                # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
-                #     newOctet = rtpGeneratorInstance.txCounter_packets % 255
-                #     # Utils.Message.addMessage("new tr octet " + str(newOctet))
-                #     try:
-                #         if sum(rtpGeneratorInstance.tracerouteHopsList[0]) == 0:
-                #             Utils.Message.addMessage("new tr octet 0.0.0." + str(newOctet))
-                #             rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,newOctet]]
-                #         else:
-                #             Utils.Message.addMessage("new tr octet 0.0.0.0")
-                #             rtpGeneratorInstance.tracerouteHopsList[0] = [0, 0, 0, 0]
-                #     except Exception as e:
-                #         Utils.Message.addMessage("TR test " + str(e))
-                #         rtpGeneratorInstance.tracerouteHopsList.append([0, 0, 0, 0])
+                    # # Deliberately cause a duplicate seq no every 500 packets
+                    # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
+                    #     Utils.Message.addMessage("Cause duplicate sequence no error")
+                    #     rtpGeneratorInstance.rtpSequenceNo -= 1
 
-                # # Deliberately modify the traceroute hops list every 50 packets
-                # paths = [[
-                #     [192, 168, 224, 252],
-                #     [82, 194, 125, 65],
-                #     [212, 74, 66, 251],
-                #     [62, 214, 37, 134],
-                #     [80, 81, 192, 59],
-                #     [0, 0, 0, 0],
-                #     [0, 0, 0, 0],
-                #     [0, 0, 0, 0],
-                #     [132, 185, 249, 7],
-                #     [212, 58, 231, 65]]
-                #     ,
-                #     [
-                #         [192, 168, 224, 252],
-                #         [82, 194, 125, 65],
-                #         [212, 74, 66, 251],
-                #         [62, 214, 37, 134],
-                #         [80, 81, 192, 59],
-                #         [0, 0, 0, 0],
-                #         [0, 0, 0, 0],
-                #         [0, 0, 0, 0],
-                #         [132, 185, 249, 7]]
-                #     ,
-                #         [
-                #         [192, 168, 224, 253],
-                #         [62, 96, 44, 73],
-                #         [212, 74, 66, 251],
-                #         [212, 74, 66, 251],
-                #         [80, 81, 192, 59],
-                #         [0, 0, 0, 0],
-                #         [0, 0, 0, 0],
-                #         [0, 0, 0, 0],
-                #         [132, 185, 249, 9],
-                #         [212, 58, 231, 65]
-                #     ]]
-                # packetThreshold = 400
-                # if rtpGeneratorInstance.txCounter_packets % packetThreshold < (packetThreshold / 2):
-                #     # Modify the path
-                #     rtpGeneratorInstance.tracerouteHopsList = paths[0]
-                # else:
-                #     rtpGeneratorInstance.tracerouteHopsList = paths[1]
-                # # calculate the checksum
-                # rtpGeneratorInstance.tracerouteChecksum = \
-                #     rtpGeneratorInstance.createTracerouteChecksum(rtpGeneratorInstance.tracerouteHopsList)
+                    # # Deliberately cause an out of seq packet every 500 packets
+                    # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
+                    #     Utils.Message.addMessage("Cause out of sequence error")
+                    #     rtpGeneratorInstance.rtpSequenceNo -= 2
+
+                    # # Deliberately modify the traceroute hops list every 500 packets
+                    # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
+                    #     newOctet = rtpGeneratorInstance.txCounter_packets % 255
+                    #     # Utils.Message.addMessage("new tr octet " + str(newOctet))
+                    #     try:
+                    #         if sum(rtpGeneratorInstance.tracerouteHopsList[0]) == 0:
+                    #             Utils.Message.addMessage("new tr octet 0.0.0." + str(newOctet))
+                    #             rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,newOctet]]
+                    #         else:
+                    #             Utils.Message.addMessage("new tr octet 0.0.0.0")
+                    #             rtpGeneratorInstance.tracerouteHopsList[0] = [0, 0, 0, 0]
+                    #     except Exception as e:
+                    #         Utils.Message.addMessage("TR test " + str(e))
+                    #         rtpGeneratorInstance.tracerouteHopsList.append([0, 0, 0, 0])
+
+                    # # Deliberately modify the traceroute hops list every 50 packets
+                    # paths = [[
+                    #     [192, 168, 224, 252],
+                    #     [82, 194, 125, 65],
+                    #     [212, 74, 66, 251],
+                    #     [62, 214, 37, 134],
+                    #     [80, 81, 192, 59],
+                    #     [0, 0, 0, 0],
+                    #     [0, 0, 0, 0],
+                    #     [0, 0, 0, 0],
+                    #     [132, 185, 249, 7],
+                    #     [212, 58, 231, 65]]
+                    #     ,
+                    #     [
+                    #         [192, 168, 224, 252],
+                    #         [82, 194, 125, 65],
+                    #         [212, 74, 66, 251],
+                    #         [62, 214, 37, 134],
+                    #         [80, 81, 192, 59],
+                    #         [0, 0, 0, 0],
+                    #         [0, 0, 0, 0],
+                    #         [0, 0, 0, 0],
+                    #         [132, 185, 249, 7]]
+                    #     ,
+                    #         [
+                    #         [192, 168, 224, 253],
+                    #         [62, 96, 44, 73],
+                    #         [212, 74, 66, 251],
+                    #         [212, 74, 66, 251],
+                    #         [80, 81, 192, 59],
+                    #         [0, 0, 0, 0],
+                    #         [0, 0, 0, 0],
+                    #         [0, 0, 0, 0],
+                    #         [132, 185, 249, 9],
+                    #         [212, 58, 231, 65]
+                    #     ]]
+                    # packetThreshold = 400
+                    # if rtpGeneratorInstance.txCounter_packets % packetThreshold < (packetThreshold / 2):
+                    #     # Modify the path
+                    #     rtpGeneratorInstance.tracerouteHopsList = paths[0]
+                    # else:
+                    #     rtpGeneratorInstance.tracerouteHopsList = paths[1]
+                    # # calculate the checksum
+                    # rtpGeneratorInstance.tracerouteChecksum = \
+                    #     rtpGeneratorInstance.createTracerouteChecksum(rtpGeneratorInstance.tracerouteHopsList)
 
 
-                # Update sleepTime stats
-                updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
+                    # Update sleepTime stats
+                    updateSleepTimeStats(rtpGeneratorInstance, sleepTime)
 
                 # Stop calculation timer - calculate how long the packet preparation and transmission has taken
                 # calculationPeriod = timer() - processingStartTime
@@ -4624,633 +4607,633 @@ class RtpGenerator(RtpCommon):
         self.tracerouteHopsListMutex.release()
 
 
-    def __tracerouteLinuxOSXThread(self):
-    # def __tracerouteLinuxOSXThread(self, ipAddrofSendingInterface, destHost, destPort, fallbackPort=33434,
-    #                                noOfRetries=6, timeOut=0.5, \
-    #                                maxNoOfHops=16):
-        # Declare some custom Exceptions
-        class UDPTxSocketSetupError(Exception):
-            pass
-        class ICMPRxSocketSetupError(Exception):
-            pass
-        class UDPTxError(Exception):
-            pass
-        class ICMPRxError(Exception):
-            pass
-        class TracerouteLinuxOSXThreadError(Exception):
-            pass
+    # def __tracerouteLinuxOSXThread(self):
+    # # def __tracerouteLinuxOSXThread(self, ipAddrofSendingInterface, destHost, destPort, fallbackPort=33434,
+    # #                                noOfRetries=6, timeOut=0.5, \
+    # #                                maxNoOfHops=16):
+    #     # Declare some custom Exceptions
+    #     class UDPTxSocketSetupError(Exception):
+    #         pass
+    #     class ICMPRxSocketSetupError(Exception):
+    #         pass
+    #     class UDPTxError(Exception):
+    #         pass
+    #     class ICMPRxError(Exception):
+    #         pass
+    #     class TracerouteLinuxOSXThreadError(Exception):
+    #         pass
+    #
+    #     # Creates and returns two seperate sockets, one for tx (udp) and one for rx (icmp)
+    #     # Returns a UDPTxSocketSetupError or ICMPRxSocketSetupError Exception
+    #     def createSockets(ipAddrofInterface):
+    #         # Set up udp transmit socket
+    #         try:
+    #             # Create UDP socket
+    #             udpTx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    #             udpTx.settimeout(timeOut)
+    #         except Exception as createSocketsError:
+    #             raise UDPTxSocketSetupError(str(createSocketsError))
+    #             # print("udpTxSocket socket setup error " + str(e))
+    #             # exit()
+    #
+    #         # Set up icmp receiving socket to receive ICMP
+    #         try:
+    #             # Create raw socket
+    #             icmpRx = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
+    #             icmpRx.settimeout(timeOut)
+    #             # Bind to the ip address of the interface specified by ipAddrofInterface
+    #             icmpRx.bind((ipAddrofInterface, 0))
+    #         except Exception as createSocketsError:
+    #             raise ICMPRxSocketSetupError(str(createSocketsError))
+    #             # print("reply socket setup error " + str(e))
+    #             # exit()
+    #         # Return the rx and tx sockets
+    #         return udpTx, icmpRx
+    #
+    #     # Decodes the supplied icmp header (which should be 8 bytes long)
+    #     class ICMPHeader(object):
+    #         # Custom Exception to be raised if the supplied icmpHeader data can't be unpacked
+    #         class DecodeException(Exception):
+    #             pass
+    #         def __init__(self, icmp_header):
+    #             # Attempt to unpack the header
+    #             try:
+    #                 self.type, self.code, self.checksum, self.p_id, self.sequence = struct.unpack('bbHHh', icmp_header)
+    #             except Exception as e:
+    #                 raise ICMPHeader.DecodeException(str(e))
+    #
+    #     # Decodes the supplied IP header (which should be 20 bytes long)
+    #     class IPHeader(object):
+    #         # Custom Exception to be raised if the supplied IP header data can't be unpacked
+    #         class DecodeException(Exception):
+    #             pass
+    #         def __init__(self, ip_header):
+    #             # unpack header
+    #             try:
+    #                 iph = struct.unpack('!BBHHHBBH4s4s', ip_header)
+    #                 # First byte pf header contains version (bits 4-7) and i[ header length (bits 0-3)
+    #                 version_ihl = iph[0]
+    #                 self.version = version_ihl >> 4
+    #                 self.ipHeaderLength = version_ihl & 0xF
+    #                 self.ttl = iph[5]
+    #                 self.protocol = iph[6]
+    #                 self.s_addr = socket.inet_ntoa(iph[8])
+    #                 self.d_addr = socket.inet_ntoa(iph[9])
+    #                 # print('Version : ' + str(
+    #                 #     self.version) + ' IP Header Length : ' + str(
+    #                 #     self.ipHeaderLength) + ' TTL : ' + str(
+    #                 #     self.ttl) + ' Protocol : ' + str(
+    #                 #     self.protocol) + ' Source Address : ' + str(
+    #                 #     self.s_addr) + ' Destination Address : ' + str(self.d_addr))
+    #             except Exception as e:
+    #                 raise IPHeader.DecodeException(str(e))
+    #
+    #     # This function decodes the icmp Header and icmp payload (which should contain a copy of the header
+    #     # that caused the icmp reply to be generated).
+    #     # It expects an ICMPHeader and IPHeader object as arguments
+    #     # If the function can match the srcAddress, srcTtl, icmpType and icmpCode to that of the original sending
+    #     # message we can infer that this ICMP message is for us.
+    #     # Returns True if all the  optional parameters were matched, False if not, or None of there was an error
+    #     def icmpReplyMatcher(__icmpHeader, __ipHeaderOfSrc, srcAddress=None, destAddress=None, \
+    #                          srcTtl=None, icmpType=None, icmpCode=None):
+    #
+    #         # Test the fields within __icmpHeader and __ipHeaderOfSrc to see if they're what we're looking for
+    #         try:
+    #             if ((srcAddress == __ipHeaderOfSrc.s_addr) or (srcAddress is None)) and \
+    #                     ((destAddress == __ipHeaderOfSrc.d_addr) or (destAddress is None)) and \
+    #                     ((srcTtl == __ipHeaderOfSrc.ttl) or (srcTtl is None)) and \
+    #                       ((icmpType == __icmpHeader.type) or (icmpType is None)) and \
+    #                     ((icmpCode == __icmpHeader.code) or (icmpCode is None)):
+    #                 return True
+    #             else:
+    #                 return False
+    #         except:
+    #             return None
+    #
+    #
+    #     # Utility function to tidy up the main loop. Sends a UDP message, allowing IP Header TTL parameter to be set
+    #     def sendUDP(txSock, txTTL, payload, destIPAddr, destUDPPort):
+    #         try:
+    #             # Update socket with latest ttl value
+    #             txSock.setsockopt(socket.SOL_IP, socket.IP_TTL, txTTL)
+    #             # Send the UDP message
+    #             bytesSent = txSock.sendto(payload, (destIPAddr, destUDPPort))
+    #             return bytesSent
+    #         except Exception as e:
+    #             raise UDPTxError("UDPTxError " + str(e))
+    #
+    #     # Define a socket timeout value
+    #     timeOut = 0.1
+    #     # Define the number of times the traceroute will attempt to illicit a response from the router.
+    #     # This is becuse some routers will fail to respond due to rate limiting of requests.
+    #     # Note: Each subsquent attempt alternates between two possible ports
+    #     # The first attempt will be to use the destination port for the stream
+    #     # If that fails, a fallback port specified in the Registry will be used. Routers are more likely to respond
+    #     # on this other port (33434)
+    #     noOfRetries = 6
+    #     # Get the max no of hops before traceroute gives up
+    #     maxNoOfHops = Registry.tracerouteMaxHops
+    #     # Get the UDP 'fallback' port
+    #     fallbackPort = Registry.tracerouteFallbackUDPDestPort
+    #     # The no. of consecqutive 'no response from router' requests we'll tolerate before giving up
+    #     maxNoOfNoResponse = 5
+    #     # Counts the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
+    #     noResponseCounter = 0
+    #     # Flag to signal that the tx udp and icmp rx flags were created successfully
+    #     socketsCreatedSuccesfullyFlag = False
+    #
+    #     Utils.Message.addMessage("DBUG:__tracerouteLinuxOSXThread starting for stream " + str(self.syncSourceIdentifier))
+    #     try:
+    #         # Create tx (udp) and rx (icmp) sockets, specifying the ip address we will be transmitting from
+    #         udpTx, icmpRx = createSockets(self.SRC_IP_ADDR)
+    #         # Set the 'sockets okay' flag so that the main while loop will start
+    #         socketsCreatedSuccesfullyFlag = True
+    #     except Exception as e:
+    #         Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread.createSockets() " + str(e))
+    #         Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
+    #         # If a UI instance (user interface) reference was supplied, display an error message on the UI
+    #         maxWidth = 60
+    #         errorText = "Insufficient rights to enable traceroute functionality.".center(maxWidth) + \
+    #                     "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) + \
+    #                     "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
+    #                     "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
+    #                     "\n\n" + "<Press any key to continue>".center(maxWidth)
+    #         if self.uiInstance is not None:
+    #             try:
+    #                 self.uiInstance.showErrorDialogue("Traceroute error", errorText)
+    #             except Exception as e:
+    #                 Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
+    #                                          str(e))
+    #
+    #     tracerouteHopsListMustMatchThreshold = 2
+    #     # Additionally, it's possible a mismatch would occur if a hop flapped to/from zero. This is likely to be quite a
+    #     # frequent occurance. And, given the length of time it takes a traceroute to complete, we don't necessarily want
+    #     # to write-off the results we have
+    #     tracerouteHopsListMismatchCounterThreshold = 5 # No of consecutive failures before clearing the hopsList
+    #     tracerouteHopsListMismatchCounter = 0 # Counts the no of consecutive failures
+    #     try:
+    #         # Perform the traceroute in an infinite loop as long as the transmit stream is alive
+    #         # The traceroute is performed n times. Only when the same route has been confirmed will the
+    #         # tracerouteHopsList be updated. This is to guard against situations where the route changes mid-traceroute
+    #         while self.timeToLive != 0 and socketsCreatedSuccesfullyFlag:
+    #             # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
+    #             # consecqutive identical lists have been determined can we say that we have a 'stable' route
+    #             # Create empty list to put the results of each traceroute attempt into
+    #             tracerouteResultsList = []
+    #             for tracerouteAttempt in range (0,tracerouteHopsListMustMatchThreshold):
+    #                 # Utils.Message.addMessage("traceroute attempt " + str(tracerouteAttempt))
+    #                 # This is the main outer traceroute loop and counts the hops
+    #                 # Set initial ttl
+    #                 ttl = 0
+    #                 # This list will be populated with the results of the traceroute
+    #                 hopsList = []
+    #                 noResponseCounter = 0
+    #                 # Utils.Message.addMessage("Starting traceroute....ttl = 1")
+    #                 while ttl < maxNoOfHops and self.timeToLive != 0:
+    #                     attemptsCount = 1
+    #                     ttl += 1
+    #                     # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
+    #                     icmpSrcAddr = None
+    #                     # print("hop counter starting: ttl: " + str(ttl))
+    #                     # This loop counts the attempts for each hop
+    #                     while (attemptsCount < noOfRetries) and self.timeToLive != 0:
+    #                         # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
+    #                         # Send UDP packet
+    #                         ######## OS specific traceroute code starts here ########
+    #                         # determine which destination port we should be using (based on the no of attempts so far)
+    #
+    #                         if attemptsCount % 2 == 1:
+    #                             udpTxPort = self.UDP_TX_PORT
+    #                         else:
+    #                             udpTxPort = fallbackPort
+    #                         try:
+    #                             sendUDP(udpTx, ttl, b'isptest', self.UDP_TX_IP, udpTxPort)
+    #                         except Exception as e:
+    #                             Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread.sendUDP() . Aborting" + str(e))
+    #                         # Increment the attempts counter
+    #                         # attemptsCount += 1
+    #
+    #                         # Receive ICMP packet(s)
+    #                         # This loop waits to receive icmp packets
+    #                         # It's possible we might receive icmp packets not destined for us. Therfore we can't just accept
+    #                         # the first icmp packet we receive. We have to examine its contents
+    #                         # Either a socket.timeout, an elapsedTime timeout or a icmpReplyMatcher=True will cause this while
+    #                         # loop to break
+    #
+    #                         # Create elapsed timer
+    #                         startTime = timer()
+    #                         # print("Receive loop started....: ")
+    #                         while True:
+    #                             # Infinite loop to receive all icmp packets
+    #                             # Break out of loop:
+    #                             #   If timeOut period has been exceeded
+    #                             #   if socket timeout exception raised
+    #                             #   If matcher matches an icmp reply
+    #                             elapsedTime = timer() - startTime
+    #                             if elapsedTime > (timeOut * 2) or self.timeToLive == 0:
+    #                                 # Utils.Message.addMessage("ttl:" + str(ttl) +\
+    #                                 #                          ", try:" + str(attemptsCount) +\
+    #                                 #                          ", elapsedTimer exceeded " + str(round(elapsedTime,1)) + "/" + str(timeOut * 2))
+    #                                 break
+    #                             try:
+    #                                 # Receive from socket
+    #                                 data, addr = icmpRx.recvfrom(5012)
+    #                                 # Snapshot the source address (of the received icmp packet)
+    #                                 __icmpSrcAddr = addr[0]
+    #                                 # Create ICMPHeader object from the received data. This will unpack and decode the fields
+    #                                 # The IP Header is contained within the first 20 bytes
+    #                                 # The ICMP Message Header is contained within the next 8 bytes
+    #                                 # The data after that is copy of the entire IPv4 header (20 bytes)
+    #                                 # ipHeaderOfReply = IPHeader(data[0:20])
+    #                                 # Decode the ICMP header
+    #                                 icmpHeader = ICMPHeader(data[20:28])
+    #                                 # Decode the ICMP payload, which contains a copy of the IP header originally sent
+    #                                 # From this we can verify that the TTL and source IP address were the same as that sent
+    #                                 # Therefore we can infer that this particular ICMP message is our reply, otherwise we discard the
+    #                                 # message and listen again (within the timeout period)
+    #                                 ipHeaderOfOriginalSender = IPHeader(data[28:48])
+    #
+    #
+    #                                 Utils.Message.addMessage("txTTL:" + str(ttl)+ \
+    #                                                          ", try:" + str(attemptsCount) + \
+    #                                                          ", txPort:" + str(udpTxPort) +\
+    #                                                          ", icmpSrc:" + str(str(addr[0]))+\
+    #                                                          ", type:" + str(icmpHeader.type) +\
+    #                                                          ", code:" + str(icmpHeader.code) +\
+    #                                                          ", src:" + str(ipHeaderOfOriginalSender.s_addr) +\
+    #                                                          ", dst:" + str(ipHeaderOfOriginalSender.d_addr)+\
+    #                                                          ", ttlOnReceipt:" + str(ipHeaderOfOriginalSender.ttl))
+    #
+    #
+    #                                 # Test to see if this icmp packet is addressed to 'us'
+    #                                 # Detect TTL Expired messages (icmp type 11, code 0)
+    #                                 if icmpReplyMatcher(icmpHeader,ipHeaderOfOriginalSender, icmpType=11, icmpCode=0,\
+    #                                                                         srcAddress=self.SRC_IP_ADDR, srcTtl=1,\
+    #                                                                         destAddress=self.UDP_TX_IP):
+    #
+    #                                     # This is a TTL expired in transit message, for us - snapshot the address
+    #                                     icmpSrcAddr = __icmpSrcAddr
+    #                                     # Cause the outer 'attempts counter' loop to break
+    #                                     attemptsCount = noOfRetries
+    #                                     # Break out of this (the icmp receive) loop
+    #                                     break
+    #
+    #                                 # Detect Destination Host Port unreachable, destination reached
+    #                                 if icmpReplyMatcher(icmpHeader,ipHeaderOfOriginalSender, icmpType=3, icmpCode=3,\
+    #                                                                         srcAddress=self.SRC_IP_ADDR, srcTtl=1,
+    #                                                                         destAddress=self.UDP_TX_IP):
+    #
+    #                                     # This is a Destination Port Unreaschable address, destination reached
+    #                                     icmpSrcAddr = __icmpSrcAddr
+    #                                     # Cause the outer 'attempts counter' loop to break
+    #                                     attemptsCount = noOfRetries
+    #                                     # Cause the outer-outer hops counter loop to break
+    #                                     ttl = maxNoOfHops
+    #                                     # Break out of this (the icmp receive) loop
+    #                                     break
+    #
+    #                             except socket.timeout:
+    #                                 # print("socket timeout")
+    #                                 pass
+    #
+    #                             except Exception as e:
+    #                                 udpTx.close()
+    #                                 icmpRx.close()
+    #                                 raise ICMPRxError("ICMPRxError " + str(e))
+    #                         # Increment the attempts counter
+    #                         attemptsCount += 1
+    #                     # At the end of each attempts count per hop, append the address to the hops list
+    #                     # To remain comptibilty with the original traceroute, break the address into a list of octets
+    #
+    #                     ############# The 'result' (if there was a response) of the current hop is in var icmpSrcAddr.
+    #                     # Has icmpSrcAddr been populated with an address?
+    #                     if icmpSrcAddr is not None:
+    #                         # The upstream router responded
+    #                         # Reset the 'no response' counter
+    #                         noResponseCounter = 0
+    #                         # Utils.Message.addMessage("tracerouteLinux icmpSrcAddr " + str(icmpSrcAddr))
+    #                         # Query the WhoisResolver to find the owner of the domain
+    #                         Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
+    #                         # If so, break the address up into a list of octets - this is how they're stored in self._tracerouteHopsList
+    #                         icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
+    #                         hopsList.append([int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]), int(icmpSrcAddrOctets[2]),
+    #                                            int(icmpSrcAddrOctets[3])])
+    #                     else:
+    #                         # The upstream router didn't respond
+    #                         # Utils.Message.addMessage("no response. Setting hop " + str(ttl) + " to 0.0.0.0")
+    #                         # Increment the 'no response' counter
+    #                         noResponseCounter += 1
+    #                         # If there was no router response for this hop, add 0.0.0.0 as the hop address
+    #                         hopsList.append([0,0,0,0])
+    #                     # Check to see what was added
+    #                     Utils.Message.addMessage("ttl:" + str(ttl) + ":" + str(hopsList[-1]) + " added")
+    #
+    #                     ######## OS specific traceroute code ends here
+    #                     # Now check to see if we've received five 'no replies' in a row, if so, give up
+    #                     # Or else, if we've reached the max no of hops, give up
+    #                     if (noResponseCounter > maxNoOfNoResponse) or (ttl == maxNoOfHops):
+    #                         # print ("5 in a row, aborting")
+    #                         Utils.Message.addMessage(" " +str(noResponseCounter) + " None's in a row or hop limit reached. Aborting")
+    #                         # Cause the outer-outer hops counter loop to break
+    #                         ttl = maxNoOfHops
+    #                         # Break out of this (hops) loop
+    #                         break
+    #
+    #
+    #                 # Traceroute pass completed,Now strip off any trailing 0.0.0.0 (no responses)
+    #                 if len(hopsList) > 0:
+    #                     elementsToTrim = 0
+    #                     # Work backwards from the end of the list
+    #                     for x in range(len(hopsList) - 1, 0, -1):
+    #                         if hopsList[x] == [0, 0, 0, 0]:
+    #                             elementsToTrim += 1
+    #                         else:
+    #                             # Otherwise a non-0.0.0.0 address present, so break out of the loop
+    #                             break
+    #                     # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
+    #                     if elementsToTrim > 0:
+    #                         try:
+    #                             # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
+    #                             hopsList = hopsList[:(len(hopsList) - elementsToTrim)]
+    #                         except Exception as e:
+    #                             Utils.Message.addMessage(
+    #                                 "ERR:__tracerouteLinuxOSXThread() trim trailing 0.0.0.0s " + str(e))
+    #
+    #                 # Traceroute pass completed and hopslist trimmed. Now append to tracerouteResultsList for later validation
+    #                 # Add the latest traceroute result to tracerouteResultsList
+    #                 tracerouteResultsList.append(hopsList)
+    #
+    #             # Now compare the contents of the lists within tracerouteResultsList for equality
+    #             if len(tracerouteResultsList) > 0:
+    #                 listsAreEqual = False
+    #                 for n in range(1,len(tracerouteResultsList)):
+    #                     # compare lists n and n-1 for equality
+    #                     if tracerouteResultsList[n-1] == tracerouteResultsList[n]:
+    #                         # If equal, move onto the next pair
+    #                         listsAreEqual = True
+    #                     else:
+    #                         # If the lists aren't equal, set the flag and break out of the loop
+    #                         listsAreEqual = False
+    #                         break
+    #
+    #                 if listsAreEqual is True:
+    #                     # If the lists are all identical that means that n consecutive traceroutes gave the same result
+    #                     # so the traceroute has been validated
+    #                     # Check to see if the existing instance variable version of hopsList is different to
+    #                     # the latest validated traceroute hopslist. If it's different, update the instance variable version
+    #                     # Otherwise leave it alone. This should minimise the risk of access violations
+    #                     self.tracerouteHopsListMutex.acquire()
+    #                     self.tracerouteHopsList = hopsList
+    #                     self.tracerouteHopsListMutex.release()
+    #                     # Successful (replicated) traceroute has completed, so reset the mismatch counter
+    #                     tracerouteHopsListMismatchCounter = 0
+    #                     # Recalculate the checksum for the hopsList
+    #                     self.tracerouteChecksum = self.createTracerouteChecksum(hopsList)
+    #                     # # Dump successful hopslist to the log
+    #                     # hopsListAsString = ""
+    #                     # for x in hopsList:
+    #                     #     hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
+    #                     # Utils.Message.addMessage(
+    #                     #     "DBUG:Traceroute successful match: (" + str(len(hopsList)) + "), " + str(hopsListAsString))
+    #                 else:
+    #                     # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
+    #                     # Increment the mismatch counter
+    #                     tracerouteHopsListMismatchCounter += 1
+    #                     # # Dump attempt 1 to the log
+    #                     # hopsListAsString = ""
+    #                     # for x in tracerouteResultsList[0]:
+    #                     #     hopsListAsString += str(x[0])+"."+str(x[1])+"."+str(x[2])+"."+str(x[3])+","
+    #                     # Utils.Message.addMessage(
+    #                     #     "DBUG:Traceroute results discrepency (attempt 1). MismatchCounter: " + \
+    #                     #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
+    #                     # # Dump attempt 2 to the log
+    #                     # hopsListAsString = ""
+    #                     # for x in tracerouteResultsList[1]:
+    #                     #     hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
+    #                     # Utils.Message.addMessage(
+    #                     #     "DBUG:Traceroute results discrepency (attempt 2). MismatchCounter: " + \
+    #                     #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
+    #
+    #                     # Now test to see if we have exceeded the max no of allowed mismatches
+    #                     if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
+    #                         Utils.Message.addMessage(\
+    #                             "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
+    #                             ") Exceeded consecutive mismatch Threshold, clearing hopsList ")
+    #                         self.tracerouteHopsListMutex.acquire()
+    #                         self.tracerouteHopsList = []
+    #                         self.tracerouteHopsListMutex.release()
+    #                         # Clear the traceroute checksum
+    #                         self.tracerouteChecksum = 0
+    #
+    #             # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
+    #             # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
+    #             # So has to be updated manually here
+    #             try:
+    #                 # get the instance of the corresponding RtpStreamResults object
+    #                 rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+    #                 # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+    #                 rtpStreamResults.setTraceRouteHopsList(hopsList)
+    #
+    #             except Exception as e:
+    #                 # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
+    #                 pass
+    #
+    #             # Sleep for 1 sec between completed traceroutes
+    #             time.sleep(1)
+    #     except Exception as e:
+    #         Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread outer loop error. " + str(type(e)) + ", " + str(e))
+    #
+    #     finally:
+    #         try:
+    #             if socketsCreatedSuccesfullyFlag:
+    #                 # Thread is ending. Close sockets
+    #                 udpTx.close()
+    #                 icmpRx.close()
+    #         except Exception as e:
+    #             Utils.Message.addMessage(
+    #                 "ERR: __tracerouteLinuxOSXThread couldn't close sockets. " + str(type(e)) + ", " + str(e))
+    #
+    #     Utils.Message.addMessage("DBUG:__tracerouteLinuxOSXThread ending ")
 
-        # Creates and returns two seperate sockets, one for tx (udp) and one for rx (icmp)
-        # Returns a UDPTxSocketSetupError or ICMPRxSocketSetupError Exception
-        def createSockets(ipAddrofInterface):
-            # Set up udp transmit socket
-            try:
-                # Create UDP socket
-                udpTx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                udpTx.settimeout(timeOut)
-            except Exception as createSocketsError:
-                raise UDPTxSocketSetupError(str(createSocketsError))
-                # print("udpTxSocket socket setup error " + str(e))
-                # exit()
-
-            # Set up icmp receiving socket to receive ICMP
-            try:
-                # Create raw socket
-                icmpRx = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-                icmpRx.settimeout(timeOut)
-                # Bind to the ip address of the interface specified by ipAddrofInterface
-                icmpRx.bind((ipAddrofInterface, 0))
-            except Exception as createSocketsError:
-                raise ICMPRxSocketSetupError(str(createSocketsError))
-                # print("reply socket setup error " + str(e))
-                # exit()
-            # Return the rx and tx sockets
-            return udpTx, icmpRx
-
-        # Decodes the supplied icmp header (which should be 8 bytes long)
-        class ICMPHeader(object):
-            # Custom Exception to be raised if the supplied icmpHeader data can't be unpacked
-            class DecodeException(Exception):
-                pass
-            def __init__(self, icmp_header):
-                # Attempt to unpack the header
-                try:
-                    self.type, self.code, self.checksum, self.p_id, self.sequence = struct.unpack('bbHHh', icmp_header)
-                except Exception as e:
-                    raise ICMPHeader.DecodeException(str(e))
-
-        # Decodes the supplied IP header (which should be 20 bytes long)
-        class IPHeader(object):
-            # Custom Exception to be raised if the supplied IP header data can't be unpacked
-            class DecodeException(Exception):
-                pass
-            def __init__(self, ip_header):
-                # unpack header
-                try:
-                    iph = struct.unpack('!BBHHHBBH4s4s', ip_header)
-                    # First byte pf header contains version (bits 4-7) and i[ header length (bits 0-3)
-                    version_ihl = iph[0]
-                    self.version = version_ihl >> 4
-                    self.ipHeaderLength = version_ihl & 0xF
-                    self.ttl = iph[5]
-                    self.protocol = iph[6]
-                    self.s_addr = socket.inet_ntoa(iph[8])
-                    self.d_addr = socket.inet_ntoa(iph[9])
-                    # print('Version : ' + str(
-                    #     self.version) + ' IP Header Length : ' + str(
-                    #     self.ipHeaderLength) + ' TTL : ' + str(
-                    #     self.ttl) + ' Protocol : ' + str(
-                    #     self.protocol) + ' Source Address : ' + str(
-                    #     self.s_addr) + ' Destination Address : ' + str(self.d_addr))
-                except Exception as e:
-                    raise IPHeader.DecodeException(str(e))
-
-        # This function decodes the icmp Header and icmp payload (which should contain a copy of the header
-        # that caused the icmp reply to be generated).
-        # It expects an ICMPHeader and IPHeader object as arguments
-        # If the function can match the srcAddress, srcTtl, icmpType and icmpCode to that of the original sending
-        # message we can infer that this ICMP message is for us.
-        # Returns True if all the  optional parameters were matched, False if not, or None of there was an error
-        def icmpReplyMatcher(__icmpHeader, __ipHeaderOfSrc, srcAddress=None, destAddress=None, \
-                             srcTtl=None, icmpType=None, icmpCode=None):
-
-            # Test the fields within __icmpHeader and __ipHeaderOfSrc to see if they're what we're looking for
-            try:
-                if ((srcAddress == __ipHeaderOfSrc.s_addr) or (srcAddress is None)) and \
-                        ((destAddress == __ipHeaderOfSrc.d_addr) or (destAddress is None)) and \
-                        ((srcTtl == __ipHeaderOfSrc.ttl) or (srcTtl is None)) and \
-                          ((icmpType == __icmpHeader.type) or (icmpType is None)) and \
-                        ((icmpCode == __icmpHeader.code) or (icmpCode is None)):
-                    return True
-                else:
-                    return False
-            except:
-                return None
-
-
-        # Utility function to tidy up the main loop. Sends a UDP message, allowing IP Header TTL parameter to be set
-        def sendUDP(txSock, txTTL, payload, destIPAddr, destUDPPort):
-            try:
-                # Update socket with latest ttl value
-                txSock.setsockopt(socket.SOL_IP, socket.IP_TTL, txTTL)
-                # Send the UDP message
-                bytesSent = txSock.sendto(payload, (destIPAddr, destUDPPort))
-                return bytesSent
-            except Exception as e:
-                raise UDPTxError("UDPTxError " + str(e))
-
-        # Define a socket timeout value
-        timeOut = 0.1
-        # Define the number of times the traceroute will attempt to illicit a response from the router.
-        # This is becuse some routers will fail to respond due to rate limiting of requests.
-        # Note: Each subsquent attempt alternates between two possible ports
-        # The first attempt will be to use the destination port for the stream
-        # If that fails, a fallback port specified in the Registry will be used. Routers are more likely to respond
-        # on this other port (33434)
-        noOfRetries = 6
-        # Get the max no of hops before traceroute gives up
-        maxNoOfHops = Registry.tracerouteMaxHops
-        # Get the UDP 'fallback' port
-        fallbackPort = Registry.tracerouteFallbackUDPDestPort
-        # The no. of consecqutive 'no response from router' requests we'll tolerate before giving up
-        maxNoOfNoResponse = 5
-        # Counts the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
-        noResponseCounter = 0
-        # Flag to signal that the tx udp and icmp rx flags were created successfully
-        socketsCreatedSuccesfullyFlag = False
-
-        Utils.Message.addMessage("DBUG:__tracerouteLinuxOSXThread starting for stream " + str(self.syncSourceIdentifier))
-        try:
-            # Create tx (udp) and rx (icmp) sockets, specifying the ip address we will be transmitting from
-            udpTx, icmpRx = createSockets(self.SRC_IP_ADDR)
-            # Set the 'sockets okay' flag so that the main while loop will start
-            socketsCreatedSuccesfullyFlag = True
-        except Exception as e:
-            Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread.createSockets() " + str(e))
-            Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
-            # If a UI instance (user interface) reference was supplied, display an error message on the UI
-            maxWidth = 60
-            errorText = "Insufficient rights to enable traceroute functionality.".center(maxWidth) + \
-                        "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) + \
-                        "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
-                        "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
-                        "\n\n" + "<Press any key to continue>".center(maxWidth)
-            if self.uiInstance is not None:
-                try:
-                    self.uiInstance.showErrorDialogue("Traceroute error", errorText)
-                except Exception as e:
-                    Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
-                                             str(e))
-
-        tracerouteHopsListMustMatchThreshold = 2
-        # Additionally, it's possible a mismatch would occur if a hop flapped to/from zero. This is likely to be quite a
-        # frequent occurance. And, given the length of time it takes a traceroute to complete, we don't necessarily want
-        # to write-off the results we have
-        tracerouteHopsListMismatchCounterThreshold = 5 # No of consecutive failures before clearing the hopsList
-        tracerouteHopsListMismatchCounter = 0 # Counts the no of consecutive failures
-        try:
-            # Perform the traceroute in an infinite loop as long as the transmit stream is alive
-            # The traceroute is performed n times. Only when the same route has been confirmed will the
-            # tracerouteHopsList be updated. This is to guard against situations where the route changes mid-traceroute
-            while self.timeToLive != 0 and socketsCreatedSuccesfullyFlag:
-                # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
-                # consecqutive identical lists have been determined can we say that we have a 'stable' route
-                # Create empty list to put the results of each traceroute attempt into
-                tracerouteResultsList = []
-                for tracerouteAttempt in range (0,tracerouteHopsListMustMatchThreshold):
-                    # Utils.Message.addMessage("traceroute attempt " + str(tracerouteAttempt))
-                    # This is the main outer traceroute loop and counts the hops
-                    # Set initial ttl
-                    ttl = 0
-                    # This list will be populated with the results of the traceroute
-                    hopsList = []
-                    noResponseCounter = 0
-                    # Utils.Message.addMessage("Starting traceroute....ttl = 1")
-                    while ttl < maxNoOfHops and self.timeToLive != 0:
-                        attemptsCount = 1
-                        ttl += 1
-                        # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
-                        icmpSrcAddr = None
-                        # print("hop counter starting: ttl: " + str(ttl))
-                        # This loop counts the attempts for each hop
-                        while (attemptsCount < noOfRetries) and self.timeToLive != 0:
-                            # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
-                            # Send UDP packet
-                            ######## OS specific traceroute code starts here ########
-                            # determine which destination port we should be using (based on the no of attempts so far)
-
-                            if attemptsCount % 2 == 1:
-                                udpTxPort = self.UDP_TX_PORT
-                            else:
-                                udpTxPort = fallbackPort
-                            try:
-                                sendUDP(udpTx, ttl, b'isptest', self.UDP_TX_IP, udpTxPort)
-                            except Exception as e:
-                                Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread.sendUDP() . Aborting" + str(e))
-                            # Increment the attempts counter
-                            # attemptsCount += 1
-
-                            # Receive ICMP packet(s)
-                            # This loop waits to receive icmp packets
-                            # It's possible we might receive icmp packets not destined for us. Therfore we can't just accept
-                            # the first icmp packet we receive. We have to examine its contents
-                            # Either a socket.timeout, an elapsedTime timeout or a icmpReplyMatcher=True will cause this while
-                            # loop to break
-
-                            # Create elapsed timer
-                            startTime = timer()
-                            # print("Receive loop started....: ")
-                            while True:
-                                # Infinite loop to receive all icmp packets
-                                # Break out of loop:
-                                #   If timeOut period has been exceeded
-                                #   if socket timeout exception raised
-                                #   If matcher matches an icmp reply
-                                elapsedTime = timer() - startTime
-                                if elapsedTime > (timeOut * 2) or self.timeToLive == 0:
-                                    # Utils.Message.addMessage("ttl:" + str(ttl) +\
-                                    #                          ", try:" + str(attemptsCount) +\
-                                    #                          ", elapsedTimer exceeded " + str(round(elapsedTime,1)) + "/" + str(timeOut * 2))
-                                    break
-                                try:
-                                    # Receive from socket
-                                    data, addr = icmpRx.recvfrom(5012)
-                                    # Snapshot the source address (of the received icmp packet)
-                                    __icmpSrcAddr = addr[0]
-                                    # Create ICMPHeader object from the received data. This will unpack and decode the fields
-                                    # The IP Header is contained within the first 20 bytes
-                                    # The ICMP Message Header is contained within the next 8 bytes
-                                    # The data after that is copy of the entire IPv4 header (20 bytes)
-                                    # ipHeaderOfReply = IPHeader(data[0:20])
-                                    # Decode the ICMP header
-                                    icmpHeader = ICMPHeader(data[20:28])
-                                    # Decode the ICMP payload, which contains a copy of the IP header originally sent
-                                    # From this we can verify that the TTL and source IP address were the same as that sent
-                                    # Therefore we can infer that this particular ICMP message is our reply, otherwise we discard the
-                                    # message and listen again (within the timeout period)
-                                    ipHeaderOfOriginalSender = IPHeader(data[28:48])
-
-
-                                    Utils.Message.addMessage("txTTL:" + str(ttl)+ \
-                                                             ", try:" + str(attemptsCount) + \
-                                                             ", txPort:" + str(udpTxPort) +\
-                                                             ", icmpSrc:" + str(str(addr[0]))+\
-                                                             ", type:" + str(icmpHeader.type) +\
-                                                             ", code:" + str(icmpHeader.code) +\
-                                                             ", src:" + str(ipHeaderOfOriginalSender.s_addr) +\
-                                                             ", dst:" + str(ipHeaderOfOriginalSender.d_addr)+\
-                                                             ", ttlOnReceipt:" + str(ipHeaderOfOriginalSender.ttl))
-
-
-                                    # Test to see if this icmp packet is addressed to 'us'
-                                    # Detect TTL Expired messages (icmp type 11, code 0)
-                                    if icmpReplyMatcher(icmpHeader,ipHeaderOfOriginalSender, icmpType=11, icmpCode=0,\
-                                                                            srcAddress=self.SRC_IP_ADDR, srcTtl=1,\
-                                                                            destAddress=self.UDP_TX_IP):
-
-                                        # This is a TTL expired in transit message, for us - snapshot the address
-                                        icmpSrcAddr = __icmpSrcAddr
-                                        # Cause the outer 'attempts counter' loop to break
-                                        attemptsCount = noOfRetries
-                                        # Break out of this (the icmp receive) loop
-                                        break
-
-                                    # Detect Destination Host Port unreachable, destination reached
-                                    if icmpReplyMatcher(icmpHeader,ipHeaderOfOriginalSender, icmpType=3, icmpCode=3,\
-                                                                            srcAddress=self.SRC_IP_ADDR, srcTtl=1,
-                                                                            destAddress=self.UDP_TX_IP):
-
-                                        # This is a Destination Port Unreaschable address, destination reached
-                                        icmpSrcAddr = __icmpSrcAddr
-                                        # Cause the outer 'attempts counter' loop to break
-                                        attemptsCount = noOfRetries
-                                        # Cause the outer-outer hops counter loop to break
-                                        ttl = maxNoOfHops
-                                        # Break out of this (the icmp receive) loop
-                                        break
-
-                                except socket.timeout:
-                                    # print("socket timeout")
-                                    pass
-
-                                except Exception as e:
-                                    udpTx.close()
-                                    icmpRx.close()
-                                    raise ICMPRxError("ICMPRxError " + str(e))
-                            # Increment the attempts counter
-                            attemptsCount += 1
-                        # At the end of each attempts count per hop, append the address to the hops list
-                        # To remain comptibilty with the original traceroute, break the address into a list of octets
-
-                        ############# The 'result' (if there was a response) of the current hop is in var icmpSrcAddr.
-                        # Has icmpSrcAddr been populated with an address?
-                        if icmpSrcAddr is not None:
-                            # The upstream router responded
-                            # Reset the 'no response' counter
-                            noResponseCounter = 0
-                            # Utils.Message.addMessage("tracerouteLinux icmpSrcAddr " + str(icmpSrcAddr))
-                            # Query the WhoisResolver to find the owner of the domain
-                            Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
-                            # If so, break the address up into a list of octets - this is how they're stored in self._tracerouteHopsList
-                            icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
-                            hopsList.append([int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]), int(icmpSrcAddrOctets[2]),
-                                               int(icmpSrcAddrOctets[3])])
-                        else:
-                            # The upstream router didn't respond
-                            # Utils.Message.addMessage("no response. Setting hop " + str(ttl) + " to 0.0.0.0")
-                            # Increment the 'no response' counter
-                            noResponseCounter += 1
-                            # If there was no router response for this hop, add 0.0.0.0 as the hop address
-                            hopsList.append([0,0,0,0])
-                        # Check to see what was added
-                        Utils.Message.addMessage("ttl:" + str(ttl) + ":" + str(hopsList[-1]) + " added")
-
-                        ######## OS specific traceroute code ends here
-                        # Now check to see if we've received five 'no replies' in a row, if so, give up
-                        # Or else, if we've reached the max no of hops, give up
-                        if (noResponseCounter > maxNoOfNoResponse) or (ttl == maxNoOfHops):
-                            # print ("5 in a row, aborting")
-                            Utils.Message.addMessage(" " +str(noResponseCounter) + " None's in a row or hop limit reached. Aborting")
-                            # Cause the outer-outer hops counter loop to break
-                            ttl = maxNoOfHops
-                            # Break out of this (hops) loop
-                            break
-
-
-                    # Traceroute pass completed,Now strip off any trailing 0.0.0.0 (no responses)
-                    if len(hopsList) > 0:
-                        elementsToTrim = 0
-                        # Work backwards from the end of the list
-                        for x in range(len(hopsList) - 1, 0, -1):
-                            if hopsList[x] == [0, 0, 0, 0]:
-                                elementsToTrim += 1
-                            else:
-                                # Otherwise a non-0.0.0.0 address present, so break out of the loop
-                                break
-                        # Now actually trim the redundant trailing 0.0.0.0's from the tracerouteHopsList list
-                        if elementsToTrim > 0:
-                            try:
-                                # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
-                                hopsList = hopsList[:(len(hopsList) - elementsToTrim)]
-                            except Exception as e:
-                                Utils.Message.addMessage(
-                                    "ERR:__tracerouteLinuxOSXThread() trim trailing 0.0.0.0s " + str(e))
-
-                    # Traceroute pass completed and hopslist trimmed. Now append to tracerouteResultsList for later validation
-                    # Add the latest traceroute result to tracerouteResultsList
-                    tracerouteResultsList.append(hopsList)
-
-                # Now compare the contents of the lists within tracerouteResultsList for equality
-                if len(tracerouteResultsList) > 0:
-                    listsAreEqual = False
-                    for n in range(1,len(tracerouteResultsList)):
-                        # compare lists n and n-1 for equality
-                        if tracerouteResultsList[n-1] == tracerouteResultsList[n]:
-                            # If equal, move onto the next pair
-                            listsAreEqual = True
-                        else:
-                            # If the lists aren't equal, set the flag and break out of the loop
-                            listsAreEqual = False
-                            break
-
-                    if listsAreEqual is True:
-                        # If the lists are all identical that means that n consecutive traceroutes gave the same result
-                        # so the traceroute has been validated
-                        # Check to see if the existing instance variable version of hopsList is different to
-                        # the latest validated traceroute hopslist. If it's different, update the instance variable version
-                        # Otherwise leave it alone. This should minimise the risk of access violations
-                        self.tracerouteHopsListMutex.acquire()
-                        self.tracerouteHopsList = hopsList
-                        self.tracerouteHopsListMutex.release()
-                        # Successful (replicated) traceroute has completed, so reset the mismatch counter
-                        tracerouteHopsListMismatchCounter = 0
-                        # Recalculate the checksum for the hopsList
-                        self.tracerouteChecksum = self.createTracerouteChecksum(hopsList)
-                        # # Dump successful hopslist to the log
-                        # hopsListAsString = ""
-                        # for x in hopsList:
-                        #     hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
-                        # Utils.Message.addMessage(
-                        #     "DBUG:Traceroute successful match: (" + str(len(hopsList)) + "), " + str(hopsListAsString))
-                    else:
-                        # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
-                        # Increment the mismatch counter
-                        tracerouteHopsListMismatchCounter += 1
-                        # # Dump attempt 1 to the log
-                        # hopsListAsString = ""
-                        # for x in tracerouteResultsList[0]:
-                        #     hopsListAsString += str(x[0])+"."+str(x[1])+"."+str(x[2])+"."+str(x[3])+","
-                        # Utils.Message.addMessage(
-                        #     "DBUG:Traceroute results discrepency (attempt 1). MismatchCounter: " + \
-                        #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
-                        # # Dump attempt 2 to the log
-                        # hopsListAsString = ""
-                        # for x in tracerouteResultsList[1]:
-                        #     hopsListAsString += str(x[0]) + "." + str(x[1]) + "." + str(x[2]) + "." + str(x[3]) + ","
-                        # Utils.Message.addMessage(
-                        #     "DBUG:Traceroute results discrepency (attempt 2). MismatchCounter: " + \
-                        #     str(tracerouteHopsListMismatchCounter) + ", " + str(hopsListAsString))
-
-                        # Now test to see if we have exceeded the max no of allowed mismatches
-                        if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
-                            Utils.Message.addMessage(\
-                                "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
-                                ") Exceeded consecutive mismatch Threshold, clearing hopsList ")
-                            self.tracerouteHopsListMutex.acquire()
-                            self.tracerouteHopsList = []
-                            self.tracerouteHopsListMutex.release()
-                            # Clear the traceroute checksum
-                            self.tracerouteChecksum = 0
-
-                # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
-                # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
-                # So has to be updated manually here
-                try:
-                    # get the instance of the corresponding RtpStreamResults object
-                    rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                    # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
-                    rtpStreamResults.setTraceRouteHopsList(hopsList)
-
-                except Exception as e:
-                    # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
-                    pass
-
-                # Sleep for 1 sec between completed traceroutes
-                time.sleep(1)
-        except Exception as e:
-            Utils.Message.addMessage("ERR: __tracerouteLinuxOSXThread outer loop error. " + str(type(e)) + ", " + str(e))
-
-        finally:
-            try:
-                if socketsCreatedSuccesfullyFlag:
-                    # Thread is ending. Close sockets
-                    udpTx.close()
-                    icmpRx.close()
-            except Exception as e:
-                Utils.Message.addMessage(
-                    "ERR: __tracerouteLinuxOSXThread couldn't close sockets. " + str(type(e)) + ", " + str(e))
-
-        Utils.Message.addMessage("DBUG:__tracerouteLinuxOSXThread ending ")
-
-    # This is a rewrite of the original __tracerouteThreadScapyWindows using Scapy to send/receive packets still, but
-    # based on the logic/mechanics of __tracerouteLinuxOSXThread (which was my own design)
-    def __tracerouteThreadScapyWindowsRewrite(self):
-        # Define a socket timeout value
-        timeOut = 0.5
-        # Define the number of times the traceroute will attempt to illicit a response from the router.
-        # This is becuse some routers will fail to respond due to rate limiting of requests.
-        # Note: Each subsquent attempt alternates between two possible ports
-        # The first attempt will be to use the destination port for the stream
-        # If that fails, a fallback port specified in the Registry will be used. Routers are more likely to respond
-        # on this other port (33434)
-        noOfRetries = 4
-        # Get the max no of hops before traceroute gives up
-        maxNoOfHops = Registry.tracerouteMaxHops
-        # Get the UDP 'fallback' port
-        fallbackPort = Registry.tracerouteFallbackUDPDestPort
-        # The no. of consecqutive 'no response from router' requests we'll tolerate before giving up
-        maxNoOfNoResponse = 5
-        # Counts the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
-        noResponseCounter = 0
-
-        Utils.Message.addMessage(\
-            "DBUG:__tracerouteThreadScapyWindowsRewrite starting for stream " + str(self.syncSourceIdentifier))
-        # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
-        # consecqutive identical lists have been determined can we say that we have a static route
-        tracerouteHopsListMustMatchThreshold = 2
-        try:
-            # Perform the traceroute in an infinite loop as long as the transmit stream is alive
-            while self.timeToLive != 0:
-                # Create empty list to put the results of each traceroute attempt into
-                tracerouteResultsList = []
-
-                for tracerouteAttempt in range(0, tracerouteHopsListMustMatchThreshold):
-                    # This is the main outer traceroute loop and counts the hops
-                    # Set initial ttl
-                    ttl = 0
-                    # This list will be populated with the results of the traceroute
-                    hopsList = []
-                    # Utils.Message.addMessage("Starting traceroute....ttl = 1")
-                    while ttl < maxNoOfHops and self.timeToLive != 0:
-                        attemptsCount = 1
-                        ttl += 1
-                        # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
-                        icmpSrcAddr = None
-                        # Utils.Message.addMessage("hop counter starting: ttl: " + str(ttl))
-                        # This loop counts the attempts for each hop
-                        while (attemptsCount < noOfRetries) and self.timeToLive != 0:
-                            # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
-                            # Send UDP packet
-                            ######## OS specific traceroute code starts here
-                            # determine which destination port we should be using (based on the no of attempts so far)
-                            # and create a packet accordingly
-                            if attemptsCount % 2 == 1:
-                                pkt = IP(dst=self.UDP_TX_IP, ttl=ttl) / UDP(dport=self.UDP_TX_PORT)
-                            else:
-                                pkt = IP(dst=self.UDP_TX_IP, ttl=ttl) / UDP(dport=fallbackPort)
-
-                            # Now send the packet and wait for a reply
-                            reply = sr1(pkt, verbose=0, timeout=timeOut)
-
-                            # Increment the attempts counter
-                            attemptsCount += 1
-                            # Test the reply (should be an ICMP message, or None if the router doesn't respond)
-                            if reply is not None:
-                                # Utils.Message.addMessage("Message reply type " + str(reply.type))
-                                # Detect TTL Expired messages (icmp type 11, code 0)
-                                if reply.type == 11:
-                                    # This is a TTL expired in transit message, for us - snapshot the address
-                                    icmpSrcAddr = reply.src
-                                # Detect Destination Host Port unreachable, destination reached
-                                if reply.type == 3 or reply.src == self.UDP_TX_IP:
-                                    icmpSrcAddr = reply.src
-                                    # Cause the outer-outer hops counter loop to break. The traceroute is complete
-                                    ttl = maxNoOfHops
-                                # Reset the 'no response' counter
-                                noResponseCounter = 0
-                                # We have a reply for this hop, so break out of the attempts loop
-                                # This will cause the ttl to increment (to the next hop value)
-                                break
-
-                        ############# The 'result' (if there was a response) of the current hop is in var icmpSrcAddr.
-                        # Has icmpSrcAddr been populated with an address?
-                        if icmpSrcAddr is not None:
-                            # It has - the upstream router did respond
-                            # Query the WhoisResolver to find the owner of the domain
-                            Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
-                            # If so, break the address up into a list of octets - this is how they're stored in self.tracerouteHopsList
-                            icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
-                            hopsList.append(
-                                [int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]), int(icmpSrcAddrOctets[2]),
-                                 int(icmpSrcAddrOctets[3])])
-                        else:
-                            # icmpSrcAddr has not been overwritten with an address so the upstream did not respond
-                            # Increment the 'no response' counter
-                            noResponseCounter += 1
-                            # As there was no router response for this hop, add 0.0.0.0 as the hop address
-                            hopsList.append([0, 0, 0, 0])
-                        ######## OS specific traceroute code ends here
-
-                        # Now check to see if we've received five 'no replies' in a row, if so, give up
-                        # Or else, if we've reached the max no of hops, give up
-                        if (noResponseCounter > maxNoOfNoResponse) or (ttl == maxNoOfHops):
-                            # print ("5 in a row, aborting")
-                            # Utils.Message.addMessage(str(noResponseCounter) + " None's in a row or hop limit reached. Aborting")
-                            # Cause the outer-outer hops counter loop to break
-                            ttl = maxNoOfHops
-                            # Break out of this (hops) loop
-                            break
-                    # Traceroute pass completed, now append to tracerouteResultsList for later validation
-                    # Add the latest traceroute result to tracerouteResultsList
-                    tracerouteResultsList.append(hopsList)
-
-
-
-                # Now compare the contents of the lists within tracerouteResultsList for equality
-                if len(tracerouteResultsList) > 0:
-                    listsAreEqual = False
-                    for n in range(1,len(tracerouteResultsList)):
-                        # compare lists n and n-1 for equality
-                        if tracerouteResultsList[n-1] == tracerouteResultsList[n]:
-                            # If equal, move onto the next pair
-                            listsAreEqual = True
-                        else:
-                            # If the lists aren't equal, set the flag and break out of the loop
-                            listsAreEqual = False
-                            break
-                    if listsAreEqual is True:
-                        # If the lists are all identical that means that n consecqutive traceroutes gave the same result
-                        # so the traceroute has been validated
-                        # copy the new tracerouteHopsList back into the instance variable version
-                        # Utils.Message.addMessage("traceroute results are identical, updating tracerouteHopsList")
-                        self.tracerouteHopsListMutex.acquire()
-                        self.tracerouteHopsList = hopsList
-                        self.tracerouteHopsListMutex.release()
-                    else:
-                        # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
-                        # Empty the tracerouteHopsList - it can't now be trusted
-                        Utils.Message.addMessage("DBUG:Traceroute results discrepency. emptying tracerouteHopsList ")
-                        self.tracerouteHopsListMutex.acquire()
-                        self.tracerouteHopsList = []
-                        self.tracerouteHopsListMutex.release()
-
-
-                # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
-                # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
-                # So has to be updated manually here
-                try:
-                    # get the instance of the corresponding RtpStreamResults object
-                    rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                    # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
-                    rtpStreamResults.setTraceRouteHopsList(hopsList)
-
-                except Exception as e:
-                    # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThreadScapyWindowsRewrite() update RtpStreamResults tracerouteHopList " + str(e))
-                    pass
-
-                # Sleep for 2 sec between completed traceroutes
-                time.sleep(2)
-
-
-        except Exception as e:
-            # If the traceroute routine fails, this is mostly because the program was started without admin rights
-            # Put up an error message on screen to warn the user
-            Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThreadScapyWindows.sr1() " + str(e))
-            Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
-            # If a UI instance (user interface) reference was supplied, display an error message on the UI
-            maxWidth = 60
-            errorText = "Insufficient rights to enable traceroute functionality.".center(maxWidth) + \
-                        "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) + \
-                        "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
-                        "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
-                        "\n\n" + "<Press any key to continue>".center(maxWidth)
-            if self.uiInstance is not None:
-                try:
-                    self.uiInstance.showErrorDialogue("Traceroute error", errorText)
-                except Exception as e:
-                    Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThreadScapyWindows: display error message on UI " + \
-                                             str(e))
-        Utils.Message.addMessage("DBUG:__tracerouteThreadScapyWindows ending for stream " + str(self.syncSourceIdentifier))
+    # # This is a rewrite of the original __tracerouteThreadScapyWindows using Scapy to send/receive packets still, but
+    # # based on the logic/mechanics of __tracerouteLinuxOSXThread (which was my own design)
+    # def __tracerouteThreadScapyWindowsRewrite(self):
+    #     # Define a socket timeout value
+    #     timeOut = 0.5
+    #     # Define the number of times the traceroute will attempt to illicit a response from the router.
+    #     # This is becuse some routers will fail to respond due to rate limiting of requests.
+    #     # Note: Each subsquent attempt alternates between two possible ports
+    #     # The first attempt will be to use the destination port for the stream
+    #     # If that fails, a fallback port specified in the Registry will be used. Routers are more likely to respond
+    #     # on this other port (33434)
+    #     noOfRetries = 4
+    #     # Get the max no of hops before traceroute gives up
+    #     maxNoOfHops = Registry.tracerouteMaxHops
+    #     # Get the UDP 'fallback' port
+    #     fallbackPort = Registry.tracerouteFallbackUDPDestPort
+    #     # The no. of consecqutive 'no response from router' requests we'll tolerate before giving up
+    #     maxNoOfNoResponse = 5
+    #     # Counts the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
+    #     noResponseCounter = 0
+    #
+    #     Utils.Message.addMessage(\
+    #         "DBUG:__tracerouteThreadScapyWindowsRewrite starting for stream " + str(self.syncSourceIdentifier))
+    #     # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
+    #     # consecqutive identical lists have been determined can we say that we have a static route
+    #     tracerouteHopsListMustMatchThreshold = 2
+    #     try:
+    #         # Perform the traceroute in an infinite loop as long as the transmit stream is alive
+    #         while self.timeToLive != 0:
+    #             # Create empty list to put the results of each traceroute attempt into
+    #             tracerouteResultsList = []
+    #
+    #             for tracerouteAttempt in range(0, tracerouteHopsListMustMatchThreshold):
+    #                 # This is the main outer traceroute loop and counts the hops
+    #                 # Set initial ttl
+    #                 ttl = 0
+    #                 # This list will be populated with the results of the traceroute
+    #                 hopsList = []
+    #                 # Utils.Message.addMessage("Starting traceroute....ttl = 1")
+    #                 while ttl < maxNoOfHops and self.timeToLive != 0:
+    #                     attemptsCount = 1
+    #                     ttl += 1
+    #                     # Initialise hop addr. This will be overwritten if an ICMP reply is received for this hop
+    #                     icmpSrcAddr = None
+    #                     # Utils.Message.addMessage("hop counter starting: ttl: " + str(ttl))
+    #                     # This loop counts the attempts for each hop
+    #                     while (attemptsCount < noOfRetries) and self.timeToLive != 0:
+    #                         # print ("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(attemptsCount))
+    #                         # Send UDP packet
+    #                         ######## OS specific traceroute code starts here
+    #                         # determine which destination port we should be using (based on the no of attempts so far)
+    #                         # and create a packet accordingly
+    #                         if attemptsCount % 2 == 1:
+    #                             pkt = IP(dst=self.UDP_TX_IP, ttl=ttl) / UDP(dport=self.UDP_TX_PORT)
+    #                         else:
+    #                             pkt = IP(dst=self.UDP_TX_IP, ttl=ttl) / UDP(dport=fallbackPort)
+    #
+    #                         # Now send the packet and wait for a reply
+    #                         reply = sr1(pkt, verbose=0, timeout=timeOut)
+    #
+    #                         # Increment the attempts counter
+    #                         attemptsCount += 1
+    #                         # Test the reply (should be an ICMP message, or None if the router doesn't respond)
+    #                         if reply is not None:
+    #                             # Utils.Message.addMessage("Message reply type " + str(reply.type))
+    #                             # Detect TTL Expired messages (icmp type 11, code 0)
+    #                             if reply.type == 11:
+    #                                 # This is a TTL expired in transit message, for us - snapshot the address
+    #                                 icmpSrcAddr = reply.src
+    #                             # Detect Destination Host Port unreachable, destination reached
+    #                             if reply.type == 3 or reply.src == self.UDP_TX_IP:
+    #                                 icmpSrcAddr = reply.src
+    #                                 # Cause the outer-outer hops counter loop to break. The traceroute is complete
+    #                                 ttl = maxNoOfHops
+    #                             # Reset the 'no response' counter
+    #                             noResponseCounter = 0
+    #                             # We have a reply for this hop, so break out of the attempts loop
+    #                             # This will cause the ttl to increment (to the next hop value)
+    #                             break
+    #
+    #                     ############# The 'result' (if there was a response) of the current hop is in var icmpSrcAddr.
+    #                     # Has icmpSrcAddr been populated with an address?
+    #                     if icmpSrcAddr is not None:
+    #                         # It has - the upstream router did respond
+    #                         # Query the WhoisResolver to find the owner of the domain
+    #                         Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
+    #                         # If so, break the address up into a list of octets - this is how they're stored in self.tracerouteHopsList
+    #                         icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
+    #                         hopsList.append(
+    #                             [int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]), int(icmpSrcAddrOctets[2]),
+    #                              int(icmpSrcAddrOctets[3])])
+    #                     else:
+    #                         # icmpSrcAddr has not been overwritten with an address so the upstream did not respond
+    #                         # Increment the 'no response' counter
+    #                         noResponseCounter += 1
+    #                         # As there was no router response for this hop, add 0.0.0.0 as the hop address
+    #                         hopsList.append([0, 0, 0, 0])
+    #                     ######## OS specific traceroute code ends here
+    #
+    #                     # Now check to see if we've received five 'no replies' in a row, if so, give up
+    #                     # Or else, if we've reached the max no of hops, give up
+    #                     if (noResponseCounter > maxNoOfNoResponse) or (ttl == maxNoOfHops):
+    #                         # print ("5 in a row, aborting")
+    #                         # Utils.Message.addMessage(str(noResponseCounter) + " None's in a row or hop limit reached. Aborting")
+    #                         # Cause the outer-outer hops counter loop to break
+    #                         ttl = maxNoOfHops
+    #                         # Break out of this (hops) loop
+    #                         break
+    #                 # Traceroute pass completed, now append to tracerouteResultsList for later validation
+    #                 # Add the latest traceroute result to tracerouteResultsList
+    #                 tracerouteResultsList.append(hopsList)
+    #
+    #
+    #
+    #             # Now compare the contents of the lists within tracerouteResultsList for equality
+    #             if len(tracerouteResultsList) > 0:
+    #                 listsAreEqual = False
+    #                 for n in range(1,len(tracerouteResultsList)):
+    #                     # compare lists n and n-1 for equality
+    #                     if tracerouteResultsList[n-1] == tracerouteResultsList[n]:
+    #                         # If equal, move onto the next pair
+    #                         listsAreEqual = True
+    #                     else:
+    #                         # If the lists aren't equal, set the flag and break out of the loop
+    #                         listsAreEqual = False
+    #                         break
+    #                 if listsAreEqual is True:
+    #                     # If the lists are all identical that means that n consecqutive traceroutes gave the same result
+    #                     # so the traceroute has been validated
+    #                     # copy the new tracerouteHopsList back into the instance variable version
+    #                     # Utils.Message.addMessage("traceroute results are identical, updating tracerouteHopsList")
+    #                     self.tracerouteHopsListMutex.acquire()
+    #                     self.tracerouteHopsList = hopsList
+    #                     self.tracerouteHopsListMutex.release()
+    #                 else:
+    #                     # Consequtive traceroutes were not identical. Perhaps the route changed, mid-traceroute?
+    #                     # Empty the tracerouteHopsList - it can't now be trusted
+    #                     Utils.Message.addMessage("DBUG:Traceroute results discrepency. emptying tracerouteHopsList ")
+    #                     self.tracerouteHopsListMutex.acquire()
+    #                     self.tracerouteHopsList = []
+    #                     self.tracerouteHopsListMutex.release()
+    #
+    #
+    #             # Now update the tracerouteHops list in the corresponding RtpStreamResults object (if it exists)
+    #             # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
+    #             # So has to be updated manually here
+    #             try:
+    #                 # get the instance of the corresponding RtpStreamResults object
+    #                 rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+    #                 # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+    #                 rtpStreamResults.setTraceRouteHopsList(hopsList)
+    #
+    #             except Exception as e:
+    #                 # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThreadScapyWindowsRewrite() update RtpStreamResults tracerouteHopList " + str(e))
+    #                 pass
+    #
+    #             # Sleep for 2 sec between completed traceroutes
+    #             time.sleep(2)
+    #
+    #
+    #     except Exception as e:
+    #         # If the traceroute routine fails, this is mostly because the program was started without admin rights
+    #         # Put up an error message on screen to warn the user
+    #         Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThreadScapyWindows.sr1() " + str(e))
+    #         Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
+    #         # If a UI instance (user interface) reference was supplied, display an error message on the UI
+    #         maxWidth = 60
+    #         errorText = "Insufficient rights to enable traceroute functionality.".center(maxWidth) + \
+    #                     "\n\n" + "isptest TRANSMITTER will continue to run, but without traceroute.".center(maxWidth) + \
+    #                     "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
+    #                     "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
+    #                     "\n\n" + "<Press any key to continue>".center(maxWidth)
+    #         if self.uiInstance is not None:
+    #             try:
+    #                 self.uiInstance.showErrorDialogue("Traceroute error", errorText)
+    #             except Exception as e:
+    #                 Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThreadScapyWindows: display error message on UI " + \
+    #                                          str(e))
+    #     Utils.Message.addMessage("DBUG:__tracerouteThreadScapyWindows ending for stream " + str(self.syncSourceIdentifier))
 
     def __tracerouteThread(self):
     # def __tracerouteLinuxOSXThread(self, ipAddrofSendingInterface, destHost, destPort, fallbackPort=33434,
@@ -5433,7 +5416,7 @@ class RtpGenerator(RtpCommon):
             # Send the UDP message (with a custom ttl and id_field value)
             try:
                 # sendUDP(_udpSocket, _ttl, b'isptest',  _destAddr, _destPort)
-                sendUDP(_udpSocket, _ttl, b'isptest',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
+                sendUDP(_udpSocket, _ttl, b'tracert',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
 
             except Exception as e:
                 raise UDPTxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.sendUDP " + str(e))
@@ -5560,7 +5543,7 @@ class RtpGenerator(RtpCommon):
                                  _srcPort=1515, _id_field=0):
             try:
                 # Create a packet template 'craft a Scapy packet'
-                payload = b'isptest'
+                payload = b'tracert'
                 # NOTE: Source port is specified as 1
                 pkt = IP(dst=_destAddr, ttl=_ttl, id=_id_field) / UDP(dport=_destPort) / Raw(
                     load=payload)
