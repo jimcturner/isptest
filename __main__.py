@@ -2768,7 +2768,8 @@ class UI(object):
                 value = str(math.ceil(value)) + "uS"
             return value
 
-        if key == 'Time to live' or key == 'stream_transmitter_TimeToLive_sec':
+        # TX Streams 'time remain' field
+        if key == 'Time to live':
             # If this is am endless stream (created with a negative time to live)
             if value < 0:
                 value = "forever"
@@ -2777,6 +2778,20 @@ class UI(object):
             else:
                 value = datetime.timedelta(seconds=value)
             return value
+
+        # Transmitter pane on Receiver
+        # The time remain messages are sent very slowly so if the time remaining is < 5 seconds, just write 'Expired'
+        if key == 'stream_transmitter_TimeToLive_sec':
+            # If this is am endless stream (created with a negative time to live)
+            if value < 0:
+                value = "forever"
+            elif value < 5:
+                value = "Expired"
+            else:
+                value = datetime.timedelta(seconds=value)
+            return value
+
+
 
         if key == "stream_srcAddress" or key == "stream_rxAddress" or key == 'Dest IP':
             # Should pad ip addresses to the max no of characters aaa.bbb.ccc.ddd
