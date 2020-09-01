@@ -4440,7 +4440,8 @@ class RtpGenerator(RtpCommon):
                 if rtpGeneratorInstance.timeToLive == 1:
                     time.sleep(1)
                     # Send keepalive packet here
-                    keepAliveString = b'keepAlive' + str(rtpGeneratorInstance.syncSourceIdentifier).encode('ascii')
+                    keepAliveString = b'keepAlive' + str(datetime.datetime.now().strftime("%S")).encode('ascii') +\
+                                      str(rtpGeneratorInstance.syncSourceIdentifier).encode('ascii')
                     sentBytes = rtpGeneratorInstance.udpTxSocket.sendto(keepAliveString,
                                                                         (rtpGeneratorInstance.UDP_TX_IP,
                                                                          rtpGeneratorInstance.UDP_TX_PORT))
