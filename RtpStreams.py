@@ -581,6 +581,64 @@ class SrcAddrChange(Event):
         jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
         return jsonRepresentation
 
+# Define an Event that represents the resuming of an existing known stream, following a Streamlost Event
+# Calculates the duration between the previous StreamLost and 'now' to
+class StreamResumed(Event):
+    def __init__(self, stats, streamLostTimestamp):
+        # Call Constructor of parent class. This will set parameters such as timeCreated etc
+        super().__init__(stats)
+        # Declare Event-specific instance variables
+        self.streamLostTimestamp = streamLostTimestamp
+        self.durationOfOutage = datetime.timedelta()
+        # Calculate the length of the outage
+        # Take into account the length of time for the StreamLost alarm to be triggered
+        try:
+            self.durationOfOutage = self.timeCreated - self.streamLostTimestamp + \
+                                    datetime.timedelta(seconds=Registry.lossOfStreamAlarmThreshold_s)
+        except Exception as e:
+            Utils.Message.addMessage("ERR: StreamResumed calculate outage " + str(e))
+            self.durationOfOutage = None
+
+
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True,
+                   includeFriendlyName=True):
+        try:
+            # optionalFields = ", Start:" + str(self.streamLostTimestamp.strftime("%H:%M:%S")) + ", End:" + \
+            #                  str(self.timeCreated.strftime("%H:%M:%S")) + \
+            #                  ", Dur:" + str(Utils.dtstrft(self.durationOfOutage))
+            optionalFields = ", Dur:" + str(Utils.dtstrft(self.durationOfOutage))
+
+        except:
+            optionalFields = ""
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo=includeEventNo,
+                                                includeType=includeType,
+                                                includeFriendlyName=includeFriendlyName)
+
+        summary += optionalFields
+        data = {'timeCreated': self.timeCreated, 'summary': summary}
+        return data
+
+    def getCSV(self):
+        optionalFields = ""
+        try:
+            optionalFields = "stream lost at," + str(self.streamLostTimestamp.strftime("%d/%m %H:%M:%S")) + \
+                             ",stream restarted," + str(self.timeCreated.strftime("%d/%m %H:%M:%S")) + \
+                             ", outage duration," + str(Utils.dtstrft(self.durationOfOutage))
+        except:
+            pass
+        csv = Event.createCommonCSVString(self) + optionalFields
+        return csv
+
+    def getJSON(self):
+        # # Returns a json object representation of the event as a string
+        # Create dictionary with any additional keys specific to this type of event
+        additionalData = {'stream lost at': self.streamLostTimestamp, 'stream restarted': self.timeCreated,
+                          'outage duration': self.durationOfOutage}
+        jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
+        return jsonRepresentation
+
+
 # Stores a running total of events that happened within the last x seconds with y granularity
 class MovingTotalEventCounter(object):
     # Stores a running total of events that happened within the last x seconds with y granularity
@@ -1659,6 +1717,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         secondsWithNoBytesRxdTimer = 0
         # This flag will go high once a stream is believed lost
         lossOfStreamFlag = False
+        # Records the timestamp of the most recent StreamLost Event
+        lossOfStreamEventTimestamp = datetime.timedelta()
 
         # This flag will go high when a stream is declared dead
         streamIsDeadFlag = False
@@ -1732,7 +1792,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.__stats["stream_srcAddress"] = self.__srcAddress
             # Snapshot latest src port
             self.__stats["stream_srcPort"] = self.__srcPort
-            # Snampshot latest stream time to live
+            # Snapshot latest stream time to live
             self.__stats["stream_transmitter_TimeToLive_sec"] = self.__txStreamTimeToLive
 
             try:
@@ -1939,7 +1999,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     if packetsRxdPerSecond > 0:
                         # Packets have been received so clear the timer
                         secondsWithNoBytesRxdTimer = 0
-                        # If lossOfStreamFlag was previously True but is about to be cleared, create a StreamStarted Event to
+                        # If lossOfStreamFlag was previously True but is about to be cleared, create a StreamResumed Event to
                         # signify that the stream has restarted
                         if lossOfStreamFlag == True:
                             # Create a 'stream started' event
@@ -1947,18 +2007,21 @@ class RtpReceiveStream(RtpReceiveCommon):
                             # the __queueReceiverThread which means that seq no contained within is not necessarily the
                             # first seq no received after the stream started.
                             # This is because the __samplingThread runs much slower than the __queuReceiverThread
+                            # Create a 'stream resumed' event
                             try:
-                                streamStartedEvent = StreamStarted(self.__stats, self.__latestReceivedRtpPacket)
+                                # streamStartedEvent = StreamStarted(self.__stats, self.__latestReceivedRtpPacket)
+                                streamResumedEvent = StreamResumed(self.__stats, lossOfStreamEventTimestamp)
                                 # Append the event to the events list
-                                self.__eventList.append(streamStartedEvent)
+                                # self.__eventList.append(streamStartedEvent)
+                                self.__eventList.append(streamResumedEvent)
                                 # Increment the Event counter
                                 self.__stats["stream_all_events_counter"] += 1
                                 # Display a message
                                 Utils.Message.addMessage(
-                                    streamStartedEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
+                                    streamResumedEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
                             except Exception as e:
                                 Utils.Message.addMessage(
-                                    "ERR:RtpReceiveStream.__samplingThread add StreamStarted Event " + str(e))
+                                    "ERR:RtpReceiveStream.__samplingThread add streamResumed Event  " + str(e))
 
 
                         # Clear the flag so another StreamLost Event can be generated
@@ -1980,6 +2043,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Increment the all_events counter
                         self.__stats["stream_all_events_counter"] += 1
                         Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
+                        # Snapshot the time of the latest StreamLost Event (this is consumed by the StreamResumed Event)
+                        lossOfStreamEventTimestamp = datetime.datetime.now()
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect loss of stream " + str(e))
 

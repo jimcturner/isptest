@@ -32,7 +32,7 @@ class Registry(object):
                                     # before the stream is accepted as a valid incoming stream
     nonExistentStreamTimout_seconds = 5 # How long to wait before deciding that a received packet isn't part of any stream
 
-    lossOfStreamAlarmThreshold_s = 10 # Specifies how long before a loss of stream Event is triggered by RtpReceiveStream
+    lossOfStreamAlarmThreshold_s = 5 # Specifies how long before a loss of stream Event is triggered by RtpReceiveStream
     streamIsDeadThreshold_s = 60 * 60 * 12 # Specifies how long to wait with no incoming rtp packets before a stream is presumed dead (12 hrs)
     autoRemoveDeadRxStreamsEnable = True # Determines whether dead streams should automaticaslly be removed from the
                                             # list of received streams
