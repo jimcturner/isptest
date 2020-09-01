@@ -1595,9 +1595,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                             # This change in the length of hopsList is a red herring because rxTTL did not change.
                             # Therefore ignore.
                             hopsListHasChanged = False
-                            Utils.Message.addMessage("DBUG:hopsList len changed but rxTTL didn't. Ignored hopList change " +\
-                                "prevLen: " + str(len(prevHopsList)) + ", Len:" + str(len(hopsList)) + ", prevTTL:" + \
-                                                     str(prevRxTTL) + ", TTL:" + str(rxTTL))
+                            # Utils.Message.addMessage("DBUG:hopsList len changed but rxTTL didn't. Ignored hopList change " +\
+                            #     "prevLen: " + str(len(prevHopsList)) + ", Len:" + str(len(hopsList)) + ", prevTTL:" + \
+                            #                          str(prevRxTTL) + ", TTL:" + str(rxTTL))
                         else:
                             # rxTTL has changed, therefore the route must have changed
                             hopsListHasChanged = True
