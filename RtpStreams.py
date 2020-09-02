@@ -2719,6 +2719,7 @@ class RtpReceiveStream(RtpReceiveCommon):
     # filterList is an optional arg containing a list of Event object types to test against within EventsList
     # eg filterList = [Glitch] will return only a list of glitches, [Glitch, StreamStarted] would give you a list
     # containing all Glitch and StreamStarted events
+    # The filter (if present) is applied first, then the range specifier
     def getRTPStreamEventList(self, *args, filterList=None):
         self.__accessRtpStreamEventListMutex.acquire()
         # Create copy of events list
@@ -6165,32 +6166,39 @@ class ResultsReceiver(object):
                                 rtpStreamResults = self.rtpTxStreamResultsDict[syncSourceID]
 
                                 # Work out whether the eventList contains any new events that we haven't already seen
-                                firstEventNoInNewList = latestEventsList[0].eventNo
-                                lastEventNoInNewList = latestEventsList[-1].eventNo
+                                # firstEventNoInNewList = latestEventsList[0].eventNo
 
-                                # # Get latest known event no from the rtpStreamResults stream object
-                                existingEventsList = []
+                                # try:
+                                #     # Create filtered version of latestEventsList that only contains IPRoutingTracerouteChange objects
+                                #     latestTracerouteEvents = list(filter(lambda event: (type(event) is IPRoutingTracerouteChange), latestEventsList))
+                                #
+                                #     # Compile a list of the traceroute event nos previously added to rtpStreamResults.historicTracerouteEvents[]
+                                #     previouslyAddedTracerouteEventNos = []
+                                #     for event in rtpStreamResults.historicTracerouteEvents:
+                                #         previouslyAddedTracerouteEventNos.append(event.eventNo)
+                                #
+                                #     # Iterate over the latestTracerouteEvents to see if the event has already been added to
+                                #     # rtpStreamResults.historicTracerouteEvents[]. If missing, add it
+                                #     for event in latestTracerouteEvents:
+                                #         if event.eventNo not in previouslyAddedTracerouteEventNos:
+                                #             rtpStreamResults.historicTracerouteEvents.append(event)
+                                #         # else:
+                                #         #     Utils.Message.addMessage("event " + str(event.eventNo) + " already exists")
+                                # except Exception as e:
+                                #     Utils.Message.addMessage("ERR:Stream " + str(syncSourceID) + \
+                                #                         "__resultsReceiverThread() update historicTracerouteEvents " +\
+                                #                              str(e))
 
-
-                                # Create filtered version of latestEventsList that only contains IPRoutingTracerouteChange objects
-                                latestTracerouteEvents = list(filter(lambda event: (type(event) is IPRoutingTracerouteChange), latestEventsList))
-                                # Now see if any of the latestTracerouteEvents[] contents are already present in rtpStreamResults.historicTracerouteEvents
-                                # If they are already, ignore them. If not, add them
-                                rtpStreamResults.historicTracerouteEvents.append(latestTracerouteEvents)
-
-                                Utils.Message.addMessage("latestTracerouteEvents " + str(latestTracerouteEvents))
-                                Utils.Message.addMessage("historicTracerouteEvents " + str(rtpStreamResults.historicTracerouteEvents))
+                                # Update (All) Events list
                                 try:
+                                    # Get the last event no from the latest received batch
+                                    lastEventNoInNewList = latestEventsList[-1].eventNo
+                                    # Get latest known event no from the rtpStreamResults stream object
                                     existingEventsList = rtpStreamResults.getRTPStreamEventList(1) # Request last event in the list
-
-
                                     # Update Events list for this object
                                     if len(existingEventsList) > 0:
                                         # # Extract the event no from the last known event
                                         lastKnownEventNo = existingEventsList[-1].eventNo
-                                        # Utils.Message.addMessage("DBUG: firstEventNoInNewList: " + str(firstEventNoInNewList) + \
-                                        #                    ", lastEventNoInNewList: " + str(lastEventNoInNewList) + \
-                                        #                    ", lastKnownEventNo: " + str(lastKnownEventNo))
 
                                         # Check to see if the latest event no appears to be less than the previous known
                                         # event no. This could be because the stats at the Receiver were reset mid test.

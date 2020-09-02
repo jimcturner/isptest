@@ -98,7 +98,7 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 
 # Additonal libraries required (of my own making)
-from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch, RtpData
+from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch, RtpData, IPRoutingTracerouteChange
 import Utils
 from Custom_prompt_toolkit_mods import multi_input_dialog
 from Traceroute import *
@@ -1474,27 +1474,49 @@ class UI(object):
 
 
     # If the Event Lists Table is currently displayed, this method will copy the events to the local clipboard
-    # If that is not possible (if for instance, you are connected to a remote instance of isptext via SSH)
-    # it will attempt to export the data to pastebin.com (a website that allows you to share text via a webpage)
-    def __onCopyReportToClipboard(self):
-        if self.displayEventsTable == True:
-            selectedRxOrResultsStream = None
-            # Get a handle on the selected stream
-            if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
-                try:
-                    selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
-                except:
-                    pass
-            elif self.operationMode == 'TRANSMIT':
-                try:
-                    selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
-                except:
-                    pass
+    # Alternatively, if the traceroute table is displayed, it will attempt to render a list of the prevous
+    # traceroute hop lists and copy that to the clipboard
 
-            # Confirm that a valid stream exists
-            if selectedRxOrResultsStream is not None:
-                # Get a textual, formatted report for this stream
-                streamReport = selectedRxOrResultsStream.generateReport(eventFilterList = self.filterListForDisplayedEvents)
+    # If that is not possible (if for instance, you are connected to a remote instance of isptext via SSH)
+    # it will attempt to use linux 'less' as a viewer launched as a seperate process
+    # Historically it would attempt to export the data to pastebin.com (a website that allows you to share text via a webpage)
+    # but this was not dependable, so has been discontinued
+    def __onCopyReportToClipboard(self):
+        selectedRxOrResultsStream = None
+        # Get a handle on the selected stream
+        if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+            try:
+                selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
+            except:
+                pass
+        elif self.operationMode == 'TRANSMIT':
+            try:
+                selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
+            except:
+                pass
+
+        streamReport = None
+        # Confirm that a valid stream exists
+        if selectedRxOrResultsStream is not None:
+            # Render a stream performance summary report
+            if self.displayEventsTable == True:
+                    # Get a textual, formatted report for this stream
+                    streamReport = selectedRxOrResultsStream.generateReport(eventFilterList = self.filterListForDisplayedEvents)
+
+            elif self.displayTraceRouteTable is True:
+            # Render a traceroute history report
+                # Get a filtered eventlist of the selected Rx or RxResults stream containing only the
+                # IPRoutingTracerouteChange Events
+                tracerouteEventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList=[IPRoutingTracerouteChange])
+                if len(tracerouteEventsList) > 0:
+                    streamReport = "Traceroute history for stream (" + str(self.selectedStreamID) + ")" + "\r\n"
+                    for event in tracerouteEventsList:
+                        streamReport += str(event.latestHopsList) + "\r\n"
+
+
+
+            # Check that a textual report has been rendered
+            if streamReport is not None:
                 # Attempt to copy the report to the local clipboard
                 try:
                     # Utils.displayTextUsingMore(streamReport)
@@ -1549,6 +1571,8 @@ class UI(object):
                             Utils.Message.addMessage("ERR: UI.__onCopyReportToClipboard (using less) " + str(e))
                     else:
                         Utils.Message.addMessage("ERR: UI.__onCopyReportToClipboard (using less) . Wrong OS " + str(os))
+
+
 
     # This method will call the currently selected Receive (or TxResults writeReportToDisk() method
     # causing a report of the current stream to be saved to disk
