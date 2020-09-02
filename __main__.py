@@ -1504,15 +1504,28 @@ class UI(object):
                     streamReport = selectedRxOrResultsStream.generateReport(eventFilterList = self.filterListForDisplayedEvents)
 
             elif self.displayTraceRouteTable is True:
-            # Render a traceroute history report
-                # Get a filtered eventlist of the selected Rx or RxResults stream containing only the
-                # IPRoutingTracerouteChange Events
-                tracerouteEventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList=[IPRoutingTracerouteChange])
-                if len(tracerouteEventsList) > 0:
-                    streamReport = "Traceroute history for stream (" + str(self.selectedStreamID) + ")" + "\r\n"
-                    for event in tracerouteEventsList:
-                        streamReport += str(event.latestHopsList) + "\r\n"
-
+                try:
+                    # Render a traceroute history report
+                    # Get a filtered eventlist of the selected Rx or RxResults stream containing only the
+                    # IPRoutingTracerouteChange Events
+                    tracerouteEventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList=[IPRoutingTracerouteChange])
+                    if len(tracerouteEventsList) > 0:
+                        separator = ("-" * 63) + "\r\n" # Dotted line separator for the report
+                        streamReport = "Traceroute history for stream (" + str(self.selectedStreamID) + ")" + "\r\n"
+                        streamReport += separator
+                        for event in tracerouteEventsList:
+                            streamReport += separator
+                            streamReport += "Time of change: " + event.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
+                            for hopNo in range(len(event.latestHopsList)):
+                                hopAddr = str(event.latestHopsList[hopNo][0]) + "." + \
+                                          str(event.latestHopsList[hopNo][1]) + "." + \
+                                          str(event.latestHopsList[hopNo][2]) + "." + \
+                                          str(event.latestHopsList[hopNo][3])
+                                streamReport += str(hopNo) + "\t" + str(event.latestHopsList).rjust(16) + "\t" +\
+                                                Utils.WhoisResolver.queryWhoisCache(hopAddr)[0]['asn_description'] + "\r\n"
+                except Exception as e:
+                    streamReport = None
+                    Utils.Message.addMessage("ERR:UI.__onCopyReportToClipboard() Render traceroute history " + str(e))
 
 
             # Check that a textual report has been rendered
