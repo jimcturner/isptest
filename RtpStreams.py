@@ -788,6 +788,9 @@ class RtpReceiveCommon(RtpCommon):
         self.__stableTracerouteHopsListLastUpdated = None
         self.__stableTracerouteHopsListMutex = threading.Lock()
 
+        # Deque list to hold previous traceroute results (used for the traceroute viewer)
+        self.historicTracerouteEvents = deque(maxlen=Registry.rtpCommonHistoricTracerouteEventsToKeep)
+
     # Thread-safe method to return the latest stable (complete) copy of the traceroute hops list
     # It returns a timestamp of when the list was last updated and the list itself
     def getStableTracerouteHopsList(self):
@@ -3235,6 +3238,9 @@ class RtpGenerator(RtpCommon):
                  rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance = None, **kwargs):
         # The last arguments (**kwargs) are optional. it allows you to specify a source port or friendly name on creation
         # kwargs are "friendlyName" and "UDP_SRC_PORT"
+
+        # Call super constructor
+        super().__init__()
 
         # Assign instance variables
         self.UDP_TX_IP = UDP_TX_IP  # The destination address
@@ -6164,9 +6170,21 @@ class ResultsReceiver(object):
 
                                 # # Get latest known event no from the rtpStreamResults stream object
                                 existingEventsList = []
+
+
+                                # Create filtered version of latestEventsList that only contains IPRoutingTracerouteChange objects
+                                latestTracerouteEvents = list(filter(lambda event: (type(event) is IPRoutingTracerouteChange), latestEventsList))
+                                # Now see if any of the latestTracerouteEvents[] contents are already present in rtpStreamResults.historicTracerouteEvents
+                                # If they are already, ignore them. If not, add them
+                                rtpStreamResults.historicTracerouteEvents.append(latestTracerouteEvents)
+
+                                Utils.Message.addMessage("latestTracerouteEvents " + str(latestTracerouteEvents))
+                                Utils.Message.addMessage("historicTracerouteEvents " + str(rtpStreamResults.historicTracerouteEvents))
                                 try:
                                     existingEventsList = rtpStreamResults.getRTPStreamEventList(1) # Request last event in the list
 
+
+                                    # Update Events list for this object
                                     if len(existingEventsList) > 0:
                                         # # Extract the event no from the last known event
                                         lastKnownEventNo = existingEventsList[-1].eventNo
