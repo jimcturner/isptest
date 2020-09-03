@@ -1508,7 +1508,7 @@ class UI(object):
                     # Render a traceroute history report
                     # Get a filtered eventlist of the selected Rx or RxResults stream containing only the
                     # IPRoutingTracerouteChange Events
-                    tracerouteEventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList=[IPRoutingTracerouteChange])
+                    tracerouteEventsList = selectedRxOrResultsStream.getRTPStreamEventList(10, filterList=[IPRoutingTracerouteChange])
                     # Get a copy of the stats dict for this stream
                     stats = selectedRxOrResultsStream.getRtpStreamStats()
 
@@ -1523,7 +1523,7 @@ class UI(object):
                             str(stats["stream_transmitter_destAddress"]) + ")" + str(stats["stream_rxAddress"]) + ":" + \
                             str(stats["stream_rxPort"]) + "\r\n"
 
-                        streamReport = "Traceroute history for stream " + str(self.selectedStreamID) + \
+                        streamReport = "Traceroute history (last 10 events) for stream " + str(self.selectedStreamID) + \
                                        "(" + str(stats["stream_friendly_name"]).strip() + ") at " +\
                                         datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
                         streamReport += streamIPDetails
