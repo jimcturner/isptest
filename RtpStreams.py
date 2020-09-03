@@ -1962,6 +1962,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                             routeHasChanged = Utils.detectRouteChanges(prevHopsList, hopsList,
                                                                 prevRxTTL=prevRxTTL,
                                                                  rxTTL=self.__stats["packet_instantaneous_ttl"])
+                            # Debug code:
+                            if routeHasChanged:
+                                Utils.Message.addMessage("Route debug. stream " + str(self.__stats["stream_syncSource"]) +\
+                                                         " hopsListChangeExpected: False, prevHopsList:" + str (prevHopsList) +\
+                                                         ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
+                                                         ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
+
                         else:
                             # Otherwise, if the rxTTL has recently changed, we can only go on the prevHopsList and hopsList
                             # to determine route changes because the hopsList changes will lag behind those of rxTTL
