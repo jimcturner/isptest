@@ -98,7 +98,8 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 
 # Additonal libraries required (of my own making)
-from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, Glitch, RtpData, IPRoutingTracerouteChange
+from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, \
+    Glitch, RtpData, IPRoutingTracerouteChange, StreamResumed, StreamLost, IPRoutingTTLChange, StreamStarted
 import Utils
 from Custom_prompt_toolkit_mods import multi_input_dialog
 from Traceroute import *
@@ -595,7 +596,13 @@ class UI(object):
         self.fatalErrorDialogueTitle = ""
         # Used by the EventsTable and CopyToClipboard/PasteBin.
         # Currently, if the list is populated, the events table will only show that type of Event
-        self.filterListForDisplayedEvents = None
+        self.filterListForDisplayedEvents = [None,
+                                             [Glitch],
+                                             [Glitch, StreamResumed],
+                                             [StreamStarted, StreamLost, StreamResumed],
+                                             [IPRoutingTracerouteChange, IPRoutingTTLChange]
+                                             ]
+        self.selectedFilterNo = 0
 
         # Thread running flags
         self.keysPressedThreadActive = True
@@ -1355,14 +1362,10 @@ class UI(object):
         Term.printTable(pagedTable.table.splitlines(), marginOffset, yPos, width, Term.BLACK, Term.CYAN)
 
 
-    # Toggles the filtering of displayed Events on the events table created by UI.__renderEventsListTable()
+    # Cycles through the filtering of displayed Events on the events table created by UI.__renderEventsListTable()
     def __onfilterEventsTable(self):
-        # Apply filtering to show/export only Glitch events
-        if self.filterListForDisplayedEvents is None:
-            self.filterListForDisplayedEvents = [Glitch]
-        # Disable filtering. All events to be displayed/exported
-        else:
-            self.filterListForDisplayedEvents = None
+        # Increment selected display filter no (by cycling around filterListForDisplayedEvents)
+        self.selectedFilterNo = (self.selectedFilterNo + 1) % len(self.filterListForDisplayedEvents)
 
 
     # Overlays on the screen a paged list of recent events relating to this stream
@@ -1399,7 +1402,7 @@ class UI(object):
         if selectedRxOrResultsStream is not None:
             try:
                 # Get eventlist of the selected Rx or TxResults stream
-                eventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList = self.filterListForDisplayedEvents)
+                eventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList = self.filterListForDisplayedEvents[self.selectedFilterNo])
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
                 friendlyName = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
                 syncSourceID = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_syncSource"))
@@ -1433,14 +1436,18 @@ class UI(object):
 
 
         # Additional check to see if the event filtering has been enabled and modify the title/footer labels accordingly
-        if self.filterListForDisplayedEvents is not None:
-                title = "Glitches for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+        if self.filterListForDisplayedEvents[self.selectedFilterNo] is not None:
+                # Create a list of string containing the Class names of the selected filterListForDisplayedEvents
+                filterListAsString = [eventType.__name__ for eventType in self.filterListForDisplayedEvents[self.selectedFilterNo]]
+
+                title = "Filtered events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
                 footer = ["","[<][>]page, [^][v]select stream, [r]exit\n"+\
-                          "[c]opy to clipboard, [f]ilter off, [s]ave file"]
+                          "[c]opy to clipboard, [f]ilter, [s]ave file \n" +\
+                          "Showing: " + str(filterListAsString)]
         else:
             title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
             footer = ["", "[<][>]page, [^][v] select stream, [r]exit \n" + \
-                      "[c]opy to clipboard, [f]ilter on, [s]ave file"]
+                      "[c]opy to clipboard, [f]ilter, [s]ave file"]
 
         # Now actually display the paged table list
         self.__renderPagedList(self.tablePageNo, title, ["Timestamp".ljust(15), "Event".ljust(50)], tableContents,
@@ -2571,7 +2578,7 @@ class UI(object):
             # Reset display page to 0 when initially displaying the table
             self.tablePageNo = 0
             # Turn off filtering of displayed events when initially displaying the table
-            self.filterListForDisplayedEvents = None
+            self.selectedFilterNo = 0
         else:
             self.displayEventsTable = False
 
@@ -2646,7 +2653,7 @@ class UI(object):
             # 'r' Display events list for selected stream (report)
             elif self.keyPressed == ord('r'):
                 self.__onDisplayEvents()
-            # 'f' Show only glitches on events list table (filter on/off)
+            # 'f' Cycle through Event display filtering options
             elif self.keyPressed == ord('f'):
                 self.__onfilterEventsTable()
             # 'c' Copy report to clipboard
