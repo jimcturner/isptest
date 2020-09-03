@@ -1114,6 +1114,19 @@ def detectRouteChangesTest():
             False,
             "9) same length current and prev hops lists, current hops list flaps from populated to 0. rxTTL and prevRxTTL are 4. Should carry forward"
         ]
+        ,
+        [
+            [(192, 168, 203, 254), (118, 185, 50, 113), (118, 185, 55, 98), (182, 19, 106, 113), (195, 89, 101, 185),
+             (0, 0, 0, 0), (195, 2, 2, 73), (195, 2, 24, 126), (195, 66, 236, 103), (0, 0, 0, 0), (0, 0, 0, 0),
+             (132, 185, 249, 9), (212, 58, 231, 65)],
+            [(192, 168, 203, 254), (118, 185, 50, 113), (118, 185, 55, 98), (182, 19, 106, 113), (195, 89, 101, 185),
+             (195, 2, 16, 105), (195, 2, 2, 73), (195, 2, 24, 126), (195, 66, 236, 103), (0, 0, 0, 0), (0, 0, 0, 0),
+             (132, 185, 249, 9), (212, 58, 231, 65)],
+            114,
+            114,
+            False,
+            "10) Mumbai false detection"
+        ]
     ]
 
     # iterate over test list
@@ -1185,8 +1198,10 @@ def detectRouteChanges(prevHopsList, hopsList, prevRxTTL=None, rxTTL=None):
             # Otherwise, if list length is the same compare latest and previous hopsList members
             for hopNo in range(len(hopsList)):
                 # Iterate over hopsList, comparing the the octets of the individual hops
-                prevHop = prevHopsList[hopNo]
-                currentHop = hopsList[hopNo]
+                # Note, we can only compare lists with lists. For some reason, the hops within hopList
+                # seem to be being converted to tuples. Therefore we must cast the hop as a list just in case
+                prevHop = list(prevHopsList[hopNo])
+                currentHop = list(hopsList[hopNo])
 
                 # Check to see if either the current or previous values are NOT 0.0.0.0.
                 if prevHop != noResponse and currentHop != noResponse:
@@ -1204,7 +1219,6 @@ def detectRouteChanges(prevHopsList, hopsList, prevRxTTL=None, rxTTL=None):
 
 
                 # Now check to see if we previously had a zero hop value but we now have a non zero value
-                # If so, this suggests a route change
                 elif prevHop == noResponse and currentHop != noResponse:
                     hopsListHasChanged = False
 
