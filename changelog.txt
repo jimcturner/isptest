@@ -23,4 +23,13 @@ V2.2 Rewritten traceroute. Shared code between Windows and Linux/OSX - much easi
 Adds remote control of transmitter from receiver
 Coded added to allow listening on multiple ports at once
 V2.3 Pastebin is done away with. Now, if the local clipboard copy fails (when generating a report), isptest will launch 'less' as a subprocess to allow the full report text to be copied
+V2.4 
+* Traceroute on Linux/OSX now uses ‘actual source port and destination of tx stream’ so a valid description of the path taken (on Windows/Scapy, still uses an OS generated source port)
+* Adds traceroute last updated timestamp (with stable routes) on Receiver
+* adds a StreamResumed Event. This calculates the time diff between a StreamLost Event being detected and then the stream resuming. It's required because some outages exhibit a property whereby the packets at the start/end of a glitch get squeezed in time by the link. This leads to an erroneous calculation of glitch duratiomn (which has hithertoo been calculated using the timestamps of the packets either side of the glitch
+* An ‘Expired Stream’ can be resurrected 
+* Traceroute History viewer (Less/clipboard)
+* Configurable event display filter options (filter by Glitch, Routing change etc.)
+* Rewritten route change detection code
+* Reverse order of traceroute events in export to clipboard
 
