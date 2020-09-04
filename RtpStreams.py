@@ -1966,17 +1966,17 @@ class RtpReceiveStream(RtpReceiveCommon):
                             if self.__stats["stream_friendly_name"].find("Berlin"):
                                 if routeHasChanged is False:
                                     Utils.Message.addMessage(
-                                        "Route debug. Berlin " + str(self.__stats["stream_syncSource"]) + \
-                                        " hopsListChangeExpected: False, prevHopsList:" + str(prevHopsList) + \
+                                        "Route debug. Berlin routeHasChanged: False, prevHopsList:" + str(prevHopsList) + \
                                         ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
                                         ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
 
 
                                 else:
-                                    Utils.Message.addMessage("Route debug. Berlin " + str(self.__stats["stream_syncSource"]) +\
-                                                             " hopsListChangeExpected: False, prevHopsList:" + str (prevHopsList) +\
-                                                             ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
-                                                             ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
+                                    Utils.Message.addMessage(
+                                        "Route debug. Berlin routeHasChanged: True, prevHopsList:" + str(
+                                            prevHopsList) + \
+                                        ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
+                                        ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
 
                         else:
                             # Otherwise, if the rxTTL has recently changed, we can only go on the prevHopsList and hopsList
