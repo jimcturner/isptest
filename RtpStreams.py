@@ -1963,8 +1963,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                                 prevRxTTL=prevRxTTL,
                                                                  rxTTL=self.__stats["packet_instantaneous_ttl"])
                             # Debug code:
-                            if self.__stats["stream_friendly_name"] == "Berlin":
-                                if not routeHasChanged:
+                            if self.__stats["stream_friendly_name"].find("Berlin"):
+                                if routeHasChanged is False:
                                     Utils.Message.addMessage(
                                         "Route debug. Berlin " + str(self.__stats["stream_syncSource"]) + \
                                         " hopsListChangeExpected: False, prevHopsList:" + str(prevHopsList) + \
