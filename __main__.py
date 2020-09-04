@@ -1515,7 +1515,8 @@ class UI(object):
                     # Render a traceroute history report
                     # Get a filtered eventlist of the selected Rx or RxResults stream containing only the
                     # IPRoutingTracerouteChange Events
-                    tracerouteEventsList = selectedRxOrResultsStream.getRTPStreamEventList(10, filterList=[IPRoutingTracerouteChange])
+                    tracerouteEventsList = selectedRxOrResultsStream.getRTPStreamEventList(10, filterList=[IPRoutingTracerouteChange], reverseOrder=True)
+
                     # Get a copy of the stats dict for this stream
                     stats = selectedRxOrResultsStream.getRtpStreamStats()
 

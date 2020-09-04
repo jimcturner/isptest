@@ -913,7 +913,7 @@ class RtpReceiveCommon(RtpCommon):
         pass
 
     @abstractmethod
-    def getRTPStreamEventList(self, filterList=None):
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False):
         pass
 
     @abstractmethod
@@ -1979,7 +1979,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                             #             ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
 
                         else:
-                            # Otherwise, if the rxTTL has recently changed, we can only go on the prevHopsList and hopsList
+                            # Otherwise, if the rxTTL has not recently changed, we can only go on the prevHopsList and hopsList
                             # to determine route changes because the hopsList changes will lag behind those of rxTTL
                             routeHasChanged = Utils.detectRouteChanges(prevHopsList, hopsList)
 
@@ -2552,9 +2552,11 @@ class RtpReceiveStream(RtpReceiveCommon):
     # eg filterList = [Glitch] will return only a list of glitches, [Glitch, StreamStarted] would give you a list
     # containing all Glitch and StreamStarted events
     # The filter (if present) is applied first, then the range specifier
-    def getRTPStreamEventList(self, *args, filterList=None):
+    # Finally, if reverseOrder==True, the list will be returned in reverse order
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False):
         self.__accessRtpStreamEventListMutex.acquire()
         # Create copy of events list
+        # unfilteredEventList = deepcopy(self.__eventList)
         unfilteredEventList = list(self.__eventList)
         self.__accessRtpStreamEventListMutex.release()
         # Now apply a filter (if specified)
@@ -2570,6 +2572,10 @@ class RtpReceiveStream(RtpReceiveCommon):
         else:
             # If no filter spcified, all take all the events
             filteredEventList = unfilteredEventList
+
+        # Now, if reverseOrder=True, reverse the order of the filtered list
+        if reverseOrder:
+            filteredEventList.reverse()
 
         if len(args) == 2:
             # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
@@ -2958,9 +2964,12 @@ class RtpStreamResults(RtpReceiveCommon):
     # filterList is an optional arg containing a list of Event object types to test against within EventsList
     # eg filterList = [Glitch] will return only a list of glitches, [Glitch, StreamStarted] would give you a list
     # containing all Glitch and StreamStarted events
-    def getRTPStreamEventList(self, *args, filterList = None):
+    # The filter (if present) is applied first, then the range specifier
+    # Finally, if reverseOrder==True, the list will be returned in reverse order
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False):
         self.__accessRtpStreamEventListMutex.acquire()
         # Create copy of events list
+        # unfilteredEventList = deepcopy(self.__eventList)
         unfilteredEventList = list(self.__eventList)
         self.__accessRtpStreamEventListMutex.release()
         # Now apply a filter (if specified)
@@ -2976,6 +2985,10 @@ class RtpStreamResults(RtpReceiveCommon):
         else:
             # If no filter spcified, all take all the events
             filteredEventList = unfilteredEventList
+
+        # Now, if reverseOrder=True, reverse the order of the filtered list
+        if reverseOrder:
+            filteredEventList.reverse()
 
         if len(args) == 2:
             # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
