@@ -1054,11 +1054,11 @@ def detectRouteChangesTest():
         ,
         [
             [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3], [127, 0, 0, 4]],
-            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 7], [127, 0, 0, 4]],
+            [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 7], [127, 0, 0, 4]], # Hop 3 has changed
             None,
             None,
             True,
-            "3) prv and current hoplist are same length but different"
+            "3) prv and current hoplist are same length but different. No TTL"
         ]
         ,
         [
@@ -1084,7 +1084,7 @@ def detectRouteChangesTest():
             [[127, 0, 0, 1], [127, 0, 0, 2], [0, 0, 0, 3]],
             None,
             None,
-            True,
+            False,
             "6) prv and current hoplist are different lengths. prevTTL and currentTTL have not been set"
         ]
         ,
@@ -1133,8 +1133,8 @@ def detectRouteChangesTest():
             [(192,168,224,253), (0,0,0,0), (212,74,73,101), (212,74,73,101), (80,81,192,59), (0,0,0,0), (0,0,0,0), (0,0,0,0), (132,185,249,9), (212,58,231,65)],
             117,
             117,
-        True,
-        "11) Berlin not detecting a completely different route"
+            True,
+            "11) Berlin not detecting a completely different route. Same lengths (10)"
         ]
         ,
         [
@@ -1143,12 +1143,13 @@ def detectRouteChangesTest():
             117,
             117,
             True,
-            "12) Berlin not detecting a completely different route"
+            "12) Berlin not detecting a completely different route. Hoplists are a different length and have different values"
         ]
     ]
 
     # iterate over test list
     for testNo in range(0, len(testList)):
+    # for testNo in range(5, 7):
         test = testList[testNo]
         result = detectRouteChanges(test[0], test[1], test[2], test[3])
         # Test result against expected result
@@ -1170,6 +1171,70 @@ def detectRouteChanges(prevHopsList, hopsList, prevRxTTL=None, rxTTL=None):
     # Therefore we can also look at the IP TTl value to see if that has changed or not.
     # if it hasn't then that suggests it's just an intermediate router not responding rather than a route change
 
+    # Compares the contents of two hopLists
+    # If they are different lengths, it will only compare to the length of the shortest list
+    # If either the prev hop or hop are 0.0.0.0 (no response) these will be ignored
+    # Thus it will only compare 'actual IP addresses' that aren't 0.0.0.0
+    # It will return True or False depending upon whether the lists are interpreted as being the same or different
+    def compareHops(prevHopsList, hopsList):
+        # Define pattern for 'no response' to compare hops to
+        noResponse = [0, 0, 0, 0]
+        hopHasChanged = False
+
+        # establish the hoplist with shortest length
+        if len(hopsList) < len(prevHopsList):
+            noOfHopsToCompare = len(hopsList)
+            # print("Using len(hopsList)" + str(len(hopsList)))
+        else:
+            noOfHopsToCompare = len(prevHopsList)
+
+        # Iterate over the hop lists up to the length of the shortest list
+        for hopNo in range(noOfHopsToCompare):
+            # Iterate over hopsList, comparing the the octets of the individual hops
+            # Note, we can only compare lists with lists. For some reason, the hops within hopList
+            # seem to be being converted to tuples. Therefore we must cast the hop as a list just in case
+            prevHop = list(prevHopsList[hopNo])
+            currentHop = list(hopsList[hopNo])
+            # print (str(hopNo) + str(prevHop) + str(currentHop))
+            # Check to see if either the current or previous values are NOT 0.0.0.0.
+            if prevHop != noResponse and currentHop != noResponse:
+                # These hops contains a value, so see if they have changed
+                if currentHop == prevHop:
+                    # The hop value has remained the same, no route change
+                    hopHasChanged = False
+                    # print("currentHop == prevHop" + str(prevHop) + str(currentHop))
+                else:
+                    # The hop value has changed. New route
+                    hopHasChanged = True
+                    # Break out of loop
+                    break
+
+            # Check for 0.0.0.0 >> 0.0.0.0 (if so, ignore)
+            elif prevHop == noResponse and currentHop == noResponse:
+                hopHasChanged = False
+
+            # Check for 0.0.0.0 >> a.b.c.d (if so, ignore)
+            elif prevHop == noResponse and currentHop != noResponse:
+                hopHasChanged = False
+
+            # Now check for a.b.c.d >> 0.0.0.0.
+            # If so, make an educated guess and carry the prev hop value into the current hop value
+            # This means that we might have something to compare this hop value to if it changes
+            # to another non-zero value
+            # Note: lists in python are mutable, so this *should* modify the source list
+            elif prevHop != noResponse and currentHop == noResponse:
+                hopsList[hopNo] = prevHopsList[hopNo]
+                # print("carry forward hop " + str(hopNo) + str(hopsList[hopNo]))
+                hopHasChanged = False
+
+            # Trap any other conditions we haven't thought of
+            else:
+                # We don't know if the route has changed or not
+                hopHasChanged = False
+
+
+        return hopHasChanged
+
     # Flag to signal the detection of a route change
     hopsListHasChanged = False
 
@@ -1183,83 +1248,21 @@ def detectRouteChanges(prevHopsList, hopsList, prevRxTTL=None, rxTTL=None):
             prevHopsList = hopsList
             hopsListHasChanged = True
 
-
-
-        # Test If length of list has changed then set hopsListHasChanged flag
-        # However, if the rxTTL value hasn't also changed*, this suggests an erroneous
-        # traceroute hops list possibly caused by a series of routers not responding.
-        # * Note if prevRxTTL is 'None' (because the rxTTL isn't able to be decoded)
-        # then all we have to go on is the length of the hops list
-
-        # Test If length of list has changed, then test rxTTL for confirmation of the change (if possible)
-        elif (len(hopsList) != len(prevHopsList)):
-            # Test to see if rxTTL values contain any further info on which to base a route-change decision
-            if prevRxTTL is not None and rxTTL is not None:
-                # rxTTL does contain a value which we can use to see if the route has changed.
-                # Compare current and prev rxTTL values
-                if prevRxTTL == rxTTL:
-                    # This change in the length of hopsList is a red herring because rxTTL did not change.
-                    # Therefore ignore.
-                    hopsListHasChanged = False
-                    # Utils.Message.addMessage("DBUG:hopsList len changed but rxTTL didn't. Ignored hopList change " +\
-                    #     "prevLen: " + str(len(prevHopsList)) + ", Len:" + str(len(hopsList)) + ", prevTTL:" + \
-                    #                          str(prevRxTTL) + ", TTL:" + str(rxTTL))
-                else:
-                    # rxTTL has changed, therefore the route must have changed
-                    hopsListHasChanged = True
-            else:
-                # It doesn't, so we can only go on the change in length of hopsList[]
+        # Test to see if the rxTTL has been set
+        elif prevRxTTL is not None and rxTTL is not None:
+            # Compare current and prev rxTTL values
+            if prevRxTTL != rxTTL:
+                # If they are different, then the route must have changed
                 hopsListHasChanged = True
-
-        # If the lengths of the two lists are the same, test the contents
+                return hopsListHasChanged
+            else:
+                # If they are the same, it's still possible that the route has changed, but the no of hops is the same
+                # so we still need to test
+                hopsListHasChanged = compareHops(prevHopsList,hopsList)
+        # Otherwise rxTTL has not been set, so have to just compare lists
         else:
-            # Otherwise, if list length is the same compare latest and previous hopsList members
-            for hopNo in range(len(hopsList)):
-                # Iterate over hopsList, comparing the the octets of the individual hops
-                # Note, we can only compare lists with lists. For some reason, the hops within hopList
-                # seem to be being converted to tuples. Therefore we must cast the hop as a list just in case
-                prevHop = list(prevHopsList[hopNo])
-                currentHop = list(hopsList[hopNo])
+            hopsListHasChanged = compareHops(prevHopsList, hopsList)
 
-                # Check to see if either the current or previous values are NOT 0.0.0.0.
-                if prevHop != noResponse and currentHop != noResponse:
-                    # These hops contains a value, so see if they have changed
-                    if currentHop == prevHop:
-                        # The hop value has remained the same, no route change
-                        hopsListHasChanged = False
-                    else:
-                        # The hop value has changed. New route
-                        hopsListHasChanged = True
-
-                # Check to see if either and current values are zero
-                elif prevHop == noResponse and currentHop == noResponse:
-                    hopsListHasChanged = False
-
-
-                # Now check to see if we previously had a zero hop value but we now have a non zero value
-                elif prevHop == noResponse and currentHop != noResponse:
-                    hopsListHasChanged = False
-
-                # Now check to see if we previously had a non-zero value for this hop. If so, make
-                # an educated guess and carry the prev hop value into the current hop value
-                # This means that we might have something to compare this hop value to if it changes
-                # to another non-zero value
-                elif prevHop != noResponse and currentHop == noResponse:
-                    # print("carry forward hop " + str(hopNo))
-                    hopsList[hopNo] = prevHopsList[hopNo]
-                    hopsListHasChanged = False
-                else:
-                    # We don't know if the route has changed or not
-                    hopsListHasChanged = False
-
-                # At the end of each hop comparison check the status of hopsListHasChanged
-                # If it has, break out of the loop, otherwise continue onto the next hop
-                if hopsListHasChanged:
-                    return True
-                else:
-                    # Continue on the the next hop comparison
-                    pass
-        # At the end of the iteration over all hops, return the latest value of hopsListHasChanged
         return hopsListHasChanged
     else:
         return False
