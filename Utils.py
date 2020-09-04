@@ -1125,7 +1125,16 @@ def detectRouteChangesTest():
             114,
             114,
             False,
-            "10) Mumbai false detection"
+            "10) Mumbai false detection, hops as tuples, not lists. RxTTL constant, flapping 0>value in hop 6"
+        ]
+        ,
+        [
+            [(192,168,224,252), (82,194,125,65), (84,19,200,41), (62,214,37,142), (80,81,192,59), (0,0,0,0), (0,0,0,0), (0,0,0,0), (132,185,249,7), (212,58,231,65)],
+            [(192,168,224,253), (0,0,0,0), (212,74,73,101), (212,74,73,101), (80,81,192,59), (0,0,0,0), (0,0,0,0), (0,0,0,0), (132,185,249,9), (212,58,231,65)],
+            117,
+            117,
+        True,
+        "11) Berlin not detecting a completely different route"
         ]
     ]
 

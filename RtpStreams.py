@@ -1963,11 +1963,20 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                                 prevRxTTL=prevRxTTL,
                                                                  rxTTL=self.__stats["packet_instantaneous_ttl"])
                             # Debug code:
-                            if routeHasChanged:
-                                Utils.Message.addMessage("Route debug. stream " + str(self.__stats["stream_syncSource"]) +\
-                                                         " hopsListChangeExpected: False, prevHopsList:" + str (prevHopsList) +\
-                                                         ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
-                                                         ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
+                            if self.__stats["stream_friendly_name"] == "Berlin":
+                                if not routeHasChanged:
+                                    Utils.Message.addMessage(
+                                        "Route debug. Berlin " + str(self.__stats["stream_syncSource"]) + \
+                                        " hopsListChangeExpected: False, prevHopsList:" + str(prevHopsList) + \
+                                        ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
+                                        ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
+
+
+                                else:
+                                    Utils.Message.addMessage("Route debug. Berlin " + str(self.__stats["stream_syncSource"]) +\
+                                                             " hopsListChangeExpected: False, prevHopsList:" + str (prevHopsList) +\
+                                                             ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
+                                                             ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
 
                         else:
                             # Otherwise, if the rxTTL has recently changed, we can only go on the prevHopsList and hopsList
