@@ -1966,14 +1966,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                             if self.__stats["stream_friendly_name"].find("Berlin"):
                                 if routeHasChanged is False:
                                     Utils.Message.addMessage(
-                                        "Route debug. Berlin routeHasChanged: False, prevHopsList:" + str(prevHopsList) + \
+                                        "Route debug. " + str(self.__stats["stream_friendly_name"]) + " routeHasChanged: False, prevHopsList:" + str(prevHopsList) + \
                                         ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
                                         ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
 
 
                                 else:
                                     Utils.Message.addMessage(
-                                        "Route debug. Berlin routeHasChanged: True, prevHopsList:" + str(
+                                        "Route debug. " + str(self.__stats["stream_friendly_name"]) + " routeHasChanged: True, prevHopsList:" + str(
                                             prevHopsList) + \
                                         ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
                                         ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
