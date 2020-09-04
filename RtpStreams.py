@@ -1963,20 +1963,20 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                                 prevRxTTL=prevRxTTL,
                                                                  rxTTL=self.__stats["packet_instantaneous_ttl"])
                             # Debug code:
-                            if str(self.__stats["stream_friendly_name"]).find("Berlin") >= 0:
-                                if routeHasChanged is False:
-                                    Utils.Message.addMessage(
-                                        "Route debug. " + str(self.__stats["stream_friendly_name"]) + " routeHasChanged: False, prevHopsList:" + str(prevHopsList) + \
-                                        ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
-                                        ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
-
-
-                                else:
-                                    Utils.Message.addMessage(
-                                        "Route debug. " + str(self.__stats["stream_friendly_name"]) + " routeHasChanged: True, prevHopsList:" + str(
-                                            prevHopsList) + \
-                                        ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
-                                        ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
+                            # if str(self.__stats["stream_friendly_name"]).find("Berlin") >= 0:
+                            #     if routeHasChanged is False:
+                            #         Utils.Message.addMessage(
+                            #             "Route debug. " + str(self.__stats["stream_friendly_name"]) + " routeHasChanged: False, prevHopsList:" + str(prevHopsList) + \
+                            #             ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
+                            #             ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
+                            #
+                            #
+                            #     else:
+                            #         Utils.Message.addMessage(
+                            #             "Route debug. " + str(self.__stats["stream_friendly_name"]) + " routeHasChanged: True, prevHopsList:" + str(
+                            #                 prevHopsList) + \
+                            #             ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
+                            #             ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
 
                         else:
                             # Otherwise, if the rxTTL has recently changed, we can only go on the prevHopsList and hopsList
