@@ -5954,27 +5954,42 @@ class ResultsReceiver(object):
 
                     # Check if we have some new stats data
                     if len(stats) > 0:
+                        # Now perform a validation of the stas dictionary by attempting to iterate over the dictionary
+                        lastValidatedKey = None
+                        statsValidated = False
                         try:
-                            # Firstly check to see a stream object with this id exists in self.rtpTxStreamResultsDict
-                            if stats["stream_syncSource"] in self.rtpTxStreamResultsDict:
-                                # If it does, add the new data
-                                self.rtpTxStreamResultsDict[stats["stream_syncSource"]].updateStats(stats)
-
-                            else:
-                                # Otherwise that stream object doesn't exist yet, so create it
-                                Utils.Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
-                                                   + str(stats["stream_syncSource"]))
-                                # Create new RtpStreamResults object
-                                rtpStreamResults = RtpStreamResults(stats["stream_syncSource"],
-                                                                    self.rtpTxStreamResultsDict,
-                                                                    self.rtpTxStreamResultsDictMutex)
-                                # Immediately update the stats
-                                rtpStreamResults.updateStats(stats)
-                                # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
-                                # addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults,
-                                #                    self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+                            for key in stats:
+                                lastValidatedKey = stats[key]
+                                statsValidated = True
                         except Exception as e:
-                            Utils.Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict or can't add new stream to rtpTxStreamResultsDict. " + str(e))
+                            Utils.Message.addMessage(
+                                "ERR:__resultsReceiverThread stats validation failed. Last validated key: " + \
+                                str(lastValidatedKey))
+                            # Validation failed so clear the flag
+                            statsValidated = False
+
+                        if statsValidated:
+                            try:
+                                # Firstly check to see a stream object with this id exists in self.rtpTxStreamResultsDict
+                                if stats["stream_syncSource"] in self.rtpTxStreamResultsDict:
+                                    # If it does, add the new data
+                                    self.rtpTxStreamResultsDict[stats["stream_syncSource"]].updateStats(stats)
+
+                                else:
+                                    # Otherwise that stream object doesn't exist yet, so create it
+                                    Utils.Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
+                                                       + str(stats["stream_syncSource"]))
+                                    # Create new RtpStreamResults object
+                                    rtpStreamResults = RtpStreamResults(stats["stream_syncSource"],
+                                                                        self.rtpTxStreamResultsDict,
+                                                                        self.rtpTxStreamResultsDictMutex)
+                                    # Immediately update the stats
+                                    rtpStreamResults.updateStats(stats)
+                                    # Add the new RtpStreamResults object to the self.rtpStreamResultsDict{}
+                                    # addRtpStreamToDict(stats["stream_syncSource"], rtpStreamResults,
+                                    #                    self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+                            except Exception as e:
+                                Utils.Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict or can't add new stream to rtpTxStreamResultsDict. " + str(e))
 
                     # Check to see if the new eventList contains any data and also that there exists a stream object to add the data to
                     if len(latestEventsList) > 0 and len(stats) > 0:
