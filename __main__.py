@@ -590,7 +590,7 @@ class UI(object):
         self.displayFatalErrorDialogue = False
         self.fatalErrorDialogueMessageText = ""
         self.fatalErrorDialogueTitle = ""
-        # Used by the EventsTable and CopyToClipboard/PasteBin.
+        # Used by the EventsTable and CopyToClipboard
         # Currently, if the list is populated, the events table will only show that type of Event
         self.filterListForDisplayedEvents = [None,
                                              [Glitch],
@@ -598,7 +598,9 @@ class UI(object):
                                              [StreamStarted, StreamLost, StreamResumed],
                                              [IPRoutingTracerouteChange, IPRoutingTTLChange]
                                              ]
-        self.selectedFilterNo = 0
+        self.selectedFilterNo = 0    # Specifies which filter option within filterListForDisplayedEvents[] is in use
+
+
 
         # Thread running flags
         self.keysPressedThreadActive = True
@@ -2609,6 +2611,13 @@ class UI(object):
             self.selectedFilterNo = 0
 
 
+    # Toggles the pop-up table sort order (ascending/descending) (if applicable)
+    def __setSortOrder(self):
+        pass
+    # Cycles through the available list of stream comparison criteria
+    def __setStreamCompareCriteria(self):
+        pass
+
     def __onCompareStreams(self):
         # Toggle display of the 'compare streams' table
         # If already, selected, disable it
@@ -2634,19 +2643,39 @@ class UI(object):
         # self.__renderMessageBox(tableContents, "Help")
         # # Clear the self.displayPopup function pointer now that the popup has been displayed
         # self.displayPopup = None
+        if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
+            self.streamResultsDataSet = self.availableRtpRxStreamList
+
+        # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
+        else:
+            self.streamResultsDataSet = self.availableRtpTxResultsList
 
         # Iterate over all RtpReceiveCommon streams present in the streams dictionary and rank them in
-        # order of no of packets lost
-        # Create a list of tuples containing the table columns
-        tableContents = []
-        tableRow = ["cake", "banana"]
-        tableContents.append(tableRow)
+        # order of no of packets lost *or whichever is the chosen metric)
+        tableContents = []  # Holds the table rows
+        tableRow = [] # A tuple to hold a single row (comprising multiple columns)
+        try:
+            if len(self.streamResultsDataSet) > 0:
+                # Compile list of available streams
+                for stream in self.streamResultsDataSet:
+                    # Get stats for the selected stream
+                    stats = stream[1].getRtpStreamStats()
+                    # Append a new row to the table contents
+                    tableContents.append([str(stream[0]), str(stats["glitch_packets_lost_total_count"])])
+        except Exception as e:
+            Utils.Message.addMessage("UI.__renderCompareStreamsTable() " + str(e))
+
+        # Sort the table contents using column 1 as the key
+        # See here: https://www.kite.com/python/answers/how-to-sort-a-list-of-lists-by-an-index-of-each-inner-list-in-python
+        sorted_list = sorted(tableContents, key=lambda x: x[1], reverse=True)
+
         # Now actually display the paged table list
+        metricTitle = "Packets Lost" # The name of the metric to be listed in table column heading
         title = "Comparison of streams "
         footer = ["", "[<][>]page, [^][v] select stream, [p]exit, [s]ave file \n" + \
                   "[c]opy to clipboard, [m]easure to compare, [o]rder"]
 
-        self.__renderPagedList(self.tablePageNo, title, ["Stream ID".ljust(15), "Measure".ljust(50)], tableContents,
+        self.__renderPagedList(self.tablePageNo, title, ["Stream ID".ljust(15), str(metricTitle).ljust(50)], sorted_list,
                                footerRow=footer,
                                pageNoDisplayInFooterRow=True, reverseList=True, marginOffset=7)
 
@@ -2737,9 +2766,15 @@ class UI(object):
             # 't' Show traceroute
             elif self.keyPressed == ord('t'):
                 self.__onDisplayTraceroute()
-            # 'o' compare streams
+            # 'p' compare streams
             elif self.keyPressed == ord('p'):
                 self.__onCompareStreams()
+            # 'o' compare streams set sort order (ascending/descending)
+            elif self.keyPressed == ord('o'):
+                self.__setSortOrder()
+            # 'm' set criteria to compare streams by
+            elif self.keyPressed == ord('m'):
+                self.__setStreamCompareCriteria()
 
             # Special features
             # 'z' Toggle packet generation on/off for selected stream
@@ -2765,7 +2800,7 @@ class UI(object):
     # Utility method to create create an up to date list, from a dictionary (taking additions and deletions into account)
     def __updateAvailableStreamsList(self, rtpStreamList, rtpStreamDict, rtpStreamDictMutex):
         # This is a utility function for UI.__renderDisplayThread
-        # It's job is to compare the current working list inn use by __displayThread (currentStreamList[])
+        # It's job is to compare the current working list in use by __displayThread (currentStreamList[])
         # with the rtpStreamDict{} dictionary of active rtpRxStreams or rtpTxStreams (maintained by main())
         # If will replicate any additions/deletions to objects in rtpStreamDict{} to currentStreamList[]
         # Crucially, the order of currentStreamList[] will be maintained so that it will represent a
