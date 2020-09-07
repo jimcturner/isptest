@@ -1506,11 +1506,12 @@ class UI(object):
         # Confirm that a valid stream exists
         if selectedRxOrResultsStream is not None:
             # Render a stream performance summary report
-            if self.displayEventsTable == True:
+            if self.displayPopup == self.__renderEventsListTable:
                     # Get a textual, formatted report for this stream
-                    streamReport = selectedRxOrResultsStream.generateReport(eventFilterList = self.filterListForDisplayedEvents)
-
-            elif self.displayTraceRouteTable is True:
+                    streamReport = \
+                        selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
+                    Utils.Message.addMessage("filterList:" + str(self.filterListForDisplayedEvents[self.selectedFilterNo]))
+            elif self.displayPopup == self.__renderTracerouteTable:
                 try:
                     # Render a traceroute history report
                     # Get a filtered eventlist of the selected Rx or RxResults stream containing only the
