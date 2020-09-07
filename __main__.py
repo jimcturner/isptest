@@ -582,13 +582,9 @@ class UI(object):
         # This will store the result of the user response
         self.quitConfirmed = False
 
-        # Use to control the display of the Events List dialogue
-        self.displayEventsTable = False
-        # Use to control the display of the Traceroute dialogue
-        self.displayTraceRouteTable = False
-        # Used to control the display of the help pages
-        self.displayHelpTable = False
-        # Used by the EventsTable (and Traceroute table). Keeps track of the current display page
+        # A pointer to the method which will render the popup (if any) to be displayed by __renderDisplayThread()
+        self.displayPopup = None
+        # Used by the Pop-Up tables (Events, Traceroute etc) . Keeps track of the current display page
         self.tablePageNo = 0
         # Used to send popup error messages to UI.__renderDisplayThread
         self.displayFatalErrorDialogue = False
@@ -648,9 +644,13 @@ class UI(object):
         self.selectedStream = None  # Tracks the stream currently highlighted in the streams table
         self.selectedStreamID = 0 # Tracks the sync source ID of the stream currebtly highlighted
         # Screen label showing the available key commands (depending upon mode)
-        self.keyCommandsString = "[<][>][^][v]navigate, [d]elete, [l]abel, [a]bout, [r]eport, [h]elp, [t]raceroute"
+        self.keyCommandsString = "[h]elp, [a]bout, [d]elete, [l]abel, [r]eport, [t]raceroute, com[p]are"
 
-        self.txStreamModifierCommandsString = "TX  modifiers: [1/2] packet size, [3/4] tx rate, [5/6] lifetime, [n]ew [b]urst"
+        self.txStreamModifierCommandsString = "TX  modifiers: [1/2] packet size, [3/4] tx rate, [5/6] lifetime, [b]urst"
+        # Add "new" command for TX mode
+        if self.operationMode == 'LOOPBACK' or self.operationMode == 'TRANSMIT':
+            self.txStreamModifierCommandsString += ", [n]ew "
+
         # Extra command strip for 'special features' mode
         self.extraKeyCommandsString = "[7] enable/disable stream, [8] jitter on/off, [9] minor loss, [0] major  loss"
 
@@ -1704,30 +1704,33 @@ class UI(object):
 
     # Cursor right
     def __onNavigateRight(self):
-        if self.displayEventsTable is False and self.displayTraceRouteTable is False and self.displayHelpTable is False:
-            # Inhibit, if Events Table, Traceroute or help tables are currently being displayed
+        # if self.displayEventsTable is False and self.displayTraceRouteTable is False and self.displayHelpTable is False:
+        if self.displayPopup is None:
+            # Inhibit, if a popup is currently being displayed
             self.selectedView += 1
             # Prevent an 'out of range' view being selected
             if self.selectedView > (len(self.views) - 1):
                 self.selectedView = len(self.views) - 1
-
-        # Used to increment to the display page of the Events table
-        # Note, this has to be bounds-checked in the table display code
-        self.tablePageNo += 1
+        else:
+            # Used to decrement to the display page of the popup (if there is one)
+            # Note, this has to be bounds-checked in the table display code
+            self.tablePageNo += 1
 
     # Cursor left
     def __onNavigateLeft(self):
-        # Inhibit, if Events Table, Traceroute or help tables are currently being displayed
-        if self.displayEventsTable is False and self.displayTraceRouteTable is False and self.displayHelpTable is False:
+        # Inhibit, if a popup is currently being displayed
+        # if self.displayEventsTable is False and self.displayTraceRouteTable is False and self.displayHelpTable is False:
+        if self.displayPopup is None:
             self.selectedView -= 1
             # Prevent an 'out of range' view being selected
             if self.selectedView < 0:
                 self.selectedView = 0
 
-        # Used to decrement to the display page of the Events table
-        self.tablePageNo -= 1
-        if self.tablePageNo < 0:
-            self.tablePageNo = 0
+        else:
+            # Used to decrement to the display page of the popup (if there is one)
+            self.tablePageNo -= 1
+            if self.tablePageNo < 0:
+                self.tablePageNo = 0
 
     # Cursor up
     def __onNavigateUp(self):
@@ -2322,8 +2325,18 @@ class UI(object):
             Utils.Message.addMessage("[v] Stream " + str(self.selectedStreamID) + " simulate major packet loss (" + str(packetsToLose) +\
                                " packets)")
 
-    # 't' - display the About dialogue
     def __onAboutDialogue(self):
+        # Toggle display of About  dialogue
+        # If already, selected, disable it
+        if self.displayPopup == self.__renderAboutDialogue:
+            self.displayPopup = None
+        # Otherwise activate it
+        else:
+            # Point self.displayPopup to the correct renderer
+            self.displayPopup = self.__renderAboutDialogue
+
+    # 'a' - render the About dialogue
+    def __renderAboutDialogue(self):
         # NOTE: This is a blocking method
         maxWidth = 55
         tableContents = ("BBC IBEOO Team ISP Analyser v" + Registry.version).center(maxWidth, " ") + \
@@ -2339,18 +2352,26 @@ class UI(object):
 
         # Render the message in a pop-up box
         self.__renderMessageBox(tableContents, "About")
+        # Clear the self.displayPopup function pointer now that the popup has been displayed
+        self.displayPopup = None
+
+
 
     # Show a help page
     def __onShowHelpTable(self):
         # Toggle the display of the help pages
-        if self.displayHelpTable:
-            self.displayHelpTable = False
+        # If already, selected, disable it
+        if self.displayPopup == self.__renderHelpTable:
+            self.displayPopup = None
+        # Otherwise activate it
         else:
-            self.displayHelpTable = True
-            self.displayTraceRouteTable = False
-            self.displayEventsTable = False
+            # Point self.displayPopup to the correct renderer
+            self.displayPopup = self.__renderHelpTable
             # Reset display page to 0 when initially displaying the table
             self.tablePageNo = 0
+            # Turn off filtering of displayed events when initially displaying the table
+            self.selectedFilterNo = 0
+
 
         # maxWidth = 55
         # tableContents = ("This will show help... ") + \
@@ -2457,20 +2478,21 @@ class UI(object):
                                footerRow=footer,
                                pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
 
-
-
     # Controls the display of the Traceroute dialogue
     def __onDisplayTraceroute(self):
-        # Toggle the display of the traceroute table by toggling the display flag
-        if self.displayTraceRouteTable:
-            self.displayTraceRouteTable = False
+        # Toggle the display of the traceroute table
+
+        # If already, selected, disable it
+        if self.displayPopup == self.__renderTracerouteTable:
+            self.displayPopup = None
+        # Otherwise activate it
         else:
-            self.displayTraceRouteTable = True
-            self.displayEventsTable = False
-            self.displayHelpTable = False
+            # Point self.displayPopup to the correct renderer
+            self.displayPopup = self.__renderTracerouteTable
             # Reset display page to 0 when initially displaying the table
             self.tablePageNo = 0
-
+            # Turn off filtering of displayed events when initially displaying the table
+            self.selectedFilterNo = 0
 
     # Renders the Traceroute dialogue
     def __renderTracerouteTable(self):
@@ -2572,16 +2594,45 @@ class UI(object):
 
     def __onDisplayEvents(self):
         # Toggle display of Events list dialogue
-        if self.displayEventsTable == False:
-            self.displayEventsTable = True
-            self.displayTraceRouteTable = False
-            self.displayHelpTable = False
+
+        # If already, selected, disable it
+        if self.displayPopup == self.__renderEventsListTable:
+            self.displayPopup = None
+        # Otherwise activate it
+        else:
+            # Point self.displayPopup to the correct renderer
+            self.displayPopup = self.__renderEventsListTable
             # Reset display page to 0 when initially displaying the table
             self.tablePageNo = 0
             # Turn off filtering of displayed events when initially displaying the table
             self.selectedFilterNo = 0
+
+
+    def __onCompareStreams(self):
+        # Toggle display of the 'compare streams' table
+        # If already, selected, disable it
+        if self.displayPopup == self.__renderCompareStreamsTable:
+            self.displayPopup = None
+        # Otherwise activate it
         else:
-            self.displayEventsTable = False
+            # Point self.displayPopup to the correct renderer
+            self.displayPopup = self.__renderCompareStreamsTable
+
+
+    # Puts up a table that allows the stream performance to be compared (ans a report generated)
+    def __renderCompareStreamsTable(self):
+
+        maxWidth = 55
+        tableContents = ("This will show compare streams type stuff ") + \
+                        "\n\n...but in the mean time.." +\
+                        "\n see https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
+                        "\n\n\n\n" + \
+                        "Press the [any] key to continue".center(maxWidth, " ")
+
+        # Render the message in a pop-up box
+        self.__renderMessageBox(tableContents, "Help")
+        # Clear the self.displayPopup function pointer now that the popup has been displayed
+        self.displayPopup = None
 
     # Tests the key pressed, and calls the appropriate method
     def __parseKeyPressed(self):
@@ -2669,6 +2720,9 @@ class UI(object):
             # 't' Show traceroute
             elif self.keyPressed == ord('t'):
                 self.__onDisplayTraceroute()
+            # 'o' compare streams
+            elif self.keyPressed == ord('p'):
+                self.__onCompareStreams()
 
             # Special features
             # 'z' Toggle packet generation on/off for selected stream
@@ -2969,25 +3023,13 @@ class UI(object):
             # draw the messages table
             self.__drawMessageTable() # Should only take effect if there are any new messages/or self.redrawScreen is True
 
-
-
-            # Check to see if Events List is to be overlaid?
-            if self.displayEventsTable:
-                # Confirm that self.selectedStream and self.selectedStreamID are up to date, before drawing the table
-                # Without this update, the Events Table update lags behind the selected stream
-                validateSelectedStream()
-                self.__renderEventsListTable()
-
-            # Check to see if Traceroute table is to be overlaid
-            if self.displayTraceRouteTable:
-                # Confirm that self.selectedStream and self.selectedStreamID are up to date, before drawing the table
-                # Without this update, the traceroute table update lags behind the stream selection
-                validateSelectedStream()
-                self.__renderTracerouteTable()
-
-            # Check to see if Help table is to be overlaid
-            if self.displayHelpTable:
-                self.__renderHelpTable()
+            # Now check to see of any pop-up display has been activated
+            if self.displayPopup is not None:
+                try:
+                    # invoke the popup method pointed to by self.displayPopup
+                    self.displayPopup()
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:__renderDisplayThread() displayPopup " + str(e))
 
             # Clear flag
             self.redrawScreen = False
