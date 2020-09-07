@@ -2623,17 +2623,33 @@ class UI(object):
     # Puts up a table that allows the stream performance to be compared (ans a report generated)
     def __renderCompareStreamsTable(self):
 
-        maxWidth = 55
-        tableContents = ("This will show compare streams type stuff ") + \
-                        "\n\n...but in the mean time.." +\
-                        "\n see https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
-                        "\n\n\n\n" + \
-                        "Press the [any] key to continue".center(maxWidth, " ")
+        # maxWidth = 55
+        # tableContents = ("This will show compare streams type stuff ") + \
+        #                 "\n\n...but in the mean time.." +\
+        #                 "\n see https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
+        #                 "\n\n\n\n" + \
+        #                 "Press the [any] key to continue".center(maxWidth, " ")
+        #
+        # # Render the message in a pop-up box
+        # self.__renderMessageBox(tableContents, "Help")
+        # # Clear the self.displayPopup function pointer now that the popup has been displayed
+        # self.displayPopup = None
 
-        # Render the message in a pop-up box
-        self.__renderMessageBox(tableContents, "Help")
-        # Clear the self.displayPopup function pointer now that the popup has been displayed
-        self.displayPopup = None
+        # Iterate over all RtpReceiveCommon streams present in the streams dictionary and rank them in
+        # order of no of packets lost
+        # Create a list of tuples containing the table columns
+        tableContents = []
+        tableRow = ["cake", "banana"]
+        tableContents.append(tableRow)
+        # Now actually display the paged table list
+        title = "Comparison of streams "
+        footer = ["", "[<][>]page, [^][v] select stream, [p]exit, [s]ave file \n" + \
+                  "[c]opy to clipboard, [m]easure to compare, [o]rder"]
+
+        self.__renderPagedList(self.tablePageNo, title, ["Stream ID".ljust(15), "Measure".ljust(50)], tableContents,
+                               footerRow=footer,
+                               pageNoDisplayInFooterRow=True, reverseList=True, marginOffset=7)
+
 
     # Tests the key pressed, and calls the appropriate method
     def __parseKeyPressed(self):
