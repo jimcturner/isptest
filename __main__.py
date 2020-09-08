@@ -98,7 +98,7 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 
 # Additonal libraries required (of my own making)
-from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, \
+from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, RtpStreamComparer,\
     Glitch, RtpData, IPRoutingTracerouteChange, StreamResumed, StreamLost, IPRoutingTTLChange, StreamStarted
 import Utils
 from Custom_prompt_toolkit_mods import multi_input_dialog
@@ -600,7 +600,7 @@ class UI(object):
                                              ]
         self.selectedFilterNo = 0    # Specifies which filter option within filterListForDisplayedEvents[] is in use
 
-
+        self.popupSortDescending = False   # Reverses the order of the results for popup tables
 
         # Thread running flags
         self.keysPressedThreadActive = True
@@ -2613,7 +2613,11 @@ class UI(object):
 
     # Toggles the pop-up table sort order (ascending/descending) (if applicable)
     def __setSortOrder(self):
-        pass
+        if self.popupSortDescending is False:
+            self.popupSortDescending = True
+        else:
+            self.popupSortDescending = False
+
     # Cycles through the available list of stream comparison criteria
     def __setStreamCompareCriteria(self):
         pass
@@ -2643,41 +2647,40 @@ class UI(object):
         # self.__renderMessageBox(tableContents, "Help")
         # # Clear the self.displayPopup function pointer now that the popup has been displayed
         # self.displayPopup = None
-        if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
-            self.streamResultsDataSet = self.availableRtpRxStreamList
-
-        # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
-        else:
-            self.streamResultsDataSet = self.availableRtpTxResultsList
-
-        # Iterate over all RtpReceiveCommon streams present in the streams dictionary and rank them in
-        # order of no of packets lost *or whichever is the chosen metric)
-        tableContents = []  # Holds the table rows
-        tableRow = [] # A tuple to hold a single row (comprising multiple columns)
         try:
-            if len(self.streamResultsDataSet) > 0:
-                # Compile list of available streams
-                for stream in self.streamResultsDataSet:
-                    # Get stats for the selected stream
-                    stats = stream[1].getRtpStreamStats()
-                    # Append a new row to the table contents
-                    tableContents.append([str(stream[0]), str(stats["glitch_packets_lost_total_count"])])
+            if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
+                # self.streamResultsDataSet = self.availableRtpRxStreamList
+                self.streamResultsDataSet = self.rtpRxStreamsDict
+            # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
+            else:
+                # self.streamResultsDataSet = self.availableRtpTxResultsList
+                self.streamResultsDataSet = self.rtpTxStreamResultsDict
+
+            # Create a RtpStreamComparer object. Pass the list of available streams to it
+            rtpStreamComparer = RtpStreamComparer(self.streamResultsDataSet)
+            # Get a list of streams ordered by a particular stats[] key
+            sortedStreamsList = rtpStreamComparer.compareByKey("glitch_packets_lost_total_count", reverseOrder=self.popupSortDescending)
+
+            # Now create the table contents from sortedStreamsList
+            # Note: RtpStreamComparer.compareByKey returns a list of dicts
+            tableContents = []  # Holds the table rows
+            if sortedStreamsList is not None and len(sortedStreamsList) > 0 :
+                for stream in sortedStreamsList:
+                    tableContents.append([stream["friendlyName"], stream["value"]])
+
+            # Now actually display the paged table list
+            metricTitle = "Packets Lost" # The name of the metric to be listed in table column heading
+            title = "Comparison of streams "
+            footer = ["", "[<][>]page, [^][v] select stream, [p]exit, [s]ave file \n" + \
+                      "[c]opy to clipboard, [m]easure to compare, [o]rder"]
+
+            self.__renderPagedList(self.tablePageNo, title, ["Stream ID".ljust(15), str(metricTitle).ljust(50)], tableContents,
+                                   footerRow=footer,
+                                   pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
         except Exception as e:
-            Utils.Message.addMessage("UI.__renderCompareStreamsTable() " + str(e))
-
-        # Sort the table contents using column 1 as the key
-        # See here: https://www.kite.com/python/answers/how-to-sort-a-list-of-lists-by-an-index-of-each-inner-list-in-python
-        sorted_list = sorted(tableContents, key=lambda x: x[1], reverse=True)
-
-        # Now actually display the paged table list
-        metricTitle = "Packets Lost" # The name of the metric to be listed in table column heading
-        title = "Comparison of streams "
-        footer = ["", "[<][>]page, [^][v] select stream, [p]exit, [s]ave file \n" + \
-                  "[c]opy to clipboard, [m]easure to compare, [o]rder"]
-
-        self.__renderPagedList(self.tablePageNo, title, ["Stream ID".ljust(15), str(metricTitle).ljust(50)], sorted_list,
-                               footerRow=footer,
-                               pageNoDisplayInFooterRow=True, reverseList=True, marginOffset=7)
+            Utils.Message.addMessage("ERR:UI.__renderCompareStreamsTable() " + str(e))
+            # Deactivate this popup
+            self.displayPopup = None
 
 
     # Tests the key pressed, and calls the appropriate method

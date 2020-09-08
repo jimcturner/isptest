@@ -6106,3 +6106,45 @@ class ResultsReceiver(object):
                 # Wait 1 second before checking to see if self.udpSocket is now valid
                 time.sleep(1)
         Utils.Message.addMessage("INFO: ResultsReceiver:__resultsReceiverThread ended")
+
+# This class provides a means of comparing the performance stats of multiple Rtp receive streams
+class RtpStreamComparer(object):
+
+    # Takes a pointer to the dictionary containing all the RTP Stream objects to be compared
+    # These are expected to be RtpReceiveCommon objects (or their subclasses)
+    def __init__(self, rtpStreamsDict) -> None:
+        super().__init__()
+        self.rtpStreamsDict = rtpStreamsDict
+
+    # This method iterates over rtpStreamsDict and examines the stats[statsKeyToCompare] parameter.
+    # It will then return an ordered list of dictionaries containing [{friendlyName, syncSourceID, statsKeyToCompare, value}]
+    # It is expected that these results will be displayed somewhere
+    # If reverseOrder==True, the returned list will be in descending order of value
+
+    def compareByKey(self, statsKeyToCompare, reverseOrder = False):
+        unsortedList = []  # Holds the list of streams that are being compared
+        try:
+            if len(self.rtpStreamsDict) > 0:
+                # Iterate over the Rtp stream object keys
+                for rtpStream in self.rtpStreamsDict:
+                    # Get stats object for the current stream
+                    stats = self.rtpStreamsDict[rtpStream].getRtpStreamStats()
+                    # Create a small dict containing the specified stats key and value
+                    streamStatsToBeCompared = {
+                                                "syncSourceID": stats["stream_syncSource"],
+                                                "friendlyName": stats["stream_friendly_name"],
+                                                "statsKeyToCompare": statsKeyToCompare,
+                                                "value": stats[statsKeyToCompare]
+                                                }
+                    # Append the dict to the unsorted list
+                    unsortedList.append(streamStatsToBeCompared)
+
+                # Now sort the list by the value of statsKeyToCompare
+                # Based on code here: https://www.kite.com/python/answers/how-to-sort-a-list-of-lists-by-an-index-of-each-inner-list-in-python
+                sorted_list = sorted(unsortedList, key=lambda x: x["value"], reverse=reverseOrder)
+                return sorted_list
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR:RtpStreamComparer.compareByKey " + str(e))
+            # Return None
+            return None
