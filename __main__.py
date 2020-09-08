@@ -602,6 +602,18 @@ class UI(object):
 
         self.popupSortDescending = False   # Reverses the order of the results for popup tables
 
+        # A list of the available criteria by which a stream can be compared (and a display friendly name)
+        # These criteria map to stats{} dictionary keys within RtpReceiveStream and RtpStreamresults objects
+        self.criteriaListForCompareStreams = [
+                                                ["glitch_packets_lost_total_percent", "Packet loss %"],
+                                                ["glitch_packets_lost_total_count", "Total  packets lost"],
+                                                ["glitch_counter_total_glitches", "Total no of glitches"],
+                                                ["glitch_most_recent_timestamp", "Most recent glitch"],
+                                                ["glitch_mean_time_between_glitches", "Glitch period (how often)"]
+                                              ]
+        self.selectedCriteriaForCompareStreams = 0 # Specifies which stream compare criteria is in use
+                                                    # (within the criteriaListForCompareStreams[] list)
+
         # Thread running flags
         self.keysPressedThreadActive = True
         self.renderDisplayThreadActive = True
@@ -2620,7 +2632,10 @@ class UI(object):
 
     # Cycles through the available list of stream comparison criteria
     def __setStreamCompareCriteria(self):
-        pass
+        # Increment selectedCriteriaForCompareStreams. Bounds limit according to the length of
+        # self.criteriaListForCompareStreams[] using modulo (%) operator
+        self.selectedCriteriaForCompareStreams = (self.selectedCriteriaForCompareStreams + 1) %\
+                                                    len(self.criteriaListForCompareStreams)
 
     def __onCompareStreams(self):
         # Toggle display of the 'compare streams' table
@@ -2658,8 +2673,10 @@ class UI(object):
 
             # Create a RtpStreamComparer object. Pass the list of available streams to it
             rtpStreamComparer = RtpStreamComparer(self.streamResultsDataSet)
+            # Extract the key stats key by which to compare the streams by
+            keyTosortBy = self.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams][0]
             # Get a list of streams ordered by a particular stats[] key
-            sortedStreamsList = rtpStreamComparer.compareByKey("glitch_packets_lost_total_count", reverseOrder=self.popupSortDescending)
+            sortedStreamsList = rtpStreamComparer.compareByKey(keyTosortBy, reverseOrder=self.popupSortDescending)
 
             # Now create the table contents from sortedStreamsList
             # Note: RtpStreamComparer.compareByKey returns a list of dicts
@@ -2669,12 +2686,12 @@ class UI(object):
                     tableContents.append([stream["friendlyName"], stream["value"]])
 
             # Now actually display the paged table list
-            metricTitle = "Packets Lost" # The name of the metric to be listed in table column heading
+            metricTitle = self.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams][1] # The name of the metric to be listed in table column heading
             title = "Comparison of streams "
             footer = ["", "[<][>]page, [^][v] select stream, [p]exit, [s]ave file \n" + \
                       "[c]opy to clipboard, [m]easure to compare, [o]rder"]
 
-            self.__renderPagedList(self.tablePageNo, title, ["Stream ID".ljust(15), str(metricTitle).ljust(50)], tableContents,
+            self.__renderPagedList(self.tablePageNo, title, ["Name".ljust(15), str(metricTitle).ljust(50)], tableContents,
                                    footerRow=footer,
                                    pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
         except Exception as e:
