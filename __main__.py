@@ -1629,7 +1629,7 @@ class UI(object):
     # causing a report of the current stream to be saved to disk
     # Note, this option is only available if the Events Table is currently being displayed
     def __onSaveReportToDisk(self):
-        if self.displayEventsTable == True:
+        if self.displayPopup == self.__renderEventsListTable:
             selectedRxOrResultsStream = None
             # Get a handle on the selected stream
             # Depending upon the mode, we'll have to retrieve it from the correct dictionary
