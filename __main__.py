@@ -1503,22 +1503,25 @@ class UI(object):
     # Historically it would attempt to export the data to pastebin.com (a website that allows you to share text via a webpage)
     # but this was not dependable, so has been discontinued
     def __onCopyReportToClipboard(self):
-        selectedRxOrResultsStream = None
-        # Get a handle on the selected stream
+        selectedRxOrResultsStream = None # Points to the actual Rtp object
+        streamResultsDict = None # Points to the dict containing selectedRxOrResultsStream
+        # Get a handle on the selected stream and dictionary of streams
         if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
             try:
                 selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
+                streamResultsDict = self.rtpRxStreamsDict
             except:
                 pass
         elif self.operationMode == 'TRANSMIT':
             try:
                 selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
+                streamResultsDict = self.rtpTxStreamResultsDict
             except:
                 pass
 
         streamReport = None
         # Confirm that a valid stream exists
-        if selectedRxOrResultsStream is not None:
+        if selectedRxOrResultsStream is not None and streamResultsDict is not None:
             # Render a stream performance summary report
             if self.displayPopup == self.__renderEventsListTable:
                 # Get a textual, formatted report for this stream
@@ -1528,6 +1531,11 @@ class UI(object):
             elif self.displayPopup == self.__renderTracerouteTable:
                 # Get a traceroute history report
                 streamReport = selectedRxOrResultsStream.generateTracerouteHistoryReport()
+            elif self.displayPopup == self.__renderCompareStreamsTable:
+                # Create a RtpStreamComparer object. Pass the list of available streams to it
+                rtpStreamComparer = RtpStreamComparer(streamResultsDict)
+                # Generate a streams comparison report - use the existing criteria list
+                streamReport = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams)
 
             # Check that a textual report has been rendered
             if streamReport is not None:
@@ -2646,7 +2654,7 @@ class UI(object):
             # Now create the table contents from sortedStreamsList
             # Note: RtpStreamComparer.compareByKey returns a list of dicts
             tableContents = []  # Holds the table rows
-            if sortedStreamsList is not None and len(sortedStreamsList) > 0 :
+            if sortedStreamsList is not None and len(sortedStreamsList) > 0:
                 for index in range(len(sortedStreamsList)):
                     # 'humanise' the value depending based on the keyTosortBy
                     value = self.__humanise(keyTosortBy, sortedStreamsList[index]["value"])
@@ -2662,7 +2670,7 @@ class UI(object):
             else:
                 title += ", ascending)"
 
-            footer = ["", "", "[<][>]page, [^][v] select stream, [p]exit, [s]ave file \n" + \
+            footer = ["", "", "[<][>]page, [^][v] select stream, [p]exit, [s]ave\n" + \
                       "[c]opy to clipboard, [m]etric to compare, [o]rder"]
 
             self.__renderPagedList(self.tablePageNo, title, ["", "Name ", str("Value").ljust(50)], tableContents,
