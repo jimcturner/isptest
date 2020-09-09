@@ -1126,6 +1126,48 @@ class RtpReceiveCommon(RtpCommon):
             Utils.Message.addMessage("ERR: RtpReceiveCommon.writeReportToDisk() " + str(e))
             return str(e)
 
+    # This method will generate a formatted report containing the last n IPRoutingTracerouteChange Events
+    # Setting historyLength will modify the no of historic events to include
+    def generateTracerouteHistoryReport(self, historyLength=10):
+        try:
+            # Get a filtered eventlist of the selected Rx or RxResults stream containing only the
+            # IPRoutingTracerouteChange Events
+            tracerouteEventsList = self.getRTPStreamEventList(historyLength,
+                                                              filterList=[IPRoutingTracerouteChange], reverseOrder=True)
+            # Get a copy of the stats dict for this stream
+            stats = self.getRtpStreamStats()
+
+            if len(tracerouteEventsList) > 0:
+                separator = ("-" * 63) + "\r\n"  # Dotted line separator for the report
+                # Format a string containing the IP src/dest address details
+                streamIPDetails = \
+                    str(stats["stream_transmitter_local_srcPort"]) + ":" + \
+                    str(stats["stream_transmitter_localAddress"]) + \
+                    "(" + str(stats["stream_srcAddress"]) + ")" + " ---> " + "(" + \
+                    str(stats["stream_srcPort"]) + ":" + \
+                    str(stats["stream_transmitter_destAddress"]) + ")" + str(stats["stream_rxAddress"]) + ":" + \
+                    str(stats["stream_rxPort"]) + "\r\n"
+
+                streamReport = "Traceroute history (last 10 events) for stream " + str(stats["stream_syncSource"]) + \
+                               "(" + str(stats["stream_friendly_name"]).strip() + ") at " + \
+                               datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
+                streamReport += streamIPDetails
+                streamReport += separator
+                for event in tracerouteEventsList:
+                    streamReport += "Time of change: " + event.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
+                    for hopNo in range(len(event.latestHopsList)):
+                        hopAddr = str(event.latestHopsList[hopNo][0]) + "." + \
+                                  str(event.latestHopsList[hopNo][1]) + "." + \
+                                  str(event.latestHopsList[hopNo][2]) + "." + \
+                                  str(event.latestHopsList[hopNo][3])
+                        streamReport += str(hopNo + 1) + "\t" + str(hopAddr).ljust(16) + "\t" + \
+                                        Utils.WhoisResolver.queryWhoisCache(hopAddr)[0]['asn_description'] + "\r\n"
+                    streamReport += separator
+                return streamReport
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR:RtpReceiveCommon.generateTracerouteHistoryReport() Render traceroute history " + str(e))
+            return None
 
 # Define a class to represent a stream of received rtp packets (and associated stats)
 class RtpReceiveStream(RtpReceiveCommon):
@@ -6063,7 +6105,6 @@ class RtpStreamComparer(object):
     # It will then return an ordered list of dictionaries containing [{friendlyName, syncSourceID, statsKeyToCompare, value}]
     # It is expected that these results will be displayed somewhere
     # If reverseOrder==True, the returned list will be in descending order of value
-
     def compareByKey(self, statsKeyToCompare, reverseOrder = False):
         unsortedList = []  # Holds the list of streams that are being compared
         try:
@@ -6104,3 +6145,14 @@ class RtpStreamComparer(object):
             Utils.Message.addMessage("ERR:RtpStreamComparer.compareByKey (" + str(statsKeyToCompare) + ", " + str(e))
             # Return None
             return None
+
+    # Provides a comparison of all streams
+    # Returns a dict of stats
+    def compareAll(self):
+        allStreamsStatsDict = {
+            "Mean packet loss %": 0,
+            "Mean glitch period": datetime.timedelta(),
+            "Mean glitch duration": datetime.timedelta(),
+            "Mean glitch packet loss": 0
+        }
+        return allStreamsStatsDict

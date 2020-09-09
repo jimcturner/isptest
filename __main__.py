@@ -1521,50 +1521,13 @@ class UI(object):
         if selectedRxOrResultsStream is not None:
             # Render a stream performance summary report
             if self.displayPopup == self.__renderEventsListTable:
-                    # Get a textual, formatted report for this stream
-                    streamReport = \
-                        selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
-                    Utils.Message.addMessage("filterList:" + str(self.filterListForDisplayedEvents[self.selectedFilterNo]))
+                # Get a textual, formatted report for this stream
+                streamReport = \
+                    selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
+                Utils.Message.addMessage("filterList:" + str(self.filterListForDisplayedEvents[self.selectedFilterNo]))
             elif self.displayPopup == self.__renderTracerouteTable:
-                try:
-                    # Render a traceroute history report
-                    # Get a filtered eventlist of the selected Rx or RxResults stream containing only the
-                    # IPRoutingTracerouteChange Events
-                    tracerouteEventsList = selectedRxOrResultsStream.getRTPStreamEventList(10, filterList=[IPRoutingTracerouteChange], reverseOrder=True)
-
-                    # Get a copy of the stats dict for this stream
-                    stats = selectedRxOrResultsStream.getRtpStreamStats()
-
-                    if len(tracerouteEventsList) > 0:
-                        separator = ("-" * 63) + "\r\n" # Dotted line separator for the report
-                        # Format a string containing the IP src/dest address details
-                        streamIPDetails = \
-                            str(stats["stream_transmitter_local_srcPort"]) + ":" + \
-                            str(stats["stream_transmitter_localAddress"]) + \
-                            "(" + str(stats["stream_srcAddress"]) + ")" + " ---> " + "(" +\
-                            str(stats["stream_srcPort"]) + ":" + \
-                            str(stats["stream_transmitter_destAddress"]) + ")" + str(stats["stream_rxAddress"]) + ":" + \
-                            str(stats["stream_rxPort"]) + "\r\n"
-
-                        streamReport = "Traceroute history (last 10 events) for stream " + str(self.selectedStreamID) + \
-                                       "(" + str(stats["stream_friendly_name"]).strip() + ") at " +\
-                                        datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
-                        streamReport += streamIPDetails
-                        streamReport += separator
-                        for event in tracerouteEventsList:
-                            streamReport += "Time of change: " + event.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
-                            for hopNo in range(len(event.latestHopsList)):
-                                hopAddr = str(event.latestHopsList[hopNo][0]) + "." + \
-                                          str(event.latestHopsList[hopNo][1]) + "." + \
-                                          str(event.latestHopsList[hopNo][2]) + "." + \
-                                          str(event.latestHopsList[hopNo][3])
-                                streamReport += str(hopNo + 1) + "\t" + str(hopAddr).ljust(16) + "\t" +\
-                                                Utils.WhoisResolver.queryWhoisCache(hopAddr)[0]['asn_description'] + "\r\n"
-                            streamReport += separator
-                except Exception as e:
-                    streamReport = None
-                    Utils.Message.addMessage("ERR:UI.__onCopyReportToClipboard() Render traceroute history " + str(e))
-
+                # Get a traceroute history report
+                streamReport = selectedRxOrResultsStream.generateTracerouteHistoryReport()
 
             # Check that a textual report has been rendered
             if streamReport is not None:
