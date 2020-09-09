@@ -1649,10 +1649,11 @@ class UI(object):
 
                             # Create the path for the saved file
                             fullSavePath = Registry.resultsSubfolder + filename
-                            # Invoke that stream's writeReportToDisk method
+                            # Generate the actual report
                             # Use the current display filter for events to determine which events are exported to the file
-                            fileSavedStatus = selectedRxOrResultsStream.writeReportToDisk(fullSavePath,\
-                                                                        exportFilterList=self.filterListForDisplayedEvents)
+                            report = selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
+                            # Invoke that stream's writeReportToDisk method
+                            fileSavedStatus = selectedRxOrResultsStream.writeReportToDisk(report, fileName=fullSavePath)
                             maxWidth = 70
                             if fileSavedStatus == True:
                                 # Display a message box showing the successful save path + filname

@@ -1080,7 +1080,7 @@ class RtpReceiveCommon(RtpCommon):
         # Return a string containing the output
         return outputString
 
-    # This utility method witll generate a filename based on the stream parameters.
+    # This utility method will generate a filename based on the stream parameters.
     # The optional includePath will create a filename with a complete path
     # By default, the filename prefix will be pulled from Registry.streamReportFilename but can be overridden
     # by setting overrideFileNamePrefix
@@ -1109,16 +1109,13 @@ class RtpReceiveCommon(RtpCommon):
             return sanitize_filepath(fileName + ".txt")
 
 
-    # This method will call self.generateReport() and write the output to disk
+    # This method will write the string object 'report' to disk
     # If no filename is supplied, it will use an auto-generated filename based on the stream parameters
-    # It will take an optional exportFilterList[] and pass it directly to generateReport()
-    # See self.generateReport() for info on how this list can be used to filter the Event types that appear
-    # in the exported report
     # Returns True for a successful save, otherwise an error message
-    def writeReportToDisk(self, fileName = None, exportFilterList=None):
+    def writeReportToDisk(self, report, fileName=None):
 
-        #  Generate the report to be written to disk
-        report = self.generateReport(eventFilterList=exportFilterList)
+        # #  Generate the report to be written to disk
+        # report = self.generateReport(eventFilterList=exportFilterList)
 
         # If filename hasn't been overridden, auto-generate one. Note filename validation should have happened prior
         if fileName is None:
@@ -2126,10 +2123,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                 ######## If the stream has been declared 'dead' and auto-remove is enabled, kill it
                 if streamIsDeadFlag and Registry.autoRemoveDeadRxStreamsEnable:
                     # Generate and save a report
+                    # Generate the actual report
+                    report = self.generateReport()
                     # Retrieve the auto-generated filename
                     _filename = self.createFilenameForReportExport()
+
                     # Write a report to disk
-                    self.writeReportToDisk(fileName=_filename)
+                    self.writeReportToDisk(report, fileName=_filename)
                     # Kill itself
                     self.killStream()
             except Exception as e:
@@ -4413,12 +4413,15 @@ class RtpGenerator(RtpCommon):
                 try:
                     # Get a handle on the RtpStreamResults object
                     rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                    # invoke the writeReportToDisk() method to dump a report to disk automatically
+                    # Generate and save a report
+                    # Generate the actual report
+                    report = rtpTxStreamResults.generateReport()
+
                     # Retrieve the auto-generated filename
                     _filename = rtpTxStreamResults.createFilenameForReportExport()
                     Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + " expiring")
                     # Write a report to disk
-                    rtpTxStreamResults.writeReportToDisk(fileName=_filename)
+                    rtpTxStreamResults.writeReportToDisk(report, fileName=_filename)
                 except Exception as e:
                     Utils.Message.addMessage(
                         "ERR: RtpGenerator.killStream() rtpTxStreamResults.generateReport(): " + str(e))
