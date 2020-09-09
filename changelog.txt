@@ -32,4 +32,5 @@ V2.4
 * Configurable event display filter options (filter by Glitch, Routing change etc.)
 * Rewritten route change detection code
 * Reverse order of traceroute events in export to clipboard
+V2.5 Adds 'compare streams' function
 
