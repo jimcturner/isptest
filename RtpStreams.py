@@ -1082,11 +1082,20 @@ class RtpReceiveCommon(RtpCommon):
 
     # This utility method witll generate a filename based on the stream parameters.
     # The optional includePath will create a filename with a complete path
-    def createFilenameForReportExport(self, includePath=True):
+    # By default, the filename prefix will be pulled from Registry.streamReportFilename but can be overridden
+    # by setting overrideFileNamePrefix
+    def createFilenameForReportExport(self, includePath=True, overrideFileNamePrefix=None):
         # Get info about the stream (to be used in the title)
         syncSourceID, srcAddr, srcPort, friendlyName = self.getRTPStreamID()
-        fileName = Registry.streamReportFilename + \
-                   str(syncSourceID) + "_" + \
+        fileName = ""
+        # Filename prefix not specified, so pull from the Registry
+        if overrideFileNamePrefix is None:
+            fileName += Registry.streamReportFilename
+        else:
+            # Use supplied filename prefix
+            fileName += str(overrideFileNamePrefix).strip()
+
+        fileName += str(syncSourceID) + "_" + \
                    str(friendlyName).rstrip() + "_" + \
                    str(srcAddr) + "_" + \
                    str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S"))
@@ -6156,3 +6165,6 @@ class RtpStreamComparer(object):
             "Mean glitch packet loss": 0
         }
         return allStreamsStatsDict
+
+    def generateReport(self):
+        pass
