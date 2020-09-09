@@ -1354,7 +1354,7 @@ class UI(object):
         if footerRow is not None:
             # If pageNoDisplayInFooterRow = True, overwrite the first column of the footer with a 'Page x of Y' label
             if pageNoDisplayInFooterRow is True:
-                footerRow[0] = "Page " + str(pageNo + 1) + "/" + str(noOfPages)
+                footerRow[0] = "Page\n" + str(pageNo + 1) + "/" + str(noOfPages)
             # Append the footer row to the table data
             tableContents.append(footerRow)
         # Create a SingleTable to tabulate the data
@@ -2675,6 +2675,7 @@ class UI(object):
             rtpStreamComparer = RtpStreamComparer(self.streamResultsDataSet)
             # Extract the key stats key by which to compare the streams by
             keyTosortBy = self.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams][0]
+            displayfriendlyKey = self.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams][1]
             # Get a list of streams ordered by a particular stats[] key
             sortedStreamsList = rtpStreamComparer.compareByKey(keyTosortBy, reverseOrder=self.popupSortDescending)
 
@@ -2682,16 +2683,25 @@ class UI(object):
             # Note: RtpStreamComparer.compareByKey returns a list of dicts
             tableContents = []  # Holds the table rows
             if sortedStreamsList is not None and len(sortedStreamsList) > 0 :
-                for stream in sortedStreamsList:
-                    tableContents.append([stream["friendlyName"], stream["value"]])
+                for index in range(len(sortedStreamsList)):
+                    # 'humanise' the value depending based on the keyTosortBy
+                    value = self.__humanise(keyTosortBy, sortedStreamsList[index]["value"])
+                    tableContents.append([index + 1, str(sortedStreamsList[index]["friendlyName"]).strip() + "  ", value])
+            else:
+                tableContents.append(["", "", "No data to display"])
 
             # Now actually display the paged table list
-            metricTitle = self.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams][1] # The name of the metric to be listed in table column heading
-            title = "Comparison of streams "
-            footer = ["", "[<][>]page, [^][v] select stream, [p]exit, [s]ave file \n" + \
-                      "[c]opy to clipboard, [m]easure to compare, [o]rder"]
+            title = "Comparison of streams (" + displayfriendlyKey
+            # Append 'ascending' or 'descending' to table title depending upon value of self.popupSortDescending
+            if self.popupSortDescending:
+                title += ", descending)"
+            else:
+                title += ", ascending)"
 
-            self.__renderPagedList(self.tablePageNo, title, ["Name".ljust(15), str(metricTitle).ljust(50)], tableContents,
+            footer = ["", "", "[<][>]page, [^][v] select stream, [p]exit, [s]ave file \n" + \
+                      "[c]opy to clipboard, [m]etric to compare, [o]rder"]
+
+            self.__renderPagedList(self.tablePageNo, title, ["", "Name ", str("Value").ljust(50)], tableContents,
                                    footerRow=footer,
                                    pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
         except Exception as e:

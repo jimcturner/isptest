@@ -1260,7 +1260,6 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # define timedelta object to store an aggregate of of Glitch length
         self.__stats["glitch_length_total_time"] = datetime.timedelta()
-        # self.__glitch_most_recent_timestamp = datetime.timedelta()
         self.__stats["glitch_most_recent_timestamp"] = datetime.timedelta()
         self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.timedelta()
         self.__stats["glitch_mean_time_between_glitches"] = datetime.timedelta()
@@ -2088,63 +2087,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Increment 1 sec loop counter
             loopCounter += 1
         Utils.Message.addMessage("DBUG: __samplingThread ended for stream " + str(self.__stats["stream_syncSource"]))
-    # This thread monitors the packet receive Queue
-    # To implement:-
-    #   self.__stats["packet_counter_1S"] 'packets per second'
-    #                   self.__stats["packet_counter_received_total"]
-    #   self.__stats["packet_data_received_1S_bytes"]
-    #                   self.__stats["packet_data_received_total_bytes"]
-    #   self.__stats["packet_payload_size_mean_1S_bytes"]
-    #   self.__stats["packet_instantaneous_receive_period_uS"]
-    #
-    #   Events
-    #   StreamStarted Event self.__stats["packet_first_packet_received_timestamp"]
-    #   All events counter self.__stats["stream_all_events_counter"]
-    #   self.__stats["packet_last_seen_received_timestamp"]
-    #   Loss of Stream alarm
-    #
-    #   Jitter
-    #   self.__stats["jitter_long_term_uS"]
-    #   self.__stats["jitter_mean_1S_uS"]
-    #   self.__stats["jitter_mean_10S_uS"]
-    #   self.__stats["jitter_min_uS"]
-    #   self.__stats["jitter_max_uS"]
-    #   self.__stats["jitter_max_uS"]
-    #   self.__stats["jitter_range_uS"]
-    #   self.__stats["jitter_instantaneous"]
-    #   self.__stats["jitter_alarm_event_timeout_S"]
-    #   self.__stats["jitter_excess_jitter_events_total"]
-    #   self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"]
-    #   self.__stats["jitter_time_of_last_excess_jitter_event"]
-    #   self.__stats["jitter_excess_jitter_events_total"]
-    #   self.__stats["jitter_mean_time_between_excess_jitter_events"]
 
-
-    #   Glitches
-    #   self.__stats["glitch_counter_total_glitches"]
-    #   self.__stats["glitch_time_elapsed_since_last_glitch"
-    #   self.__stats["glitch_most_recent_timestamp"]
-    #   self.__stats["glitch_packets_lost_total_count"]
-    #   self.__stats["glitch_packets_lost_total_percent"]
-    #   Moving glitch counters
-    #   self.__stats["glitch_Event_Trigger_Threshold_packets"]
-    #   self.__stats["glitch_glitches_ignored_counter"]
-    #   self.__stats["glitch_length_total_time"]
-    #   self.__stats["glitch_mean_glitch_duration"]
-    #   self.__stats["glitch_packets_lost_per_glitch_mean"]
-    #   self.__stats["glitch_packets_lost_per_glitch_min"]
-    #   self.__stats["glitch_packets_lost_per_glitch_max"]
-    #   self.__stats["glitch_min_glitch_duration"]
-    #   self.__stats["glitch_max_glitch_duration"]
-    #   self.__stats["glitch_worst_glitches_list"]
-
-
-    #   Stream
-    #   self.__stats["stream_time_elapsed_total"]
-
-    #   Other
-    #   Housekeep eventsList
-    #   Test for dead stream --> Save report to disk --> kill itself
 
     # This is the main receiver thread for the incoming Rtp stream. It employs a 'non-busy wait' for RtpData objects
     # to become available. It will detect events, and it will alse update the relevant instance variables with the
@@ -6136,8 +6079,21 @@ class RtpStreamComparer(object):
                                                 "statsKeyToCompare": statsKeyToCompare,
                                                 "value": stats[statsKeyToCompare]
                                                 }
-                    # Append the dict to the unsorted list
-                    unsortedList.append(streamStatsToBeCompared)
+                    # Test for special cases of values that cannot be sorted (exceptions)
+                    if statsKeyToCompare == "glitch_most_recent_timestamp" and \
+                        type(streamStatsToBeCompared["value"]) == datetime.timedelta:
+                        # NOTE: stats[glitch_most_recent_timestamp] is initialised as a datetime.timedelta object
+                        # If not glitches are recorded it'll stay that way.
+                        # Once a glitch occurs it will be set as a datetime.datetime object and these two types
+                        # cannot be sorted using sorted() (raises an Exception) therefore it's easiest just to
+                        # exclude from the list of items to be sorted
+                        pass
+                    elif streamStatsToBeCompared["value"] == None:
+                        # Catch-all for any values that might be None
+                        pass
+                    else:
+                        # Otherwise append the dict to the unsorted list
+                        unsortedList.append(streamStatsToBeCompared)
 
                 # Now sort the list by the value of statsKeyToCompare
                 # Based on code here: https://www.kite.com/python/answers/how-to-sort-a-list-of-lists-by-an-index-of-each-inner-list-in-python
@@ -6145,6 +6101,6 @@ class RtpStreamComparer(object):
                 return sorted_list
 
         except Exception as e:
-            Utils.Message.addMessage("ERR:RtpStreamComparer.compareByKey " + str(e))
+            Utils.Message.addMessage("ERR:RtpStreamComparer.compareByKey (" + str(statsKeyToCompare) + ", " + str(e))
             # Return None
             return None
