@@ -3975,6 +3975,32 @@ class RtpGenerator(RtpCommon):
                 if self.SRC_IP_ADDR != currentSrcIPAddr:
                     self.SRC_IP_ADDR = currentSrcIPAddr
 
+                # If timeToLive seconds decrements to '2' seconds left, this means that it's about to expire
+                # (it will expire when it reaches 1 second).
+                # At this point, automatically generate a stream report
+                if self.timeToLive == 2:
+                    # Now check to see if there is a corresponding RtpStreamResults object for this Tx stream
+                    self.rtpTxStreamResultsDictMutex.acquire()
+                    if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
+                        try:
+                            # Get a handle on the RtpStreamResults object
+                            rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                            # Generate and save a report
+                            # Generate the actual report
+                            report = rtpTxStreamResults.generateReport()
+
+                            # Retrieve the auto-generated filename
+                            _filename = rtpTxStreamResults.createFilenameForReportExport()
+                            Utils.Message.addMessage(
+                                "Stream " + str(self.syncSourceIdentifier) + " object is expiring. Autosaving report")
+                            # Write a report to disk
+                            rtpTxStreamResults.writeReportToDisk(report, fileName=_filename)
+                            Utils.Message.addMessage("Autosaved " + str(_filename + " to disk"))
+                        except Exception as e:
+                            Utils.Message.addMessage(
+                                "ERR: RtpGenerator.killStream() rtpTxStreamResults.generateReport(): " + str(e))
+                    self.rtpTxStreamResultsDictMutex.release()
+
                 # Decrement timeToLive seconds counter but only if current value is +ve and >= 1
                 # A -ve value is used to denote 'live for ever'
                 # A value of 1 is used to denote 'expired' . At this point, the _rtpGeneratorThread.txScheduler() will
@@ -4419,9 +4445,10 @@ class RtpGenerator(RtpCommon):
 
                     # Retrieve the auto-generated filename
                     _filename = rtpTxStreamResults.createFilenameForReportExport()
-                    Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + " expiring")
+                    Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + " object is ending. Autosaving report")
                     # Write a report to disk
                     rtpTxStreamResults.writeReportToDisk(report, fileName=_filename)
+                    Utils.Message.addMessage("Written " + str(_filename + " to disk"))
                 except Exception as e:
                     Utils.Message.addMessage(
                         "ERR: RtpGenerator.killStream() rtpTxStreamResults.generateReport(): " + str(e))
