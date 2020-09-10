@@ -609,7 +609,11 @@ class UI(object):
                                                 ["glitch_packets_lost_total_count", "Total packets lost"],
                                                 ["glitch_counter_total_glitches", "Total no of glitches"],
                                                 ["glitch_most_recent_timestamp", "Most recent glitch"],
-                                                ["glitch_mean_time_between_glitches", "Glitch period (how often)"]
+                                                ["glitch_mean_time_between_glitches", "Glitch period (how often)"],
+                                                ["glitch_packets_lost_per_glitch_max", "Worst glitch (packets lost)"],
+                                                ["glitch_max_glitch_duration", "Worst glitch (duration)"],
+                                                ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss"],
+                                                ["glitch_mean_glitch_duration", "Mean glitch duration"]
                                               ]
         self.selectedCriteriaForCompareStreams = 0 # Specifies which stream compare criteria is in use
                                                     # (within the criteriaListForCompareStreams[] list)
@@ -2883,95 +2887,6 @@ class UI(object):
         for index, stream in enumerate(rtpStreamList):
             # Write the list index value to the third element of the stream tuple
             stream[2] = index
-
-    # This function tests the supplied key against some specified key values, and formats the corresponding value
-    # to make it more readable
-    # if appendUnit is set, a suitable suffix (eg '%' will be appended)
-    def __humanise(self, key, value, appendUnit=False):
-        # This function tests the supplied key against some specified key values, and formats the corresponding value
-        # to make it more readable
-        if value == None:
-            value = " - "
-        if key == "packet_data_received_1S_bytes":
-            # We want this value in bps
-            # Convert bytes to bits
-            value *= 8
-            value = Utils.bToMb(value)
-            return value
-
-        if key == "stream_syncSource" or key == 'Sync Source ID':
-            value = str(value).rjust(10)
-
-        # Render dates concisely
-        if type(value) == datetime.datetime:
-            value = value.strftime("%d/%m %H:%M:%S")
-            return value
-
-        if type(value) == datetime.timedelta:
-            # Pass to (my) dtstrft() function to create a much shorter string
-            return Utils.dtstrft(value)
-
-        if key == "packet_data_received_total_bytes" or key == "Bytes transmitted":
-            value = Utils.bToMb(value) + "B"
-            return value
-
-        if key == 'Tx Rate (actual)' or key == 'stream_transmitter_txRate_bps':
-            value = Utils.bToMb(value)
-            return value
-
-        if key.find('percent') > 0:
-            # Round % values to 2 dec place if less than 10.0
-            if value < 10:
-                value = "%0.2f" % value
-            # Othewise round to 1 decimal place (so that the value fixes into a screen space 4 chars wide)
-            else:
-                value = "%0.1f" % value
-            # Finally, if appendUnit is set, cast as a string and append a '%'
-            if appendUnit:
-                value = str(value) + "%"
-            return value
-
-        if key.find('_uS') > 0:
-            # If > 1000uS, express as a mS
-            if int(value) > 1000 or int(value) < -1000:
-                value = str(math.ceil(value / 1000.0)) + "mS"
-            else:
-                # Append _uS to the value
-                value = str(math.ceil(value)) + "uS"
-            return value
-
-        # TX Streams 'time remain' field
-        if key == 'Time to live':
-            # If this is am endless stream (created with a negative time to live)
-            if value < 0:
-                value = "forever"
-            elif value < 2:
-                value = "Expired"
-            else:
-                value = datetime.timedelta(seconds=value)
-            return value
-
-        # Transmitter pane on Receiver
-        # The time remain messages are sent very slowly so if the time remaining is < 5 seconds, just write 'Expired'
-        if key == 'stream_transmitter_TimeToLive_sec':
-            # If this is am endless stream (created with a negative time to live)
-            if value < 0:
-                value = "forever"
-            elif value < 5:
-                value = "Expired"
-            else:
-                value = datetime.timedelta(seconds=value)
-            return value
-
-
-
-        if key == "stream_srcAddress" or key == "stream_rxAddress" or key == 'Dest IP':
-            # Should pad ip addresses to the max no of characters aaa.bbb.ccc.ddd
-            value = value.ljust(15)
-            return value
-
-        else:
-            return value
 
     # Autonomous thread to render the screen and parse keyboard presses
     def __renderDisplayThread(self):
