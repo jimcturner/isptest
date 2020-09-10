@@ -1266,3 +1266,21 @@ def detectRouteChanges(prevHopsList, hopsList, prevRxTTL=None, rxTTL=None):
         return hopsListHasChanged
     else:
         return False
+
+# This function will write the string object 'report' to disk
+# If no filename is supplied, it will use an auto-generated filename based on the stream parameters
+# Returns True for a successful save, otherwise an error message
+def writeReportToDisk(report, fileName=None):
+    # If filename hasn't been overridden, auto-generate one. Note filename validation should have happened prior
+    if fileName is None:
+        fileName = "report_" + str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S"))
+    try:
+        # Open the file for writing
+        fh = open(fileName, "w+")
+        fh.write(report)
+        fh.close()
+        Message.addMessage("Saved: " + str(fileName))
+        return True
+    except Exception as e:
+        Message.addMessage("ERR:Utils.writeReportToDisk() " + str(e))
+        return str(e)

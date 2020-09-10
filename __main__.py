@@ -1601,7 +1601,7 @@ class UI(object):
 
 
 
-    # This method will call the currently selected Receive (or TxResults writeReportToDisk() method
+    # This method will call the Utils.writeReportToDisk() function
     # causing a report of the current stream to be saved to disk
     # Note, this option is only available if the Events Table is currently being displayed
     def __onSaveReportToDisk(self):
@@ -1665,8 +1665,8 @@ class UI(object):
                             # Generate the actual report
                             # Use the current display filter for events to determine which events are exported to the file
                             report = selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
-                            # Invoke that stream's writeReportToDisk method
-                            fileSavedStatus = selectedRxOrResultsStream.writeReportToDisk(report, fileName=fullSavePath)
+                            # Invoke the Utils.writeReportToDisk method
+                            fileSavedStatus = Utils.writeReportToDisk(report, fileName=fullSavePath)
                             maxWidth = 70
                             if fileSavedStatus == True:
                                 # Display a message box showing the successful save path + filname

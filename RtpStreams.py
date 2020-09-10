@@ -1110,28 +1110,28 @@ class RtpReceiveCommon(RtpCommon):
             return sanitize_filepath(fileName + ".txt")
 
 
-    # This method will write the string object 'report' to disk
-    # If no filename is supplied, it will use an auto-generated filename based on the stream parameters
-    # Returns True for a successful save, otherwise an error message
-    def writeReportToDisk(self, report, fileName=None):
-
-        # #  Generate the report to be written to disk
-        # report = self.generateReport(eventFilterList=exportFilterList)
-
-        # If filename hasn't been overridden, auto-generate one. Note filename validation should have happened prior
-        if fileName is None:
-            fileName = self.createFilenameForReportExport()
-
-        try:
-            # Open the file for writing
-            fh = open(fileName, "w+")
-            fh.write(report)
-            fh.close()
-            Utils.Message.addMessage("Saved: " + str(fileName))
-            return True
-        except Exception as e:
-            Utils.Message.addMessage("ERR: RtpReceiveCommon.writeReportToDisk() " + str(e))
-            return str(e)
+    # # This method will write the string object 'report' to disk
+    # # If no filename is supplied, it will use an auto-generated filename based on the stream parameters
+    # # Returns True for a successful save, otherwise an error message
+    # def writeReportToDisk(self, report, fileName=None):
+    #
+    #     # #  Generate the report to be written to disk
+    #     # report = self.generateReport(eventFilterList=exportFilterList)
+    #
+    #     # If filename hasn't been overridden, auto-generate one. Note filename validation should have happened prior
+    #     if fileName is None:
+    #         fileName = self.createFilenameForReportExport()
+    #
+    #     try:
+    #         # Open the file for writing
+    #         fh = open(fileName, "w+")
+    #         fh.write(report)
+    #         fh.close()
+    #         Utils.Message.addMessage("Saved: " + str(fileName))
+    #         return True
+    #     except Exception as e:
+    #         Utils.Message.addMessage("ERR: RtpReceiveCommon.writeReportToDisk() " + str(e))
+    #         return str(e)
 
     # This method will generate a formatted report containing the last n IPRoutingTracerouteChange Events
     # Setting historyLength will modify the no of historic events to include
@@ -2228,7 +2228,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     _filename = self.createFilenameForReportExport()
 
                     # Write a report to disk
-                    self.writeReportToDisk(report, fileName=_filename)
+                    Utils.writeReportToDisk(report, fileName=_filename)
                     # Kill itself
                     self.killStream()
             except Exception as e:
@@ -4093,7 +4093,7 @@ class RtpGenerator(RtpCommon):
                             Utils.Message.addMessage(
                                 "Stream " + str(self.syncSourceIdentifier) + " object is expiring. Autosaving report")
                             # Write a report to disk
-                            rtpTxStreamResults.writeReportToDisk(report, fileName=_filename)
+                            Utils.writeReportToDisk(report, fileName=_filename)
                             Utils.Message.addMessage("Autosaved " + str(_filename + " to disk"))
                         except Exception as e:
                             Utils.Message.addMessage(
@@ -4546,7 +4546,7 @@ class RtpGenerator(RtpCommon):
                     _filename = rtpTxStreamResults.createFilenameForReportExport()
                     Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + " object is ending. Autosaving report")
                     # Write a report to disk
-                    rtpTxStreamResults.writeReportToDisk(report, fileName=_filename)
+                    Utils.writeReportToDisk(report, fileName=_filename)
                     Utils.Message.addMessage("Written " + str(_filename + " to disk"))
                 except Exception as e:
                     Utils.Message.addMessage(
