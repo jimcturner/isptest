@@ -6281,12 +6281,25 @@ class RtpStreamComparer(object):
     # Provides a comparison of all streams
     # Returns a dict of stats
     def compareAll(self):
+        # Define the mean stats to be calculated
+        # Each calculation defined by a tuple [Rtp Stream stats key to be used, friendly name of the key, the defauly value]
+        # The friendly name and value fields will then be used to construct a dictionary that will be returned to the caller
+        statsKeysToCompare = [["glitch_packets_lost_total_percent", "Mean packet loss %", 0],
+                              ["glitch_mean_time_between_glitches", "Mean glitch period (how often)", datetime.timedelta()],
+                              ["glitch_mean_glitch_duration", "Mean glitch duration", datetime.timedelta()],
+                              ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss", 0]
+                            ]
+
+        # This dict will be returned by compareAll()
         allStreamsStatsDict = {
             "Mean packet loss %": 0,
             "Mean glitch period": datetime.timedelta(),
             "Mean glitch duration": datetime.timedelta(),
             "Mean glitch packet loss": 0
         }
+        # Take shallow copy of rtpStreamsDict (just case it changes size mid-iteration)
+        rtpStreamsDict = dict(self.rtpStreamsDict)
+
         return allStreamsStatsDict
 
     # Generates a formatted report ranking the streams in order of the comparison
