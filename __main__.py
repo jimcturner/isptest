@@ -1538,8 +1538,9 @@ class UI(object):
             elif self.displayPopup == self.__renderCompareStreamsTable:
                 # Create a RtpStreamComparer object. Pass the list of available streams to it
                 rtpStreamComparer = RtpStreamComparer(streamResultsDict)
-                # Generate a streams comparison report - use the existing criteria list
-                streamReport = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams)
+                # Generate a streams comparison report - use the existing criteria list and currently set sort order
+                streamReport = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams,
+                                                                listOrder=self.popupSortDescending)
 
             # Check that a textual report has been rendered
             if streamReport is not None:

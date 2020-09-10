@@ -1182,87 +1182,95 @@ class RtpReceiveCommon(RtpCommon):
     # This is a class method, so accessible anywhere
     @classmethod
     def humanise(cls, key, value, appendUnit=False):
-        # This function tests the supplied key against some specified key values, and formats the corresponding value
-        # to make it more readable
-        if value == None:
-            value = " - "
-        if key == "packet_data_received_1S_bytes":
-            # We want this value in bps
-            # Convert bytes to bits
-            value *= 8
-            value = Utils.bToMb(value)
-            return value
+        try:
+            # This function tests the supplied key against some specified key values, and formats the corresponding value
+            # to make it more readable
+            if value == None:
+                value = " - "
+            if key == "packet_data_received_1S_bytes":
+                # We want this value in bps
+                # Convert bytes to bits
+                value *= 8
+                value = Utils.bToMb(value)
+                return value
 
-        if key == "stream_syncSource" or key == 'Sync Source ID':
-            value = str(value).rjust(10)
+            if key == "stream_syncSource" or key == 'Sync Source ID':
+                value = str(value).rjust(10)
 
-        # Render dates concisely
-        if type(value) == datetime.datetime:
-            value = value.strftime("%d/%m %H:%M:%S")
-            return value
+            # Render dates concisely
+            if type(value) == datetime.datetime:
+                value = value.strftime("%d/%m %H:%M:%S")
+                return value
 
-        if type(value) == datetime.timedelta:
-            # Pass to (my) dtstrft() function to create a much shorter string
-            return Utils.dtstrft(value)
+            if type(value) == datetime.timedelta:
+                # Pass to (my) dtstrft() function to create a much shorter string
+                return Utils.dtstrft(value)
 
-        if key == "packet_data_received_total_bytes" or key == "Bytes transmitted":
-            value = Utils.bToMb(value) + "B"
-            return value
+            if key == "packet_data_received_total_bytes" or key == "Bytes transmitted":
+                value = Utils.bToMb(value) + "B"
+                return value
 
-        if key == 'Tx Rate (actual)' or key == 'stream_transmitter_txRate_bps':
-            value = Utils.bToMb(value)
-            return value
+            if key == 'Tx Rate (actual)' or key == 'stream_transmitter_txRate_bps':
+                value = Utils.bToMb(value)
+                return value
 
-        if key.find('percent') > 0:
-            # Round % values to 2 dec place if less than 10.0
-            if value < 10:
-                value = "%0.2f" % value
-            # Othewise round to 1 decimal place (so that the value fixes into a screen space 4 chars wide)
+            if key.find('percent') > 0:
+                # Round % values to 2 dec place if less than 10.0
+                if value < 10:
+                    value = "%0.2f" % value
+                # Othewise round to 1 decimal place (so that the value fixes into a screen space 4 chars wide)
+                else:
+                    value = "%0.1f" % value
+                # Finally, if appendUnit is set, cast as a string and append a '%'
+                if appendUnit:
+                    value = str(value) + "%"
+                return value
+
+            if key.find('_uS') > 0:
+                # If > 1000uS, express as a mS
+                if int(value) > 1000 or int(value) < -1000:
+                    value = str(math.ceil(value / 1000.0)) + "mS"
+                else:
+                    # Append _uS to the value
+                    value = str(math.ceil(value)) + "uS"
+                return value
+
+            # TX Streams 'time remain' field
+            if key == 'Time to live':
+                # If this is am endless stream (created with a negative time to live)
+                if value < 0:
+                    value = "forever"
+                elif value < 2:
+                    value = "Expired"
+                else:
+                    value = datetime.timedelta(seconds=value)
+                return value
+
+            # Transmitter pane on Receiver
+            # The time remain messages are sent very slowly so if the time remaining is < 5 seconds, just write 'Expired'
+            if key == 'stream_transmitter_TimeToLive_sec':
+                # If this is am endless stream (created with a negative time to live)
+                if value < 0:
+                    value = "forever"
+                elif value < 5:
+                    value = "Expired"
+                else:
+                    value = datetime.timedelta(seconds=value)
+                return value
+
+            if key == "stream_srcAddress" or key == "stream_rxAddress" or key == 'Dest IP':
+                # Should pad ip addresses to the max no of characters aaa.bbb.ccc.ddd
+                value = value.ljust(15)
+                return value
+
+            if key == "glitch_packets_lost_per_glitch_mean":
+                value = math.ceil(value)
+                return value
+            # Else if no criteria matched, return the original value, unmodified
             else:
-                value = "%0.1f" % value
-            # Finally, if appendUnit is set, cast as a string and append a '%'
-            if appendUnit:
-                value = str(value) + "%"
-            return value
-
-        if key.find('_uS') > 0:
-            # If > 1000uS, express as a mS
-            if int(value) > 1000 or int(value) < -1000:
-                value = str(math.ceil(value / 1000.0)) + "mS"
-            else:
-                # Append _uS to the value
-                value = str(math.ceil(value)) + "uS"
-            return value
-
-        # TX Streams 'time remain' field
-        if key == 'Time to live':
-            # If this is am endless stream (created with a negative time to live)
-            if value < 0:
-                value = "forever"
-            elif value < 2:
-                value = "Expired"
-            else:
-                value = datetime.timedelta(seconds=value)
-            return value
-
-        # Transmitter pane on Receiver
-        # The time remain messages are sent very slowly so if the time remaining is < 5 seconds, just write 'Expired'
-        if key == 'stream_transmitter_TimeToLive_sec':
-            # If this is am endless stream (created with a negative time to live)
-            if value < 0:
-                value = "forever"
-            elif value < 5:
-                value = "Expired"
-            else:
-                value = datetime.timedelta(seconds=value)
-            return value
-
-        if key == "stream_srcAddress" or key == "stream_rxAddress" or key == 'Dest IP':
-            # Should pad ip addresses to the max no of characters aaa.bbb.ccc.ddd
-            value = value.ljust(15)
-            return value
-
-        else:
+                return value
+        except Exception as e:
+            Utils.Message.addMessage("ERR:RtpReceiveCommon.humanise() value: " + str(value) + ", " + str(e))
             return value
 
 
@@ -6290,15 +6298,49 @@ class RtpStreamComparer(object):
                               ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss", 0]
                             ]
 
-        # This dict will be returned by compareAll()
-        allStreamsStatsDict = {
-            "Mean packet loss %": 0,
-            "Mean glitch period": datetime.timedelta(),
-            "Mean glitch duration": datetime.timedelta(),
-            "Mean glitch packet loss": 0
-        }
+        allStreamsStatsDict = {} # The dictionary that will be returned
         # Take shallow copy of rtpStreamsDict (just case it changes size mid-iteration)
         rtpStreamsDict = dict(self.rtpStreamsDict)
+
+        # Iterate over keys to assemble an an array containing all the individual stats dicts for all streams
+        statsForAllStreams = []
+        try:
+            for stream in rtpStreamsDict:
+                statsForAllStreams.append(rtpStreamsDict[stream].getRtpStreamStats())
+
+            # Now calculate the mean values across all streams for each of the keys listed in statsKeysToCompare
+            for stat in statsKeysToCompare:
+                # Collect all values of the key stat in statsForAllStreams
+                currentKeyValueToExtract = stat[0]
+                # Explanation of this line (or see https://stackoverflow.com/a/11093436):-
+                # This is 'list comprehension'
+                #   'for x in statsForAllStreams' # iterates over the statsForAllStreams list yielding 'x'
+                # 'x[currentKeyValueToExtract]' # since each 'x' is a RtpStream stats dictionary, we want
+                # to extract only the value corresponding to the key specified by currentKeyValueToExtract
+                # '[ ]' # Put the exctracted value in a new list
+                values = []
+                values = [x[currentKeyValueToExtract] for x in statsForAllStreams]
+
+                # Now we need to calculate the mean value of the values in values[]
+                if len(values) > 0:
+                    # Check the type of the values in the list. If they are timedelta objects, the mean will
+                    # have to be calculated differently. See https://stackoverflow.com/a/3617540
+                    start = 0 # The start value for sum(). This will be overwritten in the list contains datetime objects
+                    if type(values[0]) == datetime.timedelta:
+                        start = datetime.timedelta(0)
+                    # Calculate the mean and assign back to the value in the current statsKeysToCompare[] list
+                    stat[2] = sum(values, start) / len (values)
+
+            # Dynamically create dict to be returned by compareAll()
+            # Note: The function will return a 'humanised' value
+            for item in statsKeysToCompare:
+                key = item[1]
+                # extract and humanise the value
+                value = RtpReceiveCommon.humanise(item[0], item[2], appendUnit=True)
+                allStreamsStatsDict[key] = value
+
+        except Exception as e:
+            Utils.Message.addMessage("RtpStreamComparer.compareAll() " + str(e))
 
         return allStreamsStatsDict
 
