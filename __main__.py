@@ -1602,28 +1602,62 @@ class UI(object):
 
 
     # This method will call the Utils.writeReportToDisk() function
-    # causing a report of the current stream to be saved to disk
-    # Note, this option is only available if the Events Table is currently being displayed
+    # causing a report of the current popup to be saved to disk
+    # Note, this option is only available if the popup is currently being displayed
     def __onSaveReportToDisk(self):
-        if self.displayPopup == self.__renderEventsListTable:
+        # if self.displayPopup == self.__renderEventsListTable:
+        if self.displayPopup is not None:
+
             selectedRxOrResultsStream = None
-            # Get a handle on the selected stream
+            selectedRxOrResultsDict = None
+            # Get a handle on the selected stream and dictionary of results
             # Depending upon the mode, we'll have to retrieve it from the correct dictionary
             if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
                 try:
                     selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
+                    selectedRxOrResultsDict = self.rtpRxStreamsDict
                 except:
                     pass
             elif self.operationMode == 'TRANSMIT':
                 try:
                     selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
+                    selectedRxOrResultsDict = self.rtpTxStreamResultsDict
                 except:
                     pass
 
-            # Confirm that the stream has been found
-            if selectedRxOrResultsStream is not None:
-                # Get a default filename (excluding the path)
-                defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport(includePath=False)
+            report = None
+            try:
+                if self.displayPopup == self.__renderEventsListTable:
+                    dialogueTitle = 'Export stream report to file (stream ' + str(self.selectedStreamID) + ')'
+                    # Get a default filename (excluding the path)
+                    defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport(includePath=False)
+                    # Generate the actual report
+                    # Use the current display filter for events to determine which events are exported to the file
+                    report = selectedRxOrResultsStream.generateReport(
+                        eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
+
+                elif self.displayPopup == self.__renderTracerouteTable:
+                    dialogueTitle = 'Export traceroute history to file (stream ' + str(self.selectedStreamID) + ')'
+                    # Get a default filename (excluding the path)
+                    defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport(includePath=False,
+                                                                            overrideFileNamePrefix="Traceroute_history_")
+                    report = selectedRxOrResultsStream.generateTracerouteHistoryReport()
+
+                elif self.displayPopup == self.__renderCompareStreamsTable and selectedRxOrResultsDict is not None:
+                    dialogueTitle = 'Stream comparison report'
+                    defaultFilename = "Stream_comparison_" + str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S"))
+                    # Create an RtpStreamComparer object
+                    rtpStreamComparer = RtpStreamComparer(selectedRxOrResultsDict)
+                    report = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams,
+                                                                    listOrder=self.popupSortDescending)
+            except Exception as e:
+                Utils.Message.addMessage("ERR:UI.__onSaveReportToDisk() render reports " + str(e))
+                report = None
+
+            # Confirm that a report has been generated
+            if report is not None:
+                # # Get a default filename (excluding the path)
+                # defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport(includePath=False)
 
                 # Now create an input box prefilling with the initial filename created by createFilenameForReportExport()
                 styleDefinition = Style.from_dict({
@@ -1638,7 +1672,7 @@ class UI(object):
                 # Keep displaying the dialog until the filename is validated/cancel
 
                 filenameValidated = False
-                dialogueTitle = 'Export stream report to file (stream ' + str(self.selectedStreamID) + ')'
+                # dialogueTitle = 'Export stream report to file (stream ' + str(self.selectedStreamID) + ')'
                 # Create a footer label containing the full os path of the save location
                 footerText = "Current save folder:\n" + str(os.path.abspath(Registry.resultsSubfolder))
                 while filenameValidated is False:
@@ -1662,9 +1696,9 @@ class UI(object):
 
                             # Create the path for the saved file
                             fullSavePath = Registry.resultsSubfolder + filename
-                            # Generate the actual report
-                            # Use the current display filter for events to determine which events are exported to the file
-                            report = selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
+                            # # Generate the actual report
+                            # # Use the current display filter for events to determine which events are exported to the file
+                            # report = selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
                             # Invoke the Utils.writeReportToDisk method
                             fileSavedStatus = Utils.writeReportToDisk(report, fileName=fullSavePath)
                             maxWidth = 70
@@ -1689,6 +1723,9 @@ class UI(object):
                     except ValidationError as e:
                         # Modify the dialogue table to show the erroneous chars
                         dialogueTitle = str(e)
+            else:
+                Utils.Message.addMessage("ERR: UI.__onSaveReportToDisk() no report generated. Nothing to write")
+
 
 
 
@@ -2579,7 +2616,7 @@ class UI(object):
             if lastUpdated is not None:
                 title += ", updated " + lastUpdated.strftime("%H:%M:%S")
 
-            footer = ["", "", "[<][>]page, [^][v] select stream, [t]exit\n[c]opy history to clipboard"]
+            footer = ["", "", "[<][>]page, [^][v] select stream, [t]exit\n[c]opy history to clipboard, [s]ave"]
             self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15), "Whois".ljust(maxWidth)], tableContents,
                                    footerRow=footer,
                                    pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
