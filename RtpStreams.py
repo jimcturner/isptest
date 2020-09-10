@@ -754,6 +754,7 @@ class RtpCommon(object):
             return None
 
 
+
 # Define a Super Class for RTP Receive streams. This will contain methods that are common to both
 # RtpReceiveStream and RtpStreamResults
 class RtpReceiveCommon(RtpCommon):
@@ -1174,6 +1175,96 @@ class RtpReceiveCommon(RtpCommon):
         except Exception as e:
             Utils.Message.addMessage("ERR:RtpReceiveCommon.generateTracerouteHistoryReport() Render traceroute history " + str(e))
             return None
+
+    # This function tests the supplied key against some specified key values, and formats the corresponding value
+    # to make it more readable
+    # if appendUnit is set, a suitable suffix (eg '%' will be appended)
+    # This is a class method, so accessible anywhere
+    @classmethod
+    def humanise(cls, key, value, appendUnit=False):
+        # This function tests the supplied key against some specified key values, and formats the corresponding value
+        # to make it more readable
+        if value == None:
+            value = " - "
+        if key == "packet_data_received_1S_bytes":
+            # We want this value in bps
+            # Convert bytes to bits
+            value *= 8
+            value = Utils.bToMb(value)
+            return value
+
+        if key == "stream_syncSource" or key == 'Sync Source ID':
+            value = str(value).rjust(10)
+
+        # Render dates concisely
+        if type(value) == datetime.datetime:
+            value = value.strftime("%d/%m %H:%M:%S")
+            return value
+
+        if type(value) == datetime.timedelta:
+            # Pass to (my) dtstrft() function to create a much shorter string
+            return Utils.dtstrft(value)
+
+        if key == "packet_data_received_total_bytes" or key == "Bytes transmitted":
+            value = Utils.bToMb(value) + "B"
+            return value
+
+        if key == 'Tx Rate (actual)' or key == 'stream_transmitter_txRate_bps':
+            value = Utils.bToMb(value)
+            return value
+
+        if key.find('percent') > 0:
+            # Round % values to 2 dec place if less than 10.0
+            if value < 10:
+                value = "%0.2f" % value
+            # Othewise round to 1 decimal place (so that the value fixes into a screen space 4 chars wide)
+            else:
+                value = "%0.1f" % value
+            # Finally, if appendUnit is set, cast as a string and append a '%'
+            if appendUnit:
+                value = str(value) + "%"
+            return value
+
+        if key.find('_uS') > 0:
+            # If > 1000uS, express as a mS
+            if int(value) > 1000 or int(value) < -1000:
+                value = str(math.ceil(value / 1000.0)) + "mS"
+            else:
+                # Append _uS to the value
+                value = str(math.ceil(value)) + "uS"
+            return value
+
+        # TX Streams 'time remain' field
+        if key == 'Time to live':
+            # If this is am endless stream (created with a negative time to live)
+            if value < 0:
+                value = "forever"
+            elif value < 2:
+                value = "Expired"
+            else:
+                value = datetime.timedelta(seconds=value)
+            return value
+
+        # Transmitter pane on Receiver
+        # The time remain messages are sent very slowly so if the time remaining is < 5 seconds, just write 'Expired'
+        if key == 'stream_transmitter_TimeToLive_sec':
+            # If this is am endless stream (created with a negative time to live)
+            if value < 0:
+                value = "forever"
+            elif value < 5:
+                value = "Expired"
+            else:
+                value = datetime.timedelta(seconds=value)
+            return value
+
+        if key == "stream_srcAddress" or key == "stream_rxAddress" or key == 'Dest IP':
+            # Should pad ip addresses to the max no of characters aaa.bbb.ccc.ddd
+            value = value.ljust(15)
+            return value
+
+        else:
+            return value
+
 
 # Define a class to represent a stream of received rtp packets (and associated stats)
 class RtpReceiveStream(RtpReceiveCommon):
@@ -6148,8 +6239,10 @@ class RtpStreamComparer(object):
         unsortedList = []  # Holds the list of streams that are being compared
         try:
             if len(self.rtpStreamsDict) > 0:
+                # Take shallow copy of rtpStreamsDict (just case it changes size mid-iteration)
+                rtpStreamsDict = dict(self.rtpStreamsDict)
                 # Iterate over the Rtp stream object keys
-                for rtpStream in self.rtpStreamsDict:
+                for rtpStream in rtpStreamsDict:
                     # Get stats object for the current stream
                     stats = self.rtpStreamsDict[rtpStream].getRtpStreamStats()
                     # Create a small dict containing the specified stats key and value
@@ -6203,9 +6296,11 @@ class RtpStreamComparer(object):
     def generateReport(self, statsKeysToCompare, listOrder=False):
         # Simple local function to determine the current operation mode based on the type of object instances
         # present in self.rtpStreamsDict. Returns a string
-        def getOperationMode(rtpStreamsDict):
+        def getOperationMode(_rtpStreamsDict):
             # Iterate over rtpStreamsDict to determine what objects are present
             if len(self.rtpStreamsDict) > 0:
+                # Take shallow copy of rtpStreamsDict (just case it changes size mid-iteration)
+                rtpStreamsDict = dict(_rtpStreamsDict)
                 # Assume that all the objects in the list are of the same type (therefore loop only needs to run once)
                 for key in rtpStreamsDict:
                     if type(rtpStreamsDict[key]) == RtpStreamResults:

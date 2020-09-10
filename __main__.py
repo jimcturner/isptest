@@ -98,7 +98,7 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 
 # Additonal libraries required (of my own making)
-from RtpStreams import RtpReceiveStream, RtpGenerator, RtpStreamResults, RtpStreamComparer,\
+from RtpStreams import RtpReceiveCommon, RtpReceiveStream, RtpGenerator, RtpStreamResults, RtpStreamComparer,\
     Glitch, RtpData, IPRoutingTracerouteChange, StreamResumed, StreamLost, IPRoutingTTLChange, StreamStarted
 import Utils
 from Custom_prompt_toolkit_mods import multi_input_dialog
@@ -606,7 +606,7 @@ class UI(object):
         # These criteria map to stats{} dictionary keys within RtpReceiveStream and RtpStreamresults objects
         self.criteriaListForCompareStreams = [
                                                 ["glitch_packets_lost_total_percent", "Packet loss %"],
-                                                ["glitch_packets_lost_total_count", "Total  packets lost"],
+                                                ["glitch_packets_lost_total_count", "Total packets lost"],
                                                 ["glitch_counter_total_glitches", "Total no of glitches"],
                                                 ["glitch_most_recent_timestamp", "Most recent glitch"],
                                                 ["glitch_mean_time_between_glitches", "Glitch period (how often)"]
@@ -1053,7 +1053,7 @@ class UI(object):
                             try:
                                 # Retrieve the data from the rtpStream object by looking up it's key
                                 # Attempt to humanise the data based on object type or clues given by the key name
-                                tableCell = str(self.__humanise(key, streamDataStats[key]))
+                                tableCell = str(RtpReceiveCommon.humanise(key, streamDataStats[key]))
 
                                 try:
                                     # is it a receive stream?
@@ -2657,7 +2657,7 @@ class UI(object):
             if sortedStreamsList is not None and len(sortedStreamsList) > 0:
                 for index in range(len(sortedStreamsList)):
                     # 'humanise' the value depending based on the keyTosortBy
-                    value = self.__humanise(keyTosortBy, sortedStreamsList[index]["value"])
+                    value = RtpReceiveCommon.humanise(keyTosortBy, sortedStreamsList[index]["value"], appendUnit=True)
                     tableContents.append([index + 1, str(sortedStreamsList[index]["friendlyName"]).strip() + "  ", value])
             else:
                 tableContents.append(["", "", "No data to display"])
@@ -2673,7 +2673,7 @@ class UI(object):
             footer = ["", "", "[<][>]page, [^][v] select stream, [p]exit, [s]ave\n" + \
                       "[c]opy to clipboard, [m]etric to compare, [o]rder"]
 
-            self.__renderPagedList(self.tablePageNo, title, ["", "Name ", str("Value").ljust(50)], tableContents,
+            self.__renderPagedList(self.tablePageNo, title, ["", "Name ", str(displayfriendlyKey).ljust(50)], tableContents,
                                    footerRow=footer,
                                    pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
         except Exception as e:
@@ -2886,7 +2886,8 @@ class UI(object):
 
     # This function tests the supplied key against some specified key values, and formats the corresponding value
     # to make it more readable
-    def __humanise(self, key, value):
+    # if appendUnit is set, a suitable suffix (eg '%' will be appended)
+    def __humanise(self, key, value, appendUnit=False):
         # This function tests the supplied key against some specified key values, and formats the corresponding value
         # to make it more readable
         if value == None:
@@ -2925,6 +2926,9 @@ class UI(object):
             # Othewise round to 1 decimal place (so that the value fixes into a screen space 4 chars wide)
             else:
                 value = "%0.1f" % value
+            # Finally, if appendUnit is set, cast as a string and append a '%'
+            if appendUnit:
+                value = str(value) + "%"
             return value
 
         if key.find('_uS') > 0:
