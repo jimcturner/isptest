@@ -1776,7 +1776,9 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
                 ########### Calculate elapsed time
-                self.__stats["stream_time_elapsed_total"] = datetime.datetime.now() - \
+                # Note. This is paused once the streamIsDeadFlag is set
+                if streamIsDeadFlag is not True:
+                    self.__stats["stream_time_elapsed_total"] = datetime.datetime.now() - \
                                                             self.__stats["packet_first_packet_received_timestamp"]
 
                 if packetsReceivedThisPeriod > 0:
@@ -1940,6 +1942,8 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                         # Clear the flag so another StreamLost Event can be generated
                         lossOfStreamFlag = False
+                        # Clear streamIsDeadFlag
+                        streamIsDeadFlag = False
                     else:
                         # No packets received this period so increment the timer
                         secondsWithNoBytesRxdTimer += 1
@@ -2204,8 +2208,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                 Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect dead stream " + str(e))
 
             try:
-                ######## If the stream has been declared 'dead' and auto-remove is enabled, kill it
-                if streamIsDeadFlag and Registry.autoRemoveDeadRxStreamsEnable:
+                ######## If the stream has been declared 'dead' and the autoRemoveDeadRxStreamsThreshold_s
+                # threshold has been exceeded AND auto-remove is enabled, kill it
+                # if streamIsDeadFlag and Registry.autoRemoveDeadRxStreamsEnable:
+                if streamIsDeadFlag and \
+                        ((datetime.datetime.now() - lossOfStreamEventTimestamp).total_seconds() > \
+                                Registry.autoRemoveDeadRxStreamsThreshold_s) and Registry.autoRemoveDeadRxStreamsEnable:
+
                     # Generate and save a report
                     # Generate the actual report
                     report = self.generateReport()
