@@ -3096,29 +3096,12 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
     else:
         filename = sanitize_filepath(Registry.resultsSubfolder + Registry.transmitterLogFilename)
 
+    lastWrittenEventNo = 0
     lastWrittenEventNoDict = {}  # Dictionary to hold the last written event no for each stream
     latestEvents = []
     # Create versions of filename with the desired extensions
     filename_csv = filename + ".csv"
     filename_json = filename + ".json"
-
-    # Function to monitor the existing log file size to if they've reached the threshold. If so, rename them
-    # to a new file with a date added to the filename. The file extension will be preserved
-    def archiveLogs(file, maxSize):
-        # Determine size of existing log file
-        # check to see if the file exists at all
-        if os.path.isfile(file):
-            # File does exist, so check the size
-            try:
-                if os.path.getsize(file) > maxSize:
-                    # separate the filename and the extension
-                    nameNoExtension, fileExtension = os.path.splitext(file)
-                    # File is larger than the max threshold so rename it
-                    archivedFilenameSuffix = "_ending_at_" + datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S")
-                    os.rename(file, nameNoExtension+archivedFilenameSuffix+fileExtension)
-                    Utils.Message.addMessage("Auto archived " + file)
-            except Exception as e:
-                Utils.Message.addMessage("ERR: __diskloggerThread.archiveLogs() " + str(e))
 
 
     # This function checks tp see if fileToCreate already exists. if it doesn't, it will create the file
@@ -3146,8 +3129,26 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
             # If down, break out of the endless while loop
             break
         # Check to see if the existing log files (if they exist) are below the max size threshold
-        archiveLogs(filename_csv, Registry.maximumLogFileSize_bytes)
-        archiveLogs(filename_json, Registry.maximumLogFileSize_bytes)
+        ret = Utils.archiveLogs(filename_csv, Registry.maximumLogFileSize_bytes)
+        if ret == True:
+            Utils.Message.addMessage("__diskloggerThread. " + str(filename_csv) + \
+                               " auto archived")
+        elif ret == None:
+            Utils.Message.addMessage("ERR:__diskloggerThread. " + str(filename_csv) + \
+                               " auto archive error")
+        else:
+            pass
+
+        ret = Utils.archiveLogs(filename_json, Registry.maximumLogFileSize_bytes)
+        if ret == True:
+            Utils.Message.addMessage("__diskloggerThread. " + str(filename_json) + \
+                               " auto archived")
+        elif ret == None:
+            Utils.Message.addMessage("ERR:__diskloggerThread. " + str(filename_json) + \
+                               " auto archive error")
+        else:
+            pass
+
         # Create a file and write a header (if necessary)
         # For the CSV file
         createLogFile(filename_csv, "Event summary")
