@@ -1824,40 +1824,6 @@ class UI(object):
                                                                  "type": "txname",
                                                                 "name": text})
 
-
-    # This method is called if a previously expired stream (that is still listed in
-    # self.rtpTxStreamsDict{} is requested to be restarted
-    def __recreateExpiredStream(self, RtpGeneratorToBeResurrected):
-        # Attempt to get the parameters of the dead stream
-        try:
-            # Attempt to get the parameters of the dead stream
-            stats = RtpGeneratorToBeResurrected.getRtpStreamStats()
-            # Remove the expired stream from self.rtpTxStreamsDict
-            Utils.Message.addMessage("UI.__recreateExpiredStream() Removing stream " + str(stats['Sync Source ID']))
-            RtpGeneratorToBeResurrected.killStream()
-            time.sleep(1)
-            # Create new RtpStream based on the parameters of the old stream
-            # Confirm that the stream has been succesfully deleted by checking whether there already exists
-            # a key stats['Sync Source ID'] in self.rtpTxStreamsDict
-
-            try:
-                # If the RtpGenerator object still exists in the rtpTxStreamsDict, the killStream() must have failed
-                if stats['Sync Source ID'] in self.rtpTxStreamsDict:
-                    Utils.Message.addMessage("ERR: UI.__recreateExpiredStream() Expired stream" +
-                                       str(stats['Sync Source ID']) + " still exists, can't replace")
-                else:
-                    # It has been removed, so add the new stream (a copy of the old, expired stream)
-                    RtpGenerator(stats['Dest IP'], stats['Dest Port'], stats['Tx Rate'], stats['Packet size'],
-                                 stats['Sync Source ID'], 3600, \
-                                 self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
-                                 self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex, uiInstance=self,
-                                 friendlyName=stats['Friendly Name'], UDP_SRC_PORT=stats['Tx Source Port'])
-            except Exception as e:
-                Utils.Message.addMessage("ERR: UI.__recreateExpiredStream() inner " + str(e))
-        except Exception as e:
-            Utils.Message.addMessage("ERR: UI.__recreateExpiredStream() outer " + str(e))
-
-
     # 'a' pressed (only when in Tx or Loopback mode)
     def __onAddTxStream(self):
         # Attempt to add a new tx stream (if we're in loopback or transmit mode)
@@ -2846,7 +2812,7 @@ class UI(object):
         # This is a utility function for UI.__renderDisplayThread
         # It's job is to compare the current working list in use by __displayThread (currentStreamList[])
         # with the rtpStreamDict{} dictionary of active rtpRxStreams or rtpTxStreams (maintained by main())
-        # If will replicate any additions/deletions to objects in rtpStreamDict{} to currentStreamList[]
+        # It will replicate any additions/deletions to objects in rtpStreamDict{} to currentStreamList[]
         # Crucially, the order of currentStreamList[] will be maintained so that it will represent a
         # chronological record of the order in which streams were added. This is very useful for display purposes
         # because __displayThread relies upon the index no of the entries in currentStreamList[]
@@ -4601,8 +4567,12 @@ def main(argv):
             if rtpPacketReceiver.getSocket() is not None:
                 # Create a UDPMessageSender using to correspond to the RtpPacketReceiver sharing the same socket
                 udpMessageSender = UDPMessageSender(txMessageQueue, rtpPacketReceiver, shutdownFlag)
-            # Add the RtpPacketReceiver/UDPMessageSender pair to the receiversAndSenders[] list
-            receiversAndSendersList.append([rtpPacketReceiver, udpMessageSender])
+
+            try:
+                # Add the RtpPacketReceiver/UDPMessageSender pair to the receiversAndSenders[] list
+                receiversAndSendersList.append([rtpPacketReceiver, udpMessageSender])
+            except Exception as e:
+                Utils.Message.addMessage("ERR:main() receiversAndSendersList.append() " + str(e))
 
 
     # Endless loop
