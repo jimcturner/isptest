@@ -15,6 +15,8 @@ class Registry(object):
 
     messageLogFilenameTx = "isptest_log_tx.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
     messageLogFilenameRx = "isptest_log_rx.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
+    streamsSnapshotFilename = "ispTestSnapshot.isp" # This file is created when the isptest Receiver app ends, and is reloaded
+                                                    # on startup
 
     # Provides content for the help popup
     helpTableContents = [["h","Display/hide this page"],

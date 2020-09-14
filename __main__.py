@@ -4076,18 +4076,18 @@ def shutdownApplicationSignalHandler(signum, frame):
 
 
 def main(argv):
-    testObject = Utils.TestObject()
-
-    saveStatus = Utils.exportObjectToDisk(testObject)
-    if saveStatus is True:
-        importedObject = Utils.importObjectFromDisk()
-        try:
-            print(str(importedObject.getMyDict()))
-        except Exception as e:
-            print("import failure: " + str(e))
-    else:
-        print("export failure " + str(saveStatus))
-    exit()
+    # testObject = Utils.TestObject()
+    #
+    # saveStatus = Utils.exportObjectToDisk(testObject)
+    # if saveStatus is True:
+    #     importedObject = Utils.importObjectFromDisk()
+    #     try:
+    #         print(str(importedObject.getMyDict()))
+    #     except Exception as e:
+    #         print("import failure: " + str(e))
+    # else:
+    #     print("export failure " + str(saveStatus))
+    # exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
@@ -4498,7 +4498,36 @@ def main(argv):
     # Define a local function that will perform a graceful shutdown of all threads and resources
     def shutdownApplication():
         Utils.Message.addMessage("main.shutdownApplication() called")
-        # Attempt to remove all rtp stream objects
+
+        # Special case. If in RECEIVE mode, take a snapshot of all the Events lists and stats[] dictionaries, for
+        # saving to disk
+        # if MODE == 'RECEIVE' and len(rtpRxStreamsDict) > 0:
+        #     # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
+        #     # create a list of tuples containing [streamID, RtpReceiveStream object]
+        #     rxStreamExportList = []
+        #     for streamID, RtpReceiveStream in rtpRxStreamsDict.items(): # Iterate over keys, values
+        #         # Take a deep copy of the RtpReceiveStream object
+        #         try:
+        #             RtpReceiveStreamCopy = deepcopy(RtpReceiveStream)
+        #             rxStreamExportList.append([streamID, RtpReceiveStreamCopy])
+        #         except Exception as e:
+        #             Utils.Message.addMessage("ERR: Export deepcopy " + str(e))
+        #
+        #         # rxStreamExportList.append([streamID,
+        #         #                         RtpReceiveStream.getRtpStreamStats(),
+        #         #                             RtpReceiveStream.getRTPStreamEventList()])
+        #     if len(rxStreamExportList) > 0:
+        #         # Now write the rxStreamExportList to a file
+        #         saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
+        #         if saveStatus is True:
+        #             Utils.Message.addMessage("Exported current streams snapshot to file " +\
+        #                                      str(Registry.streamsSnapshotFilename))
+        #         else:
+        #             Utils.Message.addMessage("ERR:Export streams snapshot " + str(saveStatus))
+
+
+        # Attempt to remove all rtp stream objects (be they RtpGenrators (which themselves reference RtpStreamresults objects)
+        # or RtpReceiveStream objects
         for dict in [rtpTxStreamsDict, rtpRxStreamsDict]:
             if len(dict) > 0:
                 # Temporary list to hold the streams currently in rtpStreamsDict
@@ -4510,6 +4539,8 @@ def main(argv):
                 for stream in dict:
                     # Take a copy of the key value (the stream ID)
                     tempStreamList.append(stream)
+
+
                 # Now iterate of the new streamList, calling .killStream() on all the objects within
                 for stream in tempStreamList:
                     Utils.Message.addMessage("INFO: Killing " + str(type(dict[stream])) + ": " + str(stream))
@@ -4578,6 +4609,10 @@ def main(argv):
                 receiversAndSendersList.append([rtpPacketReceiver, udpMessageSender])
             except Exception as e:
                 Utils.Message.addMessage("ERR:main() receiversAndSendersList.append() " + str(e))
+
+        # Now attempt to import a previously saved snapshot
+        # If it exists, this will prepopulate rtpRxStreamsDict{} with a list of previously known
+        # receive streams
 
 
     # Endless loop

@@ -1269,7 +1269,7 @@ class TestObject(object):
 #  Takes a python object (likely to be an RTPReceiveStream object and writes it to disk
 # The object is first serialised using Pickle
 # If filename is None, the function will auto genrate one based on thew current date
-def exportObjectToDisk(objectToExport, filename="ispTestSnapshot.isp"):
+def exportObjectToDisk(objectToExport, filename=Registry.streamsSnapshotFilename):
     try:
         with open(filename, 'wb') as file: #Open for writing in binary mode
             file.write(pickle.dumps(objectToExport))
@@ -1279,7 +1279,7 @@ def exportObjectToDisk(objectToExport, filename="ispTestSnapshot.isp"):
         return str(e)
 
 # Loads, deserialises and returns an object created by exportObjectToDisk()
-def importObjectFromDisk(filename="ispTestSnapshot.isp"):
+def importObjectFromDisk(filename=Registry.streamsSnapshotFilename):
     try:
         with open(filename, 'rb') as file: # open for reading in binary mode
             importedObject = pickle.load(file)
