@@ -4503,29 +4503,26 @@ def main(argv):
 
         # Special case. If in RECEIVE mode, take a snapshot of all the Events lists and stats[] dictionaries, for
         # saving to disk
-        if MODE == 'RECEIVE' and len(rtpRxStreamsDict) > 0:
-            # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
-            rxStreamExportList = []
-            for streamID, RtpReceiveStream in rtpRxStreamsDict.items(): # Iterate over keys, values
-                # # Take a deep copy of the RtpReceiveStream object
-                # try:
-                #     RtpReceiveStreamCopy = deepcopy(RtpReceiveStream)
-                #     rxStreamExportList.append([streamID, RtpReceiveStreamCopy])
-                # except Exception as e:
-                #     Utils.Message.addMessage("ERR: Export deepcopy " + str(e))
+        try:
+            if MODE == 'RECEIVE' and len(rtpRxStreamsDict) > 0:
+                # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
+                rxStreamExportList = []
+                for streamID, RtpReceiveStream in rtpRxStreamsDict.items(): # Iterate over keys, values
 
-                rxStreamExportList.append([streamID,
-                                        RtpReceiveStream.getRtpStreamStats(),
-                                            RtpReceiveStream.getRTPStreamEventList()])
-            if len(rxStreamExportList) > 0:
-                # Now write the rxStreamExportList to a file
-                saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
-                if saveStatus is True:
-                    Utils.Message.addMessage("Exported current streams snapshot to file " +\
-                                             str(Registry.streamsSnapshotFilename))
-                else:
-                    Utils.Message.addMessage("ERR:Export streams snapshot " + str(saveStatus))
 
+                    rxStreamExportList.append([streamID,
+                                            RtpReceiveStream.getRtpStreamStats(),
+                                                RtpReceiveStream.getRTPStreamEventList()])
+                if len(rxStreamExportList) > 0:
+                    # Now write the rxStreamExportList to a file
+                    saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
+                    if saveStatus is True:
+                        Utils.Message.addMessage("Exported current streams snapshot to file " +\
+                                                 str(Registry.streamsSnapshotFilename))
+                    else:
+                        Utils.Message.addMessage("ERR:Export streams save failure " + str(saveStatus))
+        except Exception as e:
+            Utils.Message.addMessage("ERR:Export streams snapshot failure " + str(e))
 
         # Attempt to remove all rtp stream objects (be they RtpGenrators (which themselves reference RtpStreamresults objects)
         # or RtpReceiveStream objects
@@ -4586,6 +4583,10 @@ def main(argv):
         #   1) A txMessageQueue (a Queue.SimpleQueue object to send messages/results back to the source)
         #   2) A RtpPacketReceiver to receive udp/rtp packets and create RtpReceiveStream objects
         #   3) A UDPMessageSender to actually do the transmission of udp packets back to the sender
+
+        socketWaitTimeOut = 2 # In a situation where a valid rx/tx socket isn't (can't be) this will
+        socketWaitTimer = 0 # When this value exceeds socketWaitTimeOut we wil give up waiting for a socket to become available
+        socketWaitPollInterval = 0.5 # How often we poll rtpPacketReceiver.getSocket() to check for a valid socket
         for receivePort in receivePortList:
             # Create a simple queue to hold results data to be sent back to the isptest transmitters
             # Each tx message is a tuple containing [txMessage (byteArray), dest ip addr, dest udp port]
@@ -4595,21 +4596,31 @@ def main(argv):
             rtpPacketReceiver = RtpPacketReceiver(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, ui, txMessageQueue)
 
-            # Wait for socket (Created by rtpPacketReceiver) to become available
-            while rtpPacketReceiver.getSocket() is None and not shutdownFlag.is_set():
+            # Wait for socket (Created by rtpPacketReceiver) to become available (this might take some time)
+
+            while rtpPacketReceiver.getSocket() is None:
                 Utils.Message.addMessage("DBUG:Waiting for udp socket (port " + str(receivePort) + ") to be created")
-                time.sleep(0.5)
+                socketWaitTimer += socketWaitPollInterval
+                # Check tp see if we've waited so long for a socket that it's better just to abort
+                if socketWaitTimer > socketWaitTimeOut:
+                    Utils.Message.addMessage(Term.FG(Term.RED) + \
+                                             "**Can't receive (on addr " +\
+                                  str(UDP_RX_IP) + ":" + str(receivePort) + ". Aborting. Please Quit**")
+                    break
+                time.sleep(socketWaitPollInterval)
 
             # Once the socket has been created, pass it to the udpSend thread
+            udpMessageSender = None
             if rtpPacketReceiver.getSocket() is not None:
                 # Create a UDPMessageSender using to correspond to the RtpPacketReceiver sharing the same socket
                 udpMessageSender = UDPMessageSender(txMessageQueue, rtpPacketReceiver, shutdownFlag)
 
-            try:
-                # Add the RtpPacketReceiver/UDPMessageSender pair to the receiversAndSenders[] list
-                receiversAndSendersList.append([rtpPacketReceiver, udpMessageSender])
-            except Exception as e:
-                Utils.Message.addMessage("ERR:main() receiversAndSendersList.append() " + str(e))
+            if udpMessageSender is not None:
+                try:
+                    # Add the RtpPacketReceiver/UDPMessageSender pair to the receiversAndSenders[] list
+                    receiversAndSendersList.append([rtpPacketReceiver, udpMessageSender])
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:main() receiversAndSendersList.append() " + str(e))
 
         # Now attempt to import a previously saved snapshot
         # If it exists, this will prepopulate rtpRxStreamsDict{} with a list of previously known
