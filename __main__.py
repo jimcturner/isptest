@@ -1207,6 +1207,8 @@ class UI(object):
         if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
             Term.printAt(self.operationMode + " MODE", 1, 1, Term.BLACK, Term.WHITE)
         elif self.operationMode == 'RECEIVE':
+            UDP_RX_IP = ""
+            UDP_RX_PORTS = ""
             try:
                 # Extract the receive IP and receive port(s) (if in RECEIVE mode - these are displayed on the top toolbar)
                 if len(self.receiversAndSendersList) > 0:
