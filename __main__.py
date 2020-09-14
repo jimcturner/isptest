@@ -4503,29 +4503,28 @@ def main(argv):
 
         # Special case. If in RECEIVE mode, take a snapshot of all the Events lists and stats[] dictionaries, for
         # saving to disk
-        # if MODE == 'RECEIVE' and len(rtpRxStreamsDict) > 0:
-        #     # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
-        #     # create a list of tuples containing [streamID, RtpReceiveStream object]
-        #     rxStreamExportList = []
-        #     for streamID, RtpReceiveStream in rtpRxStreamsDict.items(): # Iterate over keys, values
-        #         # Take a deep copy of the RtpReceiveStream object
-        #         try:
-        #             RtpReceiveStreamCopy = deepcopy(RtpReceiveStream)
-        #             rxStreamExportList.append([streamID, RtpReceiveStreamCopy])
-        #         except Exception as e:
-        #             Utils.Message.addMessage("ERR: Export deepcopy " + str(e))
-        #
-        #         # rxStreamExportList.append([streamID,
-        #         #                         RtpReceiveStream.getRtpStreamStats(),
-        #         #                             RtpReceiveStream.getRTPStreamEventList()])
-        #     if len(rxStreamExportList) > 0:
-        #         # Now write the rxStreamExportList to a file
-        #         saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
-        #         if saveStatus is True:
-        #             Utils.Message.addMessage("Exported current streams snapshot to file " +\
-        #                                      str(Registry.streamsSnapshotFilename))
-        #         else:
-        #             Utils.Message.addMessage("ERR:Export streams snapshot " + str(saveStatus))
+        if MODE == 'RECEIVE' and len(rtpRxStreamsDict) > 0:
+            # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
+            rxStreamExportList = []
+            for streamID, RtpReceiveStream in rtpRxStreamsDict.items(): # Iterate over keys, values
+                # # Take a deep copy of the RtpReceiveStream object
+                # try:
+                #     RtpReceiveStreamCopy = deepcopy(RtpReceiveStream)
+                #     rxStreamExportList.append([streamID, RtpReceiveStreamCopy])
+                # except Exception as e:
+                #     Utils.Message.addMessage("ERR: Export deepcopy " + str(e))
+
+                rxStreamExportList.append([streamID,
+                                        RtpReceiveStream.getRtpStreamStats(),
+                                            RtpReceiveStream.getRTPStreamEventList()])
+            if len(rxStreamExportList) > 0:
+                # Now write the rxStreamExportList to a file
+                saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
+                if saveStatus is True:
+                    Utils.Message.addMessage("Exported current streams snapshot to file " +\
+                                             str(Registry.streamsSnapshotFilename))
+                else:
+                    Utils.Message.addMessage("ERR:Export streams snapshot " + str(saveStatus))
 
 
         # Attempt to remove all rtp stream objects (be they RtpGenrators (which themselves reference RtpStreamresults objects)
