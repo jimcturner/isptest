@@ -4076,14 +4076,18 @@ def shutdownApplicationSignalHandler(signum, frame):
 
 
 def main(argv):
-    # Utils.detectRouteChangesTest()
-    # exit()
-    # print("main thread")
-    # textToDisplay = "Say you're writing a program in Python and all it does is pretty print some stuff. The output is in prettiest_print_ever. You already do weird tricks importing fcntl, termios, struct and friends to get the terminal size so that you can use the full width of the terminal (if any); that also gives you the screen height, so it makes sense to use it. (That also means you've long given up any pretenses of cross-platform compatibility, too.)"
-    #
-    # Utils.smart_print(textToDisplay,terminal_height=3)
-    # print("back in main thread")
-    # exit()
+    testObject = Utils.TestObject()
+
+    saveStatus = Utils.exportObjectToDisk(testObject)
+    if saveStatus is True:
+        importedObject = Utils.importObjectFromDisk()
+        try:
+            print(str(importedObject.getMyDict()))
+        except Exception as e:
+            print("import failure: " + str(e))
+    else:
+        print("export failure " + str(saveStatus))
+    exit()
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""

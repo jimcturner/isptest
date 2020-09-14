@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Defines useful non-core objects for use by isptest
 import os
+import pickle
 import struct
 import array
 import subprocess
@@ -1255,3 +1256,34 @@ def archiveLogs(file, maxSize):
             return None
     else:
         return None
+
+# Test object, used to test exportObjectToDisk() and importObjectFromDisk()
+class TestObject(object):
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.myDict = {"a": 1, "b": 2, "c": 3, "d": 4}
+    def getMyDict(self):
+        return self.myDict
+
+#  Takes a python object (likely to be an RTPReceiveStream object and writes it to disk
+# The object is first serialised using Pickle
+# If filename is None, the function will auto genrate one based on thew current date
+def exportObjectToDisk(objectToExport, filename="ispTestSnapshot.isp"):
+    try:
+        with open(filename, 'wb') as file: #Open for writing in binary mode
+            file.write(pickle.dumps(objectToExport))
+        return True
+    # Return an error as a string on failure
+    except Exception as e:
+        return str(e)
+
+# Loads, deserialises and returns an object created by exportObjectToDisk()
+def importObjectFromDisk(filename="ispTestSnapshot.isp"):
+    try:
+        with open(filename, 'rb') as file: # open for reading in binary mode
+            importedObject = pickle.load(file)
+        return importedObject
+    # Return an error as a string on failure
+    except Exception as e:
+        return str(e)
