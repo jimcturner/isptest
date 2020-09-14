@@ -1283,7 +1283,7 @@ def importObjectFromDisk(filename=Registry.streamsSnapshotFilename):
     try:
         with open(filename, 'rb') as file: # open for reading in binary mode
             importedObject = pickle.load(file)
-        return importedObject
+        return True, importedObject
     # Return an error as a string on failure
     except Exception as e:
-        return str(e)
+        return False, str(e)

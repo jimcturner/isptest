@@ -4625,6 +4625,25 @@ def main(argv):
         # Now attempt to import a previously saved snapshot
         # If it exists, this will prepopulate rtpRxStreamsDict{} with a list of previously known
         # receive streams
+        importedSnapshotsList = []
+        try:
+            status, importedSnapshotsList = Utils.importObjectFromDisk()
+            if status is True:
+                if len(importedSnapshotsList) > 0:
+                    for stream in importedSnapshotsList:
+                        streamID = stream[0]
+                        stats = stream[1]
+                        eventsList = [2]
+                        Utils.Message.addMessage("Historic stream " + str(streamID))
+            else:
+                Utils.Message.addMessage("Prev streams import failed " + str(importedSnapshotsList))
+
+
+        except Exception as e:
+            Utils.Message.addMessage("Prev streams import failed " + str(e))
+
+
+
 
 
     # Endless loop
