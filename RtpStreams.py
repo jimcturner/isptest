@@ -1469,6 +1469,17 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpRxStreamsDict[self.__stats["stream_syncSource"]] = self
         self.rtpRxStreamsDictMutex.release()
 
+    # Getter method for self.resultsTxQueue
+    def getResultsTxQueue(self):
+        return self.resultsTxQueue
+
+    # Setter method for self.resultsTxQueue (tests the incoming type, but doesn't validate it)
+    def setResultsTxQueue(self, newResultsTxQueue):
+        if type(newResultsTxQueue) == SimpleQueue:
+            self.resultsTxQueue = newResultsTxQueue
+            return True
+        else:
+            return False
 
     def killStream(self):
         # Kill the  __queueReceiverThread associated with this receive stream
@@ -2179,7 +2190,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Confirm that the stream is being sent from an instance of isptest AND only send if we're
                     # currently receiving bytes
                     if (self.__stats["stream_transmitterVersion"] > 0) and \
-                            self.__stats["packet_data_received_1S_bytes"] > 0:
+                            self.__stats["packet_data_received_1S_bytes"] > 0 and \
+                                self.resultsTxQueue is not None:
 
                             # Get the last 5 events for this stream
                             NO_OF_PREV_EVENTS_TO_SEND = 5
@@ -2599,6 +2611,14 @@ class RtpReceiveStream(RtpReceiveCommon):
         return stats["stream_syncSource"], stats["stream_srcAddress"], \
                stats["stream_srcPort"], self.__stats["stream_friendly_name"]
 
+    # Will overwrite the existing stats dict with the newly supplied one
+    # Note: This method is not remotely thread safe RtpReceiveStream.__stats[] is NOT mutex protected
+    def updateStats(self, statsDict):
+        # take copy of the incoming dict (to decouple it)
+        copiedStatsDict = deepcopy(statsDict)
+        # Overwrite the existing dict
+        self.__stats = copiedStatsDict
+
     # Thread-safe method for accessing all RtpStream stats
     def getRtpStreamStats(self):
         stats = self.__stats.copy()
@@ -2620,6 +2640,17 @@ class RtpReceiveStream(RtpReceiveCommon):
             return stats[key]
         else:
             return None
+
+    # Appends eventsList to the existing contents of self.__eventList
+    # if replaceExistingList is True, the existing self.__eventList will be replaced
+    # NOTE: This is not thread safe as self.__eventList is NOT mutex-protected
+    def updateEventsList(self, eventsList, replaceExistingList=False):
+        # take copy of the incoming list (to decouple it)
+        copiedEventsList = deepcopy(eventsList)
+        if replaceExistingList is False:
+            self.__eventList.extend(copiedEventsList)
+        else:
+            self.__eventList = copiedEventsList
 
     # Thread-safe method for accessing realtime RtpStream eventList
     # No args: Returns the entire list
