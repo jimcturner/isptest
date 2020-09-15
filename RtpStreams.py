@@ -1262,12 +1262,16 @@ class RtpReceiveCommon(RtpCommon):
 
 
 # Define a class to represent a stream of received rtp packets (and associated stats)
+# if restoredStreamFlag is set (in the constructor), the following optional arguments (historicStatsDict{} and
+# historicEventsList[] will be used to recreate the stream by reconstructing all the old packet counters etc to
+# the point where they left off
 class RtpReceiveStream(RtpReceiveCommon):
     # Constructor method.
     # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold,
-                 rtpRxStreamsDict, rtpRxStreamsDictMutex, txMessageQueue):
+                 rtpRxStreamsDict, rtpRxStreamsDictMutex, txMessageQueue,
+                 restoredStreamFlag=False, historicStatsDict=None, historicEventsList=None):
         # Call super constructor
         super().__init__()
         # Create Queue to accept the received packets
@@ -1449,6 +1453,26 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.streamIsDeadThreshold_s = Registry.streamIsDeadThreshold_s
         # Create a flag to signal when the stream is believed dead (is therefore scheduled to delete itself)
         # self.believedDeadFlag = False
+
+        # Before starting the receive threads, check to see if this is a 'reconstructed stream' with historic values
+        # If so, copy the historic values into the _stats{}, eventsList[] and other counters before the threads are launched
+        try:
+            if restoredStreamFlag:
+                # Populate self._stats{}
+                if historicStatsDict is not None:
+                    # Update stats{} dict
+                    self.updateStats(historicStatsDict)
+                    # Preset counters used by self.queueReceiverThread
+                    self.packetCounterReceivedTotal = self.__stats["packet_counter_received_total"]
+                    self.__packetDataReceivedTotalBytes = self.__stats["packet_data_received_total_bytes"]
+                    self.__packetCounterTransmittedTotal = self.__stats["packet_counter_transmitted_total"]
+
+
+                if historicEventsList is not None:
+                    self.updateEventsList(historicEventsList, replaceExistingList=True)
+        except Exception as e:
+            Utils.Message.addMessage("ERR:Stream " + str(self.__stats["stream_syncSource"]) +\
+                                     "_stats{}, __eventList restoration error " + str(e))
 
         # Create a _consumeReceiveQueueThread
         self.queueReceiverThreadActiveFlag = True # Used as a signal to shut down the thread
@@ -1729,32 +1753,37 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Infinite loop
         while self.samplingThreadActiveFlag:
             time.sleep(0.2)
-            ## Take snapshots of latest running counter values
-            # Snapshot latest count of packets received (for averages)
-            latestPacketsReceivedCount = self.packetCounterReceivedTotal
-            self.__stats["packet_counter_received_total"] = latestPacketsReceivedCount
-            # Snapshot latest received bytes value (for rx bps calculation)
-            latestRxdBytesCount = self.__packetDataReceivedTotalBytes
-            self.__stats["packet_data_received_total_bytes"] = latestRxdBytesCount
-            # Snapshot latest receive period count
-            latestReceivePeriodCount = self.__receivePeriodRunningTotal
-            # Snapshot latest jitter count
-            latestJitterPeriodCount = self.__jitterRunningtotal
-            # Snapshot last packet seen timestamp
-            self.__stats["packet_last_seen_received_timestamp"] = self.__latestReceivedRtpPacket.timestamp
-            # Snapshot packetCounterTransmittedTotal (packets Tx'd according to the transmitter
-            self.__stats["packet_counter_transmitted_total"] = self.__packetCounterTransmittedTotal
-            # Snapshot streamTransmitterTxRateBps (intended tx rate, according to the transmitter)
-            self.__stats["stream_transmitter_txRate_bps"] = self.__streamTransmitterTxRateBps
-            # Snapshot latest packet IP TTL value
-            self.__stats["packet_instantaneous_ttl"] = self.__rxTTL
-            # self.__stats["packet_instantaneous_ttl"] = 10
-            # Snapshot latest src address
-            self.__stats["stream_srcAddress"] = self.__srcAddress
-            # Snapshot latest src port
-            self.__stats["stream_srcPort"] = self.__srcPort
-            # Snapshot latest stream time to live
-            self.__stats["stream_transmitter_TimeToLive_sec"] = self.__txStreamTimeToLive
+            try:
+                ## Take snapshots of latest running counter values
+                # Snapshot latest count of packets received (for averages)
+                latestPacketsReceivedCount = self.packetCounterReceivedTotal
+                self.__stats["packet_counter_received_total"] = latestPacketsReceivedCount
+                # Snapshot latest received bytes value (for rx bps calculation)
+                latestRxdBytesCount = self.__packetDataReceivedTotalBytes
+                self.__stats["packet_data_received_total_bytes"] = latestRxdBytesCount
+                # Snapshot latest receive period count
+                latestReceivePeriodCount = self.__receivePeriodRunningTotal
+                # Snapshot latest jitter count
+                latestJitterPeriodCount = self.__jitterRunningtotal
+                # Snapshot last packet seen timestamp (if it exists)
+                if type(self.__latestReceivedRtpPacket) == RtpData:
+                    self.__stats["packet_last_seen_received_timestamp"] = self.__latestReceivedRtpPacket.timestamp
+                # Snapshot packetCounterTransmittedTotal (packets Tx'd according to the transmitter
+                self.__stats["packet_counter_transmitted_total"] = self.__packetCounterTransmittedTotal
+                # Snapshot streamTransmitterTxRateBps (intended tx rate, according to the transmitter)
+                self.__stats["stream_transmitter_txRate_bps"] = self.__streamTransmitterTxRateBps
+                # Snapshot latest packet IP TTL value
+                self.__stats["packet_instantaneous_ttl"] = self.__rxTTL
+                # self.__stats["packet_instantaneous_ttl"] = 10
+                # Snapshot latest src address
+                self.__stats["stream_srcAddress"] = self.__srcAddress
+                # Snapshot latest src port
+                self.__stats["stream_srcPort"] = self.__srcPort
+                # Snapshot latest stream time to live
+                self.__stats["stream_transmitter_TimeToLive_sec"] = self.__txStreamTimeToLive
+            except Exception as e:
+                Utils.Message.addMessage("ERR: RtpReceiveStream.__samplingThread snapshot stats " + str(e))
+
 
             try:
                 ########### Calculate how many packets received in the latest 200mS period - required for 'mean' calculations
@@ -2188,7 +2217,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 ############ Now send results back to transmitter
                 try:
                     # Confirm that the stream is being sent from an instance of isptest AND only send if we're
-                    # currently receiving bytes
+                    # currently receiving bytes AND only if we have a valid message queue to send through
                     if (self.__stats["stream_transmitterVersion"] > 0) and \
                             self.__stats["packet_data_received_1S_bytes"] > 0 and \
                                 self.resultsTxQueue is not None:
@@ -2202,7 +2231,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
-
 
                 # Utils.Message.addMessage("TX stream ttl: " + str(self.__stats["stream_transmitter_TimeToLive_sec"]))
                 ######## 1 second counter end of code ########

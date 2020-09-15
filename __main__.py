@@ -4508,8 +4508,6 @@ def main(argv):
                 # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
                 rxStreamExportList = []
                 for streamID, RtpReceiveStream in rtpRxStreamsDict.items(): # Iterate over keys, values
-
-
                     rxStreamExportList.append([streamID,
                                             RtpReceiveStream.getRtpStreamStats(),
                                                 RtpReceiveStream.getRTPStreamEventList()])
@@ -4517,10 +4515,21 @@ def main(argv):
                     # Now write the rxStreamExportList to a file
                     saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
                     if saveStatus is True:
-                        Utils.Message.addMessage("Exported current streams snapshot to file " +\
-                                                 str(Registry.streamsSnapshotFilename))
+                        Utils.Message.addMessage("Created snapshot for " + str(len(rxStreamExportList)) + \
+                                                 " streams to file " + str(Registry.streamsSnapshotFilename))
                     else:
                         Utils.Message.addMessage("ERR:Export streams save failure " + str(saveStatus))
+                else:
+                    Utils.Message.addMessage("***Zero length***")
+                    saveStatus = Utils.exportObjectToDisk(None)
+                    if saveStatus is True:
+                        Utils.Message.addMessage("Snapshot file " + str(Registry.streamsSnapshotFilename) + " flushed")
+                    else:
+                        # Display the error
+                        Utils.Message.addMessage("ERR:Error flushing " + str(Registry.streamsSnapshotFilename) +\
+                                                 ",  " + str(saveStatus))
+
+
         except Exception as e:
             Utils.Message.addMessage("ERR:Export streams snapshot failure " + str(e))
 
@@ -4629,47 +4638,44 @@ def main(argv):
             status, importedSnapshotsList = Utils.importObjectFromDisk()
             if status is True:
                 if len(importedSnapshotsList) > 0:
+                    # Initialise stats and eventsList
+                    stats = None
+                    eventsList = None
                     for stream in importedSnapshotsList:
                         streamID = stream[0]
                         # Extract stats dict
                         stats = stream[1]
                         # Attempt to validate the keys/Values of the stats dict by reading each key
                         for stat in stats: # Iterate over keys
+                            # This should (hopefully) cause an exception if a key/bvalue can't be read
                             x = stats[stat]
 
                         eventsList = stream[2]
                         # Attempt to validate the keys/Values of the events list by reading the event no
                         for event in eventsList:
+                            # This should (hopefully) cause an exception if the Event.eventNo can't be read
                             eventNo = event.eventNo
 
-
                         try:
-                            Utils.Message.addMessage("Recovered Events list " + str(eventsList))
-                            # Create an RtpReceiveStream based on the info retrieved
+                            # Utils.Message.addMessage("Recovered Events list " + str(eventsList))
+                            # Create an RtpReceiveStream based on the info retrieved by setting the restoredStreamFlag
+                            # This will preload the RtpReceiveStream._stats{} and eventsList to be preloaded
                             newRtpStream = RtpReceiveStream(stats["stream_syncSource"],
                                                             stats["stream_srcAddress"],
                                                             stats["stream_srcPort"],
-                                                            stats["stream_rxAddress"], \
+                                                            stats["stream_rxAddress"],
                                                             stats["stream_rxPort"],
                                                             stats["glitch_Event_Trigger_Threshold_packets"],
                                                             rtpRxStreamsDict,
                                                             rtpRxStreamsDictMutex,
-                                                            None) # Specify None as the txMessageQueue, as we don't know what it is yet
+                                                            None, # Specify None as the txMessageQueue, as we don't know what it is yet
                                                                     # This will have to be determined by RtpPacketReceiver once the
                                                                     # packets start arriving
+                                                            restoredStreamFlag=True,
+                                                            historicStatsDict=stats,
+                                                            historicEventsList=eventsList
+                                                            )
 
-                            # Immediately copy in the stats dict read from the file
-                            try:
-                                newRtpStream.updateStats(stats)
-                            except Exception as e:
-                                Utils.Message.addMessage(("ERR:Recreate RtpReceiveStream from file: updateStats() " +\
-                                                          " ID: " + str(stats["stream_syncSource"]) + ", " + str(e)))
-                            # Immediately copy in the existing Events list read from the file
-                            try:
-                                newRtpStream.updateEventsList(eventsList, replaceExistingList=True)
-                            except Exception as e:
-                                Utils.Message.addMessage(("ERR:Recreate RtpReceiveStream from file: updateEventsList() " +\
-                                                          " ID: " + str(stats["stream_syncSource"]) + ", " + str(e)))
                             Utils.Message.addMessage("Historic stream " + str(streamID) + " recreated")
 
                         except Exception as e:
