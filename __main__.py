@@ -4504,31 +4504,21 @@ def main(argv):
         # Special case. If in RECEIVE mode, take a snapshot of all the Events lists and stats[] dictionaries, for
         # saving to disk
         try:
-            if MODE == 'RECEIVE' and len(rtpRxStreamsDict) > 0:
+            if MODE == 'RECEIVE':
                 # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
                 rxStreamExportList = []
                 for streamID, RtpReceiveStream in rtpRxStreamsDict.items(): # Iterate over keys, values
                     rxStreamExportList.append([streamID,
                                             RtpReceiveStream.getRtpStreamStats(),
                                                 RtpReceiveStream.getRTPStreamEventList()])
-                if len(rxStreamExportList) > 0:
-                    # Now write the rxStreamExportList to a file
-                    saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
-                    if saveStatus is True:
-                        Utils.Message.addMessage("Created snapshot for " + str(len(rxStreamExportList)) + \
-                                                 " streams to file " + str(Registry.streamsSnapshotFilename))
-                    else:
-                        Utils.Message.addMessage("ERR:Export streams save failure " + str(saveStatus))
+                # if len(rxStreamExportList) > 0:
+                # Now write the rxStreamExportList to a file
+                saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
+                if saveStatus is True:
+                    Utils.Message.addMessage("Created snapshot for " + str(len(rxStreamExportList)) + \
+                                             " streams to file " + str(Registry.streamsSnapshotFilename))
                 else:
-                    Utils.Message.addMessage("***Zero length***")
-                    saveStatus = Utils.exportObjectToDisk(None)
-                    if saveStatus is True:
-                        Utils.Message.addMessage("Snapshot file " + str(Registry.streamsSnapshotFilename) + " flushed")
-                    else:
-                        # Display the error
-                        Utils.Message.addMessage("ERR:Error flushing " + str(Registry.streamsSnapshotFilename) +\
-                                                 ",  " + str(saveStatus))
-
+                    Utils.Message.addMessage("ERR:Export streams save failure " + str(saveStatus))
 
         except Exception as e:
             Utils.Message.addMessage("ERR:Export streams snapshot failure " + str(e))
