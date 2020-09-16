@@ -1627,15 +1627,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                 if isptestHeaderData[0] == RtpGenerator.getUniqueIDforISPTESTstreams():
                     # If so, make use the friendly name field to name this receive stream
                     self.__stats["stream_friendly_name"] = isptestHeaderDataFriendlyName
-                    # And enable transmission of results back to sender
-                    # self.resultsTransmitter.transmitActiveFlag = True
-                    # Utils.Message.addMessage(isptestHeaderDataFriendlyName)
                     # Now decode the messages contained within the isptest header
                     self.__parseIsptestHeaderData(isptestHeaderData)
                 else:
-                    # Otherwise, stream is not recognised, so disable transmission of results
-                    # Utils.Message.addMessage("DBUG:__RtpReceiveStream.__extractIsptestHeaderData(): Unable to decode stream, setting resultsTransmitter.transmitActiveFlag to False")
-                    self.resultsTransmitter.transmitActiveFlag = False
                     pass
         except Exception as e:
             pass
@@ -1698,7 +1692,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         meanJitter_10Sec = 0
         rxBps = 0
         meanPacketLengthBytes = 0
-        packetsRxdPerSecond = 0
+
         elapsedTime = datetime.timedelta()
         # Counter used to determine whether a stream has been lost or should be purged (because it has been lost forever)
         secondsWithNoBytesRxdTimer = 0
@@ -1715,6 +1709,7 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Stores the prev packets received count value. Required for calculating averages over particular periods
         prevPacketsReceivedCount = 0
+        latestPacketsReceivedCount = 0
 
         # Create circular buffer for rx bytes/sec counter (using 200mS windows, so buffersize of 5
         rxBpsBuffer = deque(maxlen=5)
@@ -1728,9 +1723,13 @@ class RtpReceiveStream(RtpReceiveCommon):
         packetsPerSecondBuffer = deque(maxlen=5)
         prevPacketsPeriodCount = 0
 
+        latestRxdBytesCount = 0
+        latestReceivePeriodCount = 0
+
         # Create circular buffer for jitter calculations
         # For 1 sec jitter calculation
         jitterPerSecBuffer = deque(maxlen=5)
+        latestJitterPeriodCount = 0
         prevJitterPeriodCount = 0
         # For 10 sec jitter calculation
         jitter10SecBuffer = deque(maxlen=10)
@@ -1797,24 +1796,22 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Add the latest count of packets received (this period) to the buffer
                 packetsPerSecondBuffer.append(packetsReceivedThisPeriod)
                 # Sum the buffer to get packets received for the last second
-                packetsRxdPerSecond = 0
-                for x in packetsPerSecondBuffer:
-                    packetsRxdPerSecond += x
-                self.__stats["packet_counter_1S"] = packetsRxdPerSecond
+                self.__stats["packet_counter_1S"] = sum(packetsPerSecondBuffer)
 
                 ############ Calculate received bits per second
+                # Special case for a 'restored stream' with no new incoming bytes
+                # Otherwise, the entire previous recveived bytes would be used (erroneously) to calculate the Bps
+                if prevRxdBytesCount == 0:
+                    prevRxdBytesCount = latestRxdBytesCount
                 # calculate bytes received since the last count
                 RxdBytesCountThisPeriod = latestRxdBytesCount - prevRxdBytesCount
                 # Snapshot the latest value for next time around the loop
                 prevRxdBytesCount = latestRxdBytesCount
                 # Append the bytes received this period to the rxBpsBuffer circular buffer
                 rxBpsBuffer.append(RxdBytesCountThisPeriod)
-                # Now sum the contents of rxBpsBuffer to get the latest rx bps
-                rxBytesPerSec = 0
-                for bytesPerPeriod in rxBpsBuffer:
-                    rxBytesPerSec += bytesPerPeriod
-                rxBps = rxBytesPerSec * 8
-                self.__stats["packet_data_received_1S_bytes"] = rxBytesPerSec
+                # Now sum the contents of rxBpsBuffer to get the latest rx rate in *bytes* per second
+                # rxBps = rxBytesPerSec * 8
+                self.__stats["packet_data_received_1S_bytes"] = sum(rxBpsBuffer)
 
 
                 ########### Calculate elapsed time
@@ -1961,7 +1958,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 try:
                     ######## Confirm that some packets have been received this second (used for the loss of signal alarm)
                     # If not, increment the timer
-                    if packetsRxdPerSecond > 0:
+                    if self.__stats["packet_counter_1S"] > 0:
                         # Packets have been received so clear the timer
                         secondsWithNoBytesRxdTimer = 0
                         # If lossOfStreamFlag was previously True but is about to be cleared, create a StreamResumed Event to
@@ -2832,135 +2829,6 @@ class RtpReceiveStream(RtpReceiveCommon):
             return {"status": False, "error": "Rtp stream " + str(self.__stats["stream_syncSource"]) +\
                                                         " can't be remotely controlled. Not generated by isptest"}
 
-
-# # An object that will transmit stream results back from the receiving end to to the sender
-# # It is designed as a counterpart to class ResultsReceiver
-# # Note. This will reply from the same UDP binding as used in main() socket.recvfrom
-# class ResultsTransmitter(object):
-#     def __init__(self, rtpStream):
-#         self.parentRtpRxStream = rtpStream
-#         self.udpSocket = 0
-#         self.destAddr = 0
-#         self.destPort = 0
-#         self.syncSource = 0
-#         self.friendlyName = ""
-#         self.threadActiveFlag = True # Used to control the lifespan of __resultsTransmitterThread
-#         self.transmitActiveFlag = False  # Used to enable/disable transmit of UDP packets
-#                                     # For RTP stream sources not identified as being from isptest (eg an NTT), this will
-#                                     # inhibit needless reverse traffic
-#                                     # At start-up, inhibit tx traffic by default.
-#                                     # The corresponding RtpReceiveStream.__calculateThread() will enable it,
-#                                     # if approproate
-#
-#         self.sendtoErrorCounter = 0 # Count's the no. of socket.sendto() errors
-#         self.sendtoErrorCounterThreshold = 10 # No of consecutive socket.sendto() errors that the thread will
-#                                             # tolerate before it gives up
-#
-#         # Get the destination addr and src port from the supplied rtpStream object
-#         self.syncSource, self.destAddr, self.destPort, self.friendlyName =\
-#             self.parentRtpRxStream.getRTPStreamID()
-#
-#         # Start the transmitter thread
-#         self.resultsTransmitterThread = threading.Thread(target=self.__resultsTransmitterThread, args=())
-#         self.resultsTransmitterThread.daemon = True
-#         self.resultsTransmitterThread.setName(str(self.syncSource) + ":ResultsTransmitter")
-#         self.resultsTransmitterThread.start()
-#
-#     def kill(self):
-#         # Forces the self.transmitterActiveFlag to False which will cause the __resultsTransmitterThread
-#         # to end
-#         self.threadActiveFlag = False
-#
-#
-#     def __resultsTransmitterThread(self):
-#         Utils.Message.addMessage("INFO: __resultsTransmitterThread started for stream: "+ str(self.syncSource))
-#
-#         # oldSocket = self.parentRtpRxStream.getSocket()
-#         # Utils.Message.addMessage("__resultsTransmitterThread. Initial socket" + str(id(oldSocket)))
-#         selectTimeout = 1 # timeout for the select() function used to poll the OS for the availability of the socket
-#         while self.threadActiveFlag:
-#             self.udpSocket = self.parentRtpRxStream.getSocket()
-#             # if oldSocket is not self.udpSocket:
-#             #     Utils.Message.addMessage("__resultsTransmitterThread. Socket changed to " + str(id(self.udpSocket)))
-#             #     oldSocket = self.udpSocket
-#
-#             # Check that the the socket is a valid socket.socket object
-#             if type(self.udpSocket) == socket.socket:
-#                 # Confirm that transmission is active
-#                 if self.transmitActiveFlag == True:
-#                     # Utils.Message.addMessage("__resultsTransmitterThread. Current TX socket " + str(id(self.udpSocket)))
-#                     # Get the destination addr and src port from the supplied rtpStream object
-#                     self.syncSource, self.destAddr, self.destPort, self.friendlyName = \
-#                         self.parentRtpRxStream.getRTPStreamID()
-#
-#                     try:
-#                         # We have a valid socket binding we can use, so transmit the data
-#                         # Use pickle to serialise the data we want to send
-#                         stats = self.parentRtpRxStream.getRtpStreamStats()
-#
-#                         # Get the last 5 events for this stream
-#                         NO_OF_PREV_EVENTS_TO_SEND = 5
-#                         eventsList = self.parentRtpRxStream.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
-#
-#                         # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
-#
-#                         msg = {"stats": stats, "eventList": eventsList}
-#                         pickledMessage = pickle.dumps(msg,protocol=2)
-#
-#                         # add the pickled message to the txMessageQueue
-#                         # self.parentRtpRxStream.resultsTxQueue.put([pickledMessage, self.destAddr, self.destPort])
-#
-#                         # Set max safe UDP tx size to 576 (based on this:-
-#                         # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
-#                         MAX_UDP_TX_LENGTH = 512
-#                         # Split the message up
-#                         fragmentedMessage = Utils.fragmentString(pickledMessage, MAX_UDP_TX_LENGTH)
-#                         if fragmentedMessage is not None and len(fragmentedMessage) > 0:
-#
-#                             # iterate over fragments and send
-#                             for fragment in fragmentedMessage:
-#                                 # Pickle and send each fragment one at a time
-#                                 txMessage = pickle.dumps(fragment,protocol=2)
-#                                 # Wait for socket to become available
-#                                 # r, w, x = select.select([self.udpSocket], [], [], selectTimeout)
-#                                 # select() will return a list w containing the writable sockets
-#                                 # if self.udpSocket is present in that list, we can safely write to it
-#                                 # Utils.Message.addMessage("DBUG: tx'd: (" +str(len(txMessage)) + ") "+ txMessage)
-#                                 # if self.udpSocket in w:
-#                                 # self.udpSocket.sendto(txMessage, (self.destAddr, self.destPort))
-#                                 # clear the socket.sendto() error counter
-#                                 self.sendtoErrorCounter = 0
-#                                 # else:
-#                                 #     # tx socket is not available within the timeout period
-#                                 #     # Increment the counter
-#                                 #     self.sendtoErrorCounter += 1
-#                                 #     Utils.Message.addMessage("__resultsTransmitterThread tx error count " + \
-#                                 #                              str(self.sendtoErrorCounter) + ", " +\
-#                                 #                              str(self.udpSocket))
-#                                 #     # Abort the transmission of all fragments
-#                                 #     break
-#                         else:
-#                             # Utils.Message.addMessage("DBUG:__resultsTransmitterThread  - fragmentedMessage[] is None or empty")
-#                             pass
-#
-#                     except Exception as e:
-#                         # Increment the error counter
-#                         self.sendtoErrorCounter += 1
-#                         Utils.Message.addMessage("ERR:__resultsTransmitterThread sendto() socket id:" + str(id(self.udpSocket)) +", " + str(e))
-#                         # Test to see if we've exceeeded the no of consequtive tolerable socket errors
-#                         if self.sendtoErrorCounter >= self.sendtoErrorCounterThreshold:
-#                             Utils.Message.addMessage("__resultsTransmitterThread. socket.sendto() error threshold exceeded (" +
-#                                                      str(self.sendtoErrorCounterThreshold) +\
-#                                                         "). Killing object for stream: " + str(self.syncSource))
-#                             # Now kill the object itself
-#                             self.kill()
-#
-#                 else:
-#                     # Results transmission inhibited
-#                     pass
-#             else:
-#                 Utils.Message.addMessage("ERR: __resultsTransmitterThread - invalid UDP socket?")
-#             time.sleep(0.5)
 
 # Define a class to encompass the results sent back from the receiving to the transmitting side (via the
 # ResultsTransmitter and ResultsReceiver objects)
