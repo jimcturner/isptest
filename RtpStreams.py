@@ -1428,22 +1428,24 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["jitter_time_of_last_excess_jitter_event"] = datetime.timedelta()
         self.__stats["jitter_excess_jitter_events_total"] = 0
         self.__stats["jitter_mean_time_between_excess_jitter_events"] = datetime.timedelta()
-        self.sumOfTimeElapsedSinceLastExcessJitterEvents = datetime.timedelta()
+        # self.sumOfTimeElapsedSinceLastExcessJitterEvents = datetime.timedelta()
+        self.__stats["sumOfTimeElapsedSinceLastExcessJitterEvents"] = datetime.timedelta()
 
         # IPRoutingChange traceroute stats
         self.__stats["route_time_elapsed_since_last_route_change_event"] = datetime.timedelta()
         self.__stats["route_time_of_last_route_change_event"] = datetime.timedelta()
         self.__stats["route_change_events_total"] = 0
         self.__stats["route_mean_time_between_route_change_events"] = datetime.timedelta()
-        self.sumOfTimeElapsedSinceLastRouteChange = datetime.timedelta()
+        # self.sumOfTimeElapsedSinceLastRouteChange = datetime.timedelta()
+        self.__stats["sumOfTimeElapsedSinceLastRouteChange"] = datetime.timedelta()
 
         # Ip routing Rx TTL stats
         self.__stats["route_time_elapsed_since_last_TTL_change_event"] = datetime.timedelta()
         self.__stats["route_time_of_last_TTL_change_event"] = datetime.timedelta()
         self.__stats["route_TTl_change_events_total"] = 0
         self.__stats["route_mean_time_between_TTl_change_events"] = datetime.timedelta()
-        self.sumOfTimeElapsedSinceLastRxTTLChange = datetime.timedelta()
-
+        # self.sumOfTimeElapsedSinceLastRxTTLChange = datetime.timedelta()
+        self.__stats["sumOfTimeElapsedSinceLastRxTTLChange"] = datetime.timedelta()
 
         # Amount of time to elapse before a lossOfStream alarm event is triggered
         self.lossOfStreamAlarmThreshold_s = Registry.lossOfStreamAlarmThreshold_s
@@ -1871,6 +1873,7 @@ class RtpReceiveStream(RtpReceiveCommon):
 
             if loopCounter % 5 == 0:
                 ######## 1 second counter
+
                 try:
                     ########### Calculate 10sec jitter mean -- self.__stats["jitter_mean_10S_uS"] = 0
                     # Add the latest 1sec jitter mean to the meanJitter_1Sec circular buffer
@@ -1885,13 +1888,23 @@ class RtpReceiveStream(RtpReceiveCommon):
                 try:
                     ########### Update Mean Jitter averages
                     if (self.__stats["jitter_excess_jitter_events_total"] > 0) and (streamIsDeadFlag is False):
+                        # Special case: if this is the first Excessive Jitter event, add the time elapsed *before* the first
+                        # jitter event to the sumOfTimeElapsedSinceLastExcessJitterEvents running total
+                        if self.__stats["jitter_excess_jitter_events_total"] == 1:
+                            self.__stats["sumOfTimeElapsedSinceLastExcessJitterEvents"] += \
+                                self.__stats["stream_time_elapsed_total"]
+
                         ########### Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
                         self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
                             datetime.datetime.now() - self.__stats["jitter_time_of_last_excess_jitter_event"]
 
-                        ########### Calculate meanTimeBetweenExcessJitterEvents (jitter Period)
+                        # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean period between events)
+                        self.__stats["sumOfTimeElapsedSinceLastExcessJitterEvents"] += \
+                            self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"]
+
+                        ########### Calculate mean TimeBetween Excess Jitter Events (jitter Period)
                         self.__stats["jitter_mean_time_between_excess_jitter_events"] = \
-                            calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastExcessJitterEvents,
+                            calculateMeanPeriodBetweenEvents(self.__stats["sumOfTimeElapsedSinceLastExcessJitterEvents"],
                                                              self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"],
                                                              self.__stats["jitter_excess_jitter_events_total"])
                 except Exception as e:
@@ -2052,7 +2065,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         self.__stats["route_time_of_last_TTL_change_event"] = ipRoutingTTLChange.timeCreated
 
                         # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
-                        self.sumOfTimeElapsedSinceLastRxTTLChange \
+                        self.__stats["sumOfTimeElapsedSinceLastRxTTLChange"] \
                             += self.__stats["route_time_elapsed_since_last_TTL_change_event"]
                         # Since the rxTTl has changed, we can expect a subsequent change in the received hopslist
                         hopsListChangeExpected = True
@@ -2082,9 +2095,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Note: Ignore the first route change, because it's not really a 'change', just the initial value
                     if (self.__stats["route_TTl_change_events_total"] > 1) and (streamIsDeadFlag is False):
                         self.__stats["route_mean_time_between_TTl_change_events"] = \
-                            calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastRxTTLChange,
-                                                             self.__stats[
-                                                                 "route_time_elapsed_since_last_TTL_change_event"],
+                            calculateMeanPeriodBetweenEvents(self.__stats["sumOfTimeElapsedSinceLastRxTTLChange"],
+                                                             self.__stats["route_time_elapsed_since_last_TTL_change_event"],
                                                              (self.__stats["route_TTl_change_events_total"] - 1))
 
                     # Utils.Message.addMessage("ttl  events " + str(self.__stats["route_TTl_change_events_total"]) + \
@@ -2092,7 +2104,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     #                          ", period " + str(Utils.dtstrft(self.__stats["route_mean_time_between_TTl_change_events"])))
 
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Rx TTL Change stats " + str(e))
+                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Rx TTL Change stats " + str(e) + ", " +\
+                                             str(self.__stats["sumOfTimeElapsedSinceLastRxTTLChange"]))
 
 
                 ######## Calculate no of IP hops according to rxTTL value Display current rxTTL
@@ -2171,8 +2184,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                             self.__stats["route_time_of_last_route_change_event"] = iPRoutingTracerouteChange.timeCreated
 
                             # Take snapshot of new time delta and add to the sum of existing values (to calculate mean)
-                            self.sumOfTimeElapsedSinceLastRouteChange \
-                                    += self.__stats["route_time_elapsed_since_last_route_change_event"]
+                            self.__stats["sumOfTimeElapsedSinceLastRouteChange"] +=\
+                                    self.__stats["route_time_elapsed_since_last_route_change_event"]
 
                             # Post a message
                             Utils.Message.addMessage(iPRoutingTracerouteChange.getSummary(includeStreamSyncSourceID=False)['summary'])
@@ -2207,11 +2220,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Note: Ignore the first route change, because it's not really a 'change', just the initial value
                     if (self.__stats["route_change_events_total"] > 1) and (streamIsDeadFlag is False):
                         self.__stats["route_mean_time_between_route_change_events"] = \
-                            calculateMeanPeriodBetweenEvents(self.sumOfTimeElapsedSinceLastRouteChange,
+                            calculateMeanPeriodBetweenEvents(self.__stats["sumOfTimeElapsedSinceLastRouteChange"],
                                                              self.__stats["route_time_elapsed_since_last_route_change_event"],
                                                              (self.__stats["route_change_events_total"] - 1))
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Route Change stats " + str(e))
+                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate traceroute Change stats " + str(e) + ", " +\
+                                             str(self.__stats["sumOfTimeElapsedSinceLastRouteChange"]))
 
                 ############ Now send results back to transmitter
                 try:
@@ -2353,25 +2367,26 @@ class RtpReceiveStream(RtpReceiveCommon):
                 qrtInstance.__eventList.append(excessiveJitterEvent)
                 # Increment the all_events counter
                 qrtInstance.__stats["stream_all_events_counter"] += 1
-                # Update jitter_time_elapsed_since_last_excess_jitter_event
-                qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
-                    datetime.datetime.now() - excessiveJitterEvent.timeCreated
+                # # Update jitter_time_elapsed_since_last_excess_jitter_event
+                # qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
+                #     datetime.datetime.now() - excessiveJitterEvent.timeCreated
+
                 # Post a message
                 Utils.Message.addMessage(excessiveJitterEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                 # Update the event counter for Excess Jitter
                 qrtInstance.__stats["jitter_excess_jitter_events_total"] += 1
 
-                # Special case: if this is the first Excesive Jitter event, add the time elapsed *before* the first
-                # jitter event to the sumOfTimeElapsedSinceLastExcessJitterEvents running total
-                if qrtInstance.__stats["jitter_excess_jitter_events_total"] == 1:
-                    qrtInstance.sumOfTimeElapsedSinceLastExcessJitterEvents += \
-                        qrtInstance.__stats["stream_time_elapsed_total"]
-
-
-                # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean period between events)
-                qrtInstance.sumOfTimeElapsedSinceLastExcessJitterEvents += qrtInstance.__stats[
-                    "jitter_time_elapsed_since_last_excess_jitter_event"]
+                # # Special case: if this is the first Excesive Jitter event, add the time elapsed *before* the first
+                # # jitter event to the sumOfTimeElapsedSinceLastExcessJitterEvents running total
+                # if qrtInstance.__stats["jitter_excess_jitter_events_total"] == 1:
+                #     qrtInstance.__stats["sumOfTimeElapsedSinceLastExcessJitterEvents"] += \
+                #         qrtInstance.__stats["stream_time_elapsed_total"]
+                #
+                #
+                # # Take snapshot of new time delta and add to the sum of existing values (to calcaulate mean period between events)
+                # qrtInstance.__stats["sumOfTimeElapsedSinceLastExcessJitterEvents"] += \
+                #     qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"]
 
                 # Take timestamp for this (the most recent) Excess Jitter event
                 qrtInstance.__stats["jitter_time_of_last_excess_jitter_event"] = excessiveJitterEvent.timeCreated
