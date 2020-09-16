@@ -3865,6 +3865,27 @@ class RtpPacketReceiver(object):
                                 seqNo, udpPayloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, \
                                 rxTTL, srcAddress, srcPort)
 
+                            # Now verify that the RtpReceiveStream object for this stream is using the correct
+                            # txMessageQueue. (As it's posible that initially the RtpReceiveStream might not have had
+                            # it's txMessageQueue set (eg if it was a historic RtpReceiveStream restored from a snapshot file)
+                            # Without a valid txMessageQueue, the RtpReceiveStream will not be able to send results back
+                            # to the transmitter
+                            # Get the existing  txMessageQueue from the object
+                            currentTxMessageQueue = self.rtpRxStreamsDict[syncSourceID].getResultsTxQueue()
+                            # Check to see if the RtpReceiveStream and RtpPacketReceiver are both pointing at the
+                            # the same object
+                            if currentTxMessageQueue is not self.txMessageQueue:
+                                # There is a mismatch between the messageQueue - update the RtpReceiveStream object
+                                try:
+                                    status = self.rtpRxStreamsDict[syncSourceID].setResultsTxQueue(self.txMessageQueue)
+                                    Utils.Message.addMessage("**RtpPacketReceiver modify TxMessageQueue for stream " + \
+                                                         str(syncSourceID) + ":" + str(status))
+                                except Exception as e:
+                                    Utils.Message.addMessage("** FAIL RtpPacketReceiver modify TxMessageQueue for stream " + \
+                                                             str(syncSourceID) + ", " + str(e))
+
+
+
                         except:
                             # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
                             # Attempt to add the latest rtpSyncSourceIdentifier to tpRxStreamTempDict
@@ -4576,6 +4597,65 @@ def main(argv):
         diskLoggerThread.setName("__diskLoggerThread")
         diskLoggerThread.start()
 
+        # Attempt to import a previously saved snapshot
+        # If it exists, this will prepopulate rtpRxStreamsDict{} with a list of previously known
+        # receive streams
+        importedSnapshotsList = []
+        try:
+            status, importedSnapshotsList = Utils.importObjectFromDisk()
+            if status is True:
+                if len(importedSnapshotsList) > 0:
+                    # Initialise stats and eventsList
+                    stats = None
+                    eventsList = None
+                    for stream in importedSnapshotsList:
+                        streamID = stream[0]
+                        # Extract stats dict
+                        stats = stream[1]
+                        # Attempt to validate the keys/Values of the stats dict by reading each key
+                        for stat in stats:  # Iterate over keys
+                            # This should (hopefully) cause an exception if a key/bvalue can't be read
+                            x = stats[stat]
+
+                        eventsList = stream[2]
+                        # Attempt to validate the keys/Values of the events list by reading the event no
+                        for event in eventsList:
+                            # This should (hopefully) cause an exception if the Event.eventNo can't be read
+                            eventNo = event.eventNo
+
+                        try:
+                            # Utils.Message.addMessage("Recovered Events list " + str(eventsList))
+                            # Create an RtpReceiveStream based on the info retrieved by setting the restoredStreamFlag
+                            # This will preload the RtpReceiveStream._stats{} and eventsList to be preloaded
+                            newRtpStream = RtpReceiveStream(stats["stream_syncSource"],
+                                                            stats["stream_srcAddress"],
+                                                            stats["stream_srcPort"],
+                                                            stats["stream_rxAddress"],
+                                                            stats["stream_rxPort"],
+                                                            stats["glitch_Event_Trigger_Threshold_packets"],
+                                                            rtpRxStreamsDict,
+                                                            rtpRxStreamsDictMutex,
+                                                            None,
+                                                            # Specify None as the txMessageQueue, as we don't know what it is yet
+                                                            # This will have to be determined by RtpPacketReceiver once the
+                                                            # packets start arriving
+                                                            restoredStreamFlag=True,
+                                                            historicStatsDict=stats,
+                                                            historicEventsList=eventsList
+                                                            )
+
+                            Utils.Message.addMessage("Historic stream " + str(streamID) + " recreated")
+
+                        except Exception as e:
+                            Utils.Message.addMessage(
+                                ("ERR:Recreate RtpReceiveStream from file: create RtpReceiveStream " + \
+                                 " ID: " + str(stats["stream_syncSource"]) + ", " + str(e)))
+            else:
+                Utils.Message.addMessage("Prev streams import failed " + str(importedSnapshotsList))
+        except Exception as e:
+            Utils.Message.addMessage("Prev streams import failed " + str(e))
+
+
         # Create list of udp ports to listen on (and send from)
         # receivePortList = [UDP_RX_PORT]
         # Iterate over the list creating
@@ -4619,67 +4699,6 @@ def main(argv):
                     receiversAndSendersList.append([rtpPacketReceiver, udpMessageSender])
                 except Exception as e:
                     Utils.Message.addMessage("ERR:main() receiversAndSendersList.append() " + str(e))
-
-        # Now attempt to import a previously saved snapshot
-        # If it exists, this will prepopulate rtpRxStreamsDict{} with a list of previously known
-        # receive streams
-        importedSnapshotsList = []
-        try:
-            status, importedSnapshotsList = Utils.importObjectFromDisk()
-            if status is True:
-                if len(importedSnapshotsList) > 0:
-                    # Initialise stats and eventsList
-                    stats = None
-                    eventsList = None
-                    for stream in importedSnapshotsList:
-                        streamID = stream[0]
-                        # Extract stats dict
-                        stats = stream[1]
-                        # Attempt to validate the keys/Values of the stats dict by reading each key
-                        for stat in stats: # Iterate over keys
-                            # This should (hopefully) cause an exception if a key/bvalue can't be read
-                            x = stats[stat]
-
-                        eventsList = stream[2]
-                        # Attempt to validate the keys/Values of the events list by reading the event no
-                        for event in eventsList:
-                            # This should (hopefully) cause an exception if the Event.eventNo can't be read
-                            eventNo = event.eventNo
-
-                        try:
-                            # Utils.Message.addMessage("Recovered Events list " + str(eventsList))
-                            # Create an RtpReceiveStream based on the info retrieved by setting the restoredStreamFlag
-                            # This will preload the RtpReceiveStream._stats{} and eventsList to be preloaded
-                            newRtpStream = RtpReceiveStream(stats["stream_syncSource"],
-                                                            stats["stream_srcAddress"],
-                                                            stats["stream_srcPort"],
-                                                            stats["stream_rxAddress"],
-                                                            stats["stream_rxPort"],
-                                                            stats["glitch_Event_Trigger_Threshold_packets"],
-                                                            rtpRxStreamsDict,
-                                                            rtpRxStreamsDictMutex,
-                                                            None, # Specify None as the txMessageQueue, as we don't know what it is yet
-                                                                    # This will have to be determined by RtpPacketReceiver once the
-                                                                    # packets start arriving
-                                                            restoredStreamFlag=True,
-                                                            historicStatsDict=stats,
-                                                            historicEventsList=eventsList
-                                                            )
-
-                            Utils.Message.addMessage("Historic stream " + str(streamID) + " recreated")
-
-                        except Exception as e:
-                            Utils.Message.addMessage(("ERR:Recreate RtpReceiveStream from file: create RtpReceiveStream " + \
-                                                      " ID: " + str(stats["stream_syncSource"]) + ", " + str(e)))
-
-            else:
-                Utils.Message.addMessage("Prev streams import failed " + str(importedSnapshotsList))
-
-
-        except Exception as e:
-            Utils.Message.addMessage("Prev streams import failed " + str(e))
-
-
 
 
 

@@ -1501,6 +1501,8 @@ class RtpReceiveStream(RtpReceiveCommon):
     def setResultsTxQueue(self, newResultsTxQueue):
         if type(newResultsTxQueue) == SimpleQueue:
             self.resultsTxQueue = newResultsTxQueue
+            Utils.Message.addMessage("DBUG:RtpReceiveStream.setResultsTxQueue() (stream " + \
+                                     str(self.__stats["stream_syncSource"]) + " updated")
             return True
         else:
             return False
