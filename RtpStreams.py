@@ -1125,6 +1125,7 @@ class RtpReceiveCommon(RtpCommon):
             # IPRoutingTracerouteChange Events
             tracerouteEventsList = self.getRTPStreamEventList(historyLength,
                                                               filterList=[IPRoutingTracerouteChange], reverseOrder=True)
+
             # Get a copy of the stats dict for this stream
             stats = self.getRtpStreamStats()
 
@@ -1149,18 +1150,40 @@ class RtpReceiveCommon(RtpCommon):
                 streamReport += streamIPDetails + separator
                 for event in tracerouteEventsList:
                     streamReport += "Time of change: " + event.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
+
                     for hopNo in range(len(event.latestHopsList)):
-                        hopAddr = str(event.latestHopsList[hopNo][0]) + "." + \
-                                  str(event.latestHopsList[hopNo][1]) + "." + \
-                                  str(event.latestHopsList[hopNo][2]) + "." + \
-                                  str(event.latestHopsList[hopNo][3])
-                        streamReport += str(hopNo + 1) + "\t" + str(hopAddr).ljust(16) + "\t" + \
-                                        Utils.WhoisResolver.queryWhoisCache(hopAddr)[0]['asn_description'] + "\r\n"
+                        hopAddr = "1.2.3.4"
+                        try:
+                            hopAddr = str(event.latestHopsList[hopNo][0]) + "." + \
+                                      str(event.latestHopsList[hopNo][1]) + "." + \
+                                      str(event.latestHopsList[hopNo][2]) + "." + \
+                                      str(event.latestHopsList[hopNo][3])
+                        except Exception as e:
+                            Utils.Message.addMessage(
+                                "ERR:RtpReceiveCommon.generateTracerouteHistoryReport() for hopNo in range(len(event.latestHopsList) " + \
+                                str(e) + ", " + str(event))
+                        whoIsLookup = None
+                        whoIsLookupAsString = ""
+                        try:
+                            # Perform a lookup. note, this might take some time
+                            whoIsLookup = Utils.WhoisResolver.queryWhoisCache(hopAddr)
+                            if whoIsLookup is None:
+                                whoIsLookupAsString = "Awaiting whois results. Please try later.."
+                            else:
+                                whoIsLookupAsString = whoIsLookup[0]['asn_description']
+                            streamReport += str(hopNo + 1) + "\t" + str(hopAddr).ljust(16) + "\t" + whoIsLookupAsString + "\r\n"
+                        except Exception as e:
+                            Utils.Message.addMessage(
+                                "ERR:RtpReceiveCommon.generateTracerouteHistoryReport() WhoIs  " + str(e) + ", " + str(whoIsLookup))
                     streamReport += separator
+
+
+
                 return streamReport
 
         except Exception as e:
-            Utils.Message.addMessage("ERR:RtpReceiveCommon.generateTracerouteHistoryReport() Render traceroute history " + str(e))
+            Utils.Message.addMessage("ERR:RtpReceiveCommon.generateTracerouteHistoryReport() Render traceroute history " + \
+                                     str(e))
             return None
 
     # This function tests the supplied key against some specified key values, and formats the corresponding value
@@ -2750,6 +2773,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
                                    str(args[1]) + ") requested start and end indexes out of range: " + str(e))
+                return []
         elif len(args) == 1:
             # If one arg supplied, return the last n events.
             # IF event list not as long as n, return what does exist
@@ -2759,68 +2783,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                 return filteredEventList
         else:
             return filteredEventList
-
-    # Method to strip off the oldest events from the eventList once the threshold is reached
-    # Note **this does not** set mutex locks itself, so should only be called from another method that
-    # already has guaranteed exclusive access
-    ##### DEPRECATED - __houseKeepEventList is now a deque so housekeeps itself
-    # def __houseKeepEventList(self):
-    #     # Check size of self.__eventList[]
-    #     noOfMessagesToPurge = len(self.__eventList) - self.historicEventsLimit
-    #     if noOfMessagesToPurge > 0:
-    #         # Remove first x events
-    #         # oldSize = len(self.__eventList)
-    #         del self.__eventList[:noOfMessagesToPurge]
-    #         # newSize = len(self.__eventList)
-    #         # Utils.Message.addMessage("DBUG: __houseKeepEventList() "+str(noOfMessagesToPurge)+
-    #         #                    " events removed"+str(oldSize)+">>"+str(newSize))
-
-    # # This method will generate a formatted report containing the performance of the Rtp Stream
-    # def generateReport(self, eventFilterList = None):
-    #     # It will include:-
-    #     # Source Ip, Dest IP, Port, Sync Source ID, Friendly Name
-    #     # Duration of test, % Loss, Glitch period, bitrate, packet size
-    #     # % Loss
-    #     # Get a dump of the current stats
-    #     stats = self.getRtpStreamStats()
-    #     # Get a dump of the current events (taking into account whether display filtering has been applied)
-    #     # Retrieve the desired event types from the RTP Stream object
-    #     eventsList = self.getRTPStreamEventList(filterList = eventFilterList)
-    #     separator = ("-" * 63) + "\r"
-    #     title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(stats["stream_friendly_name"]).rstrip() + ")" + "\r"
-    #     streamIPDetails  = \
-    #         str(stats["stream_srcAddress"]) + ":" + str(stats["stream_srcPort"])+" ---> " + \
-    #             str(stats["stream_rxAddress"]) + ":" + str(stats["stream_rxPort"]) + "\r" +\
-    #             "Packet size: " + str(stats["packet_payload_size_mean_1S_bytes"]) + " bytes" +\
-    #             ", Bitrate: " + str(bToMb(8 * stats["packet_data_received_1S_bytes"])) + "bps" + "\r"
-    #
-    #     labelWidth = 33
-    #     streamPerformance = \
-    #         "Duration of test: ".rjust(labelWidth) + str(dtstrft(stats["stream_time_elapsed_total"])) + "\r" +\
-    #         "Packet loss: ".rjust(labelWidth) + str(math.ceil(stats["glitch_packets_lost_total_percent"])) + "%" + "\r" +\
-    #         "Total packets lost: ".rjust(labelWidth) + str(int(stats["glitch_packets_lost_total_count"])) + "\r" +\
-    #         "Maximum glitch dur: ".rjust(labelWidth) + str(dtstrft(stats["glitch_max_glitch_duration"])) + "\r" +\
-    #         "Mean glitch dur: ".rjust(labelWidth) + str(dtstrft(stats["glitch_mean_glitch_duration"])) + "\r" +\
-    #         "Mean interval between glitches: ".rjust(labelWidth) + str(dtstrft(stats["glitch_mean_time_between_glitches"])) + "\r"
-    #
-    #     # Create list of glitches (as a string)
-    #     eventsListAsAString = "Events:\r"
-    #     # Display the events list in reverse order (most recent first)
-    #     for event in range(len(eventsList)-1, -1, -1):
-    #
-    #         # Retrieve each Event summary, ommiting the syncSourceID and the friendlyName (for display purposes)
-    #         eventDetails = eventsList[event].getSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
-    #         # Creata a formatted string for the event
-    #         eventsListAsAString += (str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")) +\
-    #                                 ", " + str(eventDetails['summary']) + "\r")
-    #
-    #     outputString = title + separator + streamIPDetails + separator + streamPerformance + separator +\
-    #         eventsListAsAString
-    #
-    #     # Return a string containing the output
-    #     return outputString
-
-
 
 
     # Define setter methods
