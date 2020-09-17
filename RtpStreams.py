@@ -646,7 +646,7 @@ class MovingTotalEventCounter(object):
     # for a duration of 12 hours, you might want 12 1hr samples so that you can determine the spread of events
     # over that time
     # Once created, to register a new event, call addEvent()
-    # The object does not have a bit in timer. Therefore it must be 'clocked' every second, by calling recalculate()
+    # The object does not have a built in timer. Therefore it must be 'clocked' every second, by calling recalculate()
     def __init__(self, name, totalPeriod_s, samplingPeriod_S):
         self.name = name
         self.samplingPeriod_S = samplingPeriod_S
@@ -656,7 +656,7 @@ class MovingTotalEventCounter(object):
         # Safety check the result
         if self.noOfSamplePeriods < 1:
             self.noOfSamplePeriods = 1
-        # Create array to hold historic totals
+        # Create a list to hold historic totals and prefill with zeroes
         self.historicEventsList = [0] * self.noOfSamplePeriods
 
         # Declare var to hold the current running total of events
@@ -705,7 +705,7 @@ class MovingTotalEventCounter(object):
             self.__eventCountMovingTotal += x
 
     def getResults(self):
-        # Return a tuple containing it's name, the current moving total and also a copy of the array
+        # Return a tuple containing it's [name, the current moving total, a list of events]
         return self.name, self.__eventCountMovingTotal, list(self.historicEventsList)
 
 # Define an object to hold data about an individual received rtp packet
@@ -1379,20 +1379,44 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_all_events_counter"] = 0
 
         ######## Moving glitch counters
-        # array to store (any number of) moving glitch counters
-        self.movingGlitchCounters = []
-        # Add some  moving glitch counters to the array:-
+        # Array to hold a list of glitch conter defintions of the form [name, duration_s, no of sampling periods
+        movingGlitchCounterDefinitions = [
+            ["historic_glitch_counter_last_10Sec", 10, 1],      # 10 second duration, 1 second sampling period
+            ["historic_glitch_counter_last_1Min", 60, 10],      # 1 min duration, 10 second sample period
+            ["historic_glitch_counter_last_10Min", 600, 60],    # 10 min duration, 1 minute sample period
+            ["historic_glitch_counter_last_1Hr", 3600, 600],    # 1hr duration, 10 minute sample period
+            ["historic_glitch_counter_last_24Hr", 86400, 3600]  # 24hr duration, 1hr sample period
+        ]
 
-        # 10 second duration, 1 second sampling period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Sec", 10, 1))
-        # 1 min duration, 10 second sample period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Min", 60, 10))
-        # 10 min duration, 1 minute sample period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Min", 600, 60))
-        # 1hr duration, 10 minute sample period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Hr", 3600, 600))
-        # 24hr duration, 1hr sample period
-        self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_24Hr", 86400, 3600))
+        # Array to store (any number of) moving glitch counters defined in movingGlitchCounterDefinitions[]
+        self.movingGlitchCounters = []
+        # Now create the glitch counters themselves and also the stats[] keys to hold the results
+        # Each counter yields two results, an overall counter and also containing the
+        # distribution of events across each sample
+        # Iterate over movingGlitchCounterDefinitions [] to create the counter and associated stats keys
+        for mc in movingGlitchCounterDefinitions:
+            name = mc[0]
+            duration = mc[1]
+            noOfSamples = mc[2]
+            # Create the counter
+            self.movingGlitchCounters.append(MovingTotalEventCounter(name,duration,noOfSamples))
+            # Create the stats keys to store the results
+            self.__stats[name] = 0  # moving total
+            self.__stats[name + "_events"] = [] # This key holds a list containing the distribution of events across each sample
+
+        # # Add some  moving glitch counters to the array (and create corresponding stats keys to hold the results):-
+        #
+        # # 10 second duration, 1 second sampling period
+        # self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Sec", 10, 1))
+        #
+        # # 1 min duration, 10 second sample period
+        # self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Min", 60, 10))
+        # # 10 min duration, 1 minute sample period
+        # self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_10Min", 600, 60))
+        # # 1hr duration, 10 minute sample period
+        # self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_1Hr", 3600, 600))
+        # # 24hr duration, 1hr sample period
+        # self.movingGlitchCounters.append(MovingTotalEventCounter("historic_glitch_counter_last_24Hr", 86400, 3600))
 
         # define timedelta object to store an aggregate of of Glitch length
         self.__stats["glitch_length_total_time"] = datetime.timedelta()
@@ -1458,42 +1482,54 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Before starting the receive threads, check to see if this is a 'reconstructed stream' with historic values
         # If so, copy the historic values into the _stats{}, eventsList[] and other counters before the threads are launched
+        streamsSuccessfullyRecreated = False
         try:
             if restoredStreamFlag:
                 # Populate self._stats{}
                 if historicStatsDict is not None:
-                    # Update stats{} dict
-                    self.updateStats(historicStatsDict)
-                    # Preset counters used by self.queueReceiverThread
-                    self.packetCounterReceivedTotal = self.__stats["packet_counter_received_total"]
-                    self.__packetDataReceivedTotalBytes = self.__stats["packet_data_received_total_bytes"]
-                    self.__packetCounterTransmittedTotal = self.__stats["packet_counter_transmitted_total"]
+                    # Confirm that the inported stats{} contains the identical keys to self.__stats{}
+                    diff = set(historicStatsDict) - set(self.__stats)
+                    if len(diff) == 0:
+                        # If diff == 0, the keys in both dictionaries are the same
+                        Utils.Message.addMessage("DBUG:RtpReceiveStream historicStatsDict stats keys match")
+                        # Update stats{} dict
+                        self.updateStats(historicStatsDict)
+                        # Preset counters used by self.queueReceiverThread
+                        self.packetCounterReceivedTotal = self.__stats["packet_counter_received_total"]
+                        self.__packetDataReceivedTotalBytes = self.__stats["packet_data_received_total_bytes"]
+                        self.__packetCounterTransmittedTotal = self.__stats["packet_counter_transmitted_total"]
+                        if historicEventsList is not None:
+                            self.updateEventsList(historicEventsList, replaceExistingList=True)
+                        streamsSuccessfullyRecreated = True
+                    else:
+                        Utils.Message.addMessage("ERR:RtpReceiveStream historicStatsDict key differences " + str(diff) +\
+                                                 " Aborting import of stats[] dict ")
+                        streamsSuccessfullyRecreated = False
 
-
-                if historicEventsList is not None:
-                    self.updateEventsList(historicEventsList, replaceExistingList=True)
         except Exception as e:
             Utils.Message.addMessage("ERR:Stream " + str(self.__stats["stream_syncSource"]) +\
                                      "_stats{}, __eventList restoration error " + str(e))
 
-        # Create a _consumeReceiveQueueThread
-        self.queueReceiverThreadActiveFlag = True # Used as a signal to shut down the thread
-        self.queueReceiverThread = threading.Thread(target=self.__queueReceiverThread, args=())
-        self.queueReceiverThread.daemon = False
-        self.queueReceiverThread.setName(str(self.__stats["stream_syncSource"]) + ":queueReceiverThread")
-        self.queueReceiverThread.start()
+        if restoredStreamFlag is False or\
+                (restoredStreamFlag and streamsSuccessfullyRecreated):
+            # Create a _consumeReceiveQueueThread
+            self.queueReceiverThreadActiveFlag = True # Used as a signal to shut down the thread
+            self.queueReceiverThread = threading.Thread(target=self.__queueReceiverThread, args=())
+            self.queueReceiverThread.daemon = False
+            self.queueReceiverThread.setName(str(self.__stats["stream_syncSource"]) + ":queueReceiverThread")
+            self.queueReceiverThread.start()
 
-        # Create a __samplingThread
-        self.samplingThreadActiveFlag = True # Used as a signal to shut down the thread
-        self.samplingThread = threading.Thread(target=self.__samplingThread, args=())
-        self.samplingThread.daemon = False
-        self.samplingThread.setName(str(self.__stats["stream_syncSource"]) + ":samplingThread")
-        self.samplingThread.start()
+            # Create a __samplingThread
+            self.samplingThreadActiveFlag = True # Used as a signal to shut down the thread
+            self.samplingThread = threading.Thread(target=self.__samplingThread, args=())
+            self.samplingThread.daemon = False
+            self.samplingThread.setName(str(self.__stats["stream_syncSource"]) + ":samplingThread")
+            self.samplingThread.start()
 
-        # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
-        self.rtpRxStreamsDictMutex.acquire()
-        self.rtpRxStreamsDict[self.__stats["stream_syncSource"]] = self
-        self.rtpRxStreamsDictMutex.release()
+            # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
+            self.rtpRxStreamsDictMutex.acquire()
+            self.rtpRxStreamsDict[self.__stats["stream_syncSource"]] = self
+            self.rtpRxStreamsDictMutex.release()
 
     # Getter method for self.resultsTxQueue
     def getResultsTxQueue(self):
@@ -1956,9 +1992,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Force the moving counters to increment their timers and recalculate totals
                         x.recalculate()
                         name, movingTotal, events = x.getResults()
-                        # Dynamically create new stats keys using the name field of the moving glitch counter
-                        self.__stats[name] = movingTotal
-                        self.__stats[name + "_events"] = events
+                        # Update the stats keys using the name field of the moving glitch counter
+                        self.__stats[name] = movingTotal # This key holds the running total
+                        self.__stats[name + "_events"] = events # This key holds a list containing the distribution of events across each sample
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread update moving glitch counters " + str(e))
 

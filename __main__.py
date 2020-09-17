@@ -4614,7 +4614,7 @@ def main(argv):
                         stats = stream[1]
                         # Attempt to validate the keys/Values of the stats dict by reading each key
                         for stat in stats:  # Iterate over keys
-                            # This should (hopefully) cause an exception if a key/bvalue can't be read
+                            # This should (hopefully) cause an exception if a key/value can't be read
                             x = stats[stat]
 
                         eventsList = stream[2]
