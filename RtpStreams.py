@@ -1502,11 +1502,13 @@ class RtpReceiveStream(RtpReceiveCommon):
             if restoredStreamFlag:
                 # Populate self._stats{}
                 if historicStatsDict is not None:
-                    # Confirm that the inported stats{} contains the identical keys to self.__stats{}
-                    diff = set(historicStatsDict) - set(self.__stats)
+                    # Confirm that the inported stats{} contains identical keys to that of self.__stats{}
+                    diff = set(historicStatsDict.keys()) - set(self.__stats.keys())
                     if len(diff) == 0:
                         # If diff == 0, the keys in both dictionaries are the same
-                        Utils.Message.addMessage("DBUG:RtpReceiveStream historicStatsDict stats keys match")
+                        Utils.Message.addMessage("DBUG:RtpReceiveStream historicStatsDict stats keys match " +\
+                                                 str(len(historicStatsDict)) + ":" + str(len(self.__stats)) +\
+                                                 ", diff " + str(diff))
                         # Update stats{} dict
                         self.updateStats(historicStatsDict)
                         # Preset counters used by self.queueReceiverThread
