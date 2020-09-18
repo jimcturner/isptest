@@ -1343,8 +1343,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Query (and store) the length of the headers sent by RtpGenerator so we know how to decode them
         self.ISPTEST_HEADER_SIZE = RtpGenerator.getIsptestHeaderSize()
 
-        # Create empty list to hold rtp stream data as it is received by the socket
-        # self.rtpStreamData = []
+        # Stream status flags
+        self.__stats["lossOfStreamFlag"] = False
 
         # Create private empty list to hold Events for this RtpReceiveStream object. Accessible via a getter method
         self.__eventList = deque(maxlen=Registry.rtpReceiveStreamHistoricEventsLimit)
@@ -1511,6 +1511,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         self.packetCounterReceivedTotal = self.__stats["packet_counter_received_total"]
                         self.__packetDataReceivedTotalBytes = self.__stats["packet_data_received_total_bytes"]
                         self.__packetCounterTransmittedTotal = self.__stats["packet_counter_transmitted_total"]
+
                         if historicEventsList is not None:
                             self.updateEventsList(historicEventsList, replaceExistingList=True)
                         streamsSuccessfullyRecreated = True
@@ -1747,8 +1748,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         elapsedTime = datetime.timedelta()
         # Counter used to determine whether a stream has been lost or should be purged (because it has been lost forever)
         secondsWithNoBytesRxdTimer = 0
-        # This flag will go high once a stream is believed lost
-        lossOfStreamFlag = False
+        # # This flag will go high once a stream is believed lost
+        # self.__stats["lossOfStreamFlag"] = False
         # Records the timestamp of the most recent StreamLost Event
         lossOfStreamEventTimestamp = datetime.timedelta()
 
@@ -1839,6 +1840,11 @@ class RtpReceiveStream(RtpReceiveCommon):
 
             try:
                 ########### Calculate how many packets received in the latest 200mS period - required for 'mean' calculations
+                # Special case for a 'restored stream' with no new incoming packets
+                # Otherwise, the entire previous received packets would be used (erroneously) to calculate the packets/sec
+                if prevPacketsReceivedCount == 0:
+                    prevPacketsReceivedCount = latestPacketsReceivedCount
+                # calculate packets received since the last count
                 packetsReceivedThisPeriod = latestPacketsReceivedCount - prevPacketsReceivedCount
                 # Store latest count for next time around the loop
                 prevPacketsReceivedCount = latestPacketsReceivedCount
@@ -2017,7 +2023,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         secondsWithNoBytesRxdTimer = 0
                         # If lossOfStreamFlag was previously True but is about to be cleared, create a StreamResumed Event to
                         # signify that the stream has restarted
-                        if lossOfStreamFlag == True:
+                        if self.__stats["lossOfStreamFlag"] == True:
                             # Create a 'stream resumed' event
                             try:
                                 streamResumedEvent = StreamResumed(self.__stats, lossOfStreamEventTimestamp)
@@ -2032,9 +2038,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                                 Utils.Message.addMessage(
                                     "ERR:RtpReceiveStream.__samplingThread add streamResumed Event  " + str(e))
 
-
                         # Clear the flag so another StreamLost Event can be generated
-                        lossOfStreamFlag = False
+                        self.__stats["lossOfStreamFlag"] = False
                         # Clear streamIsDeadFlag
                         streamIsDeadFlag = False
                     else:
@@ -2045,9 +2050,9 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                 try:
                     ######## Check to see if we've lost the stream (but only do this once, via the lossOfStreamFlag)
-                    if secondsWithNoBytesRxdTimer >= Registry.lossOfStreamAlarmThreshold_s and not lossOfStreamFlag:
+                    if secondsWithNoBytesRxdTimer >= Registry.lossOfStreamAlarmThreshold_s and not self.__stats["lossOfStreamFlag"]:
                         # Set flag (this Event can only fire again if the flag is subsequently cleared)
-                        lossOfStreamFlag = True
+                        self.__stats["lossOfStreamFlag"] = True
                         # Add event to the list (but only do this once)
                         streamLostEvent = StreamLost(self.__stats)
                         self.__eventList.append(streamLostEvent)
@@ -2286,12 +2291,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
+                Utils.Message.addMessage("lossOfStreamFlag:" + str(self.__stats["lossOfStreamFlag"]))
                 ######## 1 second counter end of code ########
 
             try:
                 ######## Check to see if the stream is dead (has been permanently lost). If so, set streamIsDeadFlag
                 # but only do this once, so need to check that the flag has not already been set
-                if secondsWithNoBytesRxdTimer >= Registry.streamIsDeadThreshold_s and lossOfStreamFlag and\
+                if secondsWithNoBytesRxdTimer >= Registry.streamIsDeadThreshold_s and self.__stats["lossOfStreamFlag"] and\
                         streamIsDeadFlag is False:
                     streamIsDeadFlag = True
                     Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
