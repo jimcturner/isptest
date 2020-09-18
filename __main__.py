@@ -2404,6 +2404,7 @@ class UI(object):
         # Create some debug information to append to the end of the help list
         debugInfo = [["",""],["Debug info",""]]
         debugInfo.append(["Process ID ", str(os.getpid())])
+        debugInfo.append(["Run time ", str(Utils.dtstrft(datetime.timedelta(seconds=runtime_s)))])
         if self.operationMode == "RECEIVE":
             # Display aggregate socket receive stats
             try:
@@ -4475,6 +4476,10 @@ def main(argv):
     signal.signal(signal.SIGINT, requestShutdownSignalHandler) # Ctrl-C
     signal.signal(signal.SIGTERM, shutdownApplicationSignalHandler)    # OS kill signal
 
+    # Create a global runtime_s counter to count the elapsed time the program has been running
+    global runtime_s
+    runtime_s = 0
+
 
     # Create a UI object (which will spawn a renderDisplay and catchKeyboardPresses thread)
     # Create flag that will be used by UI to signal back to main() that a shutdown has been requested
@@ -4562,6 +4567,9 @@ def main(argv):
                                      " streams to file " + str(Registry.streamsSnapshotFilename))
             else:
                 Utils.Message.addMessage("ERR:Export streams snapshot failure " + str(code))
+
+        # Write the current 'uptime' to disk
+        Utils.Message.addMessage("isptest ending. uptime: " + str(Utils.dtstrft(datetime.timedelta(seconds=runtime_s))))
 
         # Attempt to remove all rtp stream objects (be they RtpGenrators (which themselves reference RtpStreamresults objects)
         # or RtpReceiveStream objects
@@ -4727,6 +4735,19 @@ def main(argv):
             while True:
                 # Term.printAt(str(listCurrentThreads()),1,2)
                 time.sleep(1)
+                # Increment run time counter
+                runtime_s += 1
+                # Utils.Message.addMessage(str(Utils.dtstrft(datetime.timedelta(seconds=runtime_s))))
+                # If in RECEIVE mode, schedule an auto export of the current streams
+                try:
+                    if MODE == 'RECEIVE' and (runtime_s % Registry.streamsSnapshotAutoSaveInterval_s == 0):
+                        # Create snapshot of current receive streams
+                        status, code = createStreamsSnapshot()
+                        if status == False:
+                            raise Exception(str(code))
+
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:streamsSnapshotAutoSave " + str(e))
 
         # This code will execute if the RequestShutdown Exception is raised (SIGINT, Ctrl-C)
         except RequestShutdown:
