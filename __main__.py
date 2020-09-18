@@ -4515,8 +4515,39 @@ def main(argv):
         diskLoggerThread.start()
 
     # Main program execution loops
-    # # Declare a var to be used as the socket.recvfrom UDP socket
-    # sock = None
+
+
+    # A local function to take a snapshot of the Events lists and stats[] dictionaries for all Receive streams
+    # and save them to disk. This allows the streams and all their stats to be 'restored' when the program restarts
+    # The parameters for *each* stream are saved as a three as a three element list [streamID, stats{}, eventsList[]]
+    # Returns True and the number of streams successfuly exported (saved) or False, plus error message on failure
+    def createStreamsSnapshot():
+        try:
+
+            # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
+            rxStreamExportList = []
+            for streamID, RtpReceiveStream in rtpRxStreamsDict.items():  # Iterate over keys, values
+                rxStreamExportList.append([streamID,
+                                           RtpReceiveStream.getRtpStreamStats(),
+                                           RtpReceiveStream.getRTPStreamEventList()])
+
+            # Now write the rxStreamExportList to a file
+            saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
+            if saveStatus is True:
+                # Utils.Message.addMessage("Created snapshot for " + str(len(rxStreamExportList)) + \
+                #                          " streams to file " + str(Registry.streamsSnapshotFilename))
+                # Return the no of streams exported
+                return True, len(rxStreamExportList)
+            else:
+                Utils.Message.addMessage("ERR:createStreamsSnapshot() Export streams save failure " + str(saveStatus))
+                # Return error message
+                return False, saveStatus
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR:createStreamsSnapshot() Export streams snapshot failure " + str(e))
+            # Return error message
+            return False, str(e)
+
 
     # Define a local function that will perform a graceful shutdown of all threads and resources
     def shutdownApplication():
@@ -4524,26 +4555,13 @@ def main(argv):
 
         # Special case. If in RECEIVE mode, take a snapshot of all the Events lists and stats[] dictionaries, for
         # saving to disk
-        try:
-            if MODE == 'RECEIVE':
-                # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
-                rxStreamExportList = []
-                for streamID, RtpReceiveStream in rtpRxStreamsDict.items(): # Iterate over keys, values
-                    rxStreamExportList.append([streamID,
-                                            RtpReceiveStream.getRtpStreamStats(),
-                                                RtpReceiveStream.getRTPStreamEventList()])
-                # if len(rxStreamExportList) > 0:
-                # Now write the rxStreamExportList to a file
-                saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
-                if saveStatus is True:
-                    Utils.Message.addMessage("Created snapshot for " + str(len(rxStreamExportList)) + \
-                                             " streams to file " + str(Registry.streamsSnapshotFilename))
-                else:
-                    Utils.Message.addMessage("ERR:Export streams save failure " + str(saveStatus))
-
-
-        except Exception as e:
-            Utils.Message.addMessage("ERR:Export streams snapshot failure " + str(e))
+        if MODE == 'RECEIVE':
+            status, code = createStreamsSnapshot()
+            if status == True:
+                Utils.Message.addMessage("Created snapshot for " + str(code) + \
+                                     " streams to file " + str(Registry.streamsSnapshotFilename))
+            else:
+                Utils.Message.addMessage("ERR:Export streams snapshot failure " + str(code))
 
         # Attempt to remove all rtp stream objects (be they RtpGenrators (which themselves reference RtpStreamresults objects)
         # or RtpReceiveStream objects
