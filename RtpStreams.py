@@ -1345,6 +1345,8 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Stream status flags
         self.__stats["lossOfStreamFlag"] = False
+        self.__stats["streamIsDeadFlag"] = False
+        self.__stats["lossOfStreamEventTimestamp"] = datetime.timedelta()
 
         # Create private empty list to hold Events for this RtpReceiveStream object. Accessible via a getter method
         self.__eventList = deque(maxlen=Registry.rtpReceiveStreamHistoricEventsLimit)
@@ -1754,7 +1756,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         lossOfStreamEventTimestamp = datetime.timedelta()
 
         # This flag will go high when a stream is declared dead
-        streamIsDeadFlag = False
+        # streamIsDeadFlag = False
 
         # Stores the previous long-term jitter value.
         jitterLongterm_uS = 0
@@ -1872,8 +1874,8 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
                 ########### Calculate elapsed time
-                # Note. This is paused once the streamIsDeadFlag is set
-                if streamIsDeadFlag is not True:
+                # Note. This is inhibited if streamIsDeadFlag is set
+                if self.__stats["streamIsDeadFlag"] is False:
                     self.__stats["stream_time_elapsed_total"] = datetime.datetime.now() - \
                                                             self.__stats["packet_first_packet_received_timestamp"]
 
@@ -1942,7 +1944,7 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                 try:
                     ########### Update Mean Jitter averages
-                    if (self.__stats["jitter_excess_jitter_events_total"] > 0) and (streamIsDeadFlag is False):
+                    if (self.__stats["jitter_excess_jitter_events_total"] > 0) and (self.__stats["streamIsDeadFlag"] is False):
 
                         ########### Now update the self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] timer
                         self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"] = \
@@ -1960,7 +1962,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 try:
                     ########## Calculate Glitch stats
                     # (But only if there has actually been a glitch in the past to measure against) AND stream is alive
-                    if (self.__stats["glitch_counter_total_glitches"] > 0) and (streamIsDeadFlag is False):
+                    if (self.__stats["glitch_counter_total_glitches"] > 0) and (self.__stats["streamIsDeadFlag"] is False):
                         ########## Calculate time elapsed since last glitch
                         # Calculate new value
                         self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.datetime.now() - self.__stats[
@@ -2041,7 +2043,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Clear the flag so another StreamLost Event can be generated
                         self.__stats["lossOfStreamFlag"] = False
                         # Clear streamIsDeadFlag
-                        streamIsDeadFlag = False
+                        self.__stats["streamIsDeadFlag"] = False
                     else:
                         # No packets received this period so increment the timer
                         secondsWithNoBytesRxdTimer += 1
@@ -2133,13 +2135,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # AND stream is alive
                     # Note: The initial route is considered as 'change 1' therefore is ignored and threshold is >=1
                     ####### Now update the self.__stats["route_time_elapsed_since_last_TTL_change_event"] timer
-                    if (self.__stats["route_TTl_change_events_total"] > 0) and (streamIsDeadFlag is False):
+                    if (self.__stats["route_TTl_change_events_total"] > 0) and (self.__stats["streamIsDeadFlag"] is False):
                         self.__stats["route_time_elapsed_since_last_TTL_change_event"] = \
                             datetime.datetime.now() - self.__stats["route_time_of_last_TTL_change_event"]
 
                     ########### Calculate mean time between Rx TTL changes.
                     # Note: Ignore the first route change, because it's not really a 'change', just the initial value
-                    if (self.__stats["route_TTl_change_events_total"] > 1) and (streamIsDeadFlag is False):
+                    if (self.__stats["route_TTl_change_events_total"] > 1) and (self.__stats["streamIsDeadFlag"] is False):
                         self.__stats["route_mean_time_between_TTl_change_events"] = \
                             calculateMeanPeriodBetweenEvents(self.__stats["sumOfTimeElapsedSinceLastRxTTLChange"],
                                                              self.__stats["route_time_elapsed_since_last_TTL_change_event"],
@@ -2257,14 +2259,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # AND stream is alive
                     # Note: The initial route is considered as 'change 1' therefore is ignored and threshold is >=1
                     ####### Now update the self.__stats["route_time_elapsed_since_last_route_change_event"] timer
-                    if (self.__stats["route_change_events_total"] > 0) and (streamIsDeadFlag is False):
+                    if (self.__stats["route_change_events_total"] > 0) and (self.__stats["streamIsDeadFlag"] is False):
 
                         self.__stats["route_time_elapsed_since_last_route_change_event"] = \
                             datetime.datetime.now() - self.__stats["route_time_of_last_route_change_event"]
 
                     ########### Calculate mean time between route changes.
                     # Note: Ignore the first route change, because it's not really a 'change', just the initial value
-                    if (self.__stats["route_change_events_total"] > 1) and (streamIsDeadFlag is False):
+                    if (self.__stats["route_change_events_total"] > 1) and (self.__stats["streamIsDeadFlag"] is False):
                         self.__stats["route_mean_time_between_route_change_events"] = \
                             calculateMeanPeriodBetweenEvents(self.__stats["sumOfTimeElapsedSinceLastRouteChange"],
                                                              self.__stats["route_time_elapsed_since_last_route_change_event"],
@@ -2291,15 +2293,16 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
-                Utils.Message.addMessage("lossOfStreamFlag:" + str(self.__stats["lossOfStreamFlag"]))
+                Utils.Message.addMessage("lossOfStreamFlag:" + str(self.__stats["lossOfStreamFlag"]) +\
+                                         ", streamIsDeadFlag:" + str(self.__stats["streamIsDeadFlag"]))
                 ######## 1 second counter end of code ########
 
             try:
                 ######## Check to see if the stream is dead (has been permanently lost). If so, set streamIsDeadFlag
                 # but only do this once, so need to check that the flag has not already been set
                 if secondsWithNoBytesRxdTimer >= Registry.streamIsDeadThreshold_s and self.__stats["lossOfStreamFlag"] and\
-                        streamIsDeadFlag is False:
-                    streamIsDeadFlag = True
+                        self.__stats["streamIsDeadFlag"] is False:
+                    self.__stats["streamIsDeadFlag"] = True
                     Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
                                              "(" + str(self.__stats["stream_friendly_name"]).rstrip() + \
                                              ") believed dead")
@@ -2310,7 +2313,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 ######## If the stream has been declared 'dead' and the autoRemoveDeadRxStreamsThreshold_s
                 # threshold has been exceeded AND auto-remove is enabled, kill it
                 # if streamIsDeadFlag and Registry.autoRemoveDeadRxStreamsEnable:
-                if streamIsDeadFlag and \
+                if self.__stats["streamIsDeadFlag"] and \
                         ((datetime.datetime.now() - lossOfStreamEventTimestamp).total_seconds() > \
                                 Registry.autoRemoveDeadRxStreamsThreshold_s) and Registry.autoRemoveDeadRxStreamsEnable:
 
