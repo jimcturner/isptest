@@ -1753,7 +1753,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         # # This flag will go high once a stream is believed lost
         # self.__stats["lossOfStreamFlag"] = False
         # Records the timestamp of the most recent StreamLost Event
-        lossOfStreamEventTimestamp = datetime.timedelta()
+        # lossOfStreamEventTimestamp = datetime.timedelta()
 
         # This flag will go high when a stream is declared dead
         # streamIsDeadFlag = False
@@ -2028,7 +2028,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         if self.__stats["lossOfStreamFlag"] == True:
                             # Create a 'stream resumed' event
                             try:
-                                streamResumedEvent = StreamResumed(self.__stats, lossOfStreamEventTimestamp)
+                                streamResumedEvent = StreamResumed(self.__stats, self.__stats["lossOfStreamEventTimestamp"])
                                 # Append the event to the events list
                                 self.__eventList.append(streamResumedEvent)
                                 # Increment the Event counter
@@ -2062,7 +2062,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         self.__stats["stream_all_events_counter"] += 1
                         Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
                         # Snapshot the time of the latest StreamLost Event (this is consumed by the StreamResumed Event)
-                        lossOfStreamEventTimestamp = datetime.datetime.now()
+                        self.__stats["lossOfStreamEventTimestamp"] = datetime.datetime.now()
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect loss of stream " + str(e))
 
@@ -2293,8 +2293,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
-                Utils.Message.addMessage("lossOfStreamFlag:" + str(self.__stats["lossOfStreamFlag"]) +\
-                                         ", streamIsDeadFlag:" + str(self.__stats["streamIsDeadFlag"]))
                 ######## 1 second counter end of code ########
 
             try:
@@ -2314,7 +2312,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # threshold has been exceeded AND auto-remove is enabled, kill it
                 # if streamIsDeadFlag and Registry.autoRemoveDeadRxStreamsEnable:
                 if self.__stats["streamIsDeadFlag"] and \
-                        ((datetime.datetime.now() - lossOfStreamEventTimestamp).total_seconds() > \
+                        ((datetime.datetime.now() - self.__stats["lossOfStreamEventTimestamp"]).total_seconds() > \
                                 Registry.autoRemoveDeadRxStreamsThreshold_s) and Registry.autoRemoveDeadRxStreamsEnable:
 
                     # Generate and save a report
