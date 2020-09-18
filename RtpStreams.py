@@ -1321,6 +1321,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_transmitter_local_srcPort"] = 0  # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_destAddress"] = "" # Will be populated by incoming isptest header data
         self.__stats["stream_transmitterVersion"] = 0
+        self.__stats["stream_transmitter_PID"] = 0
         self.__stats["stream_transmitter_txRate_bps"] = 0 # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_TimeToLive_sec"] = 0  # Will be populated by incoming isptest header data
         Utils.Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
@@ -1634,6 +1635,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # This is a message containing version no information about the transmitter
                 txVersionNo = str(isptestHeaderData[2]) + "." + str(isptestHeaderData[3])
                 self.__stats["stream_transmitterVersion"] = float(txVersionNo)
+                self.__stats["stream_transmitter_PID"] = struct.unpack_from("!L", bytes(isptestHeaderData[4:8]))[0]
 
             elif isptestHeaderData[1] == 4:
                 # This is a message containing the intended tx rate of the stream (as an unsigned long, 4 bytes)
@@ -2295,6 +2297,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
+                # Utils.Message.addMessage("Tx pid " + str(self.__stats["stream_transmitter_PID"]) )
                 ######## 1 second counter end of code ########
 
             try:
@@ -3171,6 +3174,9 @@ class RtpGenerator(RtpCommon):
         self.slowStartActiveFlag = True    # Flag to indicate whether slowStart is active
         self.slowStartInitialTxPeriod = 0.1    # The starting tx period, i.e 100 mS, or 10 packets per second
 
+        self.pid = os.getpid()  # Stores the processID (which is transmitted as part of the isptestheader data
+                                # Allows the Receiver to determine whether the transmitter instance has changed
+
         # Create a FIFO queue to hold control messages/instructions. These will be picked up in the __samplingThread
         # This messages can be used to modify the RtpGenrator parameters as an alternative to calling the
         # various setxx() methods directly
@@ -3333,10 +3339,10 @@ class RtpGenerator(RtpCommon):
         #         # [friendlyName] 10 bytes
 
         # OR
-        # [byte1] Message type (3: Transmitter isptest version no.
+        # [byte1] Message type (3: Transmitter isptest version no. and PID of transmitter process
         #         # [byte2] major version no
         #         # [byte3] minor version no
-        #         # [byte4][byte5][byte6][byte7] all 0/not used
+        #         # [byte4][byte5][byte6][byte7] Carries the pid of the transmitter process
         #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
@@ -3413,7 +3419,7 @@ class RtpGenerator(RtpCommon):
                         except Exception as e:
                             Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader():traceroute_create message " + str(e))
                     else:
-                        # Rettrieved tracerouteHopsList was empty
+                        # Retrieved tracerouteHopsList was empty
                         # Create a dummy traceroute message
                         messageData = [0 & 0xFF,  # Message type 0: traceroute
                                        0 & 0xFF,  # Traceroute Hop no
@@ -3486,17 +3492,19 @@ class RtpGenerator(RtpCommon):
                     Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx dest addr " + str(e))
 
             elif self.isptestHeaderMessageIndex == 3:
-                # This is 'isptest version' message
+                # This is 'isptest version'  and also PID message
                 try:
                     # Split the version no into a major and minor part
                     version = str(Registry.version).split('.')
+                    # encode pid (process ID) as a series of four bytes (unsigned long, 4 bytes)
+                    pidAsBytes = struct.pack("!L", self.pid & 0xFFFFFFFF)
                     messageData = [3 & 0xFF,  # Message type 3: Destination addr
                                    int(version[0]) & 0xFF,  # Major version no
                                    int(version[1]) & 0xFF,  # Minor version no
-                                   0 & 0xFF,  # not used
-                                   0 & 0xFF,  # not used
-                                   0 & 0xFF,  # not used
-                                   0 & 0xFF,  # not used
+                                   pidAsBytes[0] & 0xFF,  # PID MSB
+                                   pidAsBytes[1] & 0xFF,  #
+                                   pidAsBytes[2] & 0xFF,  #
+                                   pidAsBytes[3] & 0xFF,  # PID LSB
                                    0 & 0xFF]  # not used
                 except Exception as e:
                     messageData = [3 & 0xFF,  # Message type 3: Destination addr
@@ -4004,8 +4012,6 @@ class RtpGenerator(RtpCommon):
                         self.txPeriod = self.calculateTxPeriod(self.txRate)
                         Utils.Message.addMessage("Burst mode ending for stream " + str(self.syncSourceIdentifier) + \
                                       ". Reverting to " + str(Utils.bToMb(self.txRate)) + "bps")
-
-
 
             ######## 1 second counter end of code ########
 
