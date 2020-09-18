@@ -4569,7 +4569,7 @@ def main(argv):
                 Utils.Message.addMessage("ERR:Export streams snapshot failure " + str(code))
 
         # Write the current 'uptime' to disk
-        Utils.Message.addMessage("isptest ending. uptime: " + str(Utils.dtstrft(datetime.timedelta(seconds=runtime_s))))
+        Utils.Message.addMessage("isptest ending. Total run time: " + str(Utils.dtstrft(datetime.timedelta(seconds=runtime_s))))
 
         # Attempt to remove all rtp stream objects (be they RtpGenrators (which themselves reference RtpStreamresults objects)
         # or RtpReceiveStream objects
