@@ -1504,12 +1504,20 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Populate self._stats{}
                 if historicStatsDict is not None:
                     # Confirm that the inported stats{} contains identical keys to that of self.__stats{}
-                    diff = set(historicStatsDict.keys()) - set(self.__stats.keys())
+                    # diff = set(historicStatsDict.keys()) - set(self.__stats.keys())
+                    diff = [] # a list to hold any missing keys *for debug purposes)
+                    # Iterate over the self.__stats{} keys
+                    for key in self.__stats.keys():
+                        # Check that thew key is present in the imported dict
+                        if not key in historicStatsDict:
+                            # If it is missing, append the missing key to the diff list
+                            diff.append(key)
+
                     if len(diff) == 0:
-                        # If diff == 0, the keys in both dictionaries are the same
-                        Utils.Message.addMessage("DBUG:RtpReceiveStream historicStatsDict stats keys match " +\
-                                                 str(len(historicStatsDict)) + ":" + str(len(self.__stats)) +\
-                                                 ", diff " + str(diff))
+                        # If diff[] is empty, there are no missing keys in the historicStatsDict
+                        # Utils.Message.addMessage("DBUG:RtpReceiveStream historicStatsDict stats keys match " +\
+                        #                          str(len(historicStatsDict)) + ":" + str(len(self.__stats)) +\
+                        #                          ", diff " + str(diff))
                         # Update stats{} dict
                         self.updateStats(historicStatsDict)
                         # Preset counters used by self.queueReceiverThread
