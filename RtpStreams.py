@@ -4952,6 +4952,8 @@ class RtpGenerator(RtpCommon):
             # The traceroute is performed n times. Only when the same route has been confirmed will the
             # tracerouteHopsList be updated. This is to guard against situations where the route changes mid-traceroute
             while self.timeToLive != 0 and setupSuccessfulFlag:
+                Utils.Message.addMessage(
+                    "***TR  outer while() start " + datetime.datetime.now().strftime("%H:%M:%S"))
                 # This is the main traceroute loop and counts the hops
                 # Set initial ttl (notee, start by decrementing 1, as the increment happens in the loop)
                 ttl = Registry.tracerouteStartingTTL - 1
@@ -5100,7 +5102,8 @@ class RtpGenerator(RtpCommon):
                         break
                     # Utils.Message.addMessage("[TTL:" + str(ttl) + ", Retry:" + str(retryCount) +"]" + str(hopsList[-1]))
 
-
+                Utils.Message.addMessage(
+                    "***TR  complete pass " + datetime.datetime.now().strftime("%H:%M:%S"))
                 # Traceroute pass completed,
 
                 # Now strip off any trailing 0.0.0.0 (no responses)
@@ -5175,7 +5178,8 @@ class RtpGenerator(RtpCommon):
                                 # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
                                 pass
 
-
+                Utils.Message.addMessage(
+                    "***TR  outer while() end " + datetime.datetime.now().strftime("%H:%M:%S"))
                 # Sleep for 1 sec between completed traceroutes
                 time.sleep(1)
 
