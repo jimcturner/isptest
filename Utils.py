@@ -256,11 +256,11 @@ class Message(object):
     @classmethod
     def __appendMessageToDeque(cls, newMessage):
         # Acquire the mutex lock
-        cls.messagesMutex.acquire()
+        # cls.messagesMutex.acquire()
         # Append the new item to the deque[]
         cls.messages.append(newMessage)
         #Release the mutex
-        cls.messagesMutex.release()
+        # cls.messagesMutex.release()
 
     # Thread-safe method to get a copy of the current messages list (deque)
     @classmethod
