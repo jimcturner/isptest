@@ -4671,7 +4671,7 @@ class RtpGenerator(RtpCommon):
             startTime = timer()
             while True:
                 Utils.Message.addMessage(
-                    "***TR  recvfrom ICMP " + datetime.datetime.now().strftime("%H:%M:%S"))
+                    "***TR  receive ICMP while " + datetime.datetime.now().strftime("%H:%M:%S"))
                 # Infinite loop to receive *all* icmp packets
                 # Break out of loop:
                 #   If timeOut period has been exceeded
@@ -4684,6 +4684,8 @@ class RtpGenerator(RtpCommon):
                 # Receive ICMP data from socket
                 # Keep waiting until we get a matched packet or the timeout occurs
                 try:
+                    Utils.Message.addMessage(
+                        "***TR  recvfrom ICMP " + datetime.datetime.now().strftime("%H:%M:%S"))
                     data, addr = _icmpSocket.recvfrom(5012)
                     Utils.Message.addMessage(
                         "***TR  recvfrom ICMP data received " + datetime.datetime.now().strftime("%H:%M:%S"))
