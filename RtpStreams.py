@@ -3221,7 +3221,7 @@ class RtpGenerator(RtpCommon):
             self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
             self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteThread")
             self.tracerouteThread.daemon = False
-            # self.tracerouteThread.start()
+            self.tracerouteThread.start()
 
 
         # create a stream results receiver object for this tx stream
@@ -4890,6 +4890,7 @@ class RtpGenerator(RtpCommon):
                 setupErrorMessage = str(e)
         else:
             # Linux or OSX detected
+            Utils.Message.addMessage("***TR  Linux or OSX detected " + datetime.datetime.now().strftime("%H:%M:%S"))
             # Create pointer to correct function for this OS
             sendUdpRecvIcmp = sendUdpRecvIcmpRawSockets
             self.tracerouteFunctionInUse = "sendUdpRecvIcmpRawSockets"
@@ -4899,6 +4900,7 @@ class RtpGenerator(RtpCommon):
                 udpTx, icmpRx = createSockets(self.SRC_IP_ADDR)
                 # Set the 'sockets okay' flag so that the main while loop will start
                 setupSuccessfulFlag = True
+                Utils.Message.addMessage("***TR  setupSuccessfulFlag = True" + datetime.datetime.now().strftime("%H:%M:%S"))
 
             except Exception as e:
                 # Failed to set up sockets
