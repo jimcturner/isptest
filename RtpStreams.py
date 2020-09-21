@@ -3212,36 +3212,16 @@ class RtpGenerator(RtpCommon):
         self.rtpGeneratorThread.start()
 
         self.tracerouteFunctionInUse = None     # Will be a label set by __traceRouteThread. Indicates which OS-dependant
-        # traceroute function is to be used
+                                                # traceroute function is to be used
 
-        # # Query the OS to determine which traceroute routine to run
-        # os = Utils.getOperatingSystem()
-        # # os = "Windows"
-        # if (os == "Windows"):
-        #     # Start the Windows (Scapy-based) traceroute thread
-        #     # self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindows, args=())
-        #     self.tracerouteThread = threading.Thread(target=self.__tracerouteThreadScapyWindowsRewrite, args=())
-        #     self.tracerouteThread.daemon = False
-        #     self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteScapyRewrite (" + str(os) + ")")
-        #
-        # else:
-        #     # Start the Linux/OSX traceroute thread
-        #     # self.tracerouteThread = threading.Thread(target=self.__tracerouteLinuxOSXThread, args=())
-        #     # self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteLinuxOSX (" + str(os) + ")")
-        #     self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
-        #     self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteThread(" + str(os) + ")")
-        #     self.tracerouteThread.daemon = False
-        #
-        # # Test the Registry var. If traceroute is enabled, start the thread
-        # if Registry.rtpGeneratorEnableTraceroute:
-        #     self.tracerouteThread.start()
+
 
         # Test the Registry var. If traceroute is enabled, create and start the thread
-        # if Registry.rtpGeneratorEnableTraceroute:
-        #     self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
-        #     self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteThread")
-        #     self.tracerouteThread.daemon = False
-        #     self.tracerouteThread.start()
+        if Registry.rtpGeneratorEnableTraceroute:
+            self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
+            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteThread")
+            self.tracerouteThread.daemon = False
+            # self.tracerouteThread.start()
 
 
         # create a stream results receiver object for this tx stream
@@ -3772,12 +3752,15 @@ class RtpGenerator(RtpCommon):
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread to end")
         self.rtpGeneratorThread.join()
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread has ended")
-        # Check to see if __tracerouteThread exists (it may have been intentionally disabled)
-        if self.tracerouteThread.is_alive():
-            # Wait for __tracerouteThread to end
-            Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  Waiting for __tracerouteThread has ended")
-            self.tracerouteThread.join()
-            Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  __tracerouteThread has ended")
+        try:
+            # Check to see if __tracerouteThread exists (it may have been intentionally disabled)
+            if self.tracerouteThread.is_alive():
+                # Wait for __tracerouteThread to end
+                Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  Waiting for __tracerouteThread has ended")
+                self.tracerouteThread.join()
+                Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  __tracerouteThread has ended")
+        except Exception as e:
+            Utils.Message.addMessage("ERR:RtpGenerator.killStream() self.tracerouteThread.join() " + str(e))
         # Wait for __samplingThread to end
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread to end")
         self.samplingThread.join()
