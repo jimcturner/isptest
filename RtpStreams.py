@@ -1364,7 +1364,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__packetCounterTransmittedTotal = 0# Will be populated by incoming isptest header data
         self.__streamTransmitterTxRateBps = 0  # Will be populated by incoming isptest header data
         self.__txStreamTimeToLive = 0 # Will be populated by incoming isptest header data
-        self.__rxTTL = 0 # The most recent TTL value from the IP Header (that conveyed the Rtp packet)
+        self.__rxTTL = None # The most recent TTL value from the IP Header (that conveyed the Rtp packet)
         self.__latestReceivedRtpPacket = None   # A copy of the most recently received Rtp packet (populated by __queueReceiverThread)
 
         # Counter to be used by __calculateJitter()
