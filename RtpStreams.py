@@ -4648,11 +4648,14 @@ class RtpGenerator(RtpCommon):
         def sendUdpRecvIcmpRawSockets(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None,\
                                       _srcPort=1515, _id_field=0):
 
-
+            Utils.Message.addMessage(
+                "***TR  sendUdpRecvIcmpRawSockets() start " + datetime.datetime.now().strftime("%H:%M:%S"))
             # Send the UDP message (with a custom ttl and id_field value)
             try:
                 # sendUDP(_udpSocket, _ttl, b'isptest',  _destAddr, _destPort)
                 sendUDP(_udpSocket, _ttl, b'tracert',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
+                Utils.Message.addMessage(
+                    "***TR  sendUdp() returned " + datetime.datetime.now().strftime("%H:%M:%S"))
 
             except Exception as e:
                 raise UDPTxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.sendUDP " + str(e))
@@ -4667,6 +4670,8 @@ class RtpGenerator(RtpCommon):
             # Create elapsed timer
             startTime = timer()
             while True:
+                Utils.Message.addMessage(
+                    "***TR  recvfrom ICMP " + datetime.datetime.now().strftime("%H:%M:%S"))
                 # Infinite loop to receive *all* icmp packets
                 # Break out of loop:
                 #   If timeOut period has been exceeded
@@ -4680,6 +4685,9 @@ class RtpGenerator(RtpCommon):
                 # Keep waiting until we get a matched packet or the timeout occurs
                 try:
                     data, addr = _icmpSocket.recvfrom(5012)
+                    Utils.Message.addMessage(
+                        "***TR  recvfrom ICMP data received " + datetime.datetime.now().strftime("%H:%M:%S"))
+
                     # Create ICMPHeader object from the received data. This will unpack and decode the fields
                     # The IP Header is contained within the first 20 bytes
                     # The ICMP Message Header is contained within the next 8 bytes
@@ -5001,13 +5009,13 @@ class RtpGenerator(RtpCommon):
                             # went with which stream
                             # This can only be a 16 bit value so needs to be masked to ensure that it doesn't wrap
                             tracerouteID = (self.UDP_TX_SRC_PORT + self.UDP_TX_PORT + self.syncSourceIdentifier + ttl) & 0xFFFF
-                            Utils.Message.addMessage(
-                                "***TR  sendUdpRecvIcmp() start " + datetime.datetime.now().strftime("%H:%M:%S"))
+
                             icmpMsg = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
                                 _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=tracerouteID)
                             Utils.Message.addMessage(
-                                "***TR  sendUdpRecvIcmp() complete " + datetime.datetime.now().strftime("%H:%M:%S"))
+                                "***TR  sendUdpRecvIcmpRawSockets() returned " + datetime.datetime.now().strftime(
+                                    "%H:%M:%S"))
                         except UDPTxError as e:
                             Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
                                                      "__tracerouteThread UDPTxError. Recreating udp Tx socket" + str(
