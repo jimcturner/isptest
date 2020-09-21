@@ -226,6 +226,7 @@ def uTom(value):
 class Message(object):
     # Define deque list to hold messages (this will auto-housekeep. Set to the max length specified in Registry)
     messages = deque(maxlen=Registry.historicMessagesToKeepInMemory)
+    messagesMutex = threading.Lock() #mutex to protect messages[]
 
     # Private flag to control the operation of the disk writing thread
     __writeMessagesToDiskThreadIsActive = False
@@ -240,6 +241,8 @@ class Message(object):
 
     outputFileName = "isptest_messages_default.txt"
 
+
+
     @classmethod
     def setVerbosity(cls, verbosity):
         cls.verbosityLevel = verbosity
@@ -248,6 +251,29 @@ class Message(object):
     @classmethod
     def setOutputFileName(cls, fileName):
         cls.outputFileName = fileName
+
+    # Thread-safe method to append messages to the cls.messages deque
+    @classmethod
+    def __appendMessageToDeque(cls, newMessage):
+        # Acquire the mutex lock
+        cls.messagesMutex.acquire()
+        # Append the new item to the deque[]
+        cls.messages.append(newMessage)
+        #Release the mutex
+        cls.messagesMutex.release()
+
+    # Thread-safe method to get a copy of the current messages list (deque)
+    @classmethod
+    def __getMessagesFromDeque(cls):
+        # Acquire the mutex lock
+        cls.messagesMutex.acquire()
+        # Take a shallow copy snapshot of the deque
+        copyOfMessages = list(cls.messages)
+        # Release the mutex
+        cls.messagesMutex.release()
+        return copyOfMessages
+
+
 
     # Class method to add a new message to the list
     # Additionally, this method checks to see if the disk writing thread is active. If it is not, it will start it
@@ -272,9 +298,10 @@ class Message(object):
 
 
         # Add the supplied message to the messages list as a tuple containing a timestamp and the message
-        # newMessage = [datetime.datetime.now().strftime("%H:%M:%S"), message]
         newMessage = [datetime.datetime.now(), message]
-        cls.messages.append(newMessage)
+
+        # Append newMessage to the deque via the thread-safe __appendMessageToDeque() method
+        cls.__appendMessageToDeque(newMessage)
 
         # Now put the new message in the queue, to be picked up by the disk writer thread
         cls.__diskWriteQueue.put(newMessage)
@@ -303,7 +330,8 @@ class Message(object):
 
         filteredList = []
         # Iterate over cls.messages[] filtering messages according to the contents of filtersInUse[]
-        for message in cls.messages:
+        # for message in cls.messages:
+        for message in cls.__getMessagesFromDeque():
             # If any of the contents of filtersInUse are found in message[1], omit them from filteredList[]
             if any(x in message[1] for x in filtersInUse):
                 # Add messages that would be filtered back into the 'filtered list' with a ** suffix
