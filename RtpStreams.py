@@ -3225,7 +3225,7 @@ class RtpGenerator(RtpCommon):
 
 
         # create a stream results receiver object for this tx stream
-        self.rtpStreamResultsReceiver = ResultsReceiver(self)
+        # self.rtpStreamResultsReceiver = ResultsReceiver(self)
 
         # Add the object to the specified dictionary with using rtpStreamID as the key
         self.rtpTxStreamsDictMutex.acquire()
