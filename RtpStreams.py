@@ -5001,9 +5001,13 @@ class RtpGenerator(RtpCommon):
                             # went with which stream
                             # This can only be a 16 bit value so needs to be masked to ensure that it doesn't wrap
                             tracerouteID = (self.UDP_TX_SRC_PORT + self.UDP_TX_PORT + self.syncSourceIdentifier + ttl) & 0xFFFF
+                            Utils.Message.addMessage(
+                                "***TR  sendUdpRecvIcmp() start " + datetime.datetime.now().strftime("%H:%M:%S"))
                             icmpMsg = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
                                 _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=tracerouteID)
+                            Utils.Message.addMessage(
+                                "***TR  sendUdpRecvIcmp() complete " + datetime.datetime.now().strftime("%H:%M:%S"))
                         except UDPTxError as e:
                             Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
                                                      "__tracerouteThread UDPTxError. Recreating udp Tx socket" + str(
