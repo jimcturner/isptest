@@ -3225,7 +3225,7 @@ class RtpGenerator(RtpCommon):
 
 
         # create a stream results receiver object for this tx stream
-        # self.rtpStreamResultsReceiver = ResultsReceiver(self)
+        self.rtpStreamResultsReceiver = ResultsReceiver(self)
 
         # Add the object to the specified dictionary with using rtpStreamID as the key
         self.rtpTxStreamsDictMutex.acquire()
@@ -3767,7 +3767,11 @@ class RtpGenerator(RtpCommon):
         Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread has ended")
 
         # Now kill corresponding RtpResultsReceiver object (should be a blocking call)
-        self.rtpStreamResultsReceiver.kill()
+        try:
+            self.rtpStreamResultsReceiver.kill()
+        except Exception as e:
+            Utils.Message.addMessage("ERR:RtpGenerator.killStream() kill rtpStreamResultsReceiver " + str(e))
+
         # Finally, remove this RtpGenerator object from rtpTxStreamsDict
         self.rtpTxStreamsDictMutex.acquire()
         Utils.Message.addMessage("INFO: Deleting RtpGenerator entry in rtpTxStreamsDict for stream: " + str(self.syncSourceIdentifier))
@@ -4614,8 +4618,7 @@ class RtpGenerator(RtpCommon):
                         # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
                         destList = srcList[:(len(srcList) - elementsToTrim)]
                     except Exception as e:
-                        Utils.Message.addMessage(
-                            "ERR:__tracerouteThread.trimHopsList() " + str(e))
+                        Utils.Message.addMessage("ERR:__tracerouteThread.trimHopsList() " + str(e))
                 else:
                     destList = srcList
             return destList
@@ -4648,14 +4651,11 @@ class RtpGenerator(RtpCommon):
         def sendUdpRecvIcmpRawSockets(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None,\
                                       _srcPort=1515, _id_field=0):
 
-            Utils.Message.addMessage(
-                "***TR  sendUdpRecvIcmpRawSockets() start " + datetime.datetime.now().strftime("%H:%M:%S"))
             # Send the UDP message (with a custom ttl and id_field value)
             try:
                 # sendUDP(_udpSocket, _ttl, b'isptest',  _destAddr, _destPort)
                 sendUDP(_udpSocket, _ttl, b'tracert',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
-                Utils.Message.addMessage(
-                    "***TR  sendUdp() returned " + datetime.datetime.now().strftime("%H:%M:%S"))
+
 
             except Exception as e:
                 raise UDPTxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.sendUDP " + str(e))
@@ -4670,8 +4670,6 @@ class RtpGenerator(RtpCommon):
             # Create elapsed timer
             startTime = timer()
             while True:
-                Utils.Message.addMessage(
-                    "***TR  receive ICMP while " + datetime.datetime.now().strftime("%H:%M:%S"))
                 # Infinite loop to receive *all* icmp packets
                 # Break out of loop:
                 #   If timeOut period has been exceeded
@@ -4686,7 +4684,7 @@ class RtpGenerator(RtpCommon):
                 try:
                     Utils.Message.addMessage(
                         "***TR  recvfrom ICMP " + datetime.datetime.now().strftime("%H:%M:%S"))
-                    data, addr = _icmpSocket.recvfrom(5012)
+                    data, addr = _icmpSocket.recvfrom(65535)
                     Utils.Message.addMessage(
                         "***TR  recvfrom ICMP data received " + datetime.datetime.now().strftime("%H:%M:%S"))
 
@@ -4900,7 +4898,6 @@ class RtpGenerator(RtpCommon):
                 setupErrorMessage = str(e)
         else:
             # Linux or OSX detected
-            Utils.Message.addMessage("***TR  Linux or OSX detected " + datetime.datetime.now().strftime("%H:%M:%S"))
             # Create pointer to correct function for this OS
             sendUdpRecvIcmp = sendUdpRecvIcmpRawSockets
             self.tracerouteFunctionInUse = "sendUdpRecvIcmpRawSockets"
@@ -4910,7 +4907,6 @@ class RtpGenerator(RtpCommon):
                 udpTx, icmpRx = createSockets(self.SRC_IP_ADDR)
                 # Set the 'sockets okay' flag so that the main while loop will start
                 setupSuccessfulFlag = True
-                Utils.Message.addMessage("***TR  setupSuccessfulFlag = True" + datetime.datetime.now().strftime("%H:%M:%S"))
 
             except Exception as e:
                 # Failed to set up sockets
@@ -4962,8 +4958,6 @@ class RtpGenerator(RtpCommon):
             # The traceroute is performed n times. Only when the same route has been confirmed will the
             # tracerouteHopsList be updated. This is to guard against situations where the route changes mid-traceroute
             while self.timeToLive != 0 and setupSuccessfulFlag:
-                # Utils.Message.addMessage(
-                #     "***TR  outer while() start " + datetime.datetime.now().strftime("%H:%M:%S"))
                 # This is the main traceroute loop and counts the hops
                 # Set initial ttl (notee, start by decrementing 1, as the increment happens in the loop)
                 ttl = Registry.tracerouteStartingTTL - 1
@@ -5015,9 +5009,7 @@ class RtpGenerator(RtpCommon):
                             icmpMsg = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
                                 _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=tracerouteID)
-                            Utils.Message.addMessage(
-                                "***TR  sendUdpRecvIcmpRawSockets() returned " + datetime.datetime.now().strftime(
-                                    "%H:%M:%S"))
+
                         except UDPTxError as e:
                             Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
                                                      "__tracerouteThread UDPTxError. Recreating udp Tx socket" + str(
@@ -5116,8 +5108,6 @@ class RtpGenerator(RtpCommon):
                         break
                     # Utils.Message.addMessage("[TTL:" + str(ttl) + ", Retry:" + str(retryCount) +"]" + str(hopsList[-1]))
 
-                Utils.Message.addMessage(
-                    "***TR  complete pass " + datetime.datetime.now().strftime("%H:%M:%S"))
                 # Traceroute pass completed,
 
                 # Now strip off any trailing 0.0.0.0 (no responses)
@@ -5192,8 +5182,6 @@ class RtpGenerator(RtpCommon):
                                 # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
                                 pass
 
-                Utils.Message.addMessage(
-                    "***TR  outer while() end " + datetime.datetime.now().strftime("%H:%M:%S"))
                 # Sleep for 1 sec between completed traceroutes
                 time.sleep(1)
 
