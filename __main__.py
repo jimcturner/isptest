@@ -4507,18 +4507,19 @@ def main(argv):
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # If UDP source port specified
         # if UDP_TX_SRC_PORT >0:
-        rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
-                                    payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
-                                    rtpTxStreamsDict, rtpTxStreamsDictMutex,
-                                    rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance=ui,
-                                    UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME)
+        # rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
+        #                             payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
+        #                             rtpTxStreamsDict, rtpTxStreamsDictMutex,
+        #                             rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance=ui,
+        #                             UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME)
+        #
 
-        # Create a diskLogging Thread - pass rtpStream object to it
-        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, shutdownFlag,))
-        diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
-        diskLoggerThread.setName("__diskLoggerThread")
-        diskLoggerThread.start()
-
+        # # Create a diskLogging Thread - pass rtpStream object to it
+        # diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, shutdownFlag,))
+        # diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
+        # diskLoggerThread.setName("__diskLoggerThread")
+        # diskLoggerThread.start()
+        pass
     # Main program execution loops
 
 
