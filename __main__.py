@@ -4505,17 +4505,16 @@ def main(argv):
 
     # Start traffic generator thread
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
-        # If UDP source port specified
-        if UDP_TX_SRC_PORT > 0:
-            try:
-                rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
-                                        payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
-                                        rtpTxStreamsDict, rtpTxStreamsDictMutex,
-                                        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance=ui,
-                                        UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME)
+        # Attempt to create an RtpGenerator based on the supplied parameters
+        try:
+            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
+                                    payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
+                                    rtpTxStreamsDict, rtpTxStreamsDictMutex,
+                                    rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance=ui,
+                                    UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME)
 
-            except Exception as e:
-                Utils.Message.addMessage("ERR:main() Create RtpGenerator() " + str(e))
+        except Exception as e:
+            Utils.Message.addMessage("ERR:main() Create RtpGenerator() " + str(e))
         # # Create a diskLogging Thread - pass rtpStream TX dict to it
         # diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, shutdownFlag,))
         # diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
