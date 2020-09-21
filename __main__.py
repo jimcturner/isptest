@@ -4515,12 +4515,13 @@ def main(argv):
 
         except Exception as e:
             Utils.Message.addMessage("ERR:main() Create RtpGenerator() " + str(e))
-        # # Create a diskLogging Thread - pass rtpStream TX dict to it
-        # diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, shutdownFlag,))
-        # diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
-        # diskLoggerThread.setName("__diskLoggerThread")
-        # diskLoggerThread.start()
-        pass
+
+        # Create a diskLogging Thread - pass rtpStream TX dict to it
+        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, shutdownFlag,))
+        diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
+        diskLoggerThread.setName("__diskLoggerThread")
+        diskLoggerThread.start()
+
     # Main program execution loops
 
 

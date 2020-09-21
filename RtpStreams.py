@@ -3237,11 +3237,11 @@ class RtpGenerator(RtpCommon):
         #     self.tracerouteThread.start()
 
         # Test the Registry var. If traceroute is enabled, create and start the thread
-        if Registry.rtpGeneratorEnableTraceroute:
-            self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
-            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteThread")
-            self.tracerouteThread.daemon = False
-            self.tracerouteThread.start()
+        # if Registry.rtpGeneratorEnableTraceroute:
+        #     self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
+        #     self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteThread")
+        #     self.tracerouteThread.daemon = False
+        #     self.tracerouteThread.start()
 
 
         # create a stream results receiver object for this tx stream
