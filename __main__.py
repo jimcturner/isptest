@@ -4599,8 +4599,11 @@ def main(argv):
 
         ############ Stop DiskLogger and __receiveRTP threads (currently they stop themselves)
         shutdownFlag.set()
-        # Wait for diskLogger Thread to end
-        diskLoggerThread.join()
+        try:
+            # Wait for diskLogger Thread to end
+            diskLoggerThread.join()
+        except Exception as e:
+            Utils.Message.addMessage("ERR: diskLoggerThread.join() " + str(e))
 
         # # wait for __receiveRtpStream Thread to end (if it exists)
         # if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
