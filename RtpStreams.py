@@ -4683,10 +4683,10 @@ class RtpGenerator(RtpCommon):
                 # Keep waiting until we get a matched packet or the timeout occurs
                 try:
                     Utils.Message.addMessage(
-                        "***TR  recvfrom ICMP " + datetime.datetime.now().strftime("%H:%M:%S"))
+                        "***TR  recvfrom ICMP TTL " + str(_ttl) + datetime.datetime.now().strftime("%H:%M:%S"))
                     data, addr = _icmpSocket.recvfrom(65535)
                     Utils.Message.addMessage(
-                        "***TR  recvfrom ICMP data received " + datetime.datetime.now().strftime("%H:%M:%S"))
+                        "***TR  recvfrom ICMP data received " + str(_ttl) + datetime.datetime.now().strftime("%H:%M:%S"))
 
                     # Create ICMPHeader object from the received data. This will unpack and decode the fields
                     # The IP Header is contained within the first 20 bytes
