@@ -575,6 +575,10 @@ class UI(object):
         # self.UDP_RX_IP = ""
         # self.UDP_RX_PORT = 0
 
+        # Create a runtime_s counter to count the elapsed time the program has been running
+        self.startTime = datetime.datetime.now()
+        self.runtime_s = datetime.timedelta()
+
         # If true, this will cause renderDisplayThread to put up a quit y/n? prompt
         self.displayQuitDialogueFlag = False
         # threading.Event object used to intentionally block the showShutDownDialogue() method
@@ -842,6 +846,10 @@ class UI(object):
 
     # A method to destroy this UI object and all associated threads
     def kill(self):
+        # Write the current 'uptime' to disk
+        Utils.Message.addMessage("********* isptest ending. Total run time: " +
+                                 str(Utils.dtstrft(self.runtime_s)) + " *********")
+
         print ("UI.kill() method called\r")
         # Signal the __keysPressedThread to end
         if self.keysPressedThread.is_alive():
@@ -864,6 +872,7 @@ class UI(object):
             # Block until the thread ends
             print("UI.kill() Waiting for detectTerminalSizeThread to end\r")
             self.detectTerminalSizeThread.join()
+
 
     # This method will cause an error message to be shown by the main __renderDisplayThread
     # it will wait for a key press, and then cause the app to shut down (without user confirmation) via a SIGTERM
@@ -2404,7 +2413,7 @@ class UI(object):
         # Create some debug information to append to the end of the help list
         debugInfo = [["",""],["Debug info",""]]
         debugInfo.append(["Process ID ", str(os.getpid())])
-        debugInfo.append(["Run time ", str(Utils.dtstrft(datetime.timedelta(seconds=runtime_s)))])
+        debugInfo.append(["Run time ", str(Utils.dtstrft(self.runtime_s))])
         if self.operationMode == "RECEIVE":
             # Display aggregate socket receive stats
             try:
@@ -2915,6 +2924,8 @@ class UI(object):
             self.wakeUpUI.wait(timeout=1)
             # Now clear the 'wakeupUI event' flag (because we've processed this key press)
             self.wakeUpUI.clear()
+            # Recalculate the run-time of the UI thread
+            self.runtime_s = datetime.datetime.now() - self.startTime
 
             # Check status of self.displayQuitDialogueFlag. If so, display the Quit Y/N prompt
             if self.displayQuitDialogueFlag:
@@ -4476,10 +4487,6 @@ def main(argv):
     signal.signal(signal.SIGINT, requestShutdownSignalHandler) # Ctrl-C
     signal.signal(signal.SIGTERM, shutdownApplicationSignalHandler)    # OS kill signal
 
-    # Create a global runtime_s counter to count the elapsed time the program has been running
-    global runtime_s
-    runtime_s = 0
-
 
     # Create a UI object (which will spawn a renderDisplay and catchKeyboardPresses thread)
     # Create flag that will be used by UI to signal back to main() that a shutdown has been requested
@@ -4571,8 +4578,6 @@ def main(argv):
             else:
                 Utils.Message.addMessage("ERR:Export streams snapshot failure " + str(code))
 
-        # Write the current 'uptime' to disk
-        Utils.Message.addMessage("isptest ending. Total run time: " + str(Utils.dtstrft(datetime.timedelta(seconds=runtime_s))))
 
         # Attempt to remove all rtp stream objects (be they RtpGenrators (which themselves reference RtpStreamresults objects)
         # or RtpReceiveStream objects
@@ -4597,13 +4602,14 @@ def main(argv):
                     dict[stream].killStream()
 
 
-        ############ Stop DiskLogger and __receiveRTP threads (currently they stop themselves)
-        shutdownFlag.set()
-        try:
-            # Wait for diskLogger Thread to end
-            diskLoggerThread.join()
-        except Exception as e:
-            Utils.Message.addMessage("ERR: diskLoggerThread.join() " + str(e))
+
+        # ############ Stop DiskLogger and __receiveRTP threads (currently they stop themselves)
+        # shutdownFlag.set()
+        # try:
+        #     # Wait for diskLogger Thread to end
+        #     diskLoggerThread.join()
+        # except Exception as e:
+        #     Utils.Message.addMessage("ERR: diskLoggerThread.join() " + str(e))
 
         # # wait for __receiveRtpStream Thread to end (if it exists)
         # if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
@@ -4618,6 +4624,17 @@ def main(argv):
 
         # Now kill UI
         ui.kill()
+
+        time.sleep(0.5)
+
+        ############ Stop DiskLogger and __receiveRTP threads (currently they stop themselves)
+        shutdownFlag.set()
+        try:
+            # Wait for diskLogger Thread to end
+            diskLoggerThread.join()
+        except Exception as e:
+            Utils.Message.addMessage("ERR: diskLoggerThread.join() " + str(e))
+
         exit()
 
 
@@ -4738,15 +4755,14 @@ def main(argv):
     # Endless loop
     while True:
         try:
+            loopCounter = 0 # Used as a scheduler
             while True:
                 # Term.printAt(str(listCurrentThreads()),1,2)
                 time.sleep(1)
-                # Increment run time counter
-                runtime_s += 1
-                # Utils.Message.addMessage(str(Utils.dtstrft(datetime.timedelta(seconds=runtime_s))))
+                loopCounter += 1
                 # If in RECEIVE mode, schedule an auto export of the current streams
                 try:
-                    if MODE == 'RECEIVE' and (runtime_s % Registry.streamsSnapshotAutoSaveInterval_s == 0):
+                    if MODE == 'RECEIVE' and (loopCounter % Registry.streamsSnapshotAutoSaveInterval_s == 0):
                         # Create snapshot of current receive streams
                         status, code = createStreamsSnapshot()
                         if status == False:
