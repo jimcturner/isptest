@@ -5006,7 +5006,8 @@ class RtpGenerator(RtpCommon):
                             # This can only be a 16 bit value so needs to be masked to ensure that it doesn't wrap
                             # tracerouteID = (self.UDP_TX_SRC_PORT + self.UDP_TX_PORT + self.syncSourceIdentifier + ttl) & 0xFFFF
                             # Calculate a unique id field using a random number
-                            tracerouteID = random.randint(1000, 65535)
+                            # This can only be a 16 bit value so needs to be masked to ensure that it doesn't wrap
+                            tracerouteID = random.randint(1000, 65535) & 0xFFFF
 
                             # Utils.Message.addMessage(
                             #     "***TR  calling sendUdpRecvIcmp() TTL:" + str(ttl) + ", retry:" + str(retryCount))
