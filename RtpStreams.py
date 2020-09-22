@@ -4164,9 +4164,10 @@ class RtpGenerator(RtpCommon):
                     # The RTP timestamp field is bytes 4-7 of the RTP header
                     struct.pack_into("!L", rtpGeneratorInstance.udpTxData, 4, rtpTimestampAsInt)
                     # Send the data
-                    sentBytes = rtpGeneratorInstance.udpTxSocket.sendto(rtpGeneratorInstance.udpTxData,
-                                                            (rtpGeneratorInstance.UDP_TX_IP,
-                                                             rtpGeneratorInstance.UDP_TX_PORT))
+                    # sentBytes = rtpGeneratorInstance.udpTxSocket.sendto(rtpGeneratorInstance.udpTxData,
+                    #                                         (rtpGeneratorInstance.UDP_TX_IP,
+                    #                                          rtpGeneratorInstance.UDP_TX_PORT))
+                    sentBytes = len(rtpGeneratorInstance.udpTxData)
                     # Confirm that we appear to have sent the correct no. of bytes
                     if sentBytes == len(rtpGeneratorInstance.udpTxData):
                         # Update tx bytes counter (taking packet headers into account)
