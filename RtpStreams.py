@@ -4959,8 +4959,8 @@ class RtpGenerator(RtpCommon):
             while self.timeToLive != 0 and setupSuccessfulFlag:
                 # This is the main traceroute loop and counts the hops
                 # Set initial ttl (NOTE, start by decrementing 1, as the increment happens in the loop)
-                ttl = Registry.tracerouteStartingTTL - 1
-                # ttl = 3
+                # ttl = Registry.tracerouteStartingTTL - 1
+                ttl = 3
                 # Counter for the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
                 # Reset the 'no response' counter
                 noResponseCounter = 0
