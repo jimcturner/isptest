@@ -5009,14 +5009,14 @@ class RtpGenerator(RtpCommon):
                             # This can only be a 16 bit value so needs to be masked to ensure that it doesn't wrap
                             tracerouteID = random.randint(1000, 65535) & 0xFFFF
 
-                            # Utils.Message.addMessage(
-                            #     "***TR  calling sendUdpRecvIcmp() TTL:" + str(ttl) + ", retry:" + str(retryCount))
-                            txRxTimerStart = timer()
+                            Utils.Message.addMessage(
+                                "***TR  calling sendUdpRecvIcmp() TTL:" + str(ttl) + ", retry:" + str(retryCount))
+                            txRxTimerStart = datetime.datetime.now()
                             icmpMsg = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
                                 _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=tracerouteID)
-                            txRxTimerElapsed = timer() - txRxTimerStart
-                            if txRxTimerElapsed > (2 * timeOut):
+                            txRxTimerElapsed = datetime.datetime.now() - txRxTimerStart
+                            if txRxTimerElapsed.total_seconds() > (2 * timeOut):
                                 Utils.Message.addMessage("TR DEBUG txRxTimerElapsed" + str(ttl) + ":" + str(retryCount) + \
                                                      ", " + str(txRxTimerElapsed))
 
