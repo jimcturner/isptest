@@ -3206,10 +3206,10 @@ class RtpGenerator(RtpCommon):
 
         ######## Actual code starts here
         # Start the traffic generator thread
-        # self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
-        # self.rtpGeneratorThread.daemon = False
-        # self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
-        # self.rtpGeneratorThread.start()
+        self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
+        self.rtpGeneratorThread.daemon = False
+        self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
+        self.rtpGeneratorThread.start()
 
         self.tracerouteFunctionInUse = None     # Will be a label set by __traceRouteThread. Indicates which OS-dependant
                                                 # traceroute function is to be used
@@ -3223,7 +3223,7 @@ class RtpGenerator(RtpCommon):
 
 
         # create a stream results receiver object for this tx stream
-        # self.rtpStreamResultsReceiver = ResultsReceiver(self)
+        self.rtpStreamResultsReceiver = ResultsReceiver(self)
 
         # Add the object to the specified dictionary with using rtpStreamID as the key
         self.rtpTxStreamsDictMutex.acquire()
@@ -5025,7 +5025,7 @@ class RtpGenerator(RtpCommon):
                             txRxTimerStart = datetime.datetime.now()
                             icmpMsg = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
-                                _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=tracerouteID)
+                                _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=(self.UDP_TX_SRC_PORT + 1), _id_field=tracerouteID)
                             txRxTimerElapsed = datetime.datetime.now() - txRxTimerStart
                             if txRxTimerElapsed.total_seconds() > (2 * timeOut):
                                 Utils.Message.addMessage("TR DEBUG txRxTimerElapsed" + str(ttl) + ":" + str(retryCount) + \
