@@ -4865,7 +4865,7 @@ class RtpGenerator(RtpCommon):
         # The first attempt will be to use the destination port for the stream
         # If that fails, a fallback port specified in the Registry will be used. Routers are more likely to respond
         # on this other port (33434)
-        maxNoOfRetries = 6
+        maxNoOfRetries = 4
         # Get the max no of hops before traceroute gives up
         maxNoOfHops = Registry.tracerouteMaxHops
         # Get the UDP 'fallback' port
