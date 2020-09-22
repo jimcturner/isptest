@@ -4654,8 +4654,8 @@ class RtpGenerator(RtpCommon):
             # Send the UDP message (with a custom ttl and id_field value)
             try:
                 # sendUDP(_udpSocket, _ttl, b'isptest',  _destAddr, _destPort)
-                sendUDP(_udpSocket, _ttl, b'tracert',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
-
+                # sendUDP(_udpSocket, _ttl, b'tracert',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
+                pass
 
             except Exception as e:
                 raise UDPTxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.sendUDP " + str(e))
