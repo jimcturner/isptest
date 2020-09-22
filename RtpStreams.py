@@ -4777,9 +4777,9 @@ class RtpGenerator(RtpCommon):
                         Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
                                              " RtpGenerator.__tracerouteThread() Unexpected short length packet from " + \
                                              str(addr[0]))
-                # except socket.timeout:
-                #     # print("socket timeout")
-                #     pass
+                except socket.timeout:
+                    # print("socket timeout")
+                    pass
 
                 except Exception as e:
                     raise ICMPRxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpRawSocket.recvICMP " + str(e))
