@@ -4668,15 +4668,14 @@ class RtpGenerator(RtpCommon):
             # loop to break
 
             # Create elapsed timer
-            startTime = timer()
+            startTime = datetime.datetime.now()
             while True:
                 # Infinite loop to receive *all* icmp packets
                 # Break out of loop:
                 #   If timeOut period has been exceeded
-                #   if socket timeout exception raised
-                #   If matcher matches an icmp reply with the correct id_field
-                elapsedTime = timer() - startTime
-                if elapsedTime > _timeout:
+                #   OR If matcher matches an icmp reply with the correct id_field
+                elapsedTime = datetime.datetime.now() - startTime
+                if elapsedTime.total_seconds() > (_timeout * 4):
                     # print("elapsedTimer exceeded twice timeout " + str(round(elapsedTime,1)) + "/" + str(timeOut * 2))
                     break
                 # Receive ICMP data from socket
@@ -4686,11 +4685,9 @@ class RtpGenerator(RtpCommon):
                     #     "***TR  recvfrom ICMP wait TTL:" + str(_ttl) + ", " + datetime.datetime.now().strftime("%H:%M:%S"))
                     # data, addr = _icmpSocket.recvfrom(65535)
                     # Use select() to poll the socket, before attempting to read it. This should block for _timeout seconds
-                    r, w, x = select.select([_icmpSocket], [], [], (_timeout/2.0))
+                    r, w, x = select.select([_icmpSocket], [], [], _timeout)
                     if not r:
                         # select () timeout reached so returned list will be empty
-                        data = []
-                        addr = ("", 0)
                         Utils.Message.addMessage("****TR select() timeout reached")
                     else:
                         # select() reckons there's some data to be read
@@ -4698,93 +4695,88 @@ class RtpGenerator(RtpCommon):
                             Utils.Message.addMessage("****TR _icmpSocket has data")
                             # The socket contains data to be read
                             data, addr = _icmpSocket.recvfrom(65535)
-                        else:
-                            # If no data to be read, clear the rawData and rawAddr lists
-                            data = []
-                            addr = ("", 0)
 
-                    # Create ICMPHeader object from the received data. This will unpack and decode the fields
-                    # The IP Header is contained within the first 20 bytes
-                    # The ICMP Message Header is contained within the next 8 bytes
-                    # The data after that is copy of the entire IPv4 header (20 bytes)
-                    # ipHeaderOfReply = IPHeader(data[0:20])
-                    # Decode the ICMP header
-                    if len(data) >= 48:
-                        try:
-                            icmpHeader = ICMPHeader(data[20:28])
-                            # Decode the ICMP payload, which contains a copy of the IP header originally sent
-                            # From this we can verify that the TTL and source IP address were the same as that sent
-                            # Therefore we can infer that this particular ICMP message is our reply, otherwise we discard the
-                            # message and listen again (within the timeout period)
-                            ipHeaderOfOriginalSender = IPHeader(data[28:48])
-                            # # Display the  header fields of the received packet
-                            # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                            #                          " RtpGenerator.__tracerouteThread() ICMP packet fields " + \
-                            #                          "src:" + str(addr[0]) + \
-                            #                          ", type:" + str(icmpHeader.type) + \
-                            #                          ", code:" + str(icmpHeader.code) + \
-                            #                          ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
-                            #                          ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
-                            #                          ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
-                            #                          ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum) +\
-                            #                          ", id:" + str(ipHeaderOfOriginalSender.id_field))
+                            # Create ICMPHeader object from the received data. This will unpack and decode the fields
+                            # The IP Header is contained within the first 20 bytes
+                            # The ICMP Message Header is contained within the next 8 bytes
+                            # The data after that is copy of the entire IPv4 header (20 bytes)
+                            # ipHeaderOfReply = IPHeader(data[0:20])
+                            # Decode the ICMP header
+                            if len(data) >= 48:
+                                try:
+                                    icmpHeader = ICMPHeader(data[20:28])
+                                    # Decode the ICMP payload, which contains a copy of the IP header originally sent
+                                    # From this we can verify that the TTL and source IP address were the same as that sent
+                                    # Therefore we can infer that this particular ICMP message is our reply, otherwise we discard the
+                                    # message and listen again (within the timeout period)
+                                    ipHeaderOfOriginalSender = IPHeader(data[28:48])
+                                    # # Display the  header fields of the received packet
+                                    # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                    #                          " RtpGenerator.__tracerouteThread() ICMP packet fields " + \
+                                    #                          "src:" + str(addr[0]) + \
+                                    #                          ", type:" + str(icmpHeader.type) + \
+                                    #                          ", code:" + str(icmpHeader.code) + \
+                                    #                          ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
+                                    #                          ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
+                                    #                          ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
+                                    #                          ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum) +\
+                                    #                          ", id:" + str(ipHeaderOfOriginalSender.id_field))
 
 
-                            # Test to see if this icmp packet is a reply to the UDP message we just sent
-                            # Do this by examining the IPsrc and id_field values of the 'returned' IP header
-                            # contained within the payload of the icmp packet
-                            # We know exactly what we sent, so we know what we're looking for
-                            if ipHeaderOfOriginalSender.id_field == _id_field and \
-                                    ipHeaderOfOriginalSender.s_addr == _srcAddr:
-                                # The received icmp contents are as expected
-                                # Extract any extra data (beyond the IP in ICMP payload) if it exists
-                                IPinICMP_payload = None # Set default value
-                                if len(data) > 48:
-                                    IPinICMP_payload = data[48:]
+                                    # Test to see if this icmp packet is a reply to the UDP message we just sent
+                                    # Do this by examining the IPsrc and id_field values of the 'returned' IP header
+                                    # contained within the payload of the icmp packet
+                                    # We know exactly what we sent, so we know what we're looking for
+                                    if ipHeaderOfOriginalSender.id_field == _id_field and \
+                                            ipHeaderOfOriginalSender.s_addr == _srcAddr:
+                                        # The received icmp contents are as expected
+                                        # Extract any extra data (beyond the IP in ICMP payload) if it exists
+                                        IPinICMP_payload = None # Set default value
+                                        if len(data) > 48:
+                                            IPinICMP_payload = data[48:]
 
-                                # Return a dictionary containing the unpacked fields of the icmp message
-                                return {"ICMP_Type": icmpHeader.type,
-                                        "ICMP_Code": icmpHeader.code,
-                                        "IP_replyFromAddr": addr[0],
-                                        "IPinICMP_ttlReceived": ipHeaderOfOriginalSender.ttl,
-                                        "IPinICMP_id_field": ipHeaderOfOriginalSender.id_field,
-                                        "IPinICMP_srcAddr": ipHeaderOfOriginalSender.s_addr,
-                                        "IPinICMP_dstAddr": ipHeaderOfOriginalSender.d_addr,
-                                        "IPinICMP_checksum": ipHeaderOfOriginalSender.checksum,
-                                        "length": len(data),
-                                        "IPinICMP_payload": IPinICMP_payload
-                                        }
+                                        # Return a dictionary containing the unpacked fields of the icmp message
+                                        return {"ICMP_Type": icmpHeader.type,
+                                                "ICMP_Code": icmpHeader.code,
+                                                "IP_replyFromAddr": addr[0],
+                                                "IPinICMP_ttlReceived": ipHeaderOfOriginalSender.ttl,
+                                                "IPinICMP_id_field": ipHeaderOfOriginalSender.id_field,
+                                                "IPinICMP_srcAddr": ipHeaderOfOriginalSender.s_addr,
+                                                "IPinICMP_dstAddr": ipHeaderOfOriginalSender.d_addr,
+                                                "IPinICMP_checksum": ipHeaderOfOriginalSender.checksum,
+                                                "length": len(data),
+                                                "IPinICMP_payload": IPinICMP_payload
+                                                }
+                                    else:
+                                        # Display the  header fields of the unexpected packet
+                                        Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                                                 " RtpGenerator.__tracerouteThread() Unexpected ICMP packet fields " + \
+                                                                 "src:" + str(addr[0]) + \
+                                                                 ", type:" + str(icmpHeader.type) + \
+                                                                 ", code:" + str(icmpHeader.code) + \
+                                                                 ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
+                                                                 ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
+                                                                 ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
+                                                                ", tx'd ttl:" + str(_ttl) + \
+                                                                 ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum) + \
+                                                                 ", id:" + str(ipHeaderOfOriginalSender.id_field) +\
+                                                                 ", tx'd id:" + str(_id_field))
+                                        pass
+
+
+                                except Exception as e:
+                                    Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                                             " RtpGenerator.__tracerouteThread() ICMP decode error, from " + \
+                                                             str(addr[0]) + ", " + str(e))
+                                    return None
+
                             else:
-                                # Display the  header fields of the unexpected packet
-                                # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                                #                          " RtpGenerator.__tracerouteThread() Unexpected ICMP packet fields " + \
-                                #                          "src:" + str(addr[0]) + \
-                                #                          ", type:" + str(icmpHeader.type) + \
-                                #                          ", code:" + str(icmpHeader.code) + \
-                                #                          ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
-                                #                          ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
-                                #                          ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
-                                #                         ", tx'd ttl:" + str(_ttl) + \
-                                #                          ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum) + \
-                                #                          ", id:" + str(ipHeaderOfOriginalSender.id_field) +\
-                                #                          ", tx'd id:" + str(_id_field))
+                                Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                                     " RtpGenerator.__tracerouteThread() Unexpected short length packet from " + \
+                                                     str(addr[0]))
                                 pass
 
 
-                        except Exception as e:
-                            Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                                                     " RtpGenerator.__tracerouteThread() ICMP decode error, from " + \
-                                                     str(addr[0]) + ", " + str(e))
-
-                    else:
-                        # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                        #                      " RtpGenerator.__tracerouteThread() Unexpected short length packet from " + \
-                        #                      str(addr[0]))
-                        pass
-
-                except socket.timeout:
-                    # print("socket timeout")
-                    pass
 
                 except Exception as e:
                     raise ICMPRxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpRawSocket.recvICMP " + str(e))
