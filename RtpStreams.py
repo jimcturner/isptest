@@ -4684,15 +4684,17 @@ class RtpGenerator(RtpCommon):
                     # Utils.Message.addMessage(
                     #     "***TR  recvfrom ICMP wait TTL:" + str(_ttl) + ", " + datetime.datetime.now().strftime("%H:%M:%S"))
                     # data, addr = _icmpSocket.recvfrom(65535)
-                    # Use select() to poll the socket, before attempting to read it
-                    r, w, x = select.select([_icmpSocket], [], [], _timeout)
+                    # Use select() to poll the socket, before attempting to read it. This should block for _timeout seconds
+                    r, w, x = select.select([_icmpSocket], [], [], (_timeout/2.0))
                     if not r:
                         # select () timeout reached so returned list will be empty
                         data = []
                         addr = ("", 0)
+                        Utils.Message.addMessage("****TR select() timeout reached")
                     else:
                         # select() reckons there's some data to be read
                         if _icmpSocket in r:
+                            Utils.Message.addMessage("****TR _icmpSocket has data")
                             # The socket contains data to be read
                             data, addr = _icmpSocket.recvfrom(65535)
                         else:
@@ -4774,9 +4776,11 @@ class RtpGenerator(RtpCommon):
                                                      str(addr[0]) + ", " + str(e))
 
                     else:
-                        Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                                             " RtpGenerator.__tracerouteThread() Unexpected short length packet from " + \
-                                             str(addr[0]))
+                        # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                        #                      " RtpGenerator.__tracerouteThread() Unexpected short length packet from " + \
+                        #                      str(addr[0]))
+                        pass
+
                 except socket.timeout:
                     # print("socket timeout")
                     pass
@@ -4972,8 +4976,8 @@ class RtpGenerator(RtpCommon):
             while self.timeToLive != 0 and setupSuccessfulFlag:
                 # This is the main traceroute loop and counts the hops
                 # Set initial ttl (NOTE, start by decrementing 1, as the increment happens in the loop)
-                # ttl = Registry.tracerouteStartingTTL - 1
-                ttl = 3
+                ttl = Registry.tracerouteStartingTTL - 1
+
                 # Counter for the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
                 # Reset the 'no response' counter
                 noResponseCounter = 0
