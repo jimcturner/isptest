@@ -4683,10 +4683,10 @@ class RtpGenerator(RtpCommon):
                 # Keep waiting until we get a matched packet or the timeout occurs
                 try:
                     Utils.Message.addMessage(
-                        "***TR  recvfrom ICMP TTL " + str(_ttl) + datetime.datetime.now().strftime("%H:%M:%S"))
+                        "***TR  recvfrom ICMP wait TTL:" + str(_ttl) + ", " + datetime.datetime.now().strftime("%H:%M:%S"))
                     data, addr = _icmpSocket.recvfrom(65535)
                     Utils.Message.addMessage(
-                        "***TR  recvfrom ICMP data received " + str(_ttl) + datetime.datetime.now().strftime("%H:%M:%S"))
+                        "***TR  recvfrom ICMP data received TTL:" + ", " + str(_ttl) + datetime.datetime.now().strftime("%H:%M:%S"))
 
                     # Create ICMPHeader object from the received data. This will unpack and decode the fields
                     # The IP Header is contained within the first 20 bytes
@@ -5006,6 +5006,8 @@ class RtpGenerator(RtpCommon):
                             # This can only be a 16 bit value so needs to be masked to ensure that it doesn't wrap
                             tracerouteID = (self.UDP_TX_SRC_PORT + self.UDP_TX_PORT + self.syncSourceIdentifier + ttl) & 0xFFFF
 
+                            Utils.Message.addMessage(
+                                "***TR  calling sendUdpRecvIcmp() TTL:" + str(ttl) + ", retry:" + str(retryCount))
                             icmpMsg = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
                                 _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=tracerouteID)
