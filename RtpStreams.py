@@ -3206,15 +3206,13 @@ class RtpGenerator(RtpCommon):
 
         ######## Actual code starts here
         # Start the traffic generator thread
-        self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
-        self.rtpGeneratorThread.daemon = False
-        self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
-        self.rtpGeneratorThread.start()
+        # self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
+        # self.rtpGeneratorThread.daemon = False
+        # self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
+        # self.rtpGeneratorThread.start()
 
         self.tracerouteFunctionInUse = None     # Will be a label set by __traceRouteThread. Indicates which OS-dependant
                                                 # traceroute function is to be used
-
-
 
         # Test the Registry var. If traceroute is enabled, create and start the thread
         if Registry.rtpGeneratorEnableTraceroute:
@@ -4489,8 +4487,8 @@ class RtpGenerator(RtpCommon):
             pass
         class ICMPRxError(Exception):
             pass
-        class TracerouteLinuxOSXThreadError(Exception):
-            pass
+        # class TracerouteLinuxOSXThreadError(Exception):
+        #     pass
 
         # Creates and returns two separate sockets, one for tx (udp) and one for rx (icmp)
         # Returns a UDPTxSocketSetupError or ICMPRxSocketSetupError Exception
@@ -4513,7 +4511,7 @@ class RtpGenerator(RtpCommon):
             try:
                 # Create raw socket
                 icmpRx = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
-                icmpRx.settimeout(timeOut)
+                # icmpRx.settimeout(timeOut)
                 icmpRx.setblocking(False)
                 # Bind to the ip address of the interface specified by ipAddrofInterface
                 icmpRx.bind((ipAddrofInterface, 0))
@@ -4565,28 +4563,28 @@ class RtpGenerator(RtpCommon):
                 except Exception as e:
                     raise IPHeader.DecodeException(str(e))
 
-        # This function decodes the icmp Header and icmp payload (which should contain a copy of the header
-        # that caused the icmp reply to be generated).
-        # It expects an ICMPHeader and IPHeader object as arguments
-        # If the function can match the srcAddress, srcTtl, icmpType and icmpCode to that of the original sending
-        # message we can infer that this ICMP message is for us.
-        # Returns True if all the  optional parameters were matched, False if not, or None of there was an error
-        def icmpReplyMatcher(__icmpHeader, __ipHeaderOfSrc, srcAddress=None, destAddress=None, \
-                             srcTtl=None, icmpType=None, icmpCode=None, id_field=None):
-
-            # Test the fields within __icmpHeader and __ipHeaderOfSrc to see if they're what we're looking for
-            try:
-                if ((srcAddress == __ipHeaderOfSrc.s_addr) or (srcAddress is None)) and \
-                        ((destAddress == __ipHeaderOfSrc.d_addr) or (destAddress is None)) and \
-                        ((srcTtl == __ipHeaderOfSrc.ttl) or (srcTtl is None)) and \
-                          ((icmpType == __icmpHeader.type) or (icmpType is None)) and \
-                        ((icmpCode == __icmpHeader.code) or (icmpCode is None)):# and \
-                        #((id_field == __icmpHeader.id_field) or (id_field is None)):
-                    return True
-                else:
-                    return False
-            except:
-                return None
+        # # This function decodes the icmp Header and icmp payload (which should contain a copy of the header
+        # # that caused the icmp reply to be generated).
+        # # It expects an ICMPHeader and IPHeader object as arguments
+        # # If the function can match the srcAddress, srcTtl, icmpType and icmpCode to that of the original sending
+        # # message we can infer that this ICMP message is for us.
+        # # Returns True if all the  optional parameters were matched, False if not, or None of there was an error
+        # def icmpReplyMatcher(__icmpHeader, __ipHeaderOfSrc, srcAddress=None, destAddress=None, \
+        #                      srcTtl=None, icmpType=None, icmpCode=None, id_field=None):
+        #
+        #     # Test the fields within __icmpHeader and __ipHeaderOfSrc to see if they're what we're looking for
+        #     try:
+        #         if ((srcAddress == __ipHeaderOfSrc.s_addr) or (srcAddress is None)) and \
+        #                 ((destAddress == __ipHeaderOfSrc.d_addr) or (destAddress is None)) and \
+        #                 ((srcTtl == __ipHeaderOfSrc.ttl) or (srcTtl is None)) and \
+        #                   ((icmpType == __icmpHeader.type) or (icmpType is None)) and \
+        #                 ((icmpCode == __icmpHeader.code) or (icmpCode is None)):# and \
+        #                 #((id_field == __icmpHeader.id_field) or (id_field is None)):
+        #             return True
+        #         else:
+        #             return False
+        #     except:
+        #         return None
 
         # Utility function to tidy up the main loop. Sends a UDP message, allowing IP Header TTL parameter to be set
         def sendUDP(txSock, txTTL, payload, destIPAddr, destUDPPort, srcAddr, srcPort, id_field):
@@ -4676,8 +4674,8 @@ class RtpGenerator(RtpCommon):
                 #   If timeOut period has been exceeded
                 #   OR If matcher matches an icmp reply with the correct id_field
                 elapsedTime = datetime.datetime.now() - startTime
-                if elapsedTime.total_seconds() > (_timeout * 4):
-                    Utils.Message.addMessage("elapsedTimer exceeded limit " + str(elapsedTime.total_seconds()) + "/" + str(timeOut * 4))
+                if elapsedTime.total_seconds() > (_timeout * 1):
+                    Utils.Message.addMessage("elapsedTimer exceeded limit " + str(elapsedTime.total_seconds()) + "/" + str(timeOut * 1))
                     break
                 # Receive ICMP data from socket
                 # Keep waiting until we get a matched packet or the timeout occurs
