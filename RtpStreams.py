@@ -4513,6 +4513,7 @@ class RtpGenerator(RtpCommon):
                 # Create raw socket
                 icmpRx = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_ICMP)
                 icmpRx.settimeout(timeOut)
+                icmpRx.setblocking(False)
                 # Bind to the ip address of the interface specified by ipAddrofInterface
                 icmpRx.bind((ipAddrofInterface, 0))
             except Exception as createSocketsError:
