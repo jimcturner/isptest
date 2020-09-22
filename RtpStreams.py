@@ -4653,9 +4653,8 @@ class RtpGenerator(RtpCommon):
 
             # Send the UDP message (with a custom ttl and id_field value)
             try:
-                # sendUDP(_udpSocket, _ttl, b'isptest',  _destAddr, _destPort)
-                # sendUDP(_udpSocket, _ttl, b'tracert',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
-                pass
+                sendUDP(_udpSocket, _ttl, b'tracert',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
+
 
             except Exception as e:
                 raise UDPTxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.sendUDP " + str(e))
@@ -4684,7 +4683,8 @@ class RtpGenerator(RtpCommon):
                 try:
                     # Utils.Message.addMessage(
                     #     "***TR  recvfrom ICMP wait TTL:" + str(_ttl) + ", " + datetime.datetime.now().strftime("%H:%M:%S"))
-                    data, addr = _icmpSocket.recvfrom(65535)
+                    # data, addr = _icmpSocket.recvfrom(65535)
+                    raise socket.timeout()
 
 
                     # Create ICMPHeader object from the received data. This will unpack and decode the fields
