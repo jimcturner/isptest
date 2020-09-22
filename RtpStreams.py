@@ -4696,7 +4696,9 @@ class RtpGenerator(RtpCommon):
                         if _icmpSocket in r:
                             Utils.Message.addMessage("****TR _icmpSocket has data")
                             # The socket contains data to be read
-                            data, addr = _icmpSocket.recvfrom(65535)
+                            # data, addr = _icmpSocket.recvfrom(65535)
+                            data = []
+                            addr = ("", 0)
                         else:
                             # If no data to be read, clear the rawData and rawAddr lists
                             data = []
