@@ -4682,11 +4682,10 @@ class RtpGenerator(RtpCommon):
                 # Receive ICMP data from socket
                 # Keep waiting until we get a matched packet or the timeout occurs
                 try:
-                    Utils.Message.addMessage(
-                        "***TR  recvfrom ICMP wait TTL:" + str(_ttl) + ", " + datetime.datetime.now().strftime("%H:%M:%S"))
+                    # Utils.Message.addMessage(
+                    #     "***TR  recvfrom ICMP wait TTL:" + str(_ttl) + ", " + datetime.datetime.now().strftime("%H:%M:%S"))
                     data, addr = _icmpSocket.recvfrom(65535)
-                    Utils.Message.addMessage(
-                        "***TR  recvfrom ICMP data received TTL:" + ", " + str(_ttl) + datetime.datetime.now().strftime("%H:%M:%S"))
+
 
                     # Create ICMPHeader object from the received data. This will unpack and decode the fields
                     # The IP Header is contained within the first 20 bytes
@@ -4959,8 +4958,9 @@ class RtpGenerator(RtpCommon):
             # tracerouteHopsList be updated. This is to guard against situations where the route changes mid-traceroute
             while self.timeToLive != 0 and setupSuccessfulFlag:
                 # This is the main traceroute loop and counts the hops
-                # Set initial ttl (notee, start by decrementing 1, as the increment happens in the loop)
+                # Set initial ttl (NOTE, start by decrementing 1, as the increment happens in the loop)
                 ttl = Registry.tracerouteStartingTTL - 1
+                # ttl = 3
                 # Counter for the number of consequtive 0 responses. If this exceeds maxNoOfNoResponse, traceroute will abort
                 # Reset the 'no response' counter
                 noResponseCounter = 0
@@ -5006,11 +5006,16 @@ class RtpGenerator(RtpCommon):
                             # This can only be a 16 bit value so needs to be masked to ensure that it doesn't wrap
                             tracerouteID = (self.UDP_TX_SRC_PORT + self.UDP_TX_PORT + self.syncSourceIdentifier + ttl) & 0xFFFF
 
-                            Utils.Message.addMessage(
-                                "***TR  calling sendUdpRecvIcmp() TTL:" + str(ttl) + ", retry:" + str(retryCount))
+                            # Utils.Message.addMessage(
+                            #     "***TR  calling sendUdpRecvIcmp() TTL:" + str(ttl) + ", retry:" + str(retryCount))
+                            txRxTimerStart = timer()
                             icmpMsg = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
                                 _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=tracerouteID)
+                            txRxTimerElapsed = timer() - txRxTimerStart
+                            if txRxTimerElapsed > (2 * timeOut):
+                                Utils.Message.addMessage("TR DEBUG txRxTimerElapsed" + str(ttl) + ":" + str(retryCount) + \
+                                                     ", " + str(txRxTimerElapsed))
 
                         except UDPTxError as e:
                             Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
@@ -5044,9 +5049,9 @@ class RtpGenerator(RtpCommon):
                             try:
                                 # Extract reply-from addr
                                 icmpSrcAddr = icmpMsg["IP_replyFromAddr"]
-                                # Utils.Message.addMessage("ttl " + str(ttl) + ", " + str(icmpSrcAddr) + ", id: " +\
-                                #                          str(icmpMsg["IPinICMP_id_field"]) + ", len: " +\
-                                #                          str(icmpMsg["length"]))
+                                Utils.Message.addMessage("ttl " + str(ttl) + ", " + str(icmpSrcAddr) + ", id: " +\
+                                                         str(icmpMsg["IPinICMP_id_field"]) + ", len: " +\
+                                                         str(icmpMsg["length"]))
 
                                 # Detect erroneous messages to trap messages with an unexpected ttl at the point of
                                 # arrival at the router.
