@@ -4684,8 +4684,21 @@ class RtpGenerator(RtpCommon):
                     # Utils.Message.addMessage(
                     #     "***TR  recvfrom ICMP wait TTL:" + str(_ttl) + ", " + datetime.datetime.now().strftime("%H:%M:%S"))
                     # data, addr = _icmpSocket.recvfrom(65535)
-                    raise socket.timeout()
-
+                    # Use select() to poll the socket, before attempting to read it
+                    r, w, x = select.select([_icmpSocket], [], [], _timeout)
+                    if not r:
+                        # select () timeout reached so returned list will be empty
+                        data = []
+                        addr = ("", 0)
+                    else:
+                        # select() reckons there's some data to be read
+                        if _icmpSocket in r:
+                            # The socket contains data to be read
+                            data, addr = _icmpSocket.recvfrom(65535)
+                        else:
+                            # If no data to be read, clear the rawData and rawAddr lists
+                            data = []
+                            addr = ("", 0)
 
                     # Create ICMPHeader object from the received data. This will unpack and decode the fields
                     # The IP Header is contained within the first 20 bytes
@@ -4764,9 +4777,9 @@ class RtpGenerator(RtpCommon):
                         Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
                                              " RtpGenerator.__tracerouteThread() Unexpected short length packet from " + \
                                              str(addr[0]))
-                except socket.timeout:
-                    # print("socket timeout")
-                    pass
+                # except socket.timeout:
+                #     # print("socket timeout")
+                #     pass
 
                 except Exception as e:
                     raise ICMPRxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpRawSocket.recvICMP " + str(e))
