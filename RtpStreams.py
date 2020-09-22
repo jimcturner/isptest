@@ -4676,7 +4676,7 @@ class RtpGenerator(RtpCommon):
                 #   OR If matcher matches an icmp reply with the correct id_field
                 elapsedTime = datetime.datetime.now() - startTime
                 if elapsedTime.total_seconds() > (_timeout * 4):
-                    # print("elapsedTimer exceeded twice timeout " + str(round(elapsedTime,1)) + "/" + str(timeOut * 2))
+                    Utils.Message.addMessage("elapsedTimer exceeded limit " + str(elapsedTime.total_seconds()) + "/" + str(timeOut * 4))
                     break
                 # Receive ICMP data from socket
                 # Keep waiting until we get a matched packet or the timeout occurs
@@ -4962,6 +4962,7 @@ class RtpGenerator(RtpCommon):
         # to write-off the results we have
         tracerouteHopsListMismatchCounterThreshold = 5 # No of consecutive failures before clearing the hopsList
         tracerouteHopsListMismatchCounter = 0 # Counts the no of consecutive failures
+        tracerouteLoopCounter = 0       # Acts as a delayed start device. Increments every second
         try:
             # Perform the traceroute in an infinite loop as long as the transmit stream is alive
             # The traceroute is performed n times. Only when the same route has been confirmed will the
@@ -4979,7 +4980,7 @@ class RtpGenerator(RtpCommon):
                 # Counts the no of retries for each hop
                 retryCount = 1
                 # Utils.Message.addMessage("Starting traceroute....ttl = 1")
-                while ttl < maxNoOfHops and self.timeToLive != 0:
+                while ttl < maxNoOfHops and self.timeToLive != 0 and tracerouteLoopCounter > Registry.tracerouteStartDelay:
                     retryCount = 1
                     # We want to start at ttl = 1. Increment
                     ttl += 1
@@ -5202,6 +5203,8 @@ class RtpGenerator(RtpCommon):
                                 # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
                                 pass
 
+                # Incrment traceroute loop counter
+                tracerouteLoopCounter += 1
                 # Sleep for 1 sec between completed traceroutes
                 time.sleep(1)
 

@@ -79,6 +79,7 @@ class Registry(object):
     # until it runs out of attempts. this feature exists because some routers will only reply with ICMP messages
     # if traceroute (ie ttl=1) messages are sent to port 33434. Otherwise they may silently drop them, which isn't
     # much use if you're trying to derive a list of hops taken by the transmitted packets
+    tracerouteStartDelay = 5
     simulatedJitterPercent = 50 # The amount of 'simulated jitter' to add to the tx packets, if the feature is enabled
     # Specify min/max/default RtpGenerator tx parameters
     minimumPermittedTXRate_bps = 10240 # Specifies the minimum RtpGenerator tx rate as 10kbps
