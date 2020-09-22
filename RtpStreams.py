@@ -5004,7 +5004,9 @@ class RtpGenerator(RtpCommon):
                             # between the streams, the ICMP receiver code might get confused about which reply
                             # went with which stream
                             # This can only be a 16 bit value so needs to be masked to ensure that it doesn't wrap
-                            tracerouteID = (self.UDP_TX_SRC_PORT + self.UDP_TX_PORT + self.syncSourceIdentifier + ttl) & 0xFFFF
+                            # tracerouteID = (self.UDP_TX_SRC_PORT + self.UDP_TX_PORT + self.syncSourceIdentifier + ttl) & 0xFFFF
+                            # Calculate a unique id field using a random number
+                            tracerouteID = random.randint(1000, 65535)
 
                             # Utils.Message.addMessage(
                             #     "***TR  calling sendUdpRecvIcmp() TTL:" + str(ttl) + ", retry:" + str(retryCount))
