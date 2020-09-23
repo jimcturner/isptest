@@ -4684,14 +4684,18 @@ class RtpGenerator(RtpCommon):
                     #     "***TR  recvfrom ICMP wait TTL:" + str(_ttl) + ", " + datetime.datetime.now().strftime("%H:%M:%S"))
                     # data, addr = _icmpSocket.recvfrom(65535)
                     # Use select() to poll the socket, before attempting to read it. This should block for _timeout seconds
-                    r, w, x = select.select([_icmpSocket], [], [], _timeout)
+                    r, w, x = select.select([_icmpSocket, _udpSocket], [], [], _timeout)
                     if not r:
                         # select () timeout reached so returned list will be empty
                         Utils.Message.addMessage("****TR select() timeout reached")
                         return None
                     else:
                         # select() reckons there's some data to be read
-                        if _icmpSocket in r:
+                        if _udpSocket in r:
+                            data, addr = _udpSocket.recvfrom(65535)
+                            Utils.Message.addMessage("****TR _icmpSocket has data " + str(data))
+
+                        elif _icmpSocket in r:
                             Utils.Message.addMessage("****TR _icmpSocket has data")
                             # The socket contains data to be read
                             data, addr = _icmpSocket.recvfrom(65535)
@@ -5025,7 +5029,7 @@ class RtpGenerator(RtpCommon):
                             txRxTimerStart = datetime.datetime.now()
                             icmpMsg = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
-                                _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=(self.UDP_TX_SRC_PORT + 1), _id_field=tracerouteID)
+                                _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=tracerouteID)
                             txRxTimerElapsed = datetime.datetime.now() - txRxTimerStart
                             if txRxTimerElapsed.total_seconds() > (2 * timeOut):
                                 Utils.Message.addMessage("TR DEBUG txRxTimerElapsed" + str(ttl) + ":" + str(retryCount) + \
