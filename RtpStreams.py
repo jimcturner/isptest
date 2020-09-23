@@ -4702,9 +4702,15 @@ class RtpGenerator(RtpCommon):
                     events = poller.poll(100) # 100mS timeout
                     Utils.Message.addMessage("****TR poll() events " + str(events))
                     s = None
+
                     for fd, flag in events:
                         # Retrieve the actual socket from its file descriptor
-                        s = fd_to_socket[fd]
+                        # s = fd_to_socket[fd]
+                        if fd == _icmpSocket.fileno() and flag == select.POLLIN:
+
+                            data, addr = _icmpSocket.recvfrom(65535)
+                            Utils.Message.addMessage("****TR poll() data is available " + str(len(data) + \
+                                                                                              ", " + str(addr)))
                     if s is _udpSocket:
                     # if not r:
                     #     # select () timeout reached so returned list will be empty
