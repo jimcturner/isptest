@@ -4652,6 +4652,15 @@ class RtpGenerator(RtpCommon):
         def sendUdpRecvIcmpRawSockets(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None,\
                                       _srcPort=1515, _id_field=0):
 
+            READ_ONLY = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
+            # Create a poller object
+            poller = select.poll()
+            # Register _icmpSocket with the poller so that it will be monitored
+            poller.register(_icmpSocket, READ_ONLY)
+            # Create dictionary to map file descriptor (an integer) to the socket object itself
+            fd_to_socket = {_icmpSocket.fileno(): _icmpSocket, }
+            Utils.Message.addMessage("socketTo fd " + str(_icmpSocket.fileno()))
+
             # Send the UDP message (with a custom ttl and id_field value)
             try:
                 bytesSent = sendUDP(_udpSocket, _ttl, b'tracert',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
@@ -4667,14 +4676,7 @@ class RtpGenerator(RtpCommon):
             # Either a socket.timeout, an elapsedTime timeout or a icmpReplyMatcher=True will cause this while
             # loop to break
 
-            READ_ONLY = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
-            # Create a poller object
-            poller = select.poll()
-            # Register _icmpSocket with the poller so that it will be monitored
-            poller.register(_icmpSocket, READ_ONLY)
-            # Create dictionary to map file descriptor (an integer) to the socket object itself
-            fd_to_socket = {_icmpSocket.fileno(): _icmpSocket,}
-            Utils.Message.addMessage("socketTo fd " + str(_icmpSocket.fileno()))
+
 
             # Create elapsed timer
             startTime = datetime.datetime.now()
