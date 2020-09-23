@@ -4693,7 +4693,7 @@ class RtpGenerator(RtpCommon):
                         # select() reckons there's some data to be read
                         if _udpSocket in r:
                             data, addr = _udpSocket.recvfrom(65535)
-                            Utils.Message.addMessage("****TR _icmpSocket has data " + str(data))
+                            Utils.Message.addMessage("****TR _udpSocket has data " + str(data))
 
                         elif _icmpSocket in r:
                             Utils.Message.addMessage("****TR _icmpSocket has data")
