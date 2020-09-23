@@ -4502,8 +4502,6 @@ class RtpGenerator(RtpCommon):
                 udpTx.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
                 udpTx.setblocking(False)
 
-                # create a se
-
 
             except Exception as createSocketsError:
                 raise UDPTxSocketSetupError(str(createSocketsError))
@@ -4657,7 +4655,7 @@ class RtpGenerator(RtpCommon):
             # Send the UDP message (with a custom ttl and id_field value)
             try:
                 bytesSent = sendUDP(_udpSocket, _ttl, b'tracert',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
-                Utils.Message.addMessage("****TR sendUDP(() _ttl " + str(_ttl) + ", bytesSent " + str(bytesSent))
+                # Utils.Message.addMessage("****TR sendUDP(() _ttl " + str(_ttl) + ", bytesSent " + str(bytesSent))
 
             except Exception as e:
                 raise UDPTxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.sendUDP " + str(e))
@@ -4692,16 +4690,17 @@ class RtpGenerator(RtpCommon):
 
                     if not r:
                         # select () timeout reached so returned list will be empty
-                        Utils.Message.addMessage("****TR select() timeout reached")
+                        # Utils.Message.addMessage("****TR select() timeout reached")
                         return None
                     else:
                         # select() reckons there's some data to be read
                         if _udpSocket in r:
                             data, addr = _udpSocket.recvfrom(65535)
-                            Utils.Message.addMessage("****TR _udpSocket has data (" + str(len(data)) + ") " + \
-                                                     str(addr) + ", " + str(data))
+                            # Utils.Message.addMessage("****TR _udpSocket has data (" + str(len(data)) + ") " + \
+                            #                          str(addr) + ", " + str(data))
+                            pass
                         elif _icmpSocket in r:
-                            Utils.Message.addMessage("****TR _icmpSocket has data")
+                            # Utils.Message.addMessage("****TR _icmpSocket has data")
                             # The socket contains data to be read
                             data, addr = _icmpSocket.recvfrom(65535)
 
@@ -5029,16 +5028,10 @@ class RtpGenerator(RtpCommon):
                             # This can only be a 16 bit value so needs to be masked to ensure that it doesn't wrap
                             tracerouteID = random.randint(1000, 65535) & 0xFFFF
 
-                            Utils.Message.addMessage(
-                                "***TR  calling sendUdpRecvIcmp() TTL:" + str(ttl) + ", retry:" + str(retryCount))
-                            txRxTimerStart = datetime.datetime.now()
+
                             icmpMsg = sendUdpRecvIcmp(\
                                 self.SRC_IP_ADDR, self.UDP_TX_IP, udpTxPort, ttl, timeOut,\
                                 _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=tracerouteID)
-                            txRxTimerElapsed = datetime.datetime.now() - txRxTimerStart
-                            if txRxTimerElapsed.total_seconds() > (2 * timeOut):
-                                Utils.Message.addMessage("TR DEBUG txRxTimerElapsed" + str(ttl) + ":" + str(retryCount) + \
-                                                     ", " + str(txRxTimerElapsed))
 
                         except UDPTxError as e:
                             Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
