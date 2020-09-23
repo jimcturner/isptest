@@ -29,6 +29,11 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 import Utils
 from Registry import Registry
 
+# Required for Windows traceroute implemenation
+from scapy.layers.inet import IP, UDP
+from scapy.sendrecv import sr1
+from scapy.packet import Raw
+
 class Foo(object):
 
     def __init__(self):
@@ -4922,14 +4927,14 @@ class RtpGenerator(RtpCommon):
 
         Utils.Message.addMessage("DBUG:__tracerouteThread starting for stream " + str(self.syncSourceIdentifier))
 
-        # Determine which Operating System is in use, and therfore which udp tx/icmp rx function we will use
+        # Determine which Operating System is in use, and therefore which udp tx/icmp rx function we will use
         os = Utils.getOperatingSystem()
         # os = "Windows"
         if os == "Windows":
             # Windows detected
-            from scapy.layers.inet import IP, UDP
-            from scapy.sendrecv import sr1
-            from scapy.packet import Raw
+            # from scapy.layers.inet import IP, UDP
+            # from scapy.sendrecv import sr1
+            # from scapy.packet import Raw
             # Create pointer to the correct function for this OS
             sendUdpRecvIcmp = sendUdpRecvIcmpScapy
             self.tracerouteFunctionInUse = "sendUdpRecvIcmpScapy"
