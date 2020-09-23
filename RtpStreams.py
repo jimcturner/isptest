@@ -4674,6 +4674,7 @@ class RtpGenerator(RtpCommon):
             poller.register(_icmpSocket, READ_ONLY)
             # Create dictionary to map file descriptor (an integer) to the socket object itself
             fd_to_socket = {_icmpSocket.fileno(): _icmpSocket,}
+            Utils.Message.addMessage("socketTo fd " + str(_icmpSocket.fileno()))
 
             # Create elapsed timer
             startTime = datetime.datetime.now()
