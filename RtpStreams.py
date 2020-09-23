@@ -4502,6 +4502,8 @@ class RtpGenerator(RtpCommon):
                 udpTx.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
                 udpTx.setblocking(False)
 
+                # create a se
+
 
             except Exception as createSocketsError:
                 raise UDPTxSocketSetupError(str(createSocketsError))
@@ -4675,7 +4677,7 @@ class RtpGenerator(RtpCommon):
                 #   If timeOut period has been exceeded
                 #   OR If matcher matches an icmp reply with the correct id_field
                 elapsedTime = datetime.datetime.now() - startTime
-                if elapsedTime.total_seconds() > (_timeout * 1):
+                if elapsedTime.total_seconds() > _timeout:
                     # Utils.Message.addMessage("elapsedTimer exceeded limit " + str(elapsedTime.total_seconds()) + "/" + str(timeOut * 1))
                     break
                 # Receive ICMP data from socket
