@@ -4685,6 +4685,7 @@ class RtpGenerator(RtpCommon):
                     #     "***TR  recvfrom ICMP wait TTL:" + str(_ttl) + ", " + datetime.datetime.now().strftime("%H:%M:%S"))
                     # data, addr = _icmpSocket.recvfrom(65535)
                     # Use select() to poll the socket, before attempting to read it. This should block for _timeout seconds
+                    Utils.Message.addMessage("****TR select([_icmpSocket, _udpSocket]) _ttl " + str(_ttl))
                     r, w, x = select.select([_icmpSocket, _udpSocket], [], [], _timeout)
                     if not r:
                         # select () timeout reached so returned list will be empty
