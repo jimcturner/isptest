@@ -4686,11 +4686,13 @@ class RtpGenerator(RtpCommon):
                     # data, addr = _icmpSocket.recvfrom(65535)
                     # Use select() to poll the socket, before attempting to read it. This should block for _timeout seconds
                     Utils.Message.addMessage("****TR select([_icmpSocket, _udpSocket]) _ttl " + str(_ttl))
-                    r, w, x = select.select([_icmpSocket, _udpSocket], [], [], _timeout)
+                    # r, w, x = select.select([_icmpSocket, _udpSocket], [], [], _timeout)
+                    r, w, x = select.select([_icmpSocket, _udpSocket], [], [], 0)
                     if not r:
                         # select () timeout reached so returned list will be empty
-                        Utils.Message.addMessage("****TR select() timeout reached")
-                        return None
+                        # Utils.Message.addMessage("****TR select() timeout reached")
+                        Utils.Message.addMessage("****TR select() no data")
+                        # return None
                     else:
                         # select() reckons there's some data to be read
                         if _udpSocket in r:
