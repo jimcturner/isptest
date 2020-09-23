@@ -4668,10 +4668,11 @@ class RtpGenerator(RtpCommon):
             # loop to break
 
             READ_ONLY = select.POLLIN | select.POLLPRI | select.POLLHUP | select.POLLERR
-            # Set up the poller
+            # Create a poller object
             poller = select.poll()
+            # Register _icmpSocket with the poller so that it will be monitored
             poller.register(_icmpSocket, READ_ONLY)
-            # Map file descriptors to socket objects
+            # Create dictionary to map file descriptor (an integer) to the socket object itself
             fd_to_socket = {_icmpSocket.fileno(): _icmpSocket,}
 
             # Create elapsed timer
@@ -4696,14 +4697,12 @@ class RtpGenerator(RtpCommon):
                     # r, w, x = select.select([_icmpSocket, _udpSocket], [], [], _timeout)
                     # Call poll() to see if there are any events pending
                     events = poller.poll(100) # 100mS timeout
+                    Utils.Message.addMessage("****TR poll() events " + str(events))
                     s = None
                     for fd, flag in events:
                         # Retrieve the actual socket from its file descriptor
                         s = fd_to_socket[fd]
-
                     if s is _udpSocket:
-
-
                     # if not r:
                     #     # select () timeout reached so returned list will be empty
                     #     Utils.Message.addMessage("****TR select() timeout reached")
@@ -4801,6 +4800,7 @@ class RtpGenerator(RtpCommon):
 
                     else:
                         # poll() timed out
+                        Utils.Message.addMessage("****poll timed out")
                         pass
 
                 except Exception as e:
