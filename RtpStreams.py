@@ -5065,9 +5065,9 @@ class RtpGenerator(RtpCommon):
                             try:
                                 # Extract reply-from addr
                                 icmpSrcAddr = icmpMsg["IP_replyFromAddr"]
-                                Utils.Message.addMessage("ttl " + str(ttl) + ", " + str(icmpSrcAddr) + ", id: " +\
-                                                         str(icmpMsg["IPinICMP_id_field"]) + ", len: " +\
-                                                         str(icmpMsg["length"]))
+                                # Utils.Message.addMessage("ttl " + str(ttl) + ", " + str(icmpSrcAddr) + ", id: " +\
+                                #                          str(icmpMsg["IPinICMP_id_field"]) + ", len: " +\
+                                #                          str(icmpMsg["length"]))
 
                                 # Detect erroneous messages to trap messages with an unexpected ttl at the point of
                                 # arrival at the router.
