@@ -29,13 +29,6 @@ from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 import Utils
 from Registry import Registry
 
-# Scapy is required for traceroute on Windows
-if Utils.getOperatingSystem() == "Windows":
-    from scapy.layers.inet import IP, UDP
-    from scapy.sendrecv import sr1
-    from scapy.packet import Raw
-# from Utils import WhoisResolver
-
 class Foo(object):
 
     def __init__(self):
@@ -4792,6 +4785,47 @@ class RtpGenerator(RtpCommon):
             # If no validated icmp packet was received within the time allowed, return with None
             return None
 
+    # Linux/OSX compatible function to send a UDP packet with a specfied TTL value, and then immediately wait for
+    # an ICMP reply. Makes use of a previously created raw (for icmp) and UDP socket
+    # Takes: rawSocket, udpSocket, source address, destAddr, destPort, ttl, receive timeout, payload
+    # Note: _icmpSocket and _udpSocket *must* be overridden
+    # Returns: a dictionary containing the decoded fields from the ICMP message or None if there is no/an invalid response
+    # It validates the received ICMP reply by comparing the length of a randomly geenrated _payload (in bytes) to the
+    # length field specified in the returned IP header included within the ICMP message. If the lengths match, it is assumed that
+    # the ICMP reply relates to the packet sent.
+    # _srcPort is ignored as this should be specified as part of the _udpSocket socket binding when the socket is created
+
+        def sendUdpRecvIcmpSimple(_srcAddr, _destAddr, _destPort, _ttl, _timeout, _icmpSocket=None, _udpSocket=None,\
+                                 _srcPort=None):
+            def generatePayload(payloadLength):
+                # Generate random byte string of length 'length' to create a payload of length self.payloadLength
+
+                # Create byte string containing all uppercase and lowercase letters
+                letters = string.ascii_letters
+                # iterate over stringLength picking random letters from 'letters'
+                randomDataString = ''.join(random.choice(letters) for i in range(payloadLength))
+
+                # Return as a bytestring
+                return randomDataString.encode('ascii')
+
+            # Create a random length payload between 50 and 250 bytes long
+            payload = generatePayload(random.randint(50, 250))
+
+            # Send the UDP message (with a custom ttl)
+            try:
+                # bytesSent = sendUDP(_udpSocket, _ttl, b'tracert', _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
+                # Set the ttl for the socket
+                _udpSocket.setsockopt(socket.SOL_IP, socket.IP_TTL, _ttl)
+                # Send the payload
+                bytesSent = _udpSocket.sendto(payload, (_destAddr, _destPort))
+                Utils.Message.addMessage("****TR sendUdpRecvIcmpSimple() _ttl " + str(_ttl) + ", bytesSent " + str(bytesSent))
+
+            except Exception as e:
+                raise UDPTxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.sendUDP " + str(e))
+
+
+
+
         # Windows compatible function to send a UDP packet with a specfied TTL value, and then immediately wait for
         # an ICMP reply. Makes use of the Scapy library to receive raw packets/decode ICMP
         # Takes: rawSocket, udpSocket, destAddr, destPort, ttl
@@ -4893,6 +4927,9 @@ class RtpGenerator(RtpCommon):
         # os = "Windows"
         if os == "Windows":
             # Windows detected
+            from scapy.layers.inet import IP, UDP
+            from scapy.sendrecv import sr1
+            from scapy.packet import Raw
             # Create pointer to the correct function for this OS
             sendUdpRecvIcmp = sendUdpRecvIcmpScapy
             self.tracerouteFunctionInUse = "sendUdpRecvIcmpScapy"
