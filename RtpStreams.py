@@ -4500,6 +4500,7 @@ class RtpGenerator(RtpCommon):
                 udpTx = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_RAW)
                 # Set socket.IP_HDRINCL = 1. This means we must supply the IP header ourselves (although the OS will calculate the checksum)
                 udpTx.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
+                udpTx.setblocking(False)
 
 
             except Exception as createSocketsError:
@@ -4695,7 +4696,6 @@ class RtpGenerator(RtpCommon):
                             data, addr = _udpSocket.recvfrom(65535)
                             Utils.Message.addMessage("****TR _udpSocket has data (" + str(len(data)) + ") " + \
                                                      str(addr) + ", " + str(data))
-
                         elif _icmpSocket in r:
                             Utils.Message.addMessage("****TR _icmpSocket has data")
                             # The socket contains data to be read
