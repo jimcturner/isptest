@@ -4929,7 +4929,7 @@ class RtpGenerator(RtpCommon):
 
         # Determine which Operating System is in use, and therefore which udp tx/icmp rx function we will use
         os = Utils.getOperatingSystem()
-        os = "Windows"
+        # os = "Windows"
         if os == "Windows":
             # Windows detected
             from scapy.layers.inet import IP, UDP
