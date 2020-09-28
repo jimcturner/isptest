@@ -3063,6 +3063,7 @@ class UI(object):
                     "INFO: Terminal size has changed to " + str(self.currentTermWidth) + "," + str(self.currentTermHeight))
             time.sleep(0.2)
         print ("UI.__detectTerminalSizeThread ended\r")
+        print ("Running threads: " + Utils.listCurrentThreads())
 
 
     # Autonomous thread to monitor key presses
@@ -3570,9 +3571,11 @@ class RtpPacketReceiver(object):
         self._sharedUDPSocket = None
 
         # Create a thread to receive the RTP streams
-        receiveRtpThread = threading.Thread(target=self.__rtpPacketReceiverThread, args=())
-        receiveRtpThread.setName("__rtpPacketReceiverThread(" + str(self.UDP_RX_PORT) + ")")
-        receiveRtpThread.start()
+        self.receiveRtpThread = threading.Thread(target=self.__rtpPacketReceiverThread, args=())
+        self.receiveRtpThread.setName("__rtpPacketReceiverThread(" + str(self.UDP_RX_PORT) + ")")
+        self.receiveRtpThread.start()
+
+
 
     # returns a udp socket to be used as a channel to send data back to the source
     def getSocket(self):
@@ -4567,10 +4570,23 @@ def main(argv):
     # Define a local function that will perform a graceful shutdown of all threads and resources
     def shutdownApplication():
         Utils.Message.addMessage("main.shutdownApplication() called")
+        # ############ Stop DiskLogger and __receiveRTP threads (They monitor the status of shutdownFlag)
+        shutdownFlag.set()
+
 
         # Special case. If in RECEIVE mode, take a snapshot of all the Events lists and stats[] dictionaries, for
         # saving to disk
         if MODE == 'RECEIVE':
+            # Wait for confirmation that RtpPacketReceiver has ended
+            # # wait for __receiveRtpStream Thread to end (if it exists)
+            try:
+                Utils.Message.addMessage("DBUG: Attempting to verify rtpPacketReceiver.receiveRtpThread is dead")
+                rtpPacketReceiver.receiveRtpThread.join()
+                Utils.Message.addMessage("DBUG: rtpPacketReceiver.receiveRtpThread confirmed killed")
+            except Exception as e:
+                Utils.Message.addMessage("ERR: shutdownApplication Couldn't verify rtpPacketReceiver has ended " + str(e))
+
+
             status, code = createStreamsSnapshot()
             if status == True:
                 Utils.Message.addMessage("Created snapshot for " + str(code) + \
@@ -4603,17 +4619,13 @@ def main(argv):
 
 
 
-        # ############ Stop DiskLogger and __receiveRTP threads (currently they stop themselves)
-        # shutdownFlag.set()
         # try:
         #     # Wait for diskLogger Thread to end
         #     diskLoggerThread.join()
         # except Exception as e:
         #     Utils.Message.addMessage("ERR: diskLoggerThread.join() " + str(e))
 
-        # # wait for __receiveRtpStream Thread to end (if it exists)
-        # if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
-        #     receiveRtpThread.join()
+
 
         # Kill the whoIsResolver object
         whoIsResolver.kill()

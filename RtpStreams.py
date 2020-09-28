@@ -3775,7 +3775,12 @@ class RtpGenerator(RtpCommon):
         self.rtpTxStreamsDictMutex.release()
 
         # Now kill UDP socket
-        self.udpTxSocket.close()
+        try:
+            self.udpTxSocket.close()
+        except Exception as e:
+            Utils.Message.addMessage(
+                "ERR: RtpGenerator.killStream()::udpTxSocket.close() for stream: " + str(self.syncSourceIdentifier))
+
 
     def disableStream(self):
         # Disables transmission of packets to simulate packet loss by clearing flag
