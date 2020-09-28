@@ -4,7 +4,7 @@
 # This will be used as the source of default values
 class Registry(object):
     streamReportFilename = "Stream_report_"
-    version = "2.5"
+    version = "2.6"
     pythonMinimumVersionRequired_Major = 3  # Specfify the minimum version of the Python interpreter required
     pythonMinimumVersionRequired_Minor = 7  # This equates to Python version 3.7
 

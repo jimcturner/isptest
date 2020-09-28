@@ -33,4 +33,14 @@ V2.4
 * Rewritten route change detection code
 * Reverse order of traceroute events in export to clipboard
 V2.5 Adds 'compare streams' function
+V.2.6
+* Adds Save/restore state when in RECEIVE mode
+* Time Elapsed counter for UI thread
+* Periodic auto saving of streams state when in RECEIVE mode
+* Auto archive log file
+* Adds Registry.autoRemoveDeadRxStreamsThreshold_s var. Alters response of Receiver to lost streams. Now three seperate thresholds
+    * lossOfStreamAlarmThreshold_s: Generates a stream lost event, but all timers continue, 
+    * streamIsDeadThreshold_s: Pauses elapsedTime and mean-average calculation timers in RtpReceiveStream.__samplingThread, triggers auto-saving of stream report
+    * autoRemoveDeadRxStreamsThreshold_s: If Registry.autoRemoveDeadRxStreamsEnable is True, the stream object will auto purge
+* Stipulates version numbers of dependancies (imported libraries)
 
