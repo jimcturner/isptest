@@ -4573,6 +4573,14 @@ def main(argv):
         # ############ Stop DiskLogger and __receiveRTP threads (They monitor the status of shutdownFlag)
         shutdownFlag.set()
 
+        try:
+            # Wait for diskLogger Thread to end
+            Utils.Message.addMessage("DBUG: Attempting to verify diskLoggerThread is dead")
+            diskLoggerThread.join()
+            Utils.Message.addMessage("DBUG: diskLoggerThread confirmed killed")
+        except Exception as e:
+            Utils.Message.addMessage("ERR: diskLoggerThread.join() " + str(e))
+
 
         # Special case. If in RECEIVE mode, take a snapshot of all the Events lists and stats[] dictionaries, for
         # saving to disk
@@ -4616,14 +4624,6 @@ def main(argv):
                     print("Killing stream " + str(stream) + "\n")
                     # Invoke the kill method of each stream
                     dict[stream].killStream()
-
-
-
-        # try:
-        #     # Wait for diskLogger Thread to end
-        #     diskLoggerThread.join()
-        # except Exception as e:
-        #     Utils.Message.addMessage("ERR: diskLoggerThread.join() " + str(e))
 
 
 
