@@ -3920,10 +3920,16 @@ class RtpPacketReceiver(object):
                                 # In this way we can test for a constant sync source ID field and an incrementing seq no
                                 # Check to see how many packets with the same sync source ID have been received
                                 if (len(rtpRxStreamTempDict[syncSourceID]) > Registry.receiveStreamAcceptThreshold):
-                                    # Now check to see if the sequence numbers appear to have incremented by at least the
-                                    # no of packets received with this sync source ID
-                                    if (rtpRxStreamTempDict[syncSourceID][-1] - rtpRxStreamTempDict[syncSourceID][0]) == \
-                                            (len(rtpRxStreamTempDict[syncSourceID]) - 1):
+                                    # DECREMENTED Now check to see if the sequence numbers appear to have incremented by at least the
+                                    # #####no of packets received with this sync source ID
+                                    # ##########if (rtpRxStreamTempDict[syncSourceID][-1] - rtpRxStreamTempDict[syncSourceID][0]) == \
+                                    #         (len(rtpRxStreamTempDict[syncSourceID]) - 1):
+
+                                    # Now check to see if the sequence numbers appear to have incremented by at least half the
+                                    # no of packets received with this sync source ID. This will mean that even really lossy streams
+                                    # should have a chance of becoming allowed in
+                                    if (rtpRxStreamTempDict[syncSourceID][-1] - rtpRxStreamTempDict[syncSourceID][0]) > \
+                                            (len(rtpRxStreamTempDict[syncSourceID]) >> 1):
 
                                         Utils.Message.addMessage(Fore.GREEN + "Rtp stream " + str(syncSourceID) +
                                                                  " validated. Creating new RtpReceiveStream")
