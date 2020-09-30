@@ -5338,6 +5338,7 @@ class ResultsReceiver(object):
 
         rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
         lastReceivedFragment = 0  # Tracks the most recently received fragment
+        verboseLogging = False
 
         while self.receiverActiveFlag:
             # Wait for relatedRtpGenerator object to set up a socket binding
@@ -5378,9 +5379,11 @@ class ResultsReceiver(object):
                             # Update the 'expected' packets counter
                             self.receiveResultsExpectedPacketsCounter += fragment[1]
                             # Recalculate the self.returnPacketLoss_pc
-                            self.returnPacketLoss_pc = \
-                                ((self.receiveResultsExpectedPacketsCounter - self.receiveResultsActualReceivedPacketsCounter)/\
-                                    self.receiveResultsExpectedPacketsCounter) * 100
+                            if self.receiveResultsExpectedPacketsCounter > 0: # Avoid div by zero error
+                                self.returnPacketLoss_pc = \
+                                    ((self.receiveResultsExpectedPacketsCounter - self.receiveResultsActualReceivedPacketsCounter)/\
+                                        self.receiveResultsExpectedPacketsCounter) * 100
+
 
                         # Detect next expected fragment
                         elif fragment[0] == (lastReceivedFragment + 1):
@@ -5397,14 +5400,16 @@ class ResultsReceiver(object):
                             # Detect too many fragments
                             if fragment[0] > (fragment[1] - 1):
                                 # More fragments than expected
-                                Utils.Message.addMessage(
-                                    "ERR: __resultsReceiverThread. More fragments received than expected " +\
-                                    str(fragment[0]) + "/" + str(fragment[1]))
+                                if verboseLogging:
+                                    Utils.Message.addMessage(
+                                        "ERR: __resultsReceiverThread. More fragments received than expected " +\
+                                        str(fragment[0]) + "/" + str(fragment[1]))
                             elif fragment[0] != (lastReceivedFragment + 1):
                                 # Out of sequence fragment received
-                                Utils.Message.addMessage(
-                                    "ERR: __resultsReceiverThread. Out of sequence fragment. Expected " + \
-                                    str(lastReceivedFragment + 1) + ", got " + str(fragment[0]))
+                                if verboseLogging:
+                                    Utils.Message.addMessage(
+                                        "ERR: __resultsReceiverThread. Out of sequence fragment. Expected " + \
+                                        str(lastReceivedFragment + 1) + ", got " + str(fragment[0]))
                             else:
                                 # Catch anything else
                                 Utils.Message.addMessage(
@@ -5414,6 +5419,7 @@ class ResultsReceiver(object):
                         # Now check to see if this is the *final* fragment we were expecting (note fragment[0] is a zero indexed value
                         # i.e. have we received the entire message (all the fragments, and expected length)?
                         if fragment[0] == (fragment[1] - 1):
+                            # Confirm that the received length of all the reconstructed fragments is as expected
                                 if len(rxMssage) == fragment[2]:
                                     # Whole message has hopefully been reassembled
                                     # Now unpickle (for a second time) to reconstruct the originally pickled and tx'd Python object
@@ -5443,13 +5449,14 @@ class ResultsReceiver(object):
                                         # Utils.Message.addMessage("ERR: __resultsReceiverThread(pickle.loads(all fragments)): " + str(e))
                                         # Increment the receive error counter
                                         Utils.Message.addMessage(
-                                            "ERR: __resultsReceiverThread (error unpacking stats and eventList): " + str(
+                                            "ERR: __resultsReceiverThread (error unpickling stats/Events/control dicts): " + str(
                                                 e))
                                         self.receiveDecodeErrorCounter += 1
                                 else:
-                                    Utils.Message.addMessage(
-                                        "ERR: __resultsReceiverThread. Last fragment received but wrong length. Expt'd: " +\
-                                        str(fragment[2]) + ", got " + str(len(rxMssage)) + " bytes")
+                                    if verboseLogging:
+                                        Utils.Message.addMessage(
+                                            "ERR: __resultsReceiverThread. Last fragment received but wrong length. Expt'd: " +\
+                                            str(fragment[2]) + ", got " + str(len(rxMssage)) + " bytes")
 
 
                     except Exception as e:

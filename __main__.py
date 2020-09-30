@@ -2449,9 +2449,14 @@ class UI(object):
                                       str(self.selectedStream.rtpStreamResultsReceiver.receiveDecodeErrorCounter)])
                     debugInfo.append(["Rx frag err ",  # Results/Events fragments that were missing
                                       str(self.selectedStream.rtpStreamResultsReceiver.receiveResultsFragmentErrorCounter)])
-                    debugInfo.append(["Ret loss %",  # An estimate of return packet loss from receiver to transmitter
+                    debugInfo.append(["Ret loss % ",  # An estimate of return packet loss from receiver to transmitter
+                                      str("%0.2f" % self.selectedStream.rtpStreamResultsReceiver.returnPacketLoss_pc)])
+                    debugInfo.append(["Rx actual ",
+                                      str(self.selectedStream.rtpStreamResultsReceiver.receiveResultsActualReceivedPacketsCounter)])
+                    debugInfo.append(["Rx exptd ",
                                       str(
-                                          self.selectedStream.rtpStreamResultsReceiver.returnPacketLoss_pc)])
+                                          self.selectedStream.rtpStreamResultsReceiver.receiveResultsExpectedPacketsCounter)])
+
 
                     debugInfo.append(["traceroute\n function ", str(self.selectedStream.tracerouteFunctionInUse)])
                 except Exception as e:
@@ -3347,7 +3352,7 @@ class UDPMessageSender(object):
     # autonomous thread to monitor self.txMessageQueue for new messages
     def __udpTransmitterThread(self):
         Utils.Message.addMessage("DBUG:__udpTransmitterThread("+ str(self.UDP_RX_PORT) + ") starting")
-        packetSkipCounter = 0
+        # packetSkipCounter = 0 # Used ot deliberately introduced lost packet errors in the TX'd results stream
         while True:
             # Check status of shutdownFlag
             if self.shutdownFlag.is_set():
@@ -3378,17 +3383,18 @@ class UDPMessageSender(object):
                         # Pickle and send each fragment one at a time
                         # pickledFragment = pickle.dumps(fragment, protocol=2)
                         pickledFragment = pickle.dumps(fragment)
-                        # skip a random packet
-                        if int(packetSkipCounter) % 50 == 0:
-                            Utils.Message.addMessage("Skipping packet. currentuSecs " + str(packetSkipCounter))
-                            pass
-                        else:
-                            # Calling getSocket() means that we'll always have the latest version of the socket, were it
-                            # to be recreated by the corresponding RtpPacketReceiver
-                            self.rxInstance.getSocket().sendto(pickledFragment, (txData_ipAddr, txData_udpPort))
+                        # # skip a random packet
+                        # if int(packetSkipCounter) % 50 == 0:
+                        #     Utils.Message.addMessage("Skipping packet. currentuSecs " + str(packetSkipCounter))
+                        #     pass
+                        # else:
+                        #     pass
+                        # Calling getSocket() means that we'll always have the latest version of the socket, were it
+                        # to be recreated by the corresponding RtpPacketReceiver
+                        self.rxInstance.getSocket().sendto(pickledFragment, (txData_ipAddr, txData_udpPort))
                         # Increment the counter
                         self.sendUDPThreadTxPacketCounter += 1
-                        packetSkipCounter +=1
+                        # packetSkipCounter +=1
             # if Queue timed out without any data in it
             except Empty:
                 pass
