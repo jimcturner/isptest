@@ -5296,6 +5296,13 @@ class ResultsReceiver(object):
         # (normally caused by UDP transmission errors. Better than generating an error message and clogging
         # up the log file)
         self.receiveDecodeErrorCounter = 0
+        # This counts the no results/events messages whos fragments were missing
+        self.receiveResultsFragmentErrorCounter = 0
+        # These counters allow an approximation of the return loss (from receiver back to transmitter) by
+        # calculating the no of packets containing results that have been lost
+        self.receiveResultsExpectedPacketsCounter = 0
+        self.receiveResultsActualReceivedPacketsCounter = 0
+        self.returnPacketLoss_pc = 0
 
         # Used a signal flag to shut the __resultsReceiverThread down
         self.receiverActiveFlag = True
@@ -5339,6 +5346,8 @@ class ResultsReceiver(object):
                 try:
                     # Wait for data (blocking function call)
                     data, addr = self.udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
+                    # increment the packets received counter
+                    self.receiveResultsActualReceivedPacketsCounter += 1
                     # Utils.Message.addMessage("DBUG: ResultsReceiver.__receiverThread()" + ", " + str(data))
                     # attempt to unpickle the received data to yield a stats dictionary
 
@@ -5350,7 +5359,7 @@ class ResultsReceiver(object):
                     # First round of unpickling - extract the fragment (a tuple)
                     # Each tuple will be of the form [a,b,c,d,e] where
                     # a = the index no of this portion,
-                    # b = the total no of portions
+                    # b = the total no of portions (packets)
                     # c = total length of reconstructed string
                     # d is the portion itself
                     try:
@@ -5366,6 +5375,12 @@ class ResultsReceiver(object):
 
                             # Record the index no of the last received fragment
                             lastReceivedFragment = fragment[0]
+                            # Update the 'expected' packets counter
+                            self.receiveResultsExpectedPacketsCounter += fragment[1]
+                            # Recalculate the self.returnPacketLoss_pc
+                            self.returnPacketLoss_pc = \
+                                ((self.receiveResultsExpectedPacketsCounter - self.receiveResultsActualReceivedPacketsCounter)/\
+                                    self.receiveResultsExpectedPacketsCounter) * 100
 
                         # Detect next expected fragment
                         elif fragment[0] == (lastReceivedFragment + 1):
@@ -5378,6 +5393,7 @@ class ResultsReceiver(object):
 
                         # Else, something went wrong = we have an out of sequence fragment
                         else:
+                            self.receiveResultsFragmentErrorCounter += 1
                             # Detect too many fragments
                             if fragment[0] > (fragment[1] - 1):
                                 # More fragments than expected

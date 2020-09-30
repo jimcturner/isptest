@@ -2445,8 +2445,14 @@ class UI(object):
                     debugInfo.append(["Tx period ", str("%0.10f" %stats['Tx period']) + "S"])
                     debugInfo.append(["Tx'd packets ", str(self.selectedStream.txCounter_packets)])
                     debugInfo.append(["Tx err ", str(self.selectedStream.txErrorCounter)])
-                    debugInfo.append(["Rx error ",
+                    debugInfo.append(["Rx dec err ",    # Results/Events Pickles that couldn't be unpickled
                                       str(self.selectedStream.rtpStreamResultsReceiver.receiveDecodeErrorCounter)])
+                    debugInfo.append(["Rx frag err ",  # Results/Events fragments that were missing
+                                      str(self.selectedStream.rtpStreamResultsReceiver.receiveResultsFragmentErrorCounter)])
+                    debugInfo.append(["Ret loss %",  # An estimate of return packet loss from receiver to transmitter
+                                      str(
+                                          self.selectedStream.rtpStreamResultsReceiver.returnPacketLoss_pc)])
+
                     debugInfo.append(["traceroute\n function ", str(self.selectedStream.tracerouteFunctionInUse)])
                 except Exception as e:
                     Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
