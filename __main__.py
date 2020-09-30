@@ -3154,15 +3154,18 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
         else:
             pass
 
-        ret = Utils.archiveLogs(filename_json, Registry.maximumLogFileSize_bytes)
-        if ret == True:
-            Utils.Message.addMessage("__diskloggerThread. " + str(filename_json) + \
-                               " auto archived")
-        elif ret == None:
-            Utils.Message.addMessage("ERR:__diskloggerThread. " + str(filename_json) + \
-                               " auto archive error")
-        else:
-            pass
+        # Check to see if exporting of Events as JSON is enabled in Registry
+        if Registry.enableJsonEventsLog:
+            # If so, check size of existing JSON log file and archive if necessary
+            ret = Utils.archiveLogs(filename_json, Registry.maximumLogFileSize_bytes)
+            if ret == True:
+                Utils.Message.addMessage("__diskloggerThread. " + str(filename_json) + \
+                                   " auto archived")
+            elif ret == None:
+                Utils.Message.addMessage("ERR:__diskloggerThread. " + str(filename_json) + \
+                                   " auto archive error")
+            else:
+                pass
 
         # Create a file and write a header (if necessary)
         # For the CSV file
@@ -3237,9 +3240,11 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                             eventString = event.getCSV()+"\n"
                             # Write the event(s) to disk
                             file_csv.write(eventString)
+                            # Check to see if JSON file writing is enabled
                             # Get a json object from the event (as a string)
-                            eventAsJson = event.getJSON() + "\n"
-                            file_json.write(eventAsJson)
+                            if Registry.enableJsonEventsLog:
+                                eventAsJson = event.getJSON() + "\n"
+                                file_json.write(eventAsJson)
                             lastWrittenEventNo = event.eventNo
                             # Make a note of the last written event no against this stream id key
                             lastWrittenEventNoDict[currentRtpStream[0]] = event.eventNo

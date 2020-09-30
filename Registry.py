@@ -10,6 +10,7 @@ class Registry(object):
 
     resultsSubfolder = "results/"        # Specifies the subfolder where exported files will be saved
     receiverLogFilename = "isptest_Receiver_Events_Log"
+    enableJsonEventsLog = False  # Enables saving events as json objects
     transmitterLogFilename= "isptest_Transmitter_Events_Log"
     maximumLogFileSize_bytes = 1024 * 1024 # 1Mb maximum size
 
