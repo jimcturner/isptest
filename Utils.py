@@ -97,7 +97,6 @@ def fragmentString(inputString, maxLength):
     # b = the total no of portions
     # c = total length of reconstructed string
     # d is the portion itself
-
     inputLength=len(inputString)
     # Determine whether input string is long enough to need fragmenting
     if maxLength <2:
@@ -115,6 +114,7 @@ def fragmentString(inputString, maxLength):
             totalNumberOfFragments = noOfCompleteFragments
         else:
             totalNumberOfFragments = noOfCompleteFragments + 1
+
             outputList = []
             startIndex = 0
 
@@ -124,7 +124,14 @@ def fragmentString(inputString, maxLength):
                     portion = inputString[startIndex:endIndex]
                 else:
                     portion = inputString[startIndex:]
-                outputList.append([x,totalNumberOfFragments, inputLength, portion])
+
+                # skip a random element every 3 seconds
+                currentSecs = datetime.datetime.now().strftime("%S")
+                if currentSecs % 2 == 0:
+                    Message.addMessage("Skipping. currentSecs " + str(currentSecs))
+                    # pass
+                else:
+                    outputList.append([x,totalNumberOfFragments, inputLength, portion])
                 startIndex += maxLength
             return outputList
 
