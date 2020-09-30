@@ -5337,9 +5337,10 @@ class ResultsReceiver(object):
         Utils.Message.addMessage("INFO: ResultsReceiver thread starting")
 
         rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
-        lastReceivedFragment = 0  # Tracks the most recently received fragment
+        lastReceivedFragmentIndex = 0  # Tracks the most recently received fragment index (ie. which fragment within the set
         verboseLogging = False
         lastKnownUniqueID = 0 # Tracks the ID field unique to each set of fragments
+        lastKnownExpectedNoOfFragments = 0 # Tracks the no of expected fragments that form the current message
         while self.receiverActiveFlag:
             # Wait for relatedRtpGenerator object to set up a socket binding
             self.udpSocket = self.relatedRtpGenerator.getUDPSocket()
@@ -5349,6 +5350,12 @@ class ResultsReceiver(object):
                     data, addr = self.udpSocket.recvfrom(4096)  # buffer size is 4096 bytes
                     # increment the packets received counter
                     self.receiveResultsActualReceivedPacketsCounter += 1
+                    # Recalculate the self.returnPacketLoss_pc
+                    if self.receiveResultsExpectedPacketsCounter > 0:  # Avoid div by zero error
+                        self.returnPacketLoss_pc = \
+                            ((self.receiveResultsExpectedPacketsCounter - \
+                              self.receiveResultsActualReceivedPacketsCounter) / \
+                             self.receiveResultsExpectedPacketsCounter) * 100
                     # Utils.Message.addMessage("DBUG: ResultsReceiver.__receiverThread()" + ", " + str(data))
                     # attempt to unpickle the received data to yield a stats dictionary
 
@@ -5366,25 +5373,33 @@ class ResultsReceiver(object):
                     # e is a random integer that serves as unique ID for this set of fragments
                     try:
                         fragment = pickle.loads(data)
-                        # Utils.Message.addMessage("Fragment " + str(fragment[0]) + "/" + str(fragment[1]))
+                        # Utils.Message.addMessage("Fragment " + str(fragment[0] + 1) + "/" + str(fragment[1]))
                         # detect first fragment
                         if fragment[0] == 0:
+                            # If we are receiving a zero index fragment but we've yet to receive all the fragments
+                            # from a previous message, that suggests we've lost some fragments (packets)
+                            # Check to see if we have any outstanding fragments expected. If so, add to the error count
+                            if lastReceivedFragmentIndex < (lastKnownExpectedNoOfFragments - 1):
+                                if verboseLogging:
+                                    Utils.Message.addMessage(
+                                        "ERR: __resultsReceiverThread.Incomplete set of fragments. Resetting to zero ")
+                                self.receiveResultsFragmentErrorCounter += 1
+
+
                             # Clear away any existing contents of rxMessage
                             rxMssage = b""
                             # Append the message portion of this fragment to rxMessage
-                            # rxMssage += fragment[3]
                             rxMssage =b"".join([rxMssage,fragment[3]])
 
                             # Record the index no of the last received fragment
-                            lastReceivedFragment = fragment[0]
+                            lastReceivedFragmentIndex = fragment[0]
 
                         # Detect next expected fragment
-                        elif fragment[0] == (lastReceivedFragment + 1):
+                        elif fragment[0] == (lastReceivedFragmentIndex + 1):
                             # Append the message portion of this fragment to rxMessage
-                            # rxMssage += fragment[3]
                             rxMssage =b"".join([rxMssage,fragment[3]])
                             # Record the index no of the last received fragment
-                            lastReceivedFragment = fragment[0]
+                            lastReceivedFragmentIndex = fragment[0]
 
 
                         # Else, something went wrong = we have an out of sequence fragment
@@ -5397,12 +5412,12 @@ class ResultsReceiver(object):
                                     Utils.Message.addMessage(
                                         "ERR: __resultsReceiverThread. More fragments received than expected " +\
                                         str(fragment[0]) + "/" + str(fragment[1]))
-                            elif fragment[0] != (lastReceivedFragment + 1):
+                            elif fragment[0] != (lastReceivedFragmentIndex + 1):
                                 # Out of sequence fragment received
                                 if verboseLogging:
                                     Utils.Message.addMessage(
                                         "ERR: __resultsReceiverThread. Out of sequence fragment. Expected " + \
-                                        str(lastReceivedFragment + 1) + ", got " + str(fragment[0]))
+                                        str(lastReceivedFragmentIndex + 1) + ", got " + str(fragment[0]))
                             else:
                                 # Catch anything else
                                 Utils.Message.addMessage(
@@ -5412,6 +5427,13 @@ class ResultsReceiver(object):
                         # Now check to see if this is the *final* fragment we were expecting (note fragment[0] is a zero indexed value
                         # i.e. have we received the entire message (all the fragments, and expected length)?
                         if fragment[0] == (fragment[1] - 1):
+                            # # Recalculate the self.returnPacketLoss_pc
+                            # if self.receiveResultsExpectedPacketsCounter > 0:  # Avoid div by zero error
+                            #     self.returnPacketLoss_pc = \
+                            #         ((self.receiveResultsExpectedPacketsCounter - \
+                            #           self.receiveResultsActualReceivedPacketsCounter) / \
+                            #          self.receiveResultsExpectedPacketsCounter) * 100
+
                             # Confirm that the received length of all the reconstructed fragments is as expected
                                 if len(rxMssage) == fragment[2]:
                                     # Whole message has hopefully been reassembled
@@ -5458,17 +5480,13 @@ class ResultsReceiver(object):
                             pass
                         else:
                             # This is a new set of fragments with a new uniqueID
-                            # Snapshot the lastest ID
+                            # Snapshot the latest ID
                             lastKnownUniqueID = fragment[4]
-                            Utils.Message.addMessage("New uniqueID " + str(fragment[4]))
+                            # Snapshot the no of fragments we will be expecting as part of this message
+                            lastKnownExpectedNoOfFragments = fragment[1]
                             # Update the 'expected' packets counter (we can only do this once, per set of fragments)
                             self.receiveResultsExpectedPacketsCounter += fragment[1]
-                            # Recalculate the self.returnPacketLoss_pc
-                            if self.receiveResultsExpectedPacketsCounter > 0:  # Avoid div by zero error
-                                self.returnPacketLoss_pc = \
-                                    ((self.receiveResultsExpectedPacketsCounter - \
-                                      self.receiveResultsActualReceivedPacketsCounter) / \
-                                        self.receiveResultsExpectedPacketsCounter) * 100
+
                     except Exception as e:
                         Utils.Message.addMessage("ERR: __resultsReceiverThread(single fragment): Unpickling error " + str(e))
 
