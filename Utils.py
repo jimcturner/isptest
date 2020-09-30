@@ -2,6 +2,7 @@
 # Defines useful non-core objects for use by isptest
 import os
 import pickle
+import random
 import struct
 import array
 import subprocess
@@ -97,13 +98,16 @@ def fragmentString(inputString, maxLength):
     # b = the total no of portions
     # c = total length of reconstructed string
     # d is the portion itself
+    # e is a random integer that serves as unique ID for this set of fragments
     inputLength=len(inputString)
+    # Generate unique ID
+    uniqueID = random.randint(1000, 65535)
     # Determine whether input string is long enough to need fragmenting
     if maxLength <2:
         # The routine below breaks if maxLength = 1
         return -1
     if inputLength <= maxLength:
-        return [[0, 1, inputLength, inputString]] # Notice it's a tuple within a list [[ ]]
+        return [[0, 1, inputLength, inputString, uniqueID]] # Notice it's a tuple within a list [[ ]]
 
     else:
         # input string does need fragmenting
@@ -126,7 +130,7 @@ def fragmentString(inputString, maxLength):
                     portion = inputString[startIndex:]
 
                 # append the fragment to the outputList
-                outputList.append([x,totalNumberOfFragments, inputLength, portion])
+                outputList.append([x,totalNumberOfFragments, inputLength, portion, uniqueID])
                 startIndex += maxLength
             return outputList
 

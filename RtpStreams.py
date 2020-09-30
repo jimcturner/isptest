@@ -5339,7 +5339,7 @@ class ResultsReceiver(object):
         rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
         lastReceivedFragment = 0  # Tracks the most recently received fragment
         verboseLogging = False
-
+        lastKnownUniqueID = 0 # Tracks the ID field unique to each set of fragments
         while self.receiverActiveFlag:
             # Wait for relatedRtpGenerator object to set up a socket binding
             self.udpSocket = self.relatedRtpGenerator.getUDPSocket()
@@ -5363,6 +5363,7 @@ class ResultsReceiver(object):
                     # b = the total no of portions (packets)
                     # c = total length of reconstructed string
                     # d is the portion itself
+                    # e is a random integer that serves as unique ID for this set of fragments
                     try:
                         fragment = pickle.loads(data)
                         # Utils.Message.addMessage("Fragment " + str(fragment[0]) + "/" + str(fragment[1]))
@@ -5376,14 +5377,6 @@ class ResultsReceiver(object):
 
                             # Record the index no of the last received fragment
                             lastReceivedFragment = fragment[0]
-                            # Update the 'expected' packets counter
-                            self.receiveResultsExpectedPacketsCounter += fragment[1]
-                            # Recalculate the self.returnPacketLoss_pc
-                            if self.receiveResultsExpectedPacketsCounter > 0: # Avoid div by zero error
-                                self.returnPacketLoss_pc = \
-                                    ((self.receiveResultsExpectedPacketsCounter - self.receiveResultsActualReceivedPacketsCounter)/\
-                                        self.receiveResultsExpectedPacketsCounter) * 100
-
 
                         # Detect next expected fragment
                         elif fragment[0] == (lastReceivedFragment + 1):
@@ -5459,6 +5452,23 @@ class ResultsReceiver(object):
                                             str(fragment[2]) + ", got " + str(len(rxMssage)) + " bytes")
 
 
+                        # Check to see if this fragment is part of a new set by comparing lastKnownUniqueID
+                        if fragment[4] == lastKnownUniqueID:
+                            # This fragment is part of the current set of fragments
+                            pass
+                        else:
+                            # This is a new set of fragments with a new uniqueID
+                            # Snapshot the lastest ID
+                            lastKnownUniqueID = fragment[4]
+                            Utils.Message.addMessage("New uniqueID " + str(fragment[4]))
+                            # Update the 'expected' packets counter (we can only do this once, per set of fragments)
+                            self.receiveResultsExpectedPacketsCounter += fragment[1]
+                            # Recalculate the self.returnPacketLoss_pc
+                            if self.receiveResultsExpectedPacketsCounter > 0:  # Avoid div by zero error
+                                self.returnPacketLoss_pc = \
+                                    ((self.receiveResultsExpectedPacketsCounter - \
+                                      self.receiveResultsActualReceivedPacketsCounter) / \
+                                        self.receiveResultsExpectedPacketsCounter) * 100
                     except Exception as e:
                         Utils.Message.addMessage("ERR: __resultsReceiverThread(single fragment): Unpickling error " + str(e))
 
