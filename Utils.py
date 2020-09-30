@@ -125,13 +125,8 @@ def fragmentString(inputString, maxLength):
                 else:
                     portion = inputString[startIndex:]
 
-                # skip a random element every 3 seconds
-                currentSecs = datetime.datetime.now().strftime("%S")
-                if currentSecs % 2 == 0:
-                    Message.addMessage("Skipping. currentSecs " + str(currentSecs))
-                    # pass
-                else:
-                    outputList.append([x,totalNumberOfFragments, inputLength, portion])
+                # append the fragment to the outputList
+                outputList.append([x,totalNumberOfFragments, inputLength, portion])
                 startIndex += maxLength
             return outputList
 
