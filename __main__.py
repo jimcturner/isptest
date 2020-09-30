@@ -3336,6 +3336,7 @@ class UDPMessageSender(object):
     # autonomous thread to monitor self.txMessageQueue for new messages
     def __udpTransmitterThread(self):
         Utils.Message.addMessage("DBUG:__udpTransmitterThread("+ str(self.UDP_RX_PORT) + ") starting")
+        packetSkipCounter = 0
         while True:
             # Check status of shutdownFlag
             if self.shutdownFlag.is_set():
@@ -3366,17 +3367,17 @@ class UDPMessageSender(object):
                         # Pickle and send each fragment one at a time
                         # pickledFragment = pickle.dumps(fragment, protocol=2)
                         pickledFragment = pickle.dumps(fragment)
-                        # skip a random packet every 3 seconds
-                        currentSecs = datetime.datetime.now().strftime("%S")
-                        if currentSecs % 3 == 0:
-                            Utils.Message.addMessage("Skipping packet. currentSecs " + str(currentSecs))
-                            # pass
+                        # skip a random packet
+                        if int(packetSkipCounter) % 50 == 0:
+                            Utils.Message.addMessage("Skipping packet. currentuSecs " + str(packetSkipCounter))
+                            pass
                         else:
                             # Calling getSocket() means that we'll always have the latest version of the socket, were it
                             # to be recreated by the corresponding RtpPacketReceiver
                             self.rxInstance.getSocket().sendto(pickledFragment, (txData_ipAddr, txData_udpPort))
                         # Increment the counter
                         self.sendUDPThreadTxPacketCounter += 1
+                        packetSkipCounter +=1
             # if Queue timed out without any data in it
             except Empty:
                 pass

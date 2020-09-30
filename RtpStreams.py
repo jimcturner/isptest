@@ -5396,39 +5396,44 @@ class ResultsReceiver(object):
                                     str(fragment[0]) + "/" + str(fragment[1]))
 
                         # Now check to see if this is the *final* fragment we were expecting (note fragment[0] is a zero indexed value
-                        # i.e. have we received the entire message (all the fragments)?
+                        # i.e. have we received the entire message (all the fragments, and expected length)?
                         if fragment[0] == (fragment[1] - 1):
-                                # Whole message has hopefully been reassembled
-                                # Now unpickle (for a second time) to reconstruct the originally pickled and tx'd Python object
+                                if len(rxMssage) == fragment[2]:
+                                    # Whole message has hopefully been reassembled
+                                    # Now unpickle (for a second time) to reconstruct the originally pickled and tx'd Python object
 
-                                # We're expecting a dictionary containing a stats dictionary{} and an eventsList{} containing the
-                                # last 5 events
-                                try:
-                                    # Attempt to reconstruct the original message sent by ResultsTransmitter
-                                    # unPickledMessage = pickle.loads(rxMssage, fix_imports=True)
-                                    unPickledMessage = pickle.loads(rxMssage)
-                                    # Utils.Message.addMessage("DBG:" + str(unPickledMessage))
+                                    # We're expecting a dictionary containing a stats dictionary{} and an eventsList{} containing the
+                                    # last 5 events
+                                    try:
+                                        # Attempt to reconstruct the original message sent by ResultsTransmitter
+                                        # unPickledMessage = pickle.loads(rxMssage, fix_imports=True)
+                                        unPickledMessage = pickle.loads(rxMssage)
+                                        # Utils.Message.addMessage("DBG:" + str(unPickledMessage))
 
-                                    # Attempt to extract the stats dictionary and eventsList list
+                                        # Attempt to extract the stats dictionary and eventsList list
 
-                                    if "stats" in unPickledMessage:
-                                        stats = unPickledMessage["stats"]
-                                    if "eventList" in unPickledMessage:
-                                        latestEventsList = unPickledMessage["eventList"]
-                                    if "control" in unPickledMessage:
-                                        controlMessage = unPickledMessage["control"]
+                                        if "stats" in unPickledMessage:
+                                            stats = unPickledMessage["stats"]
+                                        if "eventList" in unPickledMessage:
+                                            latestEventsList = unPickledMessage["eventList"]
+                                        if "control" in unPickledMessage:
+                                            controlMessage = unPickledMessage["control"]
+                                            Utils.Message.addMessage(
+                                                "DBUG:__resultsReceiverThread() Control Message Rx'd: " + \
+                                                str(controlMessage))
+                                            # Pass the message to the RtpGenerator Control Message queue
+                                            self.relatedRtpGenerator.addControlMessage(controlMessage)
+                                    except Exception as e:
+                                        # Utils.Message.addMessage("ERR: __resultsReceiverThread(pickle.loads(all fragments)): " + str(e))
+                                        # Increment the receive error counter
                                         Utils.Message.addMessage(
-                                            "DBUG:__resultsReceiverThread() Control Message Rx'd: " + \
-                                            str(controlMessage))
-                                        # Pass the message to the RtpGenerator Control Message queue
-                                        self.relatedRtpGenerator.addControlMessage(controlMessage)
-                                except Exception as e:
-                                    # Utils.Message.addMessage("ERR: __resultsReceiverThread(pickle.loads(all fragments)): " + str(e))
-                                    # Increment the receive error counter
+                                            "ERR: __resultsReceiverThread (error unpacking stats and eventList): " + str(
+                                                e))
+                                        self.receiveDecodeErrorCounter += 1
+                                else:
                                     Utils.Message.addMessage(
-                                        "ERR: __resultsReceiverThread (error unpacking stats and eventList): " + str(
-                                            e))
-                                    self.receiveDecodeErrorCounter += 1
+                                        "ERR: __resultsReceiverThread. Last fragment received but wrong length. Expt'd: " +\
+                                        str(fragment[2]) + ", got " + str(len(rxMssage)) + " bytes")
 
 
                     except Exception as e:
