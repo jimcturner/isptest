@@ -5018,6 +5018,7 @@ class RtpGenerator(RtpCommon):
         tracerouteHopsListMismatchCounterThreshold = 5 # No of consecutive failures before clearing the hopsList
         tracerouteHopsListMismatchCounter = 0 # Counts the no of consecutive failures
         tracerouteLoopCounter = 0       # Acts as a delayed start device. Increments every second
+        enableVerboseLogging = False
         try:
             # Perform the traceroute in an infinite loop as long as the transmit stream is alive
             # The traceroute is performed n times. Only when the same route has been confirmed will the
@@ -5122,7 +5123,8 @@ class RtpGenerator(RtpCommon):
                                 # a previous router has allowed a packet through whose ttl has already decremented to
                                 # zero. Therefore we can't trust this response
                                 if icmpMsg["IPinICMP_ttlReceived"] != 1:
-                                    Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                    if enableVerboseLogging:
+                                        Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
                                             " Erroneous ttl=" + str(icmpMsg["IPinICMP_ttlReceived"]) + \
                                                              " ICMP message for traceroute hop " + str(ttl) + \
                                                              " Setting hop value to 0.0.0.0")

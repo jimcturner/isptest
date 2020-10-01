@@ -1251,7 +1251,7 @@ def detectRouteChanges(prevHopsList, hopsList, prevRxTTL=None, rxTTL=None):
 # This function will write the string object 'report' to disk
 # If no filename is supplied, it will use an auto-generated filename based on the stream parameters
 # Returns True for a successful save, otherwise an error message
-def writeReportToDisk(report, fileName=None):
+def writeReportToDisk(report, fileName=None, notificationMessage=True):
     # If filename hasn't been overridden, auto-generate one. Note filename validation should have happened prior
     if fileName is None:
         fileName = "report_" + str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S"))
@@ -1260,7 +1260,8 @@ def writeReportToDisk(report, fileName=None):
         fh = open(fileName, "w+")
         fh.write(report)
         fh.close()
-        Message.addMessage("Saved: " + str(fileName))
+        if notificationMessage:
+            Message.addMessage("Saved: " + str(fileName))
         return True
     except Exception as e:
         Message.addMessage("ERR:Utils.writeReportToDisk() " + str(e))
@@ -1321,3 +1322,24 @@ def importObjectFromDisk(filename=Registry.streamsSnapshotFilename):
     # Return an error as a string on failure
     except Exception as e:
         return False, str(e)
+
+# Modifes the print function in pympler.summary.print_() to return a formatted table as a list strings representing the lines
+def pymplerprintRenderer(muppyObjects, limit=15, sort='size', order='descending'):
+    from pympler import summary
+    """Print the rows as a summary.
+
+        Keyword arguments:
+        limit -- the maximum number of elements to be listed
+        sort  -- sort elements by 'size', 'type', or '#'
+        order -- sort 'ascending' or 'descending'
+
+        """
+    # list to hold the output
+    tableLines = []
+    # converts the muppy objects
+    rows = summary.summarize(muppyObjects)
+
+    for line in summary.format_(rows, limit=limit, sort=sort, order=order):
+        # append each new line to tableLines
+        tableLines.append(line)
+    return tableLines

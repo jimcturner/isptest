@@ -77,7 +77,10 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import textwrap
 import pickle
+
+# debugging libraries
 import gc # Garbage collector API
+from pympler import muppy, summary
 
 # import cgitb
 # cgitb.enable(format='text')
@@ -4827,6 +4830,22 @@ def main(argv):
                     if loopCounter % 5 == 0 and enable_gc_debugging:
                         gcStats = gc.get_stats()
                         Utils.Message.addMessage("gcStats: " + str(gcStats))
+
+                    all_objects = muppy.get_objects()
+                    totalSize = muppy.get_size(all_objects)
+                    # Create sorted list (in size order) of all_objects
+                    # sorted_objects = muppy.sort(all_objects)
+                    # Summarise the objects into a list of lists (rows of a table)
+                    # listed_objects = summary.summarize(all_objects)
+                    #
+                    table = Utils.pymplerprintRenderer(all_objects, limit=15)
+                    # sliced_list = listed_objects[-2:]
+                    # Utils.Message.addMessage(str(table))
+                    report = "Total size: " + str(Utils.bToMb(totalSize)) + "b\r\n"
+                    for row in table:
+                        report += row + "\r\n"
+                    Utils.writeReportToDisk(report, fileName="objectslist.txt", notificationMessage=False)
+
                 except Exception as e:
                     Utils.Message.addMessage("ERR:GarbageCollector " + str(e))
 
