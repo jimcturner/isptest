@@ -4158,11 +4158,13 @@ def main(argv):
     #     print("export failure " + str(saveStatus))
     # exit()
 
-    # Set up Garbage Collection
-    flags = (gc.DEBUG_COLLECTABLE |
-             gc.DEBUG_UNCOLLECTABLE
-             )
-    gc.set_debug(flags)
+    enable_gc_debugging = False
+    if enable_gc_debugging:
+        # Set up Garbage Collection
+        flags = (gc.DEBUG_COLLECTABLE |
+                 gc.DEBUG_UNCOLLECTABLE
+                 )
+        gc.set_debug(flags)
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
@@ -4822,7 +4824,7 @@ def main(argv):
 
                 # Query the garbage collector every 5 seconds
                 try:
-                    if loopCounter % 5 == 0:
+                    if loopCounter % 5 == 0 and enable_gc_debugging:
                         gcStats = gc.get_stats()
                         Utils.Message.addMessage("gcStats: " + str(gcStats))
                 except Exception as e:
