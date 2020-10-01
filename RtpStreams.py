@@ -4760,18 +4760,18 @@ class RtpGenerator(RtpCommon):
                                                 }
                                     else:
                                         # Display the  header fields of the unexpected packet
-                                        Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
-                                                                 " RtpGenerator.__tracerouteThread() Unexpected ICMP packet fields " + \
-                                                                 "src:" + str(addr[0]) + \
-                                                                 ", type:" + str(icmpHeader.type) + \
-                                                                 ", code:" + str(icmpHeader.code) + \
-                                                                 ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
-                                                                 ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
-                                                                 ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
-                                                                ", tx'd ttl:" + str(_ttl) + \
-                                                                 ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum) + \
-                                                                 ", id:" + str(ipHeaderOfOriginalSender.id_field) +\
-                                                                 ", tx'd id:" + str(_id_field))
+                                        # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                        #                          " RtpGenerator.__tracerouteThread() Unexpected ICMP packet fields " + \
+                                        #                          "src:" + str(addr[0]) + \
+                                        #                          ", type:" + str(icmpHeader.type) + \
+                                        #                          ", code:" + str(icmpHeader.code) + \
+                                        #                          ", IPsrc:" + str(ipHeaderOfOriginalSender.s_addr) + \
+                                        #                          ", IPdst:" + str(ipHeaderOfOriginalSender.d_addr) + \
+                                        #                          ", IPttl:" + str(ipHeaderOfOriginalSender.ttl) + \
+                                        #                         ", tx'd ttl:" + str(_ttl) + \
+                                        #                          ", IPchecksum:" + str(ipHeaderOfOriginalSender.checksum) + \
+                                        #                          ", id:" + str(ipHeaderOfOriginalSender.id_field) +\
+                                        #                          ", tx'd id:" + str(_id_field))
                                         pass
 
 

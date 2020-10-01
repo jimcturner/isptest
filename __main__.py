@@ -77,6 +77,7 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import textwrap
 import pickle
+import gc # Garbage collector API
 
 # import cgitb
 # cgitb.enable(format='text')
@@ -4157,6 +4158,12 @@ def main(argv):
     #     print("export failure " + str(saveStatus))
     # exit()
 
+    # Set up Garbage Collection
+    flags = (gc.DEBUG_COLLECTABLE |
+             gc.DEBUG_UNCOLLECTABLE
+             )
+    gc.set_debug(flags)
+
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
 
@@ -4812,6 +4819,16 @@ def main(argv):
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR:streamsSnapshotAutoSave " + str(e))
+
+                # Query the garbage collector every 5 seconds
+                try:
+                    if loopCounter % 5 == 0:
+                        gcStats = gc.get_stats()
+                        Utils.Message.addMessage("gcStats: " + str(gcStats))
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:GarbageCollector " + str(e))
+
+
 
         # This code will execute if the RequestShutdown Exception is raised (SIGINT, Ctrl-C)
         except RequestShutdown:
