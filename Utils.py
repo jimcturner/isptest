@@ -1344,40 +1344,5 @@ def pymplerprintRenderer(muppyObjects, limit=15, sort='size', order='descending'
         tableLines.append(line)
     return tableLines
 
-# # Inherits from pympler.classtracker.ClassTracker to provide an additional print_summary merthod that returns
-# # a formatted string, rather than printint to stdout
-# from pympler import classtracker
-# from pympler.util.stringutils import trunc, pp
-# class pymplerClassStatsRenderer(classtracker.ClassTracker):
-#     def print_summary_renderer(self):
-#         """
-#         Print per-class summary for each snapshot.
-#         """
-#         # Emit class summaries for each snapshot
-#         classlist = self.tracked_classes
-#
-#         fobj = self.stream
-#         outputpString = ""
-#
-#         fobj.write('---- SUMMARY ' + '-' * 66 + '\n')
-#         for snapshot in self.snapshots:
-#             self.annotate_snapshot(snapshot)
-#             outputpString += str('%-35s %11s %12s %12s %5s\n' % (
-#                 trunc(snapshot.desc, 35),
-#                 'active',
-#                 pp(snapshot.asizeof_total),
-#                 'average',
-#                 'pct'
-#             ))
-#             for classname in classlist:
-#                 info = snapshot.classes.get(classname)
-#                 outputpString += str('  %-33s %11d %12s %12s %4d%%\n' % (
-#                     trunc(classname, 33),
-#                     info['active'],
-#                     pp(info['sum']),
-#                     pp(info['avg']),
-#                     info['pct']
-#                 ))
-#         outputpString += str('-' * 79 + '\n')
-#         return outputpString
+
 

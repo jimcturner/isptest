@@ -80,8 +80,8 @@ import pickle
 
 # debugging libraries
 import gc # Garbage collector API
-from pympler import muppy, classtracker
-from pympler.classtracker_stats import HtmlStats
+# from pympler import muppy, classtracker
+# from pympler.classtracker_stats import HtmlStats
 import faulthandler
 
 # import cgitb
@@ -4171,12 +4171,12 @@ def main(argv):
                  )
         gc.set_debug(flags)
 
-    # creates a web page snapshot every 10 secs of the usage of the registered objects
+    #  optional debug code using pympler. creates a web page snapshot every 10 secs of the usage of the registered objects.
     enable_pympler_classtracker_debugging = False
-    if enable_pympler_classtracker_debugging:
-        tr = classtracker.ClassTracker()
-        tr.track_class(UI)
-        tr.track_class(RtpGenerator)
+    # if enable_pympler_classtracker_debugging:
+    #     tr = classtracker.ClassTracker()
+    #     tr.track_class(UI)
+    #     tr.track_class(RtpGenerator)
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
@@ -4843,30 +4843,31 @@ def main(argv):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:streamsSnapshotAutoSave " + str(e))
 
-                # Query the garbage collector every 5 seconds
-                try:
-                    if loopCounter % 5 == 0 and enable_gc_debugging:
-                        gcStats = gc.get_stats()
-                        Utils.Message.addMessage("gcStats: " + str(gcStats))
-
-                    if loopCounter % 30  == 0 and enable_pympler_debugging:
-                        all_objects = muppy.get_objects()
-                        # onlyLists = muppy.filter(all_objects, Type=list)
-                        totalSize = muppy.get_size(all_objects)
-
-                        table = Utils.pymplerprintRenderer(all_objects, limit=15)
-
-                        report = "Total size: " + str(Utils.bToMb(totalSize)) + "b at " + \
-                            datetime.datetime.now().strftime("%d/%m %H:%M:%S") + \
-                                 ", runtime " + str(Utils.dtstrft(datetime.timedelta(seconds=loopCounter))) + "\r\n"
-                        for row in table:
-                            report += row + "\r\n"
-                        Utils.writeReportToDisk(report, fileName="objectslist.txt", notificationMessage=False)
-
-                    if loopCounter % 10 and enable_pympler_classtracker_debugging:
-                        tr.create_snapshot()
-                        # tr.stats.print_summary()
-                        HtmlStats(tracker=tr).create_html('profile.html')
+                # Debugging code -  wasn't terribly useful
+                # try:
+                #     if loopCounter % 5 == 0 and enable_gc_debugging:
+                #         gcStats = gc.get_stats()
+                #         Utils.Message.addMessage("gcStats: " + str(gcStats))
+                #
+                #     # This lists the number and size of the most common objects
+                #     if loopCounter % 30  == 0 and enable_pympler_debugging:
+                #         all_objects = muppy.get_objects()
+                #         # onlyLists = muppy.filter(all_objects, Type=list)
+                #         totalSize = muppy.get_size(all_objects)
+                #
+                #         table = Utils.pymplerprintRenderer(all_objects, limit=15)
+                #
+                #         report = "Total size: " + str(Utils.bToMb(totalSize)) + "b at " + \
+                #             datetime.datetime.now().strftime("%d/%m %H:%M:%S") + \
+                #                  ", runtime " + str(Utils.dtstrft(datetime.timedelta(seconds=loopCounter))) + "\r\n"
+                #         for row in table:
+                #             report += row + "\r\n"
+                #         Utils.writeReportToDisk(report, fileName="objectslist.txt", notificationMessage=False)
+                #
+                #     # This generates an html file 'profile.html' tracking the memory used by specified objects
+                #     if loopCounter % 10 and enable_pympler_classtracker_debugging:
+                #         tr.create_snapshot()
+                #         HtmlStats(tracker=tr).create_html('profile.html')
 
 
 
