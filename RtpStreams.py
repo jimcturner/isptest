@@ -945,13 +945,17 @@ class RtpReceiveCommon(RtpCommon):
         # Get a copy of the traceroute hops list.
         tracerouteHopsList = []
         tracerouteLastUpdate = None
-        if getOperationMode() == "TRANSMIT":
-            tracerouteHopsList = self.getTraceRouteHopsList()
+        try:
+            if getOperationMode() == "TRANSMIT":
+                tracerouteHopsList = self.getTraceRouteHopsList()
 
-        elif getOperationMode() == "RECEIVE":
-            # Since the receiver is at the mercy of a slow bitrate transmission of the traceroute hops,
-            # make use of the 'stable' list
-            tracerouteLastUpdate, tracerouteHopsList = self.getStableTracerouteHopsList()
+            elif getOperationMode() == "RECEIVE":
+                # Since the receiver is at the mercy of a slow bitrate transmission of the traceroute hops,
+                # make use of the 'stable' list
+                tracerouteLastUpdate, tracerouteHopsList = self.getStableTracerouteHopsList()
+        except Exception as e:
+            Utils.Message.addMessage("ERR: RtpReceiveCommon.generateReport, get traceroute hops list. stream " +\
+                                     str(stats["stream_syncSource"]) + ", " + str(e))
 
         separator = ("-" * 63) + "\r\n"
         title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(
