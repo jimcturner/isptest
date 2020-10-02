@@ -80,7 +80,9 @@ import pickle
 
 # debugging libraries
 import gc # Garbage collector API
-from pympler import muppy, summary
+from pympler import muppy, classtracker
+from pympler.classtracker_stats import HtmlStats
+import faulthandler
 
 # import cgitb
 # cgitb.enable(format='text')
@@ -4169,6 +4171,11 @@ def main(argv):
                  )
         gc.set_debug(flags)
 
+    enable_pympler_classtracker_debugging = True
+    if enable_pympler_classtracker_debugging:
+        tr = classtracker.ClassTracker()
+        tr.track_class(UI)
+
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
 
@@ -4805,6 +4812,15 @@ def main(argv):
                     Utils.Message.addMessage("ERR:main() receiversAndSendersList.append() " + str(e))
 
 
+    enable_pympler_debugging = False
+    enable_faulthandler_debugging = False
+
+
+
+    if enable_faulthandler_debugging:
+        # Create a file for the faulthander to dump stacktraces to
+        faulthandlerLogFile = open("isptest_faulthandler.txt", mode='w')
+        faulthandler.enable(faulthandlerLogFile, all_threads=True)
 
     # Endless loop
     while True:
@@ -4831,20 +4847,26 @@ def main(argv):
                         gcStats = gc.get_stats()
                         Utils.Message.addMessage("gcStats: " + str(gcStats))
 
-                    all_objects = muppy.get_objects()
-                    totalSize = muppy.get_size(all_objects)
-                    # Create sorted list (in size order) of all_objects
-                    # sorted_objects = muppy.sort(all_objects)
-                    # Summarise the objects into a list of lists (rows of a table)
-                    # listed_objects = summary.summarize(all_objects)
-                    #
-                    table = Utils.pymplerprintRenderer(all_objects, limit=15)
-                    # sliced_list = listed_objects[-2:]
-                    # Utils.Message.addMessage(str(table))
-                    report = "Total size: " + str(Utils.bToMb(totalSize)) + "b\r\n"
-                    for row in table:
-                        report += row + "\r\n"
-                    Utils.writeReportToDisk(report, fileName="objectslist.txt", notificationMessage=False)
+                    if loopCounter % 30  == 0 and enable_pympler_debugging:
+                        all_objects = muppy.get_objects()
+                        # onlyLists = muppy.filter(all_objects, Type=list)
+                        totalSize = muppy.get_size(all_objects)
+
+                        table = Utils.pymplerprintRenderer(all_objects, limit=15)
+
+                        report = "Total size: " + str(Utils.bToMb(totalSize)) + "b at " + \
+                            datetime.datetime.now().strftime("%d/%m %H:%M:%S") + \
+                                 ", runtime " + str(Utils.dtstrft(datetime.timedelta(seconds=loopCounter))) + "\r\n"
+                        for row in table:
+                            report += row + "\r\n"
+                        Utils.writeReportToDisk(report, fileName="objectslist.txt", notificationMessage=False)
+
+                    if loopCounter % 10 and enable_pympler_classtracker_debugging:
+                        tr.create_snapshot()
+                        # tr.stats.print_summary()
+                        HtmlStats(tracker=tr).create_html('profile.html')
+
+
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR:GarbageCollector " + str(e))
