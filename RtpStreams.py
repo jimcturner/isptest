@@ -930,8 +930,7 @@ class RtpReceiveCommon(RtpCommon):
         # The '\r\n' escape sequence is required for Windows
         eventsList = self.getRTPStreamEventList(filterList=eventFilterList)
         worstGlitchesList = self.getWorstGlitches(returnSummaries=True)
-        # tracerouteHopsList = self.getTraceRouteHopsList()
-        tracerouteLastUpdate, tracerouteHopsList = self.getStableTracerouteHopsList()
+
 
         # Simple local function to determine the current operation mode based on the type of 'this' object instance
         # and return a string
@@ -943,6 +942,16 @@ class RtpReceiveCommon(RtpCommon):
             else:
                 return "UNKNOWN"
 
+        # Get a copy of the traceroute hops list.
+        tracerouteHopsList = []
+        tracerouteLastUpdate = None
+        if getOperationMode() == "TRANSMIT":
+            tracerouteHopsList = self.getTraceRouteHopsList()
+
+        elif getOperationMode() == "RECEIVE":
+            # Since the receiver is at the mercy of a slow bitrate transmission of the traceroute hops,
+            # make use of the 'stable' list
+            tracerouteLastUpdate, tracerouteHopsList = self.getStableTracerouteHopsList()
 
         separator = ("-" * 63) + "\r\n"
         title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(
