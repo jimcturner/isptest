@@ -4171,10 +4171,12 @@ def main(argv):
                  )
         gc.set_debug(flags)
 
-    enable_pympler_classtracker_debugging = True
+    # creates a web page snapshot every 10 secs of the usage of the registered objects
+    enable_pympler_classtracker_debugging = False
     if enable_pympler_classtracker_debugging:
         tr = classtracker.ClassTracker()
         tr.track_class(UI)
+        tr.track_class(RtpGenerator)
 
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
