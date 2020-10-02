@@ -5673,7 +5673,8 @@ class RtpStreamComparer(object):
                         # cannot be sorted using sorted() (raises an Exception) therefore it's easiest just to
                         # exclude from the list of items to be sorted
                         pass
-                    elif streamStatsToBeCompared["value"] == None:
+                    elif streamStatsToBeCompared["value"] == None or \
+                            streamStatsToBeCompared["value"] == datetime.timedelta(seconds=0): # Ignores time values of '00:00:00'
                         # Catch-all for any values that might be None
                         pass
                     else:
@@ -5721,7 +5722,7 @@ class RtpStreamComparer(object):
                 #   'for x in statsForAllStreams' # iterates over the statsForAllStreams list yielding 'x'
                 # 'x[currentKeyValueToExtract]' # since each 'x' is a RtpStream stats dictionary, we want
                 # to extract only the value corresponding to the key specified by currentKeyValueToExtract
-                # '[ ]' # Put the exctracted value in a new list
+                # '[ ]' # Put the extracted value in a new list
                 values = []
                 values = [x[currentKeyValueToExtract] for x in statsForAllStreams]
 
