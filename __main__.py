@@ -1548,7 +1548,7 @@ class UI(object):
                 # Get a textual, formatted report for this stream
                 streamReport = \
                     selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
-                Utils.Message.addMessage("filterList:" + str(self.filterListForDisplayedEvents[self.selectedFilterNo]))
+                # Utils.Message.addMessage("filterList:" + str(self.filterListForDisplayedEvents[self.selectedFilterNo]))
             elif self.displayPopup == self.__renderTracerouteTable:
                 # Get a traceroute history report
                 streamReport = selectedRxOrResultsStream.generateTracerouteHistoryReport()
