@@ -4165,7 +4165,7 @@ def main(argv):
 
     enable_gc_debugging = False
     if enable_gc_debugging:
-        # Set up Garbage Collection
+        # Set up Garbage Collector stats collection
         flags = (gc.DEBUG_COLLECTABLE |
                  gc.DEBUG_UNCOLLECTABLE
                  )
