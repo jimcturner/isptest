@@ -1445,6 +1445,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         # define timedelta object to store an aggregate of of Glitch length
         self.__stats["glitch_length_total_time"] = datetime.timedelta()
         self.__stats["glitch_most_recent_timestamp"] = datetime.timedelta()
+        self.__stats["glitch_most_recent_eventNo"] = None   # Captures the event no of the most recent glitch
+                                                            # so it can be directly recalled from the eventsList
         self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.timedelta()
         self.__stats["glitch_mean_time_between_glitches"] = datetime.timedelta()
         self.__stats["glitch_mean_glitch_duration"] = datetime.timedelta()
@@ -2607,6 +2609,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                             updateGlitchStats(self, glitch)
                             # Take timestamp of most recent glitch
                             self.__stats["glitch_most_recent_timestamp"] = glitch.timeCreated
+                            # Snapshot the event no of the most recent glitch
+                            self.__stats["glitch_most_recent_eventNo"] = glitch.eventNo
                             # Increment the all_events counter
                             self.__stats["stream_all_events_counter"] += 1
                             # Post a message
