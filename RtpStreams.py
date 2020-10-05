@@ -910,7 +910,7 @@ class RtpReceiveCommon(RtpCommon):
         pass
 
     @abstractmethod
-    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False):
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, eventNo=None):
         pass
 
     @abstractmethod
@@ -2319,6 +2319,19 @@ class RtpReceiveStream(RtpReceiveCommon):
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
                 # Utils.Message.addMessage("Tx pid " + str(self.__stats["stream_transmitter_PID"]) )
+
+                #Get last glitch by eventNo
+                try:
+                    lastGlitchEventList = self.getRTPStreamEventList(requestedEventNo=self.__stats["glitch_most_recent_eventNo"])
+                    if len(lastGlitchEventList) > 0:
+                            lastGlitchEventSummary = lastGlitchEventList[0].getSummary()["summary"]
+                            Utils.Message.addMessage("Last glitch  event no: " + str(self.__stats["glitch_most_recent_eventNo"]) +\
+                                                     ", " + lastGlitchEventSummary)
+                except Exception as e:
+                    Utils.Message.addMessage("ERR: Last glitch: " + str(e))
+
+
+
                 ######## 1 second counter end of code ########
 
             try:
@@ -2778,9 +2791,15 @@ class RtpReceiveStream(RtpReceiveCommon):
     # containing all Glitch and StreamStarted events
     # The filter (if present) is applied first, then the range specifier
     # Finally, if reverseOrder==True, the list will be returned in reverse order
-    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False):
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, requestedEventNo=None):
         # Create copy of events list
         unfilteredEventList = list(self.__eventList)
+
+        # If eventNo is specified, look for and return a list containing a single event with that event no (if it still exists)
+        if requestedEventNo is not None:
+            # Iterate over unfilteredEventList looking for an event whose eventNo matches requestedEventNo
+            filteredEventList = list(filter(lambda event: event.eventNo == requestedEventNo, unfilteredEventList))
+            return filteredEventList
 
         # Now apply a filter (if specified)
         filteredEventList = []
