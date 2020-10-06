@@ -20,7 +20,11 @@ class Registry(object):
                                                     # on startup
     streamsSnapshotAutoSaveInterval_s = 5       # The frequency of stream snapshot auto saves (when in RECEIVE mode)
 
-    rtpHeaderOffsetString = "dfhsdfkjhsbkfsdfegrsb".encode('utf-8')
+    rtpHeaderOffsetString = "dfhsdfkjhsbkfsdfegrsb".encode('utf-8') # This string will be added between the UDP header
+    # and Rtp header of the geenrated RTp traffic. It's purpose is to obscure the generated
+    # packets to stop them looking like RTP (to aid investigation of ISPs that
+    # block RTP
+
     # Provides content for the help popup
     helpTableContents = [["h","Display/hide this page"],
                          ["Ctrl-C", "Quit the application"],

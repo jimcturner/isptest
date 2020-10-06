@@ -3489,10 +3489,16 @@ class RtpPacketReceiver(object):
         RTP_HEADER_SIZE = 12
         UDP_HEADER_SIZE = 8
         IP_HEADER_SIZE = 20
+        # Determine whether we're expecting the received Rtp packets to have been padded out with an offset
+        # between the UDP and RTP header (in order to disguise the packets from Rtp detection)
+        if Registry.rtpHeaderOffsetString is not None:
+            RTP_HEADER_OFFSET_STRING_SIZE = len(Registry.rtpHeaderOffsetString)
+        else:
+            RTP_HEADER_OFFSET_STRING_SIZE = 0
         try:
             # Check to see that the supplied bytearray is large enough to accommodate an RTP header
             rawBytesReceived = len(_rawData)
-            if rawBytesReceived >= (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
+            if rawBytesReceived >= (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_OFFSET_STRING_SIZE + RTP_HEADER_SIZE):
                 # Split off the various IP, UDP and RTP headers
                 ipHeader = _rawData[:IP_HEADER_SIZE]
                 udpHeader = _rawData[IP_HEADER_SIZE:(IP_HEADER_SIZE + UDP_HEADER_SIZE)]
@@ -3503,11 +3509,11 @@ class RtpPacketReceiver(object):
                     # Extract the src and dest port from the UDP header
                     srcUDPPort, destUDPPort = struct.unpack("!HH", udpHeader[0:4])
                     # Extract the rtp header
-                    rtpHeader = _rawData[(IP_HEADER_SIZE + UDP_HEADER_SIZE): \
-                                         (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE)]
+                    rtpHeader = _rawData[(IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_OFFSET_STRING_SIZE): \
+                                         (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_OFFSET_STRING_SIZE + RTP_HEADER_SIZE)]
                     # If there's any payload data, strip that off too.
-                    if rawBytesReceived > (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
-                        payload = _rawData[IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE:]
+                    if rawBytesReceived > (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_OFFSET_STRING_SIZE + RTP_HEADER_SIZE):
+                        payload = _rawData[IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_OFFSET_STRING_SIZE + RTP_HEADER_SIZE:]
                     else:
                         payload = None
                     return rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort
@@ -3867,7 +3873,7 @@ class RtpPacketReceiver(object):
                                 self.udpPacketsReceivedByRxThreadCount += 1
                                 # If the data has been rx'd via the udp socket, only the rtp header + payload will be present
                                 # However, if Registry.rtpHeaderOffsetString has been set, the rtp header will be
-                                # prepended with a string which we need to strip
+                                # prepended with a string which we need to strip first
                                 if Registry.rtpHeaderOffsetString is not None:
                                     # Slice udpSocketData[] to strip away the rtpHeaderOffsetString
                                     udpSocketData = udpSocketData[len(Registry.rtpHeaderOffsetString):]
