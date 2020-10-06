@@ -3794,6 +3794,7 @@ class RtpPacketReceiver(object):
                             # larger we can accept would kill the socket
                             rawData, rawAddr = rawSocket.recvfrom(Registry.rtpPacketRecieverRecvFromBufferSize)
                             rawTimestamp = datetime.datetime.now()
+
                         else:
                             # If no data to be read, clear the rawData and rawAddr lists
                             rawData = []
@@ -3865,6 +3866,12 @@ class RtpPacketReceiver(object):
                                 # increment the counter
                                 self.udpPacketsReceivedByRxThreadCount += 1
                                 # If the data has been rx'd via the udp socket, only the rtp header + payload will be present
+                                # However, if Registry.rtpHeaderOffsetString has been set, the rtp header will be
+                                # prepended with a string which we need to strip
+                                if Registry.rtpHeaderOffsetString is not None:
+                                    # Slice udpSocketData[] to strip away the rtpHeaderOffsetString
+                                    udpSocketData = udpSocketData[len(Registry.rtpHeaderOffsetString):]
+
                                 rtpHeader, payload = self.parseUDPPacket(udpSocketData)
                                 if rtpHeader is not None:
                                     # Now parse the rtp header

@@ -4205,13 +4205,22 @@ class RtpGenerator(RtpCommon):
                     # Directly modify the timestamp field of the rtp header within the self.udpTxData bytearray
                     # The RTP timestamp field is bytes 4-7 of the RTP header
                     struct.pack_into("!L", rtpGeneratorInstance.udpTxData, 4, rtpTimestampAsInt)
+
+                    # If Registry.rtpHeaderOffsetString has been set, prepend the rtp packet with the contents
+                    # to create an offset between udp header and the rtp header
+                    udpPayload = b""
+                    if Registry.rtpHeaderOffsetString is not None:
+                        udpPayload = Registry.rtpHeaderOffsetString + rtpGeneratorInstance.udpTxData
+                    else:
+                        udpPayload = rtpGeneratorInstance.udpTxData
+
                     # Send the data
-                    sentBytes = rtpGeneratorInstance.udpTxSocket.sendto(rtpGeneratorInstance.udpTxData,
+                    sentBytes = rtpGeneratorInstance.udpTxSocket.sendto(udpPayload,
                                                             (rtpGeneratorInstance.UDP_TX_IP,
                                                              rtpGeneratorInstance.UDP_TX_PORT))
 
                     # Confirm that we appear to have sent the correct no. of bytes
-                    if sentBytes == len(rtpGeneratorInstance.udpTxData):
+                    if sentBytes == len(udpPayload):
                         # Update tx bytes counter (taking packet headers into account)
                         rtpGeneratorInstance.txCounter_bytes += sentBytes
                         # Update tx packets counter

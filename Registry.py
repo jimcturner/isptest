@@ -20,6 +20,7 @@ class Registry(object):
                                                     # on startup
     streamsSnapshotAutoSaveInterval_s = 5       # The frequency of stream snapshot auto saves (when in RECEIVE mode)
 
+    rtpHeaderOffsetString = "dfhsdfkjhsbkfsdfegrsb".encode('utf-8')
     # Provides content for the help popup
     helpTableContents = [["h","Display/hide this page"],
                          ["Ctrl-C", "Quit the application"],
