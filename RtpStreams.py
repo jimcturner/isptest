@@ -3089,8 +3089,11 @@ class RtpGenerator(RtpCommon):
     RTP_HEADER_LENGTH_BYTES = 12
 
     # Constants. Used in the construction of the rtp header
-    rtpParams = 0b01000000
-    rtpPayloadType = 0b00000000
+    # rtpParams = 0b01000000
+    rtpParams = Registry.rtpGeneratorRtpParams
+    # rtpPayloadType = 0b00000000
+    rtpPayloadType = Registry.rtpGeneratorRtpPayloadType
+
 
     @classmethod
     def getMaxFriendlyNameLength(cls):

@@ -75,7 +75,10 @@ class Registry(object):
     # larger we can accept would kill the socket
     rtpPacketRecieverRecvFromBufferSize = 65535
 
-    # RtpGenerator
+    ### RtpGenerator
+    rtpGeneratorRtpParams = 0b01000000 # Perhaps try 0b10000000 to match NTT?
+    rtpGeneratorRtpPayloadType = 0b00000000
+
     rtpGeneratorUDPTxTTL = 128  # Sets the TTL value of the transmitted udp packets
     rtpGeneratorEnableTraceroute = True # Enables/inhbits the traceroute thread from starting
     tracerouteMaxHops = 20  # The maximum no of hops traceroute will consider before resetting
