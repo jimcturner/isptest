@@ -4263,7 +4263,7 @@ def main(argv):
             print ("No options supplied. Use -h for help")
             exit()
 
-        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:v:zn:")
+        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:v:zn:o")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
@@ -4293,8 +4293,15 @@ def main(argv):
                 print ("\r")
                 print ("-v [val] message verbosity level 0-3\r")
                 print ("\r")
+                print("-o obscure (disguise) the Rtp packets by inserting an offset between the\r")
+                print("UDP and RTP headers. NOTE: Must be set on both the transmitter and receiver\r")
+                print("\r")
                 print ("-z Enable special features (like simulate packet loss, jitter etc)\r")
                 exit()
+
+            elif opt == '-o':
+                Registry.rtpHeaderOffsetString = "dfhsdfkjhsbkfsdfegrsb".encode('utf-8')
+                print("RTP 'Disguise' mode enabled")
 
             elif opt == '-x':
                 MODE = "LOOPBACK"
