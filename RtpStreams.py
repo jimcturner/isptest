@@ -2320,15 +2320,15 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                 # Utils.Message.addMessage("Tx pid " + str(self.__stats["stream_transmitter_PID"]) )
 
-                #Get last glitch by eventNo
-                try:
-                    lastGlitchEventList = self.getRTPStreamEventList(requestedEventNo=self.__stats["glitch_most_recent_eventNo"])
-                    if len(lastGlitchEventList) > 0:
-                            lastGlitchEventSummary = lastGlitchEventList[0].getSummary()["summary"]
-                            Utils.Message.addMessage("Last glitch  event no: " + str(self.__stats["glitch_most_recent_eventNo"]) +\
-                                                     ", " + lastGlitchEventSummary)
-                except Exception as e:
-                    Utils.Message.addMessage("ERR: Last glitch: " + str(e))
+                # #Get last glitch by eventNo
+                # try:
+                #     lastGlitchEventList = self.getRTPStreamEventList(requestedEventNo=self.__stats["glitch_most_recent_eventNo"])
+                #     if len(lastGlitchEventList) > 0:
+                #             lastGlitchEventSummary = lastGlitchEventList[0].getSummary()["summary"]
+                #             Utils.Message.addMessage("Last glitch  event no: " + str(self.__stats["glitch_most_recent_eventNo"]) +\
+                #                                      ", " + lastGlitchEventSummary)
+                # except Exception as e:
+                #     Utils.Message.addMessage("ERR: Last glitch: " + str(e))
 
                 ######## 1 second counter end of code ########
 
