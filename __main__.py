@@ -4251,6 +4251,8 @@ def main(argv):
         # -u sync source ID (for transmit or loopback mode)
         # -v:[int] verbosity
         # -z Enable special features (like simulate packel loss, jitter etc)
+        # -o obscure (disguise) the Rtp packets by inserting an offset between the UDP and RTP headers. NOTE: Must be
+        # set on both the transmitter and receiver
 
 
 
