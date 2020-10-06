@@ -2330,8 +2330,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR: Last glitch: " + str(e))
 
-
-
                 ######## 1 second counter end of code ########
 
             try:
@@ -3002,12 +3000,19 @@ class RtpStreamResults(RtpReceiveCommon):
     # containing all Glitch and StreamStarted events
     # The filter (if present) is applied first, then the range specifier
     # Finally, if reverseOrder==True, the list will be returned in reverse order
-    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False):
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, requestedEventNo=None):
         self.__accessRtpStreamEventListMutex.acquire()
         # Create copy of events list
         # unfilteredEventList = deepcopy(self.__eventList)
         unfilteredEventList = list(self.__eventList)
         self.__accessRtpStreamEventListMutex.release()
+
+        # If eventNo is specified, look for and return a list containing a single event with that event no (if it still exists)
+        if requestedEventNo is not None:
+            # Iterate over unfilteredEventList looking for an event whose eventNo matches requestedEventNo
+            filteredEventList = list(filter(lambda event: event.eventNo == requestedEventNo, unfilteredEventList))
+            return filteredEventList
+
         # Now apply a filter (if specified)
         filteredEventList = []
         if filterList is not None:
