@@ -5859,9 +5859,30 @@ class RtpStreamComparer(object):
                             # humanise the value
                             value = RtpReceiveCommon.humanise(sortedStreamsList[index]["statsKeyToCompare"], \
                                                                 sortedStreamsList[index]["value"], appendUnit=True)
+                            # If the relatedEvent key has been populated, we can attempt to retrieve that event from the eventsList
+                            # to add some more detail to the comparison table
+                            eventSummary = ""
+                            eventCreated = ""
+                            eventSummaryFormattedText = ""
+                            if sortedStreamsList[index]["relatedEvent"] is not None:
+                                try:
+                                    # Get an eventSummary
+                                    relatedEvent = sortedStreamsList[index]["relatedEvent"].getSummary(
+                                        includeStreamSyncSourceID=False,
+                                        includeEventNo=False,
+                                        includeType=False,
+                                        includeFriendlyName=False)
+
+                                    eventCreated = relatedEvent["timeCreated"].strftime("%d/%m %H:%M:%S")
+                                    eventSummary = relatedEvent["summary"]  # Summary in the form of a text string
+                                    eventSummaryFormattedText = eventCreated + ", " + eventSummary
+                                except Exception as e:
+                                    Utils.Message.addMessage(
+                                        "ERR: ERR:RtpStreamComparer.generateReport() - lookup event " + str(e))
+
                             # Create the table row
                             streamReport += str(index + 1) + "\t" + \
-                                str(streamName).rjust(friendlyNameLength) + " " + str(value) + "\r\n"
+                                str(streamName).rjust(friendlyNameLength) + " " + str(value) + "\t" + eventSummaryFormattedText + "\r\n"
                         streamReport += separator
 
             return streamReport

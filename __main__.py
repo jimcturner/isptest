@@ -2695,7 +2695,7 @@ class UI(object):
                 for index in range(len(sortedStreamsList)):
                     # 'humanise' the value depending based on the keyTosortBy
                     value = RtpReceiveCommon.humanise(keyTosortBy, sortedStreamsList[index]["value"], appendUnit=True)
-                    # If the eventNo key has been populated, we can attempt to retrieve that event from the eventsList
+                    # If the relatedEvent key has been populated, we can attempt to retrieve that event from the eventsList
                     # to add some more detail to the comparison table
                     eventSummary = ""
                     eventCreated = ""
