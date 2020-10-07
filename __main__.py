@@ -2359,7 +2359,7 @@ class UI(object):
                         "\n" + "  and event logging".center(maxWidth, " ") + \
                         "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth, " ") + \
                         "\n See https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
-                        "\n\n\nlast merge: rtpPayloadType 7/10/20 09:21\n" + \
+                        "\n\n\nlast merge: compareReportWithEvents 7/10/20 12:33\n" + \
                         "Press the [any] key to continue".center(maxWidth, " ")
 
         # Render the message in a pop-up box
