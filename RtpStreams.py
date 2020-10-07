@@ -5702,11 +5702,24 @@ class RtpStreamComparer(object):
                                                 "syncSourceID": stats["stream_syncSource"],
                                                 "friendlyName": stats["stream_friendly_name"],
                                                 "statsKeyToCompare": statsKeyToCompare,
-                                                "value": stats[statsKeyToCompare]
+                                                "value": stats[statsKeyToCompare],
+                                                "relatedEvent": None # If appropriate, this will hold a reference to the event
+                                                                # relevant to the current comparison measure
                                                 }
-                    # Test for special cases of values that cannot be sorted (exceptions)
+                    # Now populate the streamStatsToBeCompared["eventNo"] if relevant to the current stats key being compared
+                    if statsKeyToCompare == "glitch_most_recent_timestamp" or\
+                            statsKeyToCompare == "glitch_packets_lost_per_glitch_max" or\
+                            statsKeyToCompare == "glitch_max_glitch_duration":
+                        # Request the specific event that relates to this measure
+                        relatedEventList = \
+                            self.rtpStreamsDict[rtpStream].getRTPStreamEventList(requestedEventNo=stats["glitch_most_recent_eventNo"])
+                        # If the event has been located, add it to the streamStatsToBeCompared[] dict
+                        if len(relatedEventList) > 0:
+                            streamStatsToBeCompared["relatedEvent"] = relatedEventList[0]
+
+                    # Test for special cases of values that cannot be sorted (zero or None values/exceptions)
                     if statsKeyToCompare == "glitch_most_recent_timestamp" and \
-                        type(streamStatsToBeCompared["value"]) == datetime.timedelta:
+                            type(streamStatsToBeCompared["value"]) == datetime.timedelta:
                         # NOTE: stats[glitch_most_recent_timestamp] is initialised as a datetime.timedelta object
                         # If not glitches are recorded it'll stay that way.
                         # Once a glitch occurs it will be set as a datetime.datetime object and these two types

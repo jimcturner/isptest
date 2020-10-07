@@ -619,8 +619,8 @@ class UI(object):
                                                 ["glitch_packets_lost_total_count", "Total packets lost"],
                                                 ["glitch_counter_total_glitches", "Total no of glitches"],
                                                 ["glitch_most_recent_timestamp", "Most recent glitch"],
-                                                ["glitch_mean_time_between_glitches", "Glitch period (how often)"],
-                                                ["glitch_packets_lost_per_glitch_max", "Worst glitch (packets lost)"],
+                                                ["glitch_mean_time_between_glitches", "Glitch period(how often)"],
+                                                ["glitch_packets_lost_per_glitch_max", "Worst loss (packets)"],
                                                 ["glitch_max_glitch_duration", "Worst glitch (duration)"],
                                                 ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss"],
                                                 ["glitch_mean_glitch_duration", "Mean glitch duration"]
@@ -2695,9 +2695,26 @@ class UI(object):
                 for index in range(len(sortedStreamsList)):
                     # 'humanise' the value depending based on the keyTosortBy
                     value = RtpReceiveCommon.humanise(keyTosortBy, sortedStreamsList[index]["value"], appendUnit=True)
-                    tableContents.append([index + 1, str(sortedStreamsList[index]["friendlyName"]).strip() + "  ", value])
+                    # If the eventNo key has been populated, we can attempt to retrieve that event from the eventsList
+                    # to add some more detail to the comparison table
+                    eventSummary = ""
+                    eventCreated = ""
+                    if sortedStreamsList[index]["relatedEvent"] is not None:
+                        try:
+                            # Get an eventSummary
+                            relatedEvent = sortedStreamsList[index]["relatedEvent"].getSummary(includeStreamSyncSourceID=False,
+                                                                   includeEventNo=False,
+                                                                    includeType=False,
+                                                                    includeFriendlyName=False)
+
+                            eventCreated = relatedEvent["timeCreated"].strftime("%d/%m %H:%M:%S")
+                            eventSummary = relatedEvent["summary"]      # Summary in the form of a text string
+                        except Exception as e:
+                            Utils.Message.addMessage("ERR: ERR:UI.__renderCompareStreamsTable - lookup event " + str(e))
+                    tableContents.append([index + 1, str(sortedStreamsList[index]["friendlyName"]).strip() + "  ", str(value).strip(),
+                                          eventCreated, eventSummary])
             else:
-                tableContents.append(["", "", "No data to display"])
+                tableContents.append(["", "", "No data to display", "", ""])
 
             # Now actually display the paged table list
             title = "Comparison of streams (" + displayfriendlyKey
@@ -2707,10 +2724,9 @@ class UI(object):
             else:
                 title += ", ascending)"
 
-            footer = ["", "", "[<][>]page, [^][v] select stream, [p]exit, [s]ave\n" + \
-                      "[c]opy to clipboard, [m]etric to compare, [o]rder"]
-
-            self.__renderPagedList(self.tablePageNo, title, ["", "Name ", str(displayfriendlyKey).ljust(50)], tableContents,
+            footer = ["", " [<][>]page\n [p]exit", " [^][v] select stream\n [c]opy to clipboard", "", "[s]ave, [o]rder\n [m]etric to compare"]
+            # .ljust(50)
+            self.__renderPagedList(self.tablePageNo, title, ["", "Name ", str(displayfriendlyKey), "", ""], tableContents,
                                    footerRow=footer,
                                    pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
         except Exception as e:
