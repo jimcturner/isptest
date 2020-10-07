@@ -1682,6 +1682,15 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
 
+            elif isptestHeaderData[1] == 7:
+                # This is a message containing the return loss (as a float  , 4 bytes)
+                try:
+                    # Convert the 4 bytes back to a float
+                    returnLoss_pc = struct.unpack_from("!f", bytes(isptestHeaderData[4:8]))[0]
+                    Utils.Message.addMessage("Return loss: " + str(returnLoss_pc))
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
+
         except Exception as e:
             Utils.Message.addMessage("DBUG:__RtpReceiveStream.__pasrseIsptestHeader " + str(e))
 
@@ -3657,8 +3666,6 @@ class RtpGenerator(RtpCommon):
                                    0 & 0xFF]  # not used
                     Utils.Message.addMessage(
                         "DBUG:RtpGenerator.generateIsptestHeader(): Message type 7: Return loss " + str(e))
-
-
 
             # Now That the message data list has been created, increment the message type index
             self.isptestHeaderMessageIndex += 1
