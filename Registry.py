@@ -76,8 +76,8 @@ class Registry(object):
     rtpPacketRecieverRecvFromBufferSize = 65535
 
     ### RtpGenerator
-    rtpGeneratorRtpParams = 0b01000000 # Perhaps try 0b10000000 to match NTT?
-    rtpGeneratorRtpPayloadType = 0b00000000
+    rtpGeneratorRtpParams = 0b10000000 # Was 0b01000000 Perhaps try 0b10000000 to match NTT?
+    rtpGeneratorRtpPayloadType = 0x33 # 0x33 identifies as MPEG video Was 0b00000000
 
     rtpGeneratorUDPTxTTL = 128  # Sets the TTL value of the transmitted udp packets
     rtpGeneratorEnableTraceroute = True # Enables/inhbits the traceroute thread from starting
