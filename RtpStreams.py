@@ -3154,7 +3154,7 @@ class RtpGenerator(RtpCommon):
         self.tracerouteChecksum = 0# Calculated by XORing an entire hops list, once it's been successfully validated
 
         self.isptestHeaderMessageIndex = 0 # Keeps track of which type of message we are sending in the header
-        self.noOfMessageTypes = 7 # The current message types are:
+        self.noOfMessageTypes = 8 # The current message types are:
                                     # 0 Traceroute
                                     # 1 private LAN Address of the local interface used for transmitting
                                     # 2 The 'public' destination address
@@ -3162,6 +3162,7 @@ class RtpGenerator(RtpCommon):
                                     # 4 The specified TX rate
                                     # 5 The transmitted packet count
                                     # 6 The stream time to live (in seconds)
+                                    # 7 The return loss (as measured by the ResultsReceiver)
 
         self.uiInstance = uiInstance   # This allows access to the methods of the UI class
         # self.minSleepTime = None
@@ -3398,6 +3399,14 @@ class RtpGenerator(RtpCommon):
         #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
+        # OR
+        # [byte1] Message type (7: The return loss (from Receiver to Transmitter).
+        #         # [byte2]
+        #         # [byte3]
+        #         # [byte4][byte5][byte6][byte7] return loss, float 4 bytes
+        #         # [byte8] not used
+        #         # [friendlyName] 10 bytes
+
 
         header = b""  # Specify byte string
         # Initialise messageData to zero
@@ -3622,6 +3631,34 @@ class RtpGenerator(RtpCommon):
                                    0 & 0xFF]  # not used
                     Utils.Message.addMessage(
                         "DBUG:RtpGenerator.generateIsptestHeader(): Message type 6: Transmit tx stream time to live " + str(e))
+
+            elif self.isptestHeaderMessageIndex == 7:
+                # Return loss from Receiver to Transmitter, float 4 bytes, %
+                try:
+                    # Get return packet loss value from related ResultsReceiver object
+                    returnPacketLoss_pc = struct.pack("!f", self.rtpStreamResultsReceiver.returnPacketLoss_pc)
+                    messageData = [7 & 0xFF,  # Message type 7: # Return loss from Receiver to Transmitter, float 4 bytes
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   returnPacketLoss_pc[0] & 0xFF,  # MSB
+                                   returnPacketLoss_pc[1] & 0xFF,  #
+                                   returnPacketLoss_pc[2] & 0xFF,  #
+                                   returnPacketLoss_pc[3] & 0xFF,  # LSB
+                                   0 & 0xFF]  # not used
+
+                except Exception as e:
+                    messageData = [7 & 0xFF,  # Message type 7: # Return loss from Receiver to Transmitter, float 4 bytes
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF]  # not used
+                    Utils.Message.addMessage(
+                        "DBUG:RtpGenerator.generateIsptestHeader(): Message type 7: Return loss " + str(e))
+
+
 
             # Now That the message data list has been created, increment the message type index
             self.isptestHeaderMessageIndex += 1
