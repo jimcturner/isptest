@@ -803,7 +803,8 @@ class UI(object):
                           [["#", 0],  # Used as an index[]
                            ["Name", "stream_friendly_name"],
                            ["Target\nTx Bps", 'stream_transmitter_txRate_bps'],
-                           [" Time\nremain", 'stream_transmitter_TimeToLive_sec']
+                           [" Time\nremain", 'stream_transmitter_TimeToLive_sec'],
+                           ["Return\n loss %", "stream_transmitter_Return_Loss_percent"]
                            ], self.streamResultsDataSet])
         # self.views.append(["Misc",
         #               [["#", 0],  # Used as an index[]
@@ -2733,7 +2734,6 @@ class UI(object):
             Utils.Message.addMessage("ERR:UI.__renderCompareStreamsTable() " + str(e))
             # Deactivate this popup
             self.displayPopup = None
-
 
     # Tests the key pressed, and calls the appropriate method
     def __parseKeyPressed(self):
@@ -4794,8 +4794,6 @@ def main(argv):
                                                             historicStatsDict=stats,
                                                             historicEventsList=eventsList
                                                             )
-
-                            Utils.Message.addMessage("Historic stream " + str(streamID) + " recreated")
 
                         except Exception as e:
                             Utils.Message.addMessage(

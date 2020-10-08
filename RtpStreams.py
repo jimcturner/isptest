@@ -1335,6 +1335,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_transmitter_PID"] = 0
         self.__stats["stream_transmitter_txRate_bps"] = 0 # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_TimeToLive_sec"] = 0  # Will be populated by incoming isptest header data
+        self.__stats["stream_transmitter_Return_Loss_percent"] = 0  # Will be populated by incoming isptest header data
         Utils.Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
 
         # Var to store the traceroute checksum value extracted from the isptestheader data
@@ -1541,6 +1542,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         if historicEventsList is not None:
                             self.updateEventsList(historicEventsList, replaceExistingList=True)
                         streamsSuccessfullyRecreated = True
+                        Utils.Message.addMessage("Historic stream " + str(self.__stats["stream_syncSource"]) + " recreated")
                     else:
                         Utils.Message.addMessage("ERR:RtpReceiveStream historicStatsDict key differences " + str(diff) +\
                                                  " Aborting import of stats[] dict ")
@@ -1686,8 +1688,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # This is a message containing the return loss (as a float  , 4 bytes)
                 try:
                     # Convert the 4 bytes back to a float
-                    returnLoss_pc = struct.unpack_from("!f", bytes(isptestHeaderData[4:8]))[0]
-                    Utils.Message.addMessage("Return loss: " + str(returnLoss_pc))
+                    self.__stats["stream_transmitter_Return_Loss_percent"] = \
+                        struct.unpack_from("!f", bytes(isptestHeaderData[4:8]))[0]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
 
