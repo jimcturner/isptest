@@ -1377,6 +1377,3 @@ def getObjectSize(objectToBeMeasured):
     except Exception as e:
         Message.addMessage("ERR: Utils.getObjectSize() " + str(e))
         return None
-
-
-

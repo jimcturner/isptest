@@ -4860,6 +4860,8 @@ def main(argv):
         faulthandlerLogFile = open("isptest_faulthandler.txt", mode='w')
         faulthandler.enable(faulthandlerLogFile, all_threads=True)
 
+
+
     # Endless loop
     while True:
         try:
@@ -4903,16 +4905,47 @@ def main(argv):
                 #         return None
 
 
-                if loopCounter % 5 == 0:
-                    peakMemUsage = Utils.getPeakMemoryUsage()
-                    if peakMemUsage is not None:
-                        Utils.Message.addMessage("Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b", logToDisk=False)  # in bytes
-                    try:
-                        objectSize = Utils.getObjectSize(ui)
-                        Utils.Message.addMessage("ui size " + str(Utils.bToMb(objectSize)), logToDisk=False)
-                    except Exception as e:
-                        Utils.Message.addMessage("ERR:ui size " + str(e), logToDisk=False)
 
+                if loopCounter % 5 == 0:
+                    # peakMemUsage = Utils.getPeakMemoryUsage()
+                    # if peakMemUsage is not None:
+                    #     Utils.Message.addMessage("Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b", logToDisk=False)  # in bytes
+                    # try:
+                    #     objectSize = Utils.getObjectSize(ui)
+                    #     Utils.Message.addMessage("ui size " + str(Utils.bToMb(objectSize)), logToDisk=False)
+                    # except Exception as e:
+                    #     Utils.Message.addMessage("ERR:ui size " + str(e), logToDisk=False)
+
+                    try:
+                        # Create list of objects to track memory usage
+                        objectsToProfile = [ui, whoIsResolver]  # These never change
+                        # Create a string to store the object sizes
+                        summaryString = ""
+
+                        # Create list of dictionaries to be polled for streams
+                        dictsToBePolled = [rtpTxStreamsDict, rtpTxStreamResultsDict, rtpRxStreamsDict]
+                        for streamDict in dictsToBePolled:
+                            # Iterate over the contents of each dict in turn
+                            copyOfDict = dict(streamDict)  # Create a copy so that we can safely iterate over it
+                            if len(copyOfDict) > 0:
+                                # Append the current list of RtpGenerator objects to to objectsToProfile list
+                                for item in copyOfDict:  # iterate over keys
+                                    objectsToProfile.append(copyOfDict[item])
+
+                        if MODE == "RECEIVE":
+                            objectsToProfile.append(udpMessageSender)
+                            objectsToProfile.append(rtpPacketReceiver)
+
+
+                        # Iterate over all the objects to be tracked, and report on the size
+                        for obj in objectsToProfile:
+                            objSize = Utils.getObjectSize(obj)
+                            if objSize is not None and objSize > 0:
+                                summaryString += str(type(obj)) + ":" + str(Utils.bToMb(objSize)) + ", "
+                        Utils.Message.addMessage("object profiler: " + summaryString, logToDisk=True)
+
+                    except Exception as e:
+                        Utils.Message.addMessage("ERR:object profiler " + str(e), logToDisk=True)
 
                 # try:
                 #     if loopCounter % 5 == 0 and enable_gc_debugging:
