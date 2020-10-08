@@ -2642,13 +2642,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                         else:
                             # Glitch is below the threshold. Acknowledge it with a message but don't add an Event
                             # increment the 'ignored' counter so that we know that it happened
+                            # Note, this message is not logged to disk, to save the log file being filled
                             self.__stats["glitch_glitches_ignored_counter"] += 1
                             # Post a message
                             Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + ", " +\
                                                      str(sequenceNoGap) + " packets lost. (<=" +\
                                                      str(self.__stats["glitch_Event_Trigger_Threshold_packets"]) +\
                                                      ", minor loss " + str(rtpPackets[-2].rtpSequenceNo) + ":" +\
-                                                     str(rtpPackets[-1].rtpSequenceNo) + ")" )
+                                                     str(rtpPackets[-1].rtpSequenceNo) + ")", logToDisk=False )
 
                         # Temporarily disable the jitter detection immediately after a glitch
                         jitterDetectionEnabledFlag = False

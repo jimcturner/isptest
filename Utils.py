@@ -282,9 +282,11 @@ class Message(object):
 
 
     # Class method to add a new message to the list
+    # If logToDisk==True (the default), the message will also be also added to the diskWriteQueue
+    # This employed to stop the disk log filling up with unwanted messages
     # Additionally, this method checks to see if the disk writing thread is active. If it is not, it will start it
     @classmethod
-    def addMessage(cls, message):
+    def addMessage(cls, message, logToDisk=True):
         # Check status of disk writing thread. If it has not yet been started, it will be
         if cls.__writeMessagesToDiskThreadIsActive is False:
             try:
@@ -310,7 +312,8 @@ class Message(object):
         cls.__appendMessageToDeque(newMessage)
 
         # Now put the new message in the queue, to be picked up by the disk writer thread
-        cls.__diskWriteQueue.put(newMessage)
+        if logToDisk:
+            cls.__diskWriteQueue.put(newMessage)
 
     # class method to filter cls.messages[] based on the message prefix and cls.verbosityLevel and return a sublist
     @classmethod
