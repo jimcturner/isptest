@@ -83,7 +83,7 @@ import gc # Garbage collector API
 # from pympler import muppy, classtracker
 # from pympler.classtracker_stats import HtmlStats
 import faulthandler
-import psutil
+import resource
 
 # import cgitb
 # cgitb.enable(format='text')
@@ -4861,9 +4861,6 @@ def main(argv):
         faulthandlerLogFile = open("isptest_faulthandler.txt", mode='w')
         faulthandler.enable(faulthandlerLogFile, all_threads=True)
 
-    # Get pid of this process used for memory usage measurements
-    processID = os.getpid()
-    process = psutil.Process(processID)
     # Endless loop
     while True:
         try:
@@ -4885,8 +4882,8 @@ def main(argv):
 
                 # Debugging code -  wasn't terribly useful
                 def sampleMemoryUsage():
-                    memUsage = Utils.bToMb(process.memory_info().rss)
-                    Utils.Message.addMessage("Usage: " + str(memUsage) + "b", logToDisk=False)  # in bytes
+                    peakMemUsage = Utils.bToMb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+                    Utils.Message.addMessage("Peak Usage: " + str(peakMemUsage) + "b", logToDisk=False)  # in bytes
 
                 if loopCounter % 5 == 0:
                     sampleMemoryUsage()
