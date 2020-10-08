@@ -4882,10 +4882,24 @@ def main(argv):
 
                 # Debugging code -  wasn't terribly useful
                 def sampleMemoryUsage():
-                    peakMemUsage = Utils.bToMb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-                    pageSize = resource.getpagesize()
-                    Utils.Message.addMessage("Peak Usage: " + str(peakMemUsage) + "b" +\
-                                             ", pageSize: " + str(pageSize), logToDisk=False)  # in bytes
+                    # Check operating system
+                    os = Utils.getOperatingSystem()
+                    peakMemUsage = 0
+                    if os == "Windows":
+                        # Doesn't currently work on Windows
+                        return None
+                    elif os == "Darwin":
+                        # OSX returns the peak memory usage in bytes
+                        peakMemUsage = Utils.bToMb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+                    else:
+                        # Linux returns the OS in kb so convert to bytes first
+                        peakMemUsage = Utils.bToMb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024)
+
+
+                    # peakMemUsage = Utils.bToMb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+                    # pageSize = resource.getpagesize()
+                    Utils.Message.addMessage("Peak Usage: " + str(peakMemUsage) + "b, " + str(os), logToDisk=False)  # in bytes
+                    return peakMemUsage
 
                 if loopCounter % 5 == 0:
                     sampleMemoryUsage()
