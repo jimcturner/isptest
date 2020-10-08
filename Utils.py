@@ -1369,3 +1369,13 @@ def getPeakMemoryUsage():
         Message.addMessage("ERR: Utils.sampleMemoryUsage() " + str(e))
         return None
 
+# Uses pympler.asizeof() to determine the size of any object or None on error
+def getObjectSize(objectToBeMeasured):
+    try:
+        from pympler import asizeof
+        return asizeof.asizeof(objectToBeMeasured)
+    except:
+        return None
+
+
+

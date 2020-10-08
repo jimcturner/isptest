@@ -4907,6 +4907,11 @@ def main(argv):
                     peakMemUsage = Utils.getPeakMemoryUsage()
                     if peakMemUsage is not None:
                         Utils.Message.addMessage("Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b", logToDisk=False)  # in bytes
+                    try:
+                        objectSize = Utils.getObjectSize(ui)
+                        Utils.Message.addMessage("ui size " + str(Utils.bToMb(objectSize)), logToDisk=False)
+                    except Exception as e:
+                        Utils.Message.addMessage("ERR:ui size " + str(e), logToDisk=False)
 
 
                 # try:
