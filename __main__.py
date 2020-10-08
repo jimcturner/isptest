@@ -83,7 +83,6 @@ import gc # Garbage collector API
 # from pympler import muppy, classtracker
 # from pympler.classtracker_stats import HtmlStats
 import faulthandler
-import resource
 
 # import cgitb
 # cgitb.enable(format='text')
