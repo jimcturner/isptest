@@ -975,7 +975,8 @@ class RtpReceiveCommon(RtpCommon):
         if stats["stream_transmitterVersion"] > 0:
             transmitterDetails = \
                 "Transmitter version: v" + str(stats["stream_transmitterVersion"]) + \
-                ", Transmit bitrate: " + str(Utils.bToMb(stats["stream_transmitter_txRate_bps"])) + "bps" + "\r\n"
+                ", Transmit bitrate: " + str(Utils.bToMb(stats["stream_transmitter_txRate_bps"])) + "bps" + \
+                ", Return loss " + str("%0.2f" % stats["stream_transmitter_Return_Loss_percent"]) + "%" + "\r\n"
 
 
         labelWidth = 33
