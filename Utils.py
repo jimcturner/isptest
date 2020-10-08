@@ -1374,7 +1374,8 @@ def getObjectSize(objectToBeMeasured):
     try:
         from pympler import asizeof
         return asizeof.asizeof(objectToBeMeasured)
-    except:
+    except Exception as e:
+        Message.addMessage("ERR: Utils.getObjectSize() " + str(e))
         return None
 
 

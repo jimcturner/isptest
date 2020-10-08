@@ -10,6 +10,7 @@ dependencies=(
 	pathvalidate==2.3.0
 	scapy==2.4.3 
 	ipwhois==1.2.0
+	pympler==0.8
 	)
 
 # Temporary folder where pip will collect the dependencies. The name of this folder will determine the name of the file executable archive
@@ -38,13 +39,13 @@ cp *.py $targetSubFolder
 echo "Creating $targetSubFolder.pyz file from contents of $targetSubFolder" 
 python3 -m zipapp -p "/usr/bin/env python" $targetSubFolder
 
-echo "Delete $targetSubFolder subfolder (as no longer required) y/n?"
-read answer
-if [ "$answer" != "${answer#[Yy]}" ] ;then
-    rm -rf $targetSubFolder
-else
-    exit
-fi
+# echo "Delete $targetSubFolder subfolder (as no longer required) y/n?"
+# read answer
+# if [ "$answer" != "${answer#[Yy]}" ] ;then
+#    rm -rf $targetSubFolder
+# else
+#    exit
+# fi
 
  echo "Deleting $targetSubFolder subfolder (as no longer required)"
  rm -rf $targetSubFolder
