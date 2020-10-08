@@ -1347,5 +1347,25 @@ def pymplerprintRenderer(muppyObjects, limit=15, sort='size', order='descending'
         tableLines.append(line)
     return tableLines
 
-
+# Returns the peak (not current) memory usage of this process and all threads in bytes
+# or None on error. Currently only works on OSX/Linux
+def getPeakMemoryUsage():
+    try:
+        # Check operating system
+        os = getOperatingSystem()
+        peakMemUsage = 0
+        if os == "Darwin":
+            import resource
+            # OSX returns the peak memory usage in bytes
+            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        elif os=="Linux":
+            import resource
+            # Linux returns the OS in kb so convert to bytes first
+            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+        else:
+            # Doesn't currently work on Windows
+            return None
+    except Exception as e:
+        Message.addMessage("ERR: Utils.sampleMemoryUsage() " + str(e))
+        return None
 

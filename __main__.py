@@ -4880,33 +4880,33 @@ def main(argv):
                     Utils.Message.addMessage("ERR:streamsSnapshotAutoSave " + str(e))
 
                 # Debugging code -  wasn't terribly useful
-                # Returns the peak (not current) memory usage of this process and all threads in bytes
-                # or None on error.
-                # Currently nly works on OSX/Linux
-                def getPeakMemoryUsage():
-                    try:
-                        # Check operating system
-                        os = Utils.getOperatingSystem()
-                        peakMemUsage = 0
-                        if os == "Darwin":
-                            import resource
-                            # OSX returns the peak memory usage in bytes
-                            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-                        elif os=="Linux":
-                            import resource
-                            # Linux returns the OS in kb so convert to bytes first
-                            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
-                        else:
-                            # Doesn't currently work on Windows
-                            return None
-                    except Exception as e:
-                        Utils.Message.addMessage("ERR: sampleMemoryUsage() " + str(e))
-                        return None
+                # # Returns the peak (not current) memory usage of this process and all threads in bytes
+                # # or None on error. Currently only works on OSX/Linux
+                # def getPeakMemoryUsage():
+                #     try:
+                #         # Check operating system
+                #         os = Utils.getOperatingSystem()
+                #         peakMemUsage = 0
+                #         if os == "Darwin":
+                #             import resource
+                #             # OSX returns the peak memory usage in bytes
+                #             return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+                #         elif os=="Linux":
+                #             import resource
+                #             # Linux returns the OS in kb so convert to bytes first
+                #             return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+                #         else:
+                #             # Doesn't currently work on Windows
+                #             return None
+                #     except Exception as e:
+                #         Utils.Message.addMessage("ERR: sampleMemoryUsage() " + str(e))
+                #         return None
 
 
                 if loopCounter % 5 == 0:
-                    peakMemUsage = Utils.bToMb(getPeakMemoryUsage())
-                    Utils.Message.addMessage("Peak Usage: " + str(peakMemUsage) + "b", logToDisk=False)  # in bytes
+                    peakMemUsage = Utils.getPeakMemoryUsage()
+                    if peakMemUsage is not None:
+                        Utils.Message.addMessage("Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b", logToDisk=False)  # in bytes
 
 
                 # try:
