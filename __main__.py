@@ -4883,7 +4883,9 @@ def main(argv):
                 # Debugging code -  wasn't terribly useful
                 def sampleMemoryUsage():
                     peakMemUsage = Utils.bToMb(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
-                    Utils.Message.addMessage("Peak Usage: " + str(peakMemUsage) + "b", logToDisk=False)  # in bytes
+                    pageSize = resource.getpagesize()
+                    Utils.Message.addMessage("Peak Usage: " + str(peakMemUsage) + "b" +\
+                                             ", pageSize: " + str(pageSize), logToDisk=False)  # in bytes
 
                 if loopCounter % 5 == 0:
                     sampleMemoryUsage()
