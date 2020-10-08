@@ -83,6 +83,7 @@ import gc # Garbage collector API
 # from pympler import muppy, classtracker
 # from pympler.classtracker_stats import HtmlStats
 import faulthandler
+import psutil
 
 # import cgitb
 # cgitb.enable(format='text')
@@ -4860,6 +4861,9 @@ def main(argv):
         faulthandlerLogFile = open("isptest_faulthandler.txt", mode='w')
         faulthandler.enable(faulthandlerLogFile, all_threads=True)
 
+    # Get pid of this process used for memory usage measurements
+    processID = os.getpid()
+    process = psutil.Process(processID)
     # Endless loop
     while True:
         try:
@@ -4880,6 +4884,13 @@ def main(argv):
                     Utils.Message.addMessage("ERR:streamsSnapshotAutoSave " + str(e))
 
                 # Debugging code -  wasn't terribly useful
+                def sampleMemoryUsage():
+                    memUsage = Utils.bToMb(process.memory_info().rss)
+                    Utils.Message.addMessage("Usage: " + str(memUsage) + "b", logToDisk=False)  # in bytes
+
+                if loopCounter % 5 == 0:
+                    sampleMemoryUsage()
+
                 # try:
                 #     if loopCounter % 5 == 0 and enable_gc_debugging:
                 #         gcStats = gc.get_stats()
@@ -4907,8 +4918,8 @@ def main(argv):
 
 
 
-                except Exception as e:
-                    Utils.Message.addMessage("ERR:GarbageCollector " + str(e))
+                # except Exception as e:
+                #     Utils.Message.addMessage("ERR:GarbageCollector " + str(e))
 
 
 

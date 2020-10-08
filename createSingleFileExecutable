@@ -9,7 +9,8 @@ dependencies=(
 	pyperclip==1.8.0
 	pathvalidate==2.3.0
 	scapy==2.4.3 
-	ipwhois==1.2.0)
+	ipwhois==1.2.0
+	psutil==5.7.0)
 
 # Temporary folder where pip will collect the dependencies. The name of this folder will determine the name of the file executable archive
 targetSubFolder=isptest
