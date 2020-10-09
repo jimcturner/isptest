@@ -5441,7 +5441,7 @@ class ResultsReceiver(object):
 
         rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
         lastReceivedFragmentIndex = 0  # Tracks the most recently received fragment index (ie. which fragment within the set
-        verboseLogging = False
+        verboseLogging = True
         lastKnownUniqueID = 0 # Tracks the ID field unique to each set of fragments
         lastKnownExpectedNoOfFragments = 0 # Tracks the no of expected fragments that form the current message
         while self.receiverActiveFlag:
@@ -5485,7 +5485,8 @@ class ResultsReceiver(object):
                             if lastReceivedFragmentIndex < (lastKnownExpectedNoOfFragments - 1):
                                 if verboseLogging:
                                     Utils.Message.addMessage(
-                                        "ERR: __resultsReceiverThread.Incomplete set of fragments. Resetting to zero ")
+                                        "INFO: __resultsReceiverThread.Incomplete set of fragments. Resetting to zero ",
+                                            logToDisk=False)
                                 self.receiveResultsFragmentErrorCounter += 1
 
 
@@ -5513,19 +5514,19 @@ class ResultsReceiver(object):
                                 # More fragments than expected
                                 if verboseLogging:
                                     Utils.Message.addMessage(
-                                        "ERR: __resultsReceiverThread. More fragments received than expected " +\
-                                        str(fragment[0]) + "/" + str(fragment[1]))
+                                        "INFO: __resultsReceiverThread. More fragments received than expected " +\
+                                        str(fragment[0]) + "/" + str(fragment[1]), logToDisk=False)
                             elif fragment[0] != (lastReceivedFragmentIndex + 1):
                                 # Out of sequence fragment received
                                 if verboseLogging:
                                     Utils.Message.addMessage(
-                                        "ERR: __resultsReceiverThread. Out of sequence fragment. Expected " + \
-                                        str(lastReceivedFragmentIndex + 1) + ", got " + str(fragment[0]))
+                                        "INFO: __resultsReceiverThread. Out of sequence fragment. Expected " + \
+                                        str(lastReceivedFragmentIndex + 1) + ", got " + str(fragment[0]), logToDisk=False)
                             else:
                                 # Catch anything else
                                 Utils.Message.addMessage(
-                                    "ERR: __resultsReceiverThread. Unexpected fragment " + \
-                                    str(fragment[0]) + "/" + str(fragment[1]))
+                                    "INFO: __resultsReceiverThread. Unexpected fragment " + \
+                                    str(fragment[0]) + "/" + str(fragment[1]), logToDisk=False)
 
                         # Now check to see if this is the *final* fragment we were expecting (note fragment[0] is a zero indexed value
                         # i.e. have we received the entire message (all the fragments, and expected length)?
