@@ -79,13 +79,7 @@ import textwrap
 import pickle
 
 # debugging libraries
-import gc # Garbage collector API
-# from pympler import muppy, classtracker
-# from pympler.classtracker_stats import HtmlStats
 import faulthandler
-
-# import cgitb
-# cgitb.enable(format='text')
 
 # Non standard external libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
@@ -108,8 +102,6 @@ from RtpStreams import RtpReceiveCommon, RtpReceiveStream, RtpGenerator, RtpStre
     Glitch, RtpData, IPRoutingTracerouteChange, StreamResumed, StreamLost, IPRoutingTTLChange, StreamStarted
 import Utils
 from Custom_prompt_toolkit_mods import multi_input_dialog
-from Traceroute import *
-
 
 ####################################################################################
 # Utility Classes
@@ -4192,21 +4184,6 @@ def main(argv):
     #     print("export failure " + str(saveStatus))
     # exit()
 
-    enable_gc_debugging = False
-    if enable_gc_debugging:
-        # Set up Garbage Collector stats collection
-        flags = (gc.DEBUG_COLLECTABLE |
-                 gc.DEBUG_UNCOLLECTABLE
-                 )
-        gc.set_debug(flags)
-
-    #  optional debug code using pympler. creates a web page snapshot every 10 secs of the usage of the registered objects.
-    enable_pympler_classtracker_debugging = False
-    # if enable_pympler_classtracker_debugging:
-    #     tr = classtracker.ClassTracker()
-    #     tr.track_class(UI)
-    #     tr.track_class(RtpGenerator)
-
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
 
@@ -4850,17 +4827,17 @@ def main(argv):
                     Utils.Message.addMessage("ERR:main() receiversAndSendersList.append() " + str(e))
 
 
-    enable_pympler_debugging = False
-    enable_faulthandler_debugging = False
 
+    enable_faulthandler_debugging = True
 
-
+    faulthandlerLogFile = None
     if enable_faulthandler_debugging:
         # Create a file for the faulthander to dump stacktraces to
-        faulthandlerLogFile = open("isptest_faulthandler.txt", mode='w')
-        faulthandler.enable(faulthandlerLogFile, all_threads=True)
+        faulthandlerLogFile = open("isptest_faulthandler_stacktrace.txt", mode='w')
 
-
+    # Store the previous memory usage
+    prevPeakMemUsage = 0
+    peakMemUsage = None
 
     # Endless loop
     while True:
@@ -4881,44 +4858,45 @@ def main(argv):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:streamsSnapshotAutoSave " + str(e))
 
-                # Debugging code -  wasn't terribly useful
-                # # Returns the peak (not current) memory usage of this process and all threads in bytes
-                # # or None on error. Currently only works on OSX/Linux
-                # def getPeakMemoryUsage():
-                #     try:
-                #         # Check operating system
-                #         os = Utils.getOperatingSystem()
-                #         peakMemUsage = 0
-                #         if os == "Darwin":
-                #             import resource
-                #             # OSX returns the peak memory usage in bytes
-                #             return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-                #         elif os=="Linux":
-                #             import resource
-                #             # Linux returns the OS in kb so convert to bytes first
-                #             return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
-                #         else:
-                #             # Doesn't currently work on Windows
-                #             return None
-                #     except Exception as e:
-                #         Utils.Message.addMessage("ERR: sampleMemoryUsage() " + str(e))
-                #         return None
+                # Debugging code -  This samples the memory usage of the program every 2 seconds
+                # If memory usage jumps significantly (by 10%) since the last sample, it will trigger
+                # the snapshot of memory usage of all objects listed in objectsToProfile[]
+                # Also, the current stack trace will be dumped to a file isptest_faulthandler_stacktrace.txt
 
+                # Additionally, every 60 seconds, regardless of the current memory usage, the
+                # snapshot of object memory usage will be triggered
 
+                # For convenience, objectsToProfile[] is actually a list of dictionaries that contain the object to
+                # be measured and also a 'friendly name'
 
-                if loopCounter % 5 == 0:
-                    # peakMemUsage = Utils.getPeakMemoryUsage()
-                    # if peakMemUsage is not None:
-                    #     Utils.Message.addMessage("Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b", logToDisk=False)  # in bytes
-                    # try:
-                    #     objectSize = Utils.getObjectSize(ui)
-                    #     Utils.Message.addMessage("ui size " + str(Utils.bToMb(objectSize)), logToDisk=False)
-                    # except Exception as e:
-                    #     Utils.Message.addMessage("ERR:ui size " + str(e), logToDisk=False)
-
+                # Clear the flag
+                measureObjectMemoryUsageFlag = False
+                # Every 2 seconds, measure memory usage
+                if loopCounter % 2 == 0:
                     try:
-                        # Create list of objects to track memory usage
-                        objectsToProfile = [ui, whoIsResolver]  # These never change
+                        peakMemUsage = Utils.getPeakMemoryUsage()
+                        if peakMemUsage is not None:
+                            # Test to see if memory use has increased significantly (by 10%) since the last sample
+                            if peakMemUsage > prevPeakMemUsage * 1.1:
+                                # If so, set the flag to trigger meaurement of the individual objects memory use
+                                measureObjectMemoryUsageFlag = True
+                                # Dump a stack trace to disk
+                                if enable_faulthandler_debugging and faulthandlerLogFile is not None:
+                                    faulthandler.dump_traceback(file=faulthandlerLogFile, all_threads=True)
+                                # List all current running threads
+                                Utils.Message.addMessage("DBUG:Current threads " + Utils.listCurrentThreads())
+                            # Snapshot peak memory usage
+                            prevPeakMemUsage = peakMemUsage
+                    except Exception as e:
+                        Utils.Message.addMessage("ERR: main.getPeakMemoryUsage() " + str(e))
+
+                # Every 60 seconds, or if the measureObjectMemoryUsageFlag is set, record the object memory usage
+                if loopCounter % 60 == 0 or measureObjectMemoryUsageFlag:
+                    try:
+                        # Create list of objects to track memory usage and a friendly name
+                        # Each object is contained within its own dict which also contains a friendly name.
+                        # this will help genration of a report
+                        objectsToProfile = [{"obj":ui, "name":"ui"}, {"obj":whoIsResolver, "name":"whoIsResolver"}]  # These never change
                         # Create a string to store the object sizes
                         summaryString = ""
 
@@ -4930,53 +4908,31 @@ def main(argv):
                             if len(copyOfDict) > 0:
                                 # Append the current list of RtpGenerator objects to to objectsToProfile list
                                 for item in copyOfDict:  # iterate over keys
-                                    objectsToProfile.append(copyOfDict[item])
+                                    objectsToProfile.append({"obj":copyOfDict[item], "name":item})
 
                         if MODE == "RECEIVE":
-                            objectsToProfile.append(udpMessageSender)
-                            objectsToProfile.append(rtpPacketReceiver)
+                            try:
+                                objectsToProfile.append({"obj":udpMessageSender, "name":"udpMessageSender"})
+                                objectsToProfile.append({"obj":rtpPacketReceiver, "name":"rtpPacketReceiver"})
+                            except Exception as e:
+                                Utils.Message.addMessage("ERR: MODE==RECEIVE, objectsToProfile.append() " + str(e))
 
 
                         # Iterate over all the objects to be tracked, and report on the size
                         for obj in objectsToProfile:
-                            objSize = Utils.getObjectSize(obj)
+                            objSize = Utils.getObjectSize(obj["obj"])
                             if objSize is not None and objSize > 0:
-                                summaryString += str(type(obj)) + ":" + str(Utils.bToMb(objSize)) + ", "
-                        Utils.Message.addMessage("object profiler: " + summaryString, logToDisk=True)
+                                summaryString += "[name: " + str(obj["name"]) + ", type" + \
+                                                     str(type(obj["obj"])) + ":" + str(Utils.bToMb(objSize)) + "], "
+                        # Write out peak mem use and object mem use summary
+                        if peakMemUsage is not None:
+                            Utils.Message.addMessage("DBUG:Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b")  # in bytes
+                        Utils.Message.addMessage("DBUG:object profiler: " + summaryString)
+                        # List all current running threads
+                        Utils.Message.addMessage("DBUG:Current threads " + Utils.listCurrentThreads())
 
                     except Exception as e:
-                        Utils.Message.addMessage("ERR:object profiler " + str(e), logToDisk=True)
-
-                # try:
-                #     if loopCounter % 5 == 0 and enable_gc_debugging:
-                #         gcStats = gc.get_stats()
-                #         Utils.Message.addMessage("gcStats: " + str(gcStats))
-                #
-                #     # This lists the number and size of the most common objects
-                #     if loopCounter % 30  == 0 and enable_pympler_debugging:
-                #         all_objects = muppy.get_objects()
-                #         # onlyLists = muppy.filter(all_objects, Type=list)
-                #         totalSize = muppy.get_size(all_objects)
-                #
-                #         table = Utils.pymplerprintRenderer(all_objects, limit=15)
-                #
-                #         report = "Total size: " + str(Utils.bToMb(totalSize)) + "b at " + \
-                #             datetime.datetime.now().strftime("%d/%m %H:%M:%S") + \
-                #                  ", runtime " + str(Utils.dtstrft(datetime.timedelta(seconds=loopCounter))) + "\r\n"
-                #         for row in table:
-                #             report += row + "\r\n"
-                #         Utils.writeReportToDisk(report, fileName="objectslist.txt", notificationMessage=False)
-                #
-                #     # This generates an html file 'profile.html' tracking the memory used by specified objects
-                #     if loopCounter % 10 and enable_pympler_classtracker_debugging:
-                #         tr.create_snapshot()
-                #         HtmlStats(tracker=tr).create_html('profile.html')
-
-
-
-                # except Exception as e:
-                #     Utils.Message.addMessage("ERR:GarbageCollector " + str(e))
-
+                        Utils.Message.addMessage("ERR:object profiler " + str(e))
 
 
         # This code will execute if the RequestShutdown Exception is raised (SIGINT, Ctrl-C)
