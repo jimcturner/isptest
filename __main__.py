@@ -2433,35 +2433,47 @@ class UI(object):
                 pass
 
         if self.selectedStream is not None:
-            # Get copy of latest stats
-            stats = self.selectedStream.getRtpStreamStats()
             # Determine what type of stream this is, and display stats accordingly
-            if type(self.selectedStream) == RtpGenerator:
+            if type(self.selectedStream) == RtpGenerator or type(self.selectedStream) == RtpStreamResults:
+                # We must be in transmit mode, either on the Tx Streams pane, or on one of the results pages
                 try:
-                    # This will only work if the stream type is an RtpGenerator object
-                    debugInfo.append(["\nTransmitter ", ""])
-                    debugInfo.append(["sleep time ", str("%0.20f" %stats['Sleep Time mean']) + "S"])
-                    debugInfo.append(["Tx period ", str("%0.10f" %stats['Tx period']) + "S"])
-                    debugInfo.append(["Tx'd packets ", str(self.selectedStream.txCounter_packets)])
-                    debugInfo.append(["Tx err ", str(self.selectedStream.txErrorCounter)])
-                    debugInfo.append(["Rx dec err ",    # Results/Events Pickles that couldn't be unpickled
-                                      str(self.selectedStream.rtpStreamResultsReceiver.receiveDecodeErrorCounter)])
-                    debugInfo.append(["Rx frag err ",  # Results/Events fragments that were missing
-                                      str(self.selectedStream.rtpStreamResultsReceiver.receiveResultsFragmentErrorCounter)])
-                    debugInfo.append(["Ret loss % ",  # An estimate of return packet loss from receiver to transmitter
-                                      str("%0.2f" % self.selectedStream.rtpStreamResultsReceiver.returnPacketLoss_pc)])
-                    debugInfo.append(["Rx actual ",
-                                      str(self.selectedStream.rtpStreamResultsReceiver.receiveResultsActualReceivedPacketsCounter)])
-                    debugInfo.append(["Rx exptd ",
-                                      str(
-                                          self.selectedStream.rtpStreamResultsReceiver.receiveResultsExpectedPacketsCounter)])
+                    selectedStream = None # Will store a reference to the selected stream
+                    if type(self.selectedStream) == RtpGenerator:
+                        selectedStream = self.selectedStream
+                    elif type(self.selectedStream) == RtpStreamResults:
+                        # If we are on a Results page, we need to get a handle on the RtpGenerator associated
+                        # with this RtpStreamResults object in order to get access to the RtpGenerator vars
+                        selectedStream = self.rtpTxStreamsDict[self.selectedStreamID]
 
+                    if selectedStream is not None:
+                        # This will only work if selectedStream stream type is an RtpGenerator object
+                        # Get copy of latest stats
+                        stats = selectedStream.getRtpStreamStats()
 
-                    debugInfo.append(["traceroute\n function ", str(self.selectedStream.tracerouteFunctionInUse)])
+                        debugInfo.append(["\nTransmitter ", ""])
+                        debugInfo.append(["sleep time ", str("%0.20f" %stats['Sleep Time mean']) + "S"])
+                        debugInfo.append(["Tx period ", str("%0.10f" %stats['Tx period']) + "S"])
+                        debugInfo.append(["Tx'd packets ", str(selectedStream.txCounter_packets)])
+                        debugInfo.append(["Tx err ", str(selectedStream.txErrorCounter)])
+                        debugInfo.append(["Rx dec err ",    # Results/Events Pickles that couldn't be unpickled
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveDecodeErrorCounter)])
+                        debugInfo.append(["Rx frag err ",  # Results/Events fragments that were missing
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveResultsFragmentErrorCounter)])
+                        debugInfo.append(["Ret loss % ",  # An estimate of return packet loss from receiver to transmitter
+                                          str("%0.2f" % selectedStream.rtpStreamResultsReceiver.returnPacketLoss_pc)])
+                        debugInfo.append(["Rx actual ",
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveResultsActualReceivedPacketsCounter)])
+                        debugInfo.append(["Rx exptd ",
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveResultsExpectedPacketsCounter)])
+                        debugInfo.append(["traceroute\n function ", str(selectedStream.tracerouteFunctionInUse)])
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
+                    Utils.Message.addMessage("ERR:UI.__renderHelpTable() add RtpGenerator debug information " + str(e))
+
             if type(self.selectedStream) == RtpReceiveStream:
                 try:
+                    # Get copy of latest stats
+                    stats = self.selectedStream.getRtpStreamStats()
+
                     # This will only work if the selected stream type is an RtpreceiveStream object
                     # Query the RtpReceiveStream receive Queue. If this no > 1 then it suggests that
                     # the receiver is struggling to empty the queue fast enough
