@@ -68,6 +68,7 @@ class Registry(object):
     # then an Event will be generated
     rtpReceiveStreamJitterExcessiveAlarmThreshold = 2
     rtpReceiveStreamGlitchThreshold = 4 # The default no of packets that have to be lost before a Glitch Event is generated
+    rtpReceiveStreamCompressResultsBeforeSending = True
 
     ### RtpPacketReciever
     # buffer size is 65535 bytes. This is the maximum possible size for UDP We need to set it

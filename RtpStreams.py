@@ -23,6 +23,7 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import pickle
 from collections import deque   # Used for circular buffers
+import bz2
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 # Additonal libraries required (of my own making)
@@ -1739,6 +1740,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                 msg = {"stats": stats, "eventList": eventsToBeSent}
                 # pickledMessage = pickle.dumps(msg, protocol=2)
                 pickledMessage = pickle.dumps(msg)
+                # If compression is enabled, compress the message string before sending
+                if Registry.rtpReceiveStreamCompressResultsBeforeSending:
+                    pickledMessage = bz2.compress(pickledMessage)
                 # add the pickled message to the txMessageQueue
                 resultsTxQueue.put([pickledMessage, destAddr, destPort])
 
@@ -5546,6 +5550,10 @@ class ResultsReceiver(object):
                                     # We're expecting a dictionary containing a stats dictionary{} and an eventsList{} containing the
                                     # last 5 events
                                     try:
+                                        # firstly check to see whether the pickle incomig data was compressed before sending
+                                        if Registry.rtpReceiveStreamCompressResultsBeforeSending:
+                                            # uncompress the data
+                                            rxMssage = bz2.decompress(rxMssage)
                                         # Attempt to reconstruct the original message sent by ResultsTransmitter
                                         # unPickledMessage = pickle.loads(rxMssage, fix_imports=True)
                                         unPickledMessage = pickle.loads(rxMssage)
