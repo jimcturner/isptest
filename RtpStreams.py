@@ -23,12 +23,19 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import pickle
 from collections import deque   # Used for circular buffers
-import bz2
+
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 # Additonal libraries required (of my own making)
 import Utils
 from Registry import Registry
+
+try:
+    # Try to import the bz2 compresion library. This seems to be missing on some Linuxes
+    import bz2
+except Exception as e:
+    Registry.rtpReceiveStreamCompressResultsBeforeSending = False
+    print("WARNING: Can't import bz2 compression library " + str(e))
 
 # # Required for Windows traceroute implemenation - imports moved into traceroute routine itself
 # from scapy.layers.inet import IP, UDP
