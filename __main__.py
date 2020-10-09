@@ -2260,7 +2260,7 @@ class UI(object):
             # Set flag to true
             self.showErrorsFlag = True
             # Force a change of Message verbosity level to show errors
-            Utils.Message.setVerbosity(1)
+            Utils.Message.setVerbosity(3)
             Utils.Message.addMessage("[e] Error messages on")
         else:
             # Set flag to false
