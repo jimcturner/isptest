@@ -79,13 +79,7 @@ import textwrap
 import pickle
 
 # debugging libraries
-import gc # Garbage collector API
-# from pympler import muppy, classtracker
-# from pympler.classtracker_stats import HtmlStats
 import faulthandler
-
-# import cgitb
-# cgitb.enable(format='text')
 
 # Non standard external libraries (need importing with pip)
 from terminaltables import SingleTable  # Used for pretty tables in displayThread
@@ -108,8 +102,6 @@ from RtpStreams import RtpReceiveCommon, RtpReceiveStream, RtpGenerator, RtpStre
     Glitch, RtpData, IPRoutingTracerouteChange, StreamResumed, StreamLost, IPRoutingTTLChange, StreamStarted
 import Utils
 from Custom_prompt_toolkit_mods import multi_input_dialog
-from Traceroute import *
-
 
 ####################################################################################
 # Utility Classes
@@ -619,8 +611,8 @@ class UI(object):
                                                 ["glitch_packets_lost_total_count", "Total packets lost"],
                                                 ["glitch_counter_total_glitches", "Total no of glitches"],
                                                 ["glitch_most_recent_timestamp", "Most recent glitch"],
-                                                ["glitch_mean_time_between_glitches", "Glitch period (how often)"],
-                                                ["glitch_packets_lost_per_glitch_max", "Worst glitch (packets lost)"],
+                                                ["glitch_mean_time_between_glitches", "Glitch period(how often)"],
+                                                ["glitch_packets_lost_per_glitch_max", "Worst loss (packets)"],
                                                 ["glitch_max_glitch_duration", "Worst glitch (duration)"],
                                                 ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss"],
                                                 ["glitch_mean_glitch_duration", "Mean glitch duration"]
@@ -803,7 +795,8 @@ class UI(object):
                           [["#", 0],  # Used as an index[]
                            ["Name", "stream_friendly_name"],
                            ["Target\nTx Bps", 'stream_transmitter_txRate_bps'],
-                           [" Time\nremain", 'stream_transmitter_TimeToLive_sec']
+                           [" Time\nremain", 'stream_transmitter_TimeToLive_sec'],
+                           ["Return\n loss %", "stream_transmitter_Return_Loss_percent"]
                            ], self.streamResultsDataSet])
         # self.views.append(["Misc",
         #               [["#", 0],  # Used as an index[]
@@ -2267,7 +2260,7 @@ class UI(object):
             # Set flag to true
             self.showErrorsFlag = True
             # Force a change of Message verbosity level to show errors
-            Utils.Message.setVerbosity(1)
+            Utils.Message.setVerbosity(3)
             Utils.Message.addMessage("[e] Error messages on")
         else:
             # Set flag to false
@@ -2359,7 +2352,7 @@ class UI(object):
                         "\n" + "  and event logging".center(maxWidth, " ") + \
                         "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth, " ") + \
                         "\n See https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
-                        "\n\n\nlast merge: compIgnore 2/10/20 16:21\n" + \
+                        "\n\n\nlast merge: compressPickles 9/10/20 17:05\n\n" + \
                         "Press the [any] key to continue".center(maxWidth, " ")
 
         # Render the message in a pop-up box
@@ -2440,35 +2433,47 @@ class UI(object):
                 pass
 
         if self.selectedStream is not None:
-            # Get copy of latest stats
-            stats = self.selectedStream.getRtpStreamStats()
             # Determine what type of stream this is, and display stats accordingly
-            if type(self.selectedStream) == RtpGenerator:
+            if type(self.selectedStream) == RtpGenerator or type(self.selectedStream) == RtpStreamResults:
+                # We must be in transmit mode, either on the Tx Streams pane, or on one of the results pages
                 try:
-                    # This will only work if the stream type is an RtpGenerator object
-                    debugInfo.append(["\nTransmitter ", ""])
-                    debugInfo.append(["sleep time ", str("%0.20f" %stats['Sleep Time mean']) + "S"])
-                    debugInfo.append(["Tx period ", str("%0.10f" %stats['Tx period']) + "S"])
-                    debugInfo.append(["Tx'd packets ", str(self.selectedStream.txCounter_packets)])
-                    debugInfo.append(["Tx err ", str(self.selectedStream.txErrorCounter)])
-                    debugInfo.append(["Rx dec err ",    # Results/Events Pickles that couldn't be unpickled
-                                      str(self.selectedStream.rtpStreamResultsReceiver.receiveDecodeErrorCounter)])
-                    debugInfo.append(["Rx frag err ",  # Results/Events fragments that were missing
-                                      str(self.selectedStream.rtpStreamResultsReceiver.receiveResultsFragmentErrorCounter)])
-                    debugInfo.append(["Ret loss % ",  # An estimate of return packet loss from receiver to transmitter
-                                      str("%0.2f" % self.selectedStream.rtpStreamResultsReceiver.returnPacketLoss_pc)])
-                    debugInfo.append(["Rx actual ",
-                                      str(self.selectedStream.rtpStreamResultsReceiver.receiveResultsActualReceivedPacketsCounter)])
-                    debugInfo.append(["Rx exptd ",
-                                      str(
-                                          self.selectedStream.rtpStreamResultsReceiver.receiveResultsExpectedPacketsCounter)])
+                    selectedStream = None # Will store a reference to the selected stream
+                    if type(self.selectedStream) == RtpGenerator:
+                        selectedStream = self.selectedStream
+                    elif type(self.selectedStream) == RtpStreamResults:
+                        # If we are on a Results page, we need to get a handle on the RtpGenerator associated
+                        # with this RtpStreamResults object in order to get access to the RtpGenerator vars
+                        selectedStream = self.rtpTxStreamsDict[self.selectedStreamID]
 
+                    if selectedStream is not None:
+                        # This will only work if selectedStream stream type is an RtpGenerator object
+                        # Get copy of latest stats
+                        stats = selectedStream.getRtpStreamStats()
 
-                    debugInfo.append(["traceroute\n function ", str(self.selectedStream.tracerouteFunctionInUse)])
+                        debugInfo.append(["\nTransmitter ", ""])
+                        debugInfo.append(["sleep time ", str("%0.20f" %stats['Sleep Time mean']) + "S"])
+                        debugInfo.append(["Tx period ", str("%0.10f" %stats['Tx period']) + "S"])
+                        debugInfo.append(["Tx'd packets ", str(selectedStream.txCounter_packets)])
+                        debugInfo.append(["Tx err ", str(selectedStream.txErrorCounter)])
+                        debugInfo.append(["Rx dec err ",    # Results/Events Pickles that couldn't be unpickled
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveDecodeErrorCounter)])
+                        debugInfo.append(["Rx frag err ",  # Results/Events fragments that were missing
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveResultsFragmentErrorCounter)])
+                        debugInfo.append(["Ret loss % ",  # An estimate of return packet loss from receiver to transmitter
+                                          str("%0.2f" % selectedStream.rtpStreamResultsReceiver.returnPacketLoss_pc)])
+                        debugInfo.append(["Rx actual ",
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveResultsActualReceivedPacketsCounter)])
+                        debugInfo.append(["Rx exptd ",
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveResultsExpectedPacketsCounter)])
+                        debugInfo.append(["traceroute\n function ", str(selectedStream.tracerouteFunctionInUse)])
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
+                    Utils.Message.addMessage("ERR:UI.__renderHelpTable() add RtpGenerator debug information " + str(e))
+
             if type(self.selectedStream) == RtpReceiveStream:
                 try:
+                    # Get copy of latest stats
+                    stats = self.selectedStream.getRtpStreamStats()
+
                     # This will only work if the selected stream type is an RtpreceiveStream object
                     # Query the RtpReceiveStream receive Queue. If this no > 1 then it suggests that
                     # the receiver is struggling to empty the queue fast enough
@@ -2695,9 +2700,26 @@ class UI(object):
                 for index in range(len(sortedStreamsList)):
                     # 'humanise' the value depending based on the keyTosortBy
                     value = RtpReceiveCommon.humanise(keyTosortBy, sortedStreamsList[index]["value"], appendUnit=True)
-                    tableContents.append([index + 1, str(sortedStreamsList[index]["friendlyName"]).strip() + "  ", value])
+                    # If the relatedEvent key has been populated, we can attempt to retrieve that event from the eventsList
+                    # to add some more detail to the comparison table
+                    eventSummary = ""
+                    eventCreated = ""
+                    if sortedStreamsList[index]["relatedEvent"] is not None:
+                        try:
+                            # Get an eventSummary
+                            relatedEvent = sortedStreamsList[index]["relatedEvent"].getSummary(includeStreamSyncSourceID=False,
+                                                                   includeEventNo=False,
+                                                                    includeType=False,
+                                                                    includeFriendlyName=False)
+
+                            eventCreated = relatedEvent["timeCreated"].strftime("%d/%m %H:%M:%S")
+                            eventSummary = relatedEvent["summary"]      # Summary in the form of a text string
+                        except Exception as e:
+                            Utils.Message.addMessage("ERR: ERR:UI.__renderCompareStreamsTable - lookup event " + str(e))
+                    tableContents.append([index + 1, str(sortedStreamsList[index]["friendlyName"]).strip() + "  ", str(value).strip(),
+                                          eventCreated, eventSummary])
             else:
-                tableContents.append(["", "", "No data to display"])
+                tableContents.append(["", "", "No data to display", "", ""])
 
             # Now actually display the paged table list
             title = "Comparison of streams (" + displayfriendlyKey
@@ -2707,17 +2729,15 @@ class UI(object):
             else:
                 title += ", ascending)"
 
-            footer = ["", "", "[<][>]page, [^][v] select stream, [p]exit, [s]ave\n" + \
-                      "[c]opy to clipboard, [m]etric to compare, [o]rder"]
-
-            self.__renderPagedList(self.tablePageNo, title, ["", "Name ", str(displayfriendlyKey).ljust(50)], tableContents,
+            footer = ["", " [<][>]page\n [p]exit", " [^][v] select stream\n [c]opy to clipboard", "", "[s]ave, [o]rder\n [m]etric to compare"]
+            # .ljust(50)
+            self.__renderPagedList(self.tablePageNo, title, ["", "Name ", str(displayfriendlyKey), "", ""], tableContents,
                                    footerRow=footer,
                                    pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
         except Exception as e:
             Utils.Message.addMessage("ERR:UI.__renderCompareStreamsTable() " + str(e))
             # Deactivate this popup
             self.displayPopup = None
-
 
     # Tests the key pressed, and calls the appropriate method
     def __parseKeyPressed(self):
@@ -3489,10 +3509,16 @@ class RtpPacketReceiver(object):
         RTP_HEADER_SIZE = 12
         UDP_HEADER_SIZE = 8
         IP_HEADER_SIZE = 20
+        # Determine whether we're expecting the received Rtp packets to have been padded out with an offset
+        # between the UDP and RTP header (in order to disguise the packets from Rtp detection)
+        if Registry.rtpHeaderOffsetString is not None:
+            RTP_HEADER_OFFSET_STRING_SIZE = len(Registry.rtpHeaderOffsetString)
+        else:
+            RTP_HEADER_OFFSET_STRING_SIZE = 0
         try:
             # Check to see that the supplied bytearray is large enough to accommodate an RTP header
             rawBytesReceived = len(_rawData)
-            if rawBytesReceived >= (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
+            if rawBytesReceived >= (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_OFFSET_STRING_SIZE + RTP_HEADER_SIZE):
                 # Split off the various IP, UDP and RTP headers
                 ipHeader = _rawData[:IP_HEADER_SIZE]
                 udpHeader = _rawData[IP_HEADER_SIZE:(IP_HEADER_SIZE + UDP_HEADER_SIZE)]
@@ -3503,11 +3529,11 @@ class RtpPacketReceiver(object):
                     # Extract the src and dest port from the UDP header
                     srcUDPPort, destUDPPort = struct.unpack("!HH", udpHeader[0:4])
                     # Extract the rtp header
-                    rtpHeader = _rawData[(IP_HEADER_SIZE + UDP_HEADER_SIZE): \
-                                         (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE)]
+                    rtpHeader = _rawData[(IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_OFFSET_STRING_SIZE): \
+                                         (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_OFFSET_STRING_SIZE + RTP_HEADER_SIZE)]
                     # If there's any payload data, strip that off too.
-                    if rawBytesReceived > (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE):
-                        payload = _rawData[IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_SIZE:]
+                    if rawBytesReceived > (IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_OFFSET_STRING_SIZE + RTP_HEADER_SIZE):
+                        payload = _rawData[IP_HEADER_SIZE + UDP_HEADER_SIZE + RTP_HEADER_OFFSET_STRING_SIZE + RTP_HEADER_SIZE:]
                     else:
                         payload = None
                     return rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort
@@ -3794,6 +3820,7 @@ class RtpPacketReceiver(object):
                             # larger we can accept would kill the socket
                             rawData, rawAddr = rawSocket.recvfrom(Registry.rtpPacketRecieverRecvFromBufferSize)
                             rawTimestamp = datetime.datetime.now()
+
                         else:
                             # If no data to be read, clear the rawData and rawAddr lists
                             rawData = []
@@ -3865,6 +3892,12 @@ class RtpPacketReceiver(object):
                                 # increment the counter
                                 self.udpPacketsReceivedByRxThreadCount += 1
                                 # If the data has been rx'd via the udp socket, only the rtp header + payload will be present
+                                # However, if Registry.rtpHeaderOffsetString has been set, the rtp header will be
+                                # prepended with a string which we need to strip first
+                                if Registry.rtpHeaderOffsetString is not None:
+                                    # Slice udpSocketData[] to strip away the rtpHeaderOffsetString
+                                    udpSocketData = udpSocketData[len(Registry.rtpHeaderOffsetString):]
+
                                 rtpHeader, payload = self.parseUDPPacket(udpSocketData)
                                 if rtpHeader is not None:
                                     # Now parse the rtp header
@@ -4163,21 +4196,6 @@ def main(argv):
     #     print("export failure " + str(saveStatus))
     # exit()
 
-    enable_gc_debugging = False
-    if enable_gc_debugging:
-        # Set up Garbage Collector stats collection
-        flags = (gc.DEBUG_COLLECTABLE |
-                 gc.DEBUG_UNCOLLECTABLE
-                 )
-        gc.set_debug(flags)
-
-    #  optional debug code using pympler. creates a web page snapshot every 10 secs of the usage of the registered objects.
-    enable_pympler_classtracker_debugging = False
-    # if enable_pympler_classtracker_debugging:
-    #     tr = classtracker.ClassTracker()
-    #     tr.track_class(UI)
-    #     tr.track_class(RtpGenerator)
-
     # String to specify which operation mode we're in (loopback, tx, rx)
     MODE = ""
 
@@ -4238,6 +4256,8 @@ def main(argv):
         # -u sync source ID (for transmit or loopback mode)
         # -v:[int] verbosity
         # -z Enable special features (like simulate packel loss, jitter etc)
+        # -o obscure (disguise) the Rtp packets by inserting an offset between the UDP and RTP headers. NOTE: Must be
+        # set on both the transmitter and receiver
 
 
 
@@ -4248,7 +4268,7 @@ def main(argv):
             print ("No options supplied. Use -h for help")
             exit()
 
-        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:v:zn:")
+        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:v:zn:o")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
@@ -4278,8 +4298,15 @@ def main(argv):
                 print ("\r")
                 print ("-v [val] message verbosity level 0-3\r")
                 print ("\r")
+                print("-o obscure (disguise) the Rtp packets by inserting an offset between the\r")
+                print("UDP and RTP headers. NOTE: Must be set on both the transmitter and receiver\r")
+                print("\r")
                 print ("-z Enable special features (like simulate packet loss, jitter etc)\r")
                 exit()
+
+            elif opt == '-o':
+                Registry.rtpHeaderOffsetString = "dfhsdfkjhsbkfsdfegrsb".encode('utf-8')
+                print("RTP 'Disguise' mode enabled")
 
             elif opt == '-x':
                 MODE = "LOOPBACK"
@@ -4757,8 +4784,6 @@ def main(argv):
                                                             historicEventsList=eventsList
                                                             )
 
-                            Utils.Message.addMessage("Historic stream " + str(streamID) + " recreated")
-
                         except Exception as e:
                             Utils.Message.addMessage(
                                 ("ERR:Recreate RtpReceiveStream from file: create RtpReceiveStream " + \
@@ -4814,15 +4839,17 @@ def main(argv):
                     Utils.Message.addMessage("ERR:main() receiversAndSendersList.append() " + str(e))
 
 
-    enable_pympler_debugging = False
-    enable_faulthandler_debugging = False
 
+    enable_faulthandler_debugging = True
 
-
+    faulthandlerLogFile = None
     if enable_faulthandler_debugging:
         # Create a file for the faulthander to dump stacktraces to
-        faulthandlerLogFile = open("isptest_faulthandler.txt", mode='w')
-        faulthandler.enable(faulthandlerLogFile, all_threads=True)
+        faulthandlerLogFile = open("isptest_faulthandler_stacktrace.txt", mode='w')
+
+    # Store the previous memory usage
+    prevPeakMemUsage = 0
+    peakMemUsage = None
 
     # Endless loop
     while True:
@@ -4843,37 +4870,81 @@ def main(argv):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:streamsSnapshotAutoSave " + str(e))
 
-                # Debugging code -  wasn't terribly useful
-                # try:
-                #     if loopCounter % 5 == 0 and enable_gc_debugging:
-                #         gcStats = gc.get_stats()
-                #         Utils.Message.addMessage("gcStats: " + str(gcStats))
-                #
-                #     # This lists the number and size of the most common objects
-                #     if loopCounter % 30  == 0 and enable_pympler_debugging:
-                #         all_objects = muppy.get_objects()
-                #         # onlyLists = muppy.filter(all_objects, Type=list)
-                #         totalSize = muppy.get_size(all_objects)
-                #
-                #         table = Utils.pymplerprintRenderer(all_objects, limit=15)
-                #
-                #         report = "Total size: " + str(Utils.bToMb(totalSize)) + "b at " + \
-                #             datetime.datetime.now().strftime("%d/%m %H:%M:%S") + \
-                #                  ", runtime " + str(Utils.dtstrft(datetime.timedelta(seconds=loopCounter))) + "\r\n"
-                #         for row in table:
-                #             report += row + "\r\n"
-                #         Utils.writeReportToDisk(report, fileName="objectslist.txt", notificationMessage=False)
-                #
-                #     # This generates an html file 'profile.html' tracking the memory used by specified objects
-                #     if loopCounter % 10 and enable_pympler_classtracker_debugging:
-                #         tr.create_snapshot()
-                #         HtmlStats(tracker=tr).create_html('profile.html')
+                # Debugging code -  This samples the memory usage of the program every 2 seconds
+                # If memory usage jumps significantly (by 10%) since the last sample, it will trigger
+                # the snapshot of memory usage of all objects listed in objectsToProfile[]
+                # Also, the current stack trace will be dumped to a file isptest_faulthandler_stacktrace.txt
+
+                # Additionally, every 60 seconds, regardless of the current memory usage, the
+                # snapshot of object memory usage will be triggered
+
+                # For convenience, objectsToProfile[] is actually a list of dictionaries that contain the object to
+                # be measured and also a 'friendly name'
+
+                # Clear the flag
+                measureObjectMemoryUsageFlag = False
+                # Every 2 seconds, measure memory usage
+                if loopCounter % 2 == 0:
+                    try:
+                        peakMemUsage = Utils.getPeakMemoryUsage()
+                        if peakMemUsage is not None:
+                            # Test to see if memory use has increased significantly (by 10%) since the last sample
+                            if peakMemUsage > prevPeakMemUsage * 1.1:
+                                # If so, set the flag to trigger meaurement of the individual objects memory use
+                                measureObjectMemoryUsageFlag = True
+                                # Dump a stack trace to disk
+                                if enable_faulthandler_debugging and faulthandlerLogFile is not None:
+                                    faulthandler.dump_traceback(file=faulthandlerLogFile, all_threads=True)
+                                # List all current running threads
+                                Utils.Message.addMessage("DBUG:Current threads " + Utils.listCurrentThreads())
+                            # Snapshot peak memory usage
+                            prevPeakMemUsage = peakMemUsage
+                    except Exception as e:
+                        Utils.Message.addMessage("ERR: main.getPeakMemoryUsage() " + str(e))
+
+                # Every 60 seconds, or if the measureObjectMemoryUsageFlag is set, record the object memory usage
+                if loopCounter % 60 == 0 or measureObjectMemoryUsageFlag:
+                    try:
+                        # Create list of objects to track memory usage and a friendly name
+                        # Each object is contained within its own dict which also contains a friendly name.
+                        # this will help genration of a report
+                        objectsToProfile = [{"obj":ui, "name":"ui"}, {"obj":whoIsResolver, "name":"whoIsResolver"}]  # These never change
+                        # Create a string to store the object sizes
+                        summaryString = ""
+
+                        # Create list of dictionaries to be polled for streams
+                        dictsToBePolled = [rtpTxStreamsDict, rtpTxStreamResultsDict, rtpRxStreamsDict]
+                        for streamDict in dictsToBePolled:
+                            # Iterate over the contents of each dict in turn
+                            copyOfDict = dict(streamDict)  # Create a copy so that we can safely iterate over it
+                            if len(copyOfDict) > 0:
+                                # Append the current list of RtpGenerator objects to to objectsToProfile list
+                                for item in copyOfDict:  # iterate over keys
+                                    objectsToProfile.append({"obj":copyOfDict[item], "name":item})
+
+                        if MODE == "RECEIVE":
+                            try:
+                                objectsToProfile.append({"obj":udpMessageSender, "name":"udpMessageSender"})
+                                objectsToProfile.append({"obj":rtpPacketReceiver, "name":"rtpPacketReceiver"})
+                            except Exception as e:
+                                Utils.Message.addMessage("ERR: MODE==RECEIVE, objectsToProfile.append() " + str(e))
 
 
+                        # Iterate over all the objects to be tracked, and report on the size
+                        for obj in objectsToProfile:
+                            objSize = Utils.getObjectSize(obj["obj"])
+                            if objSize is not None and objSize > 0:
+                                summaryString += "[name: " + str(obj["name"]) + ", type" + \
+                                                     str(type(obj["obj"])) + ":" + str(Utils.bToMb(objSize)) + "], "
+                        # Write out peak mem use and object mem use summary
+                        if peakMemUsage is not None:
+                            Utils.Message.addMessage("DBUG:Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b")  # in bytes
+                        Utils.Message.addMessage("DBUG:object profiler: " + summaryString)
+                        # List all current running threads
+                        Utils.Message.addMessage("DBUG:Current threads " + Utils.listCurrentThreads())
 
-                except Exception as e:
-                    Utils.Message.addMessage("ERR:GarbageCollector " + str(e))
-
+                    except Exception as e:
+                        Utils.Message.addMessage("ERR:object profiler " + str(e))
 
 
         # This code will execute if the RequestShutdown Exception is raised (SIGINT, Ctrl-C)

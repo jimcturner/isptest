@@ -4,7 +4,7 @@
 # This will be used as the source of default values
 class Registry(object):
     streamReportFilename = "Stream_report_"
-    version = "2.6"
+    version = "2.7"
     pythonMinimumVersionRequired_Major = 3  # Specfify the minimum version of the Python interpreter required
     pythonMinimumVersionRequired_Minor = 7  # This equates to Python version 3.7
 
@@ -19,6 +19,12 @@ class Registry(object):
     streamsSnapshotFilename = "ispTestSnapshot.isp" # This file is created when the isptest Receiver app ends, and is reloaded
                                                     # on startup
     streamsSnapshotAutoSaveInterval_s = 5       # The frequency of stream snapshot auto saves (when in RECEIVE mode)
+
+     # This string will be added between the UDP header
+    # and Rtp header of the geenrated RTp traffic. It's purpose is to obscure the generated
+    # packets to stop them looking like RTP (to aid investigation of ISPs that
+    # block RTP. Note: it is overwritten in main() if the program is started with the '-o' option
+    rtpHeaderOffsetString = None # None is the default value
 
     # Provides content for the help popup
     helpTableContents = [["h","Display/hide this page"],
@@ -62,6 +68,7 @@ class Registry(object):
     # then an Event will be generated
     rtpReceiveStreamJitterExcessiveAlarmThreshold = 2
     rtpReceiveStreamGlitchThreshold = 4 # The default no of packets that have to be lost before a Glitch Event is generated
+    rtpReceiveStreamCompressResultsBeforeSending = False # If True, uses bz2 compression. Experimental
 
     ### RtpPacketReciever
     # buffer size is 65535 bytes. This is the maximum possible size for UDP We need to set it
@@ -69,7 +76,10 @@ class Registry(object):
     # larger we can accept would kill the socket
     rtpPacketRecieverRecvFromBufferSize = 65535
 
-    # RtpGenerator
+    ### RtpGenerator
+    rtpGeneratorRtpParams = 0b10000000 # Was 0b01000000 Perhaps try 0b10000000 to match NTT?
+    rtpGeneratorRtpPayloadType = 0x33 # 0x33 identifies as MPEG video Was 0b00000000
+
     rtpGeneratorUDPTxTTL = 128  # Sets the TTL value of the transmitted udp packets
     rtpGeneratorEnableTraceroute = True # Enables/inhbits the traceroute thread from starting
     tracerouteMaxHops = 20  # The maximum no of hops traceroute will consider before resetting

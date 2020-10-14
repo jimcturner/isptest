@@ -43,4 +43,10 @@ V.2.6
     * streamIsDeadThreshold_s: Pauses elapsedTime and mean-average calculation timers in RtpReceiveStream.__samplingThread, triggers auto-saving of stream report
     * autoRemoveDeadRxStreamsThreshold_s: If Registry.autoRemoveDeadRxStreamsEnable is True, the stream object will auto purge
 * Stipulates version numbers of dependancies (imported libraries)
+V2.7
+* Adds RTP obfuscation mode. If you start Rx and Tx with an -o switch, an offset is added between the UDP and RTP headers
+* Add the related Events themselves to the compare streams table 
+* Adds return loss to isptestheader, report  and add to report, and Transmitter help page
+* Sample memory usage/trigger stack trace - NOTE excess memory detection only works on Linux/OSX but object mem works on all platforms)
+* Compressed pickles for Results Transmission back to Transmitter (a single stream results is about 128kbps) Reduces it to about 30kbps
 

@@ -23,11 +23,19 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import pickle
 from collections import deque   # Used for circular buffers
+
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 # Additonal libraries required (of my own making)
 import Utils
 from Registry import Registry
+
+try:
+    # Try to import the bz2 compresion library. This seems to be missing on some Linuxes
+    import bz2
+except Exception as e:
+    Registry.rtpReceiveStreamCompressResultsBeforeSending = False
+    print("WARNING: Can't import bz2 compression library " + str(e))
 
 # # Required for Windows traceroute implemenation - imports moved into traceroute routine itself
 # from scapy.layers.inet import IP, UDP
@@ -910,7 +918,7 @@ class RtpReceiveCommon(RtpCommon):
         pass
 
     @abstractmethod
-    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False):
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, eventNo=None):
         pass
 
     @abstractmethod
@@ -975,7 +983,8 @@ class RtpReceiveCommon(RtpCommon):
         if stats["stream_transmitterVersion"] > 0:
             transmitterDetails = \
                 "Transmitter version: v" + str(stats["stream_transmitterVersion"]) + \
-                ", Transmit bitrate: " + str(Utils.bToMb(stats["stream_transmitter_txRate_bps"])) + "bps" + "\r\n"
+                ", Transmit bitrate: " + str(Utils.bToMb(stats["stream_transmitter_txRate_bps"])) + "bps" + \
+                ", Return loss " + str("%0.2f" % stats["stream_transmitter_Return_Loss_percent"]) + "%" + "\r\n"
 
 
         labelWidth = 33
@@ -1335,6 +1344,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_transmitter_PID"] = 0
         self.__stats["stream_transmitter_txRate_bps"] = 0 # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_TimeToLive_sec"] = 0  # Will be populated by incoming isptest header data
+        self.__stats["stream_transmitter_Return_Loss_percent"] = 0  # Will be populated by incoming isptest header data
         Utils.Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
 
         # Var to store the traceroute checksum value extracted from the isptestheader data
@@ -1445,6 +1455,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         # define timedelta object to store an aggregate of of Glitch length
         self.__stats["glitch_length_total_time"] = datetime.timedelta()
         self.__stats["glitch_most_recent_timestamp"] = datetime.timedelta()
+        self.__stats["glitch_most_recent_eventNo"] = None   # Captures the event no of the most recent glitch
+                                                            # so it can be directly recalled from the eventsList
         self.__stats["glitch_time_elapsed_since_last_glitch"] = datetime.timedelta()
         self.__stats["glitch_mean_time_between_glitches"] = datetime.timedelta()
         self.__stats["glitch_mean_glitch_duration"] = datetime.timedelta()
@@ -1539,6 +1551,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         if historicEventsList is not None:
                             self.updateEventsList(historicEventsList, replaceExistingList=True)
                         streamsSuccessfullyRecreated = True
+                        Utils.Message.addMessage("Historic stream " + str(self.__stats["stream_syncSource"]) + " recreated")
                     else:
                         Utils.Message.addMessage("ERR:RtpReceiveStream historicStatsDict key differences " + str(diff) +\
                                                  " Aborting import of stats[] dict ")
@@ -1680,6 +1693,15 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
 
+            elif isptestHeaderData[1] == 7:
+                # This is a message containing the return loss (as a float  , 4 bytes)
+                try:
+                    # Convert the 4 bytes back to a float
+                    self.__stats["stream_transmitter_Return_Loss_percent"] = \
+                        struct.unpack_from("!f", bytes(isptestHeaderData[4:8]))[0]
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
+
         except Exception as e:
             Utils.Message.addMessage("DBUG:__RtpReceiveStream.__pasrseIsptestHeader " + str(e))
 
@@ -1725,6 +1747,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                 msg = {"stats": stats, "eventList": eventsToBeSent}
                 # pickledMessage = pickle.dumps(msg, protocol=2)
                 pickledMessage = pickle.dumps(msg)
+                # If compression is enabled, compress the message string before sending
+                if Registry.rtpReceiveStreamCompressResultsBeforeSending:
+                    pickledMessage = bz2.compress(pickledMessage)
                 # add the pickled message to the txMessageQueue
                 resultsTxQueue.put([pickledMessage, destAddr, destPort])
 
@@ -2317,6 +2342,17 @@ class RtpReceiveStream(RtpReceiveCommon):
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
                 # Utils.Message.addMessage("Tx pid " + str(self.__stats["stream_transmitter_PID"]) )
+
+                # #Get last glitch by eventNo
+                # try:
+                #     lastGlitchEventList = self.getRTPStreamEventList(requestedEventNo=self.__stats["glitch_most_recent_eventNo"])
+                #     if len(lastGlitchEventList) > 0:
+                #             lastGlitchEventSummary = lastGlitchEventList[0].getSummary()["summary"]
+                #             Utils.Message.addMessage("Last glitch  event no: " + str(self.__stats["glitch_most_recent_eventNo"]) +\
+                #                                      ", " + lastGlitchEventSummary)
+                # except Exception as e:
+                #     Utils.Message.addMessage("ERR: Last glitch: " + str(e))
+
                 ######## 1 second counter end of code ########
 
             try:
@@ -2607,6 +2643,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                             updateGlitchStats(self, glitch)
                             # Take timestamp of most recent glitch
                             self.__stats["glitch_most_recent_timestamp"] = glitch.timeCreated
+                            # Snapshot the event no of the most recent glitch
+                            self.__stats["glitch_most_recent_eventNo"] = glitch.eventNo
                             # Increment the all_events counter
                             self.__stats["stream_all_events_counter"] += 1
                             # Post a message
@@ -2615,13 +2653,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                         else:
                             # Glitch is below the threshold. Acknowledge it with a message but don't add an Event
                             # increment the 'ignored' counter so that we know that it happened
+                            # Note, this message is not logged to disk, to save the log file being filled
                             self.__stats["glitch_glitches_ignored_counter"] += 1
                             # Post a message
                             Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + ", " +\
                                                      str(sequenceNoGap) + " packets lost. (<=" +\
                                                      str(self.__stats["glitch_Event_Trigger_Threshold_packets"]) +\
                                                      ", minor loss " + str(rtpPackets[-2].rtpSequenceNo) + ":" +\
-                                                     str(rtpPackets[-1].rtpSequenceNo) + ")" )
+                                                     str(rtpPackets[-1].rtpSequenceNo) + ")", logToDisk=False )
 
                         # Temporarily disable the jitter detection immediately after a glitch
                         jitterDetectionEnabledFlag = False
@@ -2774,9 +2813,15 @@ class RtpReceiveStream(RtpReceiveCommon):
     # containing all Glitch and StreamStarted events
     # The filter (if present) is applied first, then the range specifier
     # Finally, if reverseOrder==True, the list will be returned in reverse order
-    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False):
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, requestedEventNo=None):
         # Create copy of events list
         unfilteredEventList = list(self.__eventList)
+
+        # If eventNo is specified, look for and return a list containing a single event with that event no (if it still exists)
+        if requestedEventNo is not None:
+            # Iterate over unfilteredEventList looking for an event whose eventNo matches requestedEventNo
+            filteredEventList = list(filter(lambda event: event.eventNo == requestedEventNo, unfilteredEventList))
+            return filteredEventList
 
         # Now apply a filter (if specified)
         filteredEventList = []
@@ -2979,12 +3024,19 @@ class RtpStreamResults(RtpReceiveCommon):
     # containing all Glitch and StreamStarted events
     # The filter (if present) is applied first, then the range specifier
     # Finally, if reverseOrder==True, the list will be returned in reverse order
-    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False):
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, requestedEventNo=None):
         self.__accessRtpStreamEventListMutex.acquire()
         # Create copy of events list
         # unfilteredEventList = deepcopy(self.__eventList)
         unfilteredEventList = list(self.__eventList)
         self.__accessRtpStreamEventListMutex.release()
+
+        # If eventNo is specified, look for and return a list containing a single event with that event no (if it still exists)
+        if requestedEventNo is not None:
+            # Iterate over unfilteredEventList looking for an event whose eventNo matches requestedEventNo
+            filteredEventList = list(filter(lambda event: event.eventNo == requestedEventNo, unfilteredEventList))
+            return filteredEventList
+
         # Now apply a filter (if specified)
         filteredEventList = []
         if filterList is not None:
@@ -3061,8 +3113,11 @@ class RtpGenerator(RtpCommon):
     RTP_HEADER_LENGTH_BYTES = 12
 
     # Constants. Used in the construction of the rtp header
-    rtpParams = 0b01000000
-    rtpPayloadType = 0b00000000
+    # rtpParams = 0b01000000
+    rtpParams = Registry.rtpGeneratorRtpParams
+    # rtpPayloadType = 0b00000000
+    rtpPayloadType = Registry.rtpGeneratorRtpPayloadType
+
 
     @classmethod
     def getMaxFriendlyNameLength(cls):
@@ -3123,7 +3178,7 @@ class RtpGenerator(RtpCommon):
         self.tracerouteChecksum = 0# Calculated by XORing an entire hops list, once it's been successfully validated
 
         self.isptestHeaderMessageIndex = 0 # Keeps track of which type of message we are sending in the header
-        self.noOfMessageTypes = 7 # The current message types are:
+        self.noOfMessageTypes = 8 # The current message types are:
                                     # 0 Traceroute
                                     # 1 private LAN Address of the local interface used for transmitting
                                     # 2 The 'public' destination address
@@ -3131,6 +3186,7 @@ class RtpGenerator(RtpCommon):
                                     # 4 The specified TX rate
                                     # 5 The transmitted packet count
                                     # 6 The stream time to live (in seconds)
+                                    # 7 The return loss (as measured by the ResultsReceiver)
 
         self.uiInstance = uiInstance   # This allows access to the methods of the UI class
         # self.minSleepTime = None
@@ -3367,6 +3423,14 @@ class RtpGenerator(RtpCommon):
         #         # [byte8] not used
         #         # [friendlyName] 10 bytes
 
+        # OR
+        # [byte1] Message type (7: The return loss (from Receiver to Transmitter).
+        #         # [byte2]
+        #         # [byte3]
+        #         # [byte4][byte5][byte6][byte7] return loss, float 4 bytes
+        #         # [byte8] not used
+        #         # [friendlyName] 10 bytes
+
 
         header = b""  # Specify byte string
         # Initialise messageData to zero
@@ -3591,6 +3655,32 @@ class RtpGenerator(RtpCommon):
                                    0 & 0xFF]  # not used
                     Utils.Message.addMessage(
                         "DBUG:RtpGenerator.generateIsptestHeader(): Message type 6: Transmit tx stream time to live " + str(e))
+
+            elif self.isptestHeaderMessageIndex == 7:
+                # Return loss from Receiver to Transmitter, float 4 bytes, %
+                try:
+                    # Get return packet loss value from related ResultsReceiver object
+                    returnPacketLoss_pc = struct.pack("!f", self.rtpStreamResultsReceiver.returnPacketLoss_pc)
+                    messageData = [7 & 0xFF,  # Message type 7: # Return loss from Receiver to Transmitter, float 4 bytes
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   returnPacketLoss_pc[0] & 0xFF,  # MSB
+                                   returnPacketLoss_pc[1] & 0xFF,  #
+                                   returnPacketLoss_pc[2] & 0xFF,  #
+                                   returnPacketLoss_pc[3] & 0xFF,  # LSB
+                                   0 & 0xFF]  # not used
+
+                except Exception as e:
+                    messageData = [7 & 0xFF,  # Message type 7: # Return loss from Receiver to Transmitter, float 4 bytes
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  #
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF,  # not used
+                                   0 & 0xFF]  # not used
+                    Utils.Message.addMessage(
+                        "DBUG:RtpGenerator.generateIsptestHeader(): Message type 7: Return loss " + str(e))
 
             # Now That the message data list has been created, increment the message type index
             self.isptestHeaderMessageIndex += 1
@@ -4177,13 +4267,22 @@ class RtpGenerator(RtpCommon):
                     # Directly modify the timestamp field of the rtp header within the self.udpTxData bytearray
                     # The RTP timestamp field is bytes 4-7 of the RTP header
                     struct.pack_into("!L", rtpGeneratorInstance.udpTxData, 4, rtpTimestampAsInt)
+
+                    # If Registry.rtpHeaderOffsetString has been set, prepend the rtp packet with the contents
+                    # to create an offset between udp header and the rtp header
+                    udpPayload = b""
+                    if Registry.rtpHeaderOffsetString is not None:
+                        udpPayload = Registry.rtpHeaderOffsetString + rtpGeneratorInstance.udpTxData
+                    else:
+                        udpPayload = rtpGeneratorInstance.udpTxData
+
                     # Send the data
-                    sentBytes = rtpGeneratorInstance.udpTxSocket.sendto(rtpGeneratorInstance.udpTxData,
+                    sentBytes = rtpGeneratorInstance.udpTxSocket.sendto(udpPayload,
                                                             (rtpGeneratorInstance.UDP_TX_IP,
                                                              rtpGeneratorInstance.UDP_TX_PORT))
 
                     # Confirm that we appear to have sent the correct no. of bytes
-                    if sentBytes == len(rtpGeneratorInstance.udpTxData):
+                    if sentBytes == len(udpPayload):
                         # Update tx bytes counter (taking packet headers into account)
                         rtpGeneratorInstance.txCounter_bytes += sentBytes
                         # Update tx packets counter
@@ -5353,7 +5452,7 @@ class ResultsReceiver(object):
 
         rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
         lastReceivedFragmentIndex = 0  # Tracks the most recently received fragment index (ie. which fragment within the set
-        verboseLogging = False
+        verboseLogging = True
         lastKnownUniqueID = 0 # Tracks the ID field unique to each set of fragments
         lastKnownExpectedNoOfFragments = 0 # Tracks the no of expected fragments that form the current message
         while self.receiverActiveFlag:
@@ -5397,7 +5496,8 @@ class ResultsReceiver(object):
                             if lastReceivedFragmentIndex < (lastKnownExpectedNoOfFragments - 1):
                                 if verboseLogging:
                                     Utils.Message.addMessage(
-                                        "ERR: __resultsReceiverThread.Incomplete set of fragments. Resetting to zero ")
+                                        "INFO: __resultsReceiverThread.Incomplete set of fragments. Resetting to zero ",
+                                            logToDisk=False)
                                 self.receiveResultsFragmentErrorCounter += 1
 
 
@@ -5425,19 +5525,19 @@ class ResultsReceiver(object):
                                 # More fragments than expected
                                 if verboseLogging:
                                     Utils.Message.addMessage(
-                                        "ERR: __resultsReceiverThread. More fragments received than expected " +\
-                                        str(fragment[0]) + "/" + str(fragment[1]))
+                                        "INFO: __resultsReceiverThread. More fragments received than expected " +\
+                                        str(fragment[0]) + "/" + str(fragment[1]), logToDisk=False)
                             elif fragment[0] != (lastReceivedFragmentIndex + 1):
                                 # Out of sequence fragment received
                                 if verboseLogging:
                                     Utils.Message.addMessage(
-                                        "ERR: __resultsReceiverThread. Out of sequence fragment. Expected " + \
-                                        str(lastReceivedFragmentIndex + 1) + ", got " + str(fragment[0]))
+                                        "INFO: __resultsReceiverThread. Out of sequence fragment. Expected " + \
+                                        str(lastReceivedFragmentIndex + 1) + ", got " + str(fragment[0]), logToDisk=False)
                             else:
                                 # Catch anything else
                                 Utils.Message.addMessage(
-                                    "ERR: __resultsReceiverThread. Unexpected fragment " + \
-                                    str(fragment[0]) + "/" + str(fragment[1]))
+                                    "INFO: __resultsReceiverThread. Unexpected fragment " + \
+                                    str(fragment[0]) + "/" + str(fragment[1]), logToDisk=False)
 
                         # Now check to see if this is the *final* fragment we were expecting (note fragment[0] is a zero indexed value
                         # i.e. have we received the entire message (all the fragments, and expected length)?
@@ -5457,6 +5557,10 @@ class ResultsReceiver(object):
                                     # We're expecting a dictionary containing a stats dictionary{} and an eventsList{} containing the
                                     # last 5 events
                                     try:
+                                        # firstly check to see whether the pickle incomig data was compressed before sending
+                                        if Registry.rtpReceiveStreamCompressResultsBeforeSending:
+                                            # uncompress the data
+                                            rxMssage = bz2.decompress(rxMssage)
                                         # Attempt to reconstruct the original message sent by ResultsTransmitter
                                         # unPickledMessage = pickle.loads(rxMssage, fix_imports=True)
                                         unPickledMessage = pickle.loads(rxMssage)
@@ -5662,11 +5766,24 @@ class RtpStreamComparer(object):
                                                 "syncSourceID": stats["stream_syncSource"],
                                                 "friendlyName": stats["stream_friendly_name"],
                                                 "statsKeyToCompare": statsKeyToCompare,
-                                                "value": stats[statsKeyToCompare]
+                                                "value": stats[statsKeyToCompare],
+                                                "relatedEvent": None # If appropriate, this will hold a reference to the event
+                                                                # relevant to the current comparison measure
                                                 }
-                    # Test for special cases of values that cannot be sorted (exceptions)
+                    # Now populate the streamStatsToBeCompared["eventNo"] if relevant to the current stats key being compared
+                    if statsKeyToCompare == "glitch_most_recent_timestamp" or\
+                            statsKeyToCompare == "glitch_packets_lost_per_glitch_max" or\
+                            statsKeyToCompare == "glitch_max_glitch_duration":
+                        # Request the specific event that relates to this measure
+                        relatedEventList = \
+                            self.rtpStreamsDict[rtpStream].getRTPStreamEventList(requestedEventNo=stats["glitch_most_recent_eventNo"])
+                        # If the event has been located, add it to the streamStatsToBeCompared[] dict
+                        if len(relatedEventList) > 0:
+                            streamStatsToBeCompared["relatedEvent"] = relatedEventList[0]
+
+                    # Test for special cases of values that cannot be sorted (zero or None values/exceptions)
                     if statsKeyToCompare == "glitch_most_recent_timestamp" and \
-                        type(streamStatsToBeCompared["value"]) == datetime.timedelta:
+                            type(streamStatsToBeCompared["value"]) == datetime.timedelta:
                         # NOTE: stats[glitch_most_recent_timestamp] is initialised as a datetime.timedelta object
                         # If not glitches are recorded it'll stay that way.
                         # Once a glitch occurs it will be set as a datetime.datetime object and these two types
@@ -5806,9 +5923,28 @@ class RtpStreamComparer(object):
                             # humanise the value
                             value = RtpReceiveCommon.humanise(sortedStreamsList[index]["statsKeyToCompare"], \
                                                                 sortedStreamsList[index]["value"], appendUnit=True)
+                            # If the relatedEvent key has been populated, we can attempt to retrieve that event from the eventsList
+                            # to add some more detail to the comparison table
+                            eventSummaryFormattedText = ""
+                            if sortedStreamsList[index]["relatedEvent"] is not None:
+                                try:
+                                    # Get an eventSummary
+                                    relatedEvent = sortedStreamsList[index]["relatedEvent"].getSummary(
+                                        includeStreamSyncSourceID=False,
+                                        includeEventNo=False,
+                                        includeType=False,
+                                        includeFriendlyName=False)
+
+                                    eventCreated = relatedEvent["timeCreated"].strftime("%d/%m %H:%M:%S")
+                                    eventSummary = relatedEvent["summary"]  # Summary in the form of a text string
+                                    eventSummaryFormattedText = eventCreated + ", " + eventSummary
+                                except Exception as e:
+                                    Utils.Message.addMessage(
+                                        "ERR: ERR:RtpStreamComparer.generateReport() - lookup event " + str(e))
+
                             # Create the table row
                             streamReport += str(index + 1) + "\t" + \
-                                str(streamName).rjust(friendlyNameLength) + " " + str(value) + "\r\n"
+                                str(streamName).rjust(friendlyNameLength) + " " + str(value) + "\t" + eventSummaryFormattedText + "\r\n"
                         streamReport += separator
 
             return streamReport

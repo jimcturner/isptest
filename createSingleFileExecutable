@@ -9,7 +9,9 @@ dependencies=(
 	pyperclip==1.8.0
 	pathvalidate==2.3.0
 	scapy==2.4.3 
-	ipwhois==1.2.0)
+	ipwhois==1.2.0
+	pympler==0.8
+	)
 
 # Temporary folder where pip will collect the dependencies. The name of this folder will determine the name of the file executable archive
 targetSubFolder=isptest
@@ -17,8 +19,17 @@ targetSubFolder=isptest
 echo "Creating isptest executable archive file"
 # echo ${dependencies[@]}
 
+echo "Use proxy www-cache.reith.bbc.co.uk:80?"
+read answer
+if [ "$answer" != "${answer#[Yy]}" ] ;then
+	python3 -m pip --proxy www-cache.reith.bbc.co.uk:80 install  ${dependencies[@]} --target $targetSubFolder
+else
+    python3 -m pip install  ${dependencies[@]} --target $targetSubFolder
+fi
+
+
 echo "downloading dependancies into new subfolder $targetSubFolder"
-python3 -m pip --proxy www-cache.reith.bbc.co.uk:80 install  ${dependencies[@]} --target $targetSubFolder
+# python3 -m pip --proxy www-cache.reith.bbc.co.uk:80 install  ${dependencies[@]} --target $targetSubFolder
 # python3 -m pip install  ${dependencies[@]} --target $targetSubFolder
 
 
@@ -28,13 +39,13 @@ cp *.py $targetSubFolder
 echo "Creating $targetSubFolder.pyz file from contents of $targetSubFolder" 
 python3 -m zipapp -p "/usr/bin/env python" $targetSubFolder
 
-#echo "Delete $targetSubFolder subfolder (as no longer required) y/n?"
-#read answer
-#if [ "$answer" != "${answer#[Yy]}" ] ;then
+# echo "Delete $targetSubFolder subfolder (as no longer required) y/n?"
+# read answer
+# if [ "$answer" != "${answer#[Yy]}" ] ;then
 #    rm -rf $targetSubFolder
-#else
+# else
 #    exit
-#fi
+# fi
 
  echo "Deleting $targetSubFolder subfolder (as no longer required)"
  rm -rf $targetSubFolder

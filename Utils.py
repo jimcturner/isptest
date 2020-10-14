@@ -282,9 +282,11 @@ class Message(object):
 
 
     # Class method to add a new message to the list
+    # If logToDisk==True (the default), the message will also be also added to the diskWriteQueue
+    # This employed to stop the disk log filling up with unwanted messages
     # Additionally, this method checks to see if the disk writing thread is active. If it is not, it will start it
     @classmethod
-    def addMessage(cls, message):
+    def addMessage(cls, message, logToDisk=True):
         # Check status of disk writing thread. If it has not yet been started, it will be
         if cls.__writeMessagesToDiskThreadIsActive is False:
             try:
@@ -310,7 +312,8 @@ class Message(object):
         cls.__appendMessageToDeque(newMessage)
 
         # Now put the new message in the queue, to be picked up by the disk writer thread
-        cls.__diskWriteQueue.put(newMessage)
+        if logToDisk:
+            cls.__diskWriteQueue.put(newMessage)
 
     # class method to filter cls.messages[] based on the message prefix and cls.verbosityLevel and return a sublist
     @classmethod
@@ -1344,5 +1347,33 @@ def pymplerprintRenderer(muppyObjects, limit=15, sort='size', order='descending'
         tableLines.append(line)
     return tableLines
 
+# Returns the peak (not current) memory usage of this process and all threads in bytes
+# or None on error. Currently only works on OSX/Linux
+def getPeakMemoryUsage():
+    try:
+        # Check operating system
+        os = getOperatingSystem()
+        peakMemUsage = 0
+        if os == "Darwin":
+            import resource
+            # OSX returns the peak memory usage in bytes
+            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+        elif os=="Linux":
+            import resource
+            # Linux returns the OS in kb so convert to bytes first
+            return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
+        else:
+            # Doesn't currently work on Windows
+            return None
+    except Exception as e:
+        Message.addMessage("ERR: Utils.sampleMemoryUsage() " + str(e))
+        return None
 
-
+# Uses pympler.asizeof() to determine the size of any object or None on error
+def getObjectSize(objectToBeMeasured):
+    try:
+        from pympler import asizeof
+        return asizeof.asizeof(objectToBeMeasured)
+    except Exception as e:
+        Message.addMessage("ERR: Utils.getObjectSize() " + str(e))
+        return None
