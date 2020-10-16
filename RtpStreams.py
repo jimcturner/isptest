@@ -1578,12 +1578,16 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.samplingThread.setName(str(self.__stats["stream_syncSource"]) + ":samplingThread")
             self.samplingThread.start()
 
-            # Create an HTTP server thread
-            self.httpd = None
-            self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
-            self.httpServerThread.daemon = False
-            self.httpServerThread.setName(self.__stats["stream_syncSource"] + ":httpServerThread")
-            # self.httpServerThread.start()
+            try:
+                Utils.Message.addMessage("DBUG:************Creating httpServerThread")
+                # Create an HTTP server thread
+                self.httpd = None
+                self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
+                self.httpServerThread.daemon = False
+                self.httpServerThread.setName(str(self.__stats["stream_syncSource"]) + ":httpServerThread")
+                self.httpServerThread.start()
+            except Exception as e:
+                Utils.Message.addMessage("ERR:Couldn't create httpServerThread " + str(e))
 
             # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
             self.rtpRxStreamsDictMutex.acquire()
@@ -1591,7 +1595,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.rtpRxStreamsDictMutex.release()
 
     def __httpServerThread(self):
-        Utils.Message.addMessage("DBUG: start " + self.__stats["stream_syncSource"] + ":httpServerThread")
+        Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
         try:
             # This call will block
             # self.httpd = HTTPServer(('localhost', 8080), self)
