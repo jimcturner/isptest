@@ -15,7 +15,7 @@ import string
 import textwrap
 import platform
 from functools import reduce
-from http.server import BaseHTTPRequestHandler
+from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
 from queue import SimpleQueue, Queue, Empty, Full
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
@@ -1578,16 +1578,16 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.samplingThread.setName(str(self.__stats["stream_syncSource"]) + ":samplingThread")
             self.samplingThread.start()
 
-            try:
-                Utils.Message.addMessage("DBUG:************Creating httpServerThread")
-                # Create an HTTP server thread
-                self.httpd = None
-                self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
-                self.httpServerThread.daemon = False
-                self.httpServerThread.setName(str(self.__stats["stream_syncSource"]) + ":httpServerThread")
-                self.httpServerThread.start()
-            except Exception as e:
-                Utils.Message.addMessage("ERR:Couldn't create httpServerThread " + str(e))
+            # try:
+            #     Utils.Message.addMessage("DBUG:************Creating httpServerThread")
+            #     # Create an HTTP server thread
+            #     self.httpd = None
+            #     self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
+            #     self.httpServerThread.daemon = False
+            #     self.httpServerThread.setName(str(self.__stats["stream_syncSource"]) + ":httpServerThread")
+            #     self.httpServerThread.start()
+            # except Exception as e:
+            #     Utils.Message.addMessage("ERR:Couldn't create httpServerThread " + str(e))
 
             # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
             self.rtpRxStreamsDictMutex.acquire()
@@ -1599,15 +1599,40 @@ class RtpReceiveStream(RtpReceiveCommon):
         try:
             # This call will block
             # self.httpd = HTTPServer(('localhost', 8080), self)
-            loopCounter = 0
-            while self.samplingThreadActiveFlag:
-                Utils.Message.addMessage("__httpServerThread " + str(loopCounter))
-                loopCounter += 1
-                time.sleep(1)
+            self.httpd = ThreadingHTTPServer(('localhost', 8080), self)
+            self.httpd.serve_forever()
+            Utils.Message.addMessage(
+                "DBUG:Stream " + str(self.__stats["stream_syncSource"]) + ":httpServerThread serve_forever() returned")
+            # loopCounter = 0
+            # while self.samplingThreadActiveFlag:
+            #     Utils.Message.addMessage("__httpServerThread " + str(loopCounter))
+            #     loopCounter += 1
+            #     time.sleep(1)
 
         except Exception as e:
             Utils.Message.addMessage("ERR:Failed to start __httpServerThread " + str(e))
-        Utils.Message.addMessage("DBUG:Stream " + self.__stats["stream_syncSource"] + ":httpServerThread ended")
+        Utils.Message.addMessage("DBUG:Stream " + str(self.__stats["stream_syncSource"]) + ":httpServerThread ended")
+
+    # Http server methods
+    def _set_response(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html')
+        self.end_headers()
+
+    def do_GET(self):
+        Utils.Message.addMessage("GET request, Path: " + str(self.path) + ", Headers: " + str(self.headers))
+        self._set_response()
+        self.wfile.write("GET request for {}\n".format(self.path).encode('utf-8'))
+
+    def do_POST(self):
+        content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
+        post_data = self.rfile.read(content_length)  # <--- Gets the data itself
+        Utils.Message.addMessage("POST request, Path: " + str(self.path) + "Headers: " + str(self.headers) + \
+                                 "Body:" + post_data.decode('utf-8'))
+        self._set_response()
+        self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
+
+
 
     # Getter method for self.resultsTxQueue
     def getResultsTxQueue(self):
@@ -1633,6 +1658,14 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.samplingThreadActiveFlag = False
         # self.samplingThread.join()
         # Utils.Message.addMessage("DBUG: self.samplingThread.join() complete")
+
+        # Kill the http server
+        try:
+            self.httpd.close()
+            Utils.Message.addMessage("DBUG:Closing http server")
+        except Exception as e:
+            Utils.Message.addMessage("ERR:Closing http server " + str(e))
+
 
         # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
         self.rtpRxStreamsDictMutex.acquire()
