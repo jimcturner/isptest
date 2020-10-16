@@ -15,6 +15,7 @@ import string
 import textwrap
 import platform
 from functools import reduce
+from http.server import BaseHTTPRequestHandler
 from queue import SimpleQueue, Queue, Empty, Full
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
@@ -733,7 +734,7 @@ class RtpData(object):
 
 # Define a Super Class for all RTP objects (Generators, ReceiveStreams, ReceiveResults..)
 # This will contain methods that are useful to all
-class RtpCommon(object):
+class RtpCommon(BaseHTTPRequestHandler):
     def __init__(self) -> None:
         pass
 
@@ -1577,10 +1578,32 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.samplingThread.setName(str(self.__stats["stream_syncSource"]) + ":samplingThread")
             self.samplingThread.start()
 
+            # Create an HTTP server thread
+            self.httpd = None
+            self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
+            self.httpServerThread.daemon = False
+            self.httpServerThread.setName(self.__stats["stream_syncSource"] + ":httpServerThread")
+            # self.httpServerThread.start()
+
             # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
             self.rtpRxStreamsDictMutex.acquire()
             self.rtpRxStreamsDict[self.__stats["stream_syncSource"]] = self
             self.rtpRxStreamsDictMutex.release()
+
+    def __httpServerThread(self):
+        Utils.Message.addMessage("DBUG: start " + self.__stats["stream_syncSource"] + ":httpServerThread")
+        try:
+            # This call will block
+            # self.httpd = HTTPServer(('localhost', 8080), self)
+            loopCounter = 0
+            while self.samplingThreadActiveFlag:
+                Utils.Message.addMessage("__httpServerThread " + str(loopCounter))
+                loopCounter += 1
+                time.sleep(1)
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR:Failed to start __httpServerThread " + str(e))
+        Utils.Message.addMessage("DBUG:Stream " + self.__stats["stream_syncSource"] + ":httpServerThread ended")
 
     # Getter method for self.resultsTxQueue
     def getResultsTxQueue(self):
