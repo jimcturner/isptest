@@ -4952,45 +4952,41 @@ def main(argv):
                     except Exception as e:
                         Utils.Message.addMessage("ERR:object profiler " + str(e))
 
-                # Runs a previously created HTTPServer object in a seperate thread
-                def __httpServerThread(httpd):
-                    Utils.Message.addMessage("DBUG: start httpServerThread")
-                    try:
-                        # This call will block
-                        # self.httpd = HTTPServer(('localhost', 8080), self)
-                        httpd.serve_forever()
-                        Utils.Message.addMessage("DBUG:httpServerThread serve_forever() returned")
-                    except Exception as e:
-                        Utils.Message.addMessage("ERR:httpServerThread serve_forever() returned")
+                # # Runs a previously created HTTPServer object in a seperate thread
+                # def __httpServerThread(httpd):
+                #     Utils.Message.addMessage("DBUG: start httpServerThread")
+                #     try:
+                #         # This call will block
+                #         # self.httpd = HTTPServer(('localhost', 8080), self)
+                #         httpd.serve_forever()
+                #         Utils.Message.addMessage("DBUG:httpServerThread serve_forever() returned")
+                #     except Exception as e:
+                #         Utils.Message.addMessage("ERR:httpServerThread serve_forever() returned")
 
-                # Create list of dictionaries to be polled for streams
-                dictsToBePolled = [rtpTxStreamsDict, rtpTxStreamResultsDict, rtpRxStreamsDict]
-                for streamDict in dictsToBePolled:
-                    copyOfDict = dict(streamDict)  # Create a copy so that we can safely iterate over it
-                    if len(copyOfDict) > 0:
-                        # Append the current list of RtpGenerator objects to to objectsToProfile list
-                        for item in copyOfDict:  # iterate over keys
-                            # Check to see if this object already has an http server associated with it
-                            if item in httpServerDict:
-                                # We don't have to worry, a web server already exists
-                                pass
-                            else:
-                                # We need to create an HTTP Server for this object (as an individual thread)
-                                # Create an HTTP Server object. Pass the RTP stream object to it
-                                httpd = HTTPServer(('localhost', tcpPort), copyOfDict[item])
-                                # Create a thread,
-                                httpServerThread = threading.Thread(target=__httpServerThread, args=(httpd,))
-                                httpServerThread.daemon = True
-                                httpServerThread.start()
-                                # HTTP Server thread created. Now add the stream object to the httpServerDict
-                                # So that we don't attempt to recreate an HTTP server for this stream
-                                httpServerDict[item] = copyOfDict[item]
-                                # Increment the tcpPort
-                                tcpPort += 1
-
-
-
-
+                # # Create list of dictionaries to be polled for streams
+                # dictsToBePolled = [rtpTxStreamsDict, rtpTxStreamResultsDict, rtpRxStreamsDict]
+                # for streamDict in dictsToBePolled:
+                #     copyOfDict = dict(streamDict)  # Create a copy so that we can safely iterate over it
+                #     if len(copyOfDict) > 0:
+                #         # Append the current list of RtpGenerator objects to to objectsToProfile list
+                #         for item in copyOfDict:  # iterate over keys
+                #             # Check to see if this object already has an http server associated with it
+                #             if item in httpServerDict:
+                #                 # We don't have to worry, a web server already exists
+                #                 pass
+                #             else:
+                #                 # We need to create an HTTP Server for this object (as an individual thread)
+                #                 # Create an HTTP Server object. Pass the RTP stream object to it
+                #                 httpd = HTTPServer(('localhost', tcpPort), copyOfDict[item])
+                #                 # Create a thread,
+                #                 httpServerThread = threading.Thread(target=__httpServerThread, args=(httpd,))
+                #                 httpServerThread.daemon = True
+                #                 httpServerThread.start()
+                #                 # HTTP Server thread created. Now add the stream object to the httpServerDict
+                #                 # So that we don't attempt to recreate an HTTP server for this stream
+                #                 httpServerDict[item] = copyOfDict[item]
+                #                 # Increment the tcpPort
+                #                 tcpPort += 1
 
 
         # This code will execute if the RequestShutdown Exception is raised (SIGINT, Ctrl-C)

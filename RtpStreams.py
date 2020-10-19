@@ -734,8 +734,9 @@ class RtpData(object):
 
 # Define a Super Class for all RTP objects (Generators, ReceiveStreams, ReceiveResults..)
 # This will contain methods that are useful to all
-class RtpCommon(BaseHTTPRequestHandler):
+class RtpCommon(object):
     def __init__(self) -> None:
+        # super().__init__()
         pass
 
 
@@ -760,12 +761,26 @@ class RtpCommon(BaseHTTPRequestHandler):
         except Exception as e:
             return None
 
+    # Define a custom HTTPServer. This will allow access to the associated RtpReceiveStream object that created it
+    class RtpStreamHTTPServer(HTTPServer):
+        def __init__(self, *args, **kwargs):
+            # Because HTTPServer is an old-style class, super() can't be used.
+            HTTPServer.__init__(self, *args, **kwargs)
+            self.rtpStream = None
 
+        # Provide a setter method to allow the server to have access to the RtpStream object that created it
+        # The reason not to have this set by the Constructor method is that I didn't want to modify the existing
+        # constructor method of HTTPServer
+        def setRtpStream(self, parentRtpStreamInstance):
+            self.rtpStream = parentRtpStreamInstance
 
 # Define a Super Class for RTP Receive streams. This will contain methods that are common to both
 # RtpReceiveStream and RtpStreamResults
 class RtpReceiveCommon(RtpCommon):
     def __init__(self):
+        # Call super constructor
+        super().__init__()
+
         # Create a 'leaderboard' for the worst 10 glitches
         self.worstGlitchesList = []
         self.worstGlitchesMutex = threading.Lock()
@@ -1578,60 +1593,79 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.samplingThread.setName(str(self.__stats["stream_syncSource"]) + ":samplingThread")
             self.samplingThread.start()
 
-            # try:
-            #     Utils.Message.addMessage("DBUG:************Creating httpServerThread")
-            #     # Create an HTTP server thread
-            #     self.httpd = None
-            #     self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
-            #     self.httpServerThread.daemon = False
-            #     self.httpServerThread.setName(str(self.__stats["stream_syncSource"]) + ":httpServerThread")
-            #     self.httpServerThread.start()
-            # except Exception as e:
-            #     Utils.Message.addMessage("ERR:Couldn't create httpServerThread " + str(e))
+            # Create an HTTP server thread
+            self.httpd = None
+            try:
+                Utils.Message.addMessage("DBUG:************Creating httpServerThread")
+                self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
+                self.httpServerThread.daemon = False
+                self.httpServerThread.setName(str(self.__stats["stream_syncSource"]) + ":httpServerThread")
+                self.httpServerThread.start()
+            except Exception as e:
+                Utils.Message.addMessage("ERR:Couldn't create httpServerThread " + str(e))
 
             # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
             self.rtpRxStreamsDictMutex.acquire()
             self.rtpRxStreamsDict[self.__stats["stream_syncSource"]] = self
             self.rtpRxStreamsDictMutex.release()
 
+    # Define a custom BaseHTTPRequestHandler class to handle HTTP GET, POST requests
+    class HTTPRequestHandler(BaseHTTPRequestHandler):
+        # Http server methods
+        def _set_response(self):
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+
+        def do_GET(self):
+            #
+            # Access parent Rtp Stream object via server attribute
+            syncSourceID = None
+            stats = None
+            try:
+                stats = self.server.rtpStream.getRtpStreamStats()
+                syncSourceID = stats["stream_syncSource"]
+
+            except Exception as e:
+                Utils.Message.addMessage("GET failed: " + str(e))
+
+            Utils.Message.addMessage("GET request: " + str(syncSourceID) + ", " + "Path: " + str(self.path))
+            # Create the headers
+            self._set_response()
+            # Validate self.path to see what was requested
+            if self.path == '/stats':
+                response = (json.dumps(stats, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+            else:
+                response = ("GET request for stream " + str(syncSourceID) + ", " + str(self.path) + "\n").encode('utf-8')
+
+            # Write the response back to the client
+            self.wfile.write(response)
+
+
+        def do_POST(self):
+            content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
+            post_data = self.rfile.read(content_length)  # <--- Gets the data itself
+            Utils.Message.addMessage("POST request, Path: " + str(self.path) + "Headers: " + str(self.headers) + \
+                                     "Body:" + post_data.decode('utf-8'))
+            self._set_response()
+            self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
+            
+
     def __httpServerThread(self):
         Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
         try:
             # This call will block
-            # self.httpd = HTTPServer(('localhost', 8080), self)
-            self.httpd = ThreadingHTTPServer(('localhost', 8080), self)
+            self.httpd = RtpCommon.RtpStreamHTTPServer(('localhost', 8080), RtpReceiveStream.HTTPRequestHandler)
+            # Pass this RtpReceiveStream instance to the server
+            self.httpd.setRtpStream(self)
+            # Start the http server
             self.httpd.serve_forever()
             Utils.Message.addMessage(
                 "DBUG:Stream " + str(self.__stats["stream_syncSource"]) + ":httpServerThread serve_forever() returned")
-            # loopCounter = 0
-            # while self.samplingThreadActiveFlag:
-            #     Utils.Message.addMessage("__httpServerThread " + str(loopCounter))
-            #     loopCounter += 1
-            #     time.sleep(1)
 
         except Exception as e:
             Utils.Message.addMessage("ERR:Failed to start __httpServerThread " + str(e))
         Utils.Message.addMessage("DBUG:Stream " + str(self.__stats["stream_syncSource"]) + ":httpServerThread ended")
-
-    # Http server methods
-    def _set_response(self):
-        self.send_response(200)
-        self.send_header('Content-type', 'text/html')
-        self.end_headers()
-
-    def do_GET(self):
-        Utils.Message.addMessage("GET request, Path: " + str(self.path) + ", Headers: " + str(self.headers))
-        self._set_response()
-        self.wfile.write("GET request for {}\n".format(self.path).encode('utf-8'))
-
-    def do_POST(self):
-        content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
-        post_data = self.rfile.read(content_length)  # <--- Gets the data itself
-        Utils.Message.addMessage("POST request, Path: " + str(self.path) + "Headers: " + str(self.headers) + \
-                                 "Body:" + post_data.decode('utf-8'))
-        self._set_response()
-        self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
-
 
 
     # Getter method for self.resultsTxQueue
@@ -1656,15 +1690,15 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Kill the __samplingThread associated with this stream
         self.samplingThreadActiveFlag = False
-        # self.samplingThread.join()
-        # Utils.Message.addMessage("DBUG: self.samplingThread.join() complete")
+        self.samplingThread.join()
+        Utils.Message.addMessage("DBUG: self.samplingThread.join() complete")
 
         # Kill the http server
         try:
-            self.httpd.close()
-            Utils.Message.addMessage("DBUG:Closing http server")
+            self.httpd.shutdown()
+            Utils.Message.addMessage("DBUG:Closing http server for stream " + str(self.__stats["stream_syncSource"]))
         except Exception as e:
-            Utils.Message.addMessage("ERR:Closing http server " + str(e))
+            Utils.Message.addMessage("ERR:Closing http server for stream " + str(self.__stats["stream_syncSource"]) + str(e))
 
 
         # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
@@ -6011,3 +6045,16 @@ class RtpStreamComparer(object):
         except Exception as e:
             Utils.Message.addMessage("ERR:RtpStreamComparer " + str(e))
             return None
+
+# # Define a custom HTTPServer. This will allow access to the associated RtpReceiveStream object that created it
+# class RtpStreamHTTPServer(HTTPServer):
+#     def __init__(self, *args, **kwargs):
+#         # Because HTTPServer is an old-style class, super() can't be used.
+#         HTTPServer.__init__(self, *args, **kwargs)
+#         self.rtpStream = None
+#
+#     # Provide a setter method to allow the server to have access to the RtpStream object that created it
+#     # The reason not to have this set by the Constructor method is that I didn't want to modify the existing
+#     # constructor method of HTTPServer
+#     def setRtpStream(self, parentRtpStreamInstance):
+#         self.rtpStream = parentRtpStreamInstance
