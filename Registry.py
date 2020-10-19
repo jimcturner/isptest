@@ -33,12 +33,15 @@ class Registry(object):
                          ["l","Sets the friendly name of the stream (10 chars max)"],
                          ["r", "Show report for the currently stream"],
                          ["t", "Show traceroute for the currently selected stream"],
-                         ["a", "Show 'About' dialogue"]
+                         ["a", "Show 'About' dialogue"],
+                         ["p", "Compare stream performance"],
+                         ["b", "Burst mode - temporary (5s) doubling of Tx bitrate"]
                          ]
 
 
     ######### RtpCommon
     rtpCommonHistoricTracerouteEventsToKeep = 10 # No of previous traceroute results to hold in memory
+    httpServerStartingTCPPort = 10000 # The starting tcp http server port no
 
     ######### RtpReceiveStream
     receiveStreamAcceptThreshold = 15 # The minimum no of rtp packets for particular sync source ID to be received
