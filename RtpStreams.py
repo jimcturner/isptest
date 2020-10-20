@@ -761,18 +761,18 @@ class RtpCommon(object):
         except Exception as e:
             return None
 
-    # Define a custom HTTPServer. This will allow access to the associated RtpReceiveStream object that created it
-    class RtpStreamHTTPServer(HTTPServer):
-        def __init__(self, *args, **kwargs):
-            # Because HTTPServer is an old-style class, super() can't be used.
-            HTTPServer.__init__(self, *args, **kwargs)
-            self.rtpStream = None
-
-        # Provide a setter method to allow the server to have access to the RtpStream object that created it
-        # The reason not to have this set by the Constructor method is that I didn't want to modify the existing
-        # constructor method of HTTPServer
-        def setRtpStream(self, parentRtpStreamInstance):
-            self.rtpStream = parentRtpStreamInstance
+    # # Define a custom HTTPServer. This will allow access to the associated RtpReceiveStream object that created it
+    # class RtpStreamHTTPServer(HTTPServer):
+    #     def __init__(self, *args, **kwargs):
+    #         # Because HTTPServer is an old-style class, super() can't be used.
+    #         HTTPServer.__init__(self, *args, **kwargs)
+    #         self.rtpStream = None
+    #
+    #     # Provide a setter method to allow the server to have access to the RtpStream object that created it
+    #     # The reason not to have this set by the Constructor method is that I didn't want to modify the existing
+    #     # constructor method of HTTPServer
+    #     def setRtpStream(self, parentRtpStreamInstance):
+    #         self.rtpStream = parentRtpStreamInstance
 
 # Define a Super Class for RTP Receive streams. This will contain methods that are common to both
 # RtpReceiveStream and RtpStreamResults
@@ -1652,10 +1652,14 @@ class RtpReceiveStream(RtpReceiveCommon):
             
 
     def __httpServerThread(self):
-        Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
+        # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
         try:
+            # Request an unused TCP port for the HTTP server to listen on
+            tcpListenPort = Utils.TCPListenPortCreator.getNext()
             # This call will block
-            self.httpd = RtpCommon.RtpStreamHTTPServer(('localhost', 8080), RtpReceiveStream.HTTPRequestHandler)
+            self.httpd = RtpCommon.RtpStreamHTTPServer(('localhost', tcpListenPort), RtpReceiveStream.HTTPRequestHandler)
+            Utils.Message.addMessage("DBUG: Creating " + str(self.__stats["stream_syncSource"]) +
+                                     ":httpServerThread, listening on TCP port " + str(tcpListenPort))
             # Pass this RtpReceiveStream instance to the server
             self.httpd.setRtpStream(self)
             # Start the http server

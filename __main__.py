@@ -5,7 +5,7 @@
 # 
 from __future__ import unicode_literals # Required for prompt_toolkit
 
-from http.server import HTTPServer
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from Registry import Registry # This class contains constants/defaults used throughout the program
 
@@ -4105,6 +4105,92 @@ class RtpPacketReceiver(object):
         Utils.Message.addMessage("DBUG:__receiveRTPThread exiting")
 
 
+# Class to provide an HTTP Server/ web API
+class ISPTestHTTPServer(object):
+
+    def __init__(self) -> None:
+        super().__init__()
+        # Start a web server running on the first port specified by Registry.httpServerStartingTCPPort
+        # NOTE: This is the only server running at a fixed port.
+        # All other HTTP servers should call Utils.TCPListenPortCreator.getNext()
+        self.tcpListenPort = Registry.httpServerStartingTCPPort
+        self.tcpListernAddr = '' # By default, will listen on all interfaces
+        # start an http server thread
+        self.httpd = None
+        self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
+        self.httpServerThread.daemon = False
+        self.httpServerThread.setName("ISPTestHTTPServer:" + str(self.tcpListenPort))
+        self.httpServerThread.start()
+
+
+    def kill(self):
+        # Kill the http server
+        try:
+            self.httpd.shutdown()
+            Utils.Message.addMessage("DBUG:ISPTestHTTPServer() Closing http server (on port " + \
+                                     str(self.tcpListenPort) + ")")
+        except Exception as e:
+            Utils.Message.addMessage(
+                "ERR:ISPTestHTTPServer() Closing http server (on port " + str(self.tcpListenPort) + ") " + str(e))
+        # Confirm that the server thread has ended
+        try:
+            Utils.Message.addMessage("DBUG:ISPTestHTTPServer() Waiting for httpServerThread.join()")
+            self.httpServerThread.join()
+            Utils.Message.addMessage("DBUG:ISPTestHTTPServer() httpServerThread.join() completed")
+
+        except Exception as e:
+            Utils.Message.addMessage(
+                "ERR:ISPTestHTTPServer() ISPTestHTTPServer() httpServerThread.join() (on port " + str(self.tcpListenPort) + ") " + str(e))
+
+
+
+
+
+    # Define a custom BaseHTTPRequestHandler class to handle HTTP GET, POST requests
+    # Note: A new instance of this class is created with every HTTP request
+    class HTTPRequestHandler(BaseHTTPRequestHandler):
+        # Http server methods
+        def _set_response(self):
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+
+        def do_GET(self):
+            Utils.Message.addMessage("GET request: " + ", " + "Path: " + str(self.path))
+            # Create the headers
+            self._set_response()
+            # Create the response
+            response = ("GET request: " + str(self.path) + "\n").encode('utf-8')
+            # Write the response back to the client
+            self.wfile.write(response)
+
+        def do_POST(self):
+            content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
+            post_data = self.rfile.read(content_length)  # <--- Gets the data itself
+            Utils.Message.addMessage("POST request, Path: " + str(self.path) + "Headers: " + str(self.headers) + \
+                                     "Body:" + post_data.decode('utf-8'))
+            self._set_response()
+            self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
+
+    def __httpServerThread(self):
+        # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
+        try:
+
+            # This call will block
+            self.httpd = Utils.CustomHTTPServer((self.tcpListernAddr, self.tcpListenPort), ISPTestHTTPServer.HTTPRequestHandler)
+            Utils.Message.addMessage("DBUG: Creating ISPTestHTTPServer, listening on TCP port " + str(self.tcpListenPort))
+            # Pass this object instance to the server
+            self.httpd.setParentObjectInstance(self)
+            # Start the http server
+            self.httpd.serve_forever()
+            Utils.Message.addMessage("DBUG:Stream ISPTestHTTPServer serve_forever() returned")
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR:Failed to start ISPTestHTTPServer " + str(e))
+        Utils.Message.addMessage(
+            "DBUG: ISPTestHTTPServer ended")
+
+
 class RequestShutdown(Exception):
     """
     Custom exception which is used to trigger the clean exit
@@ -4614,6 +4700,12 @@ def main(argv):
 
     # Main program execution loops
 
+    # Create and start the main HTTP Server
+    try:
+        isptesttHTTPServer = ISPTestHTTPServer()
+    except Exception as e:
+        Utils.Message.addMessage("ERR:isptesttHTTPServer = ISPTestHTTPServer() " + str(e))
+
 
     # A local function to take a snapshot of the Events lists and stats[] dictionaries for all Receive streams
     # and save them to disk. This allows the streams and all their stats to be 'restored' when the program restarts
@@ -4716,6 +4808,9 @@ def main(argv):
 
         # Now kill UI
         ui.kill()
+
+        # Kill the HTTP server
+        isptesttHTTPServer.kill()
 
         time.sleep(0.5)
 

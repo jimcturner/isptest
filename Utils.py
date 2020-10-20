@@ -16,6 +16,7 @@ import platform
 # import psutil
 from collections import deque
 from functools import reduce
+from http.server import HTTPServer
 from queue import SimpleQueue
 
 from Registry import Registry
@@ -1384,7 +1385,7 @@ def getObjectSize(objectToBeMeasured):
 # Each call to this function should yield an ever increasing value
 class TCPListenPortCreator(object):
     # Get the starting TCP listener port from the Registry
-    tcpPort = Registry.httpServerStartingTCPPort - 1
+    tcpPort = Registry.httpServerStartingTCPPort
 
     # Return the next available TCP port number
     @classmethod
@@ -1398,5 +1399,16 @@ class TCPListenPortCreator(object):
     def getLastProvided(cls):
         return cls.tcpPort
 
+# Define a custom HTTPServer. This will allow access to the associated RtpReceiveStream object that created it
+class CustomHTTPServer(HTTPServer):
+    def __init__(self, *args, **kwargs):
+        # Because HTTPServer is an old-style class, super() can't be used.
+        HTTPServer.__init__(self, *args, **kwargs)
+        self.parentObject = None
 
+    # Provide a setter method to allow the server to have access to the instance of the object that created it
+    # The reason not to have this set by the Constructor method is that I didn't want to modify the existing
+    # constructor method of HTTPServer
+    def setParentObjectInstance(self, parentObjectInstance):
+        self.parentObject = parentObjectInstance
 
