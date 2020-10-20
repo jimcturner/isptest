@@ -1377,3 +1377,26 @@ def getObjectSize(objectToBeMeasured):
     except Exception as e:
         Message.addMessage("ERR: Utils.getObjectSize() " + str(e))
         return None
+
+# This Class will yield a forever incrementing int starting at the value set in
+# Registry.httpServerStartingTCPPort
+# Its is used to ensure that each instance of an http server is created with a unique TCP listen port
+# Each call to this function should yield an ever increasing value
+class TCPListenPortCreator(object):
+    # Get the starting TCP listener port from the Registry
+    tcpPort = Registry.httpServerStartingTCPPort - 1
+
+    # Return the next available TCP port number
+    @classmethod
+    def getNext(cls):
+        # Increment the class value
+        cls.tcpPort += 1
+        return cls.tcpPort
+
+    # Retrieve the last provided tcpPort value
+    @classmethod
+    def getLastProvided(cls):
+        return cls.tcpPort
+
+
+
