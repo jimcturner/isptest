@@ -4195,66 +4195,67 @@ class ISPTestHTTPServer(object):
         #     BaseHTTPRequestHandler.send_error(self, code, message)
 
         def do_GET(self):
-            Utils.Message.addMessage("GET request: " + ", " + "Path: " + str(self.path))
-            pathList = self.splitPath(self.path)
-            Utils.Message.addMessage("pathList:" + str(pathList))
-            # Parse the path
-            response = b"\n"
-            if len(pathList) > 0:
-                if len(pathList) == 1 and pathList[0] == "streams":
-                    # /streams
-                    # Return a json encoded list of the available streams
-                    # response = (str(self.server.parentObject.streamsList) +  "\n").encode('utf-8')
-                    response = (json.dumps(self.server.parentObject.streamsList,
-                                            sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
-                    # Create the headers
-                    self._set_response(contentType='application/json')
-                elif len(pathList) >= 1 and pathList[0] == "streams":
-                    # /streams/[streamID]
-                    # A specific stream has been requested
-                    # Return the json encoded stats for that stream
-                    requestedStreamID = pathList[1]
-                    streamsList = self.server.parentObject.streamsList
-                    # Create a sublist of streamsList containing just the streamID fields.
-                    # If found, this should return a list of length 1, containing entry for the stream object we want
-                    filteredStreamList = []
-                    try:
-                        filteredStreamList =  list(filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
-                    except Exception as e:
-                        response = "Requested path: " + str(self.path) + ", " + str(e)
-                        # Requested stream doesn't exist
-                        self.send_error(404, response)
+            try:
+                Utils.Message.addMessage("GET request: " + ", " + "Path: " + str(self.path))
+                pathList = self.splitPath(self.path)
+                Utils.Message.addMessage("pathList:" + str(pathList))
+                # Parse the path
+                response = b"\n"
+                if len(pathList) > 0:
+                    if len(pathList) == 1 and pathList[0] == "streams":
+                        # /streams
+                        # Return a json encoded list of the available streams
+                        # response = (str(self.server.parentObject.streamsList) +  "\n").encode('utf-8')
+                        response = (json.dumps(self.server.parentObject.streamsList,
+                                                sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                        # Create the headers
+                        self._set_response(contentType='application/json')
+                    elif len(pathList) >= 1 and pathList[0] == "streams":
+                        # /streams/[streamID]
+                        # A specific stream has been requested
+                        # Return the json encoded stats for that stream
+                        requestedStreamID = pathList[1]
+                        streamsList = self.server.parentObject.streamsList
+                        # Create a sublist of streamsList containing just the streamID fields.
+                        # If found, this should return a list of length 1, containing entry for the stream object we want
+                        filteredStreamList = []
+                        try:
+                            filteredStreamList =  list(filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
+                        except Exception as e:
+                            # Requested stream doesn't exist
+                            self.send_error(404, str("path " + str(self.path) + " not found"))
 
 
-                    if len(filteredStreamList) > 0:
-                        # The requested stream was found in the list
-                        # Now check to see if any additonal paths were specified
-                        if len(pathList) > 2:
-                            if pathList[2] == "stats":
-                                response = self.formatResponse("stream " + str(requestedStreamID) + " stats.")
-                            elif pathList[2] == "events":
-                                response = self.formatResponse("stream " + str(requestedStreamID) + " events.")
+                        if len(filteredStreamList) > 0:
+                            # The requested stream was found in the list
+                            # Now check to see if any additonal paths were specified
+                            if len(pathList) > 2:
+                                if pathList[2] == "stats":
+                                    response = self.formatResponse("stream " + str(requestedStreamID) + " stats.")
+                                elif pathList[2] == "events":
+                                    response = self.formatResponse("stream " + str(requestedStreamID) + " events.")
+                                else:
+                                    # Unrecognised path
+                                    self.send_error(404, str("path " + str(self.path) + " not found"))
                             else:
-                                self.send_error(404, str("path " + str(self.path) + " not found"))
+                                response = self.formatResponse("Stream " + str(requestedStreamID) + " exists")
+
+                            self._set_response()
                         else:
-                            response = self.formatResponse("Stream " + str(requestedStreamID) + " exists")
-
-                        self._set_response()
+                            # Requested stream doesn't exist
+                            self.send_error(404, str("path " + str(self.path) + " not found"))
                     else:
-                        # Requested stream doesn't exist
-                        self.send_error(404, "File Not Found {}".format(self.path))
-                else:
-                    # Catch-all
-                    response = ("isptest" + "\n").encode('utf-8')
-                    self._set_response()
+                        # Catch-all
+                        response = self.formatResponse("isptest http server")
+                        self._set_response()
 
+               # Write the response back to the client
+                self.wfile.write(response)
+            except Exception as e:
+                # Requested stream doesn't exist
+                Utils.Message.addMessage("ERR: ISPTestHTTPServer do_GET() " + str(e))
+                # self.send_error(404, str("ISPTestHTTPServer do_GET() path " + str(self.path) + " not found" + str(e)))
 
-
-
-            # Create the response
-            # response = ("GET request: " + str(self.path) + "\n").encode('utf-8')
-            # Write the response back to the client
-            self.wfile.write(response)
 
         def do_POST(self):
             content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
