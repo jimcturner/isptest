@@ -4116,24 +4116,31 @@ class ISPTestHTTPServer(object):
         # Create a list of dicts to hold a list of Rtp Streams
         self.streamsList = []
         # Creates a dummy stream entry and appends it to the streamsList
-        def createDummyStream(streamsList, streamType):
+        def createDummyStream(streamsList, streamType, streamID=random.randint(1000, 2000)):
             try:
-                streamsList.append({"streamID":random.randint(1000, 2000),
+                streamsList.append({"streamID":streamID,
                                      "httpPort":Utils.TCPListenPortCreator().getNext(),
                                      "streamType":streamType,
                                      "timeCreated":datetime.datetime.now()
                                      })
+
+
             except Exception as e:
                 Utils.Message.addMessage("ERR: ISPTestHTTPServer.createDummyStream() " + str(e))
-        # Create a dummy stream
-        createDummyStream(self.streamsList, RtpReceiveStream)
+        # Create a dummy stream(s)
+        streamID = random.randint(1000, 2000)
+        createDummyStream(self.streamsList, RtpReceiveStream.__name__, streamID=streamID)
+        createDummyStream(self.streamsList, RtpGenerator.__name__, streamID=streamID)
+        streamID = random.randint(1000, 2000)
+        createDummyStream(self.streamsList, RtpReceiveStream.__name__, streamID=streamID)
+        createDummyStream(self.streamsList, RtpGenerator.__name__, streamID=streamID)
 
 
         # Start a web server running on the first port specified by Registry.httpServerStartingTCPPort
         # NOTE: This is the only server running at a fixed port.
         # All other HTTP servers should call Utils.TCPListenPortCreator.getNext()
         self.tcpListenPort = Registry.httpServerStartingTCPPort
-        self.tcpListernAddr = '' # By default, will listen on all interfaces
+        self.tcpListernAddr = '127.0.0.1' # '' will listen on all interfaces but there is a startup delay
         # start an http server thread
         self.httpd = None
         self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
@@ -4193,18 +4200,23 @@ class ISPTestHTTPServer(object):
         # Returns a list containing the dict(s) of the object if found, or None, if not found
         # It's possible that more than one stream could exist with the same ID (if they are, say an RtpGenerator and
         # an RtpStreamresults)
-        def getStreamtByID(self, requestedStreamID, streamType=None):
+        def getStreamByID(self, requestedStreamID, streamType=None):
             # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
             streamsList = list(self.server.parentObject.streamsList)
             filteredStreamList = []
             try:
                 if streamType is None:
+                    Utils.Message.addMessage("streamType is None")
                     filteredStreamList = list(
                         filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
                 else:
+                    Utils.Message.addMessage("filter by streamType: " + str(streamType))
+                    # filteredStreamList = list(
+                    #     filter(lambda stream: (stream["streamID"] == int(requestedStreamID) and
+                    #                            type(stream["streamType"]) is type(streamType)), streamsList))
                     filteredStreamList = list(
-                        filter(lambda stream: (stream["streamID"] == int(requestedStreamID) and
-                                               type(stream["streamType"]) == type(streamType)), streamsList))
+                        filter(lambda stream: stream["streamID"] == int(requestedStreamID) and
+                                              stream["streamType"] is streamType, streamsList))
 
                 return filteredStreamList
             except Exception as e:
@@ -4234,39 +4246,38 @@ class ISPTestHTTPServer(object):
                         # A specific stream has been requested
                         # Return the json encoded stats for that stream
                         requestedStreamID = pathList[1]
-                        streamsList = self.server.parentObject.streamsList
-                        # Create a sublist of streamsList containing just the streamID fields.
-                        # If found, this should return a list of length 1, containing entry for the stream object we want
-                        filteredStreamList = []
-                        try:
-                            filteredStreamList = list(filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
-                        except Exception as e:
-                            # Requested stream doesn't exist
-                            self.send_error(404, str("path " + str(self.path) + " not found"))
-
+                        filteredStreamList = self.getStreamByID(requestedStreamID, streamType=RtpReceiveStream)
 
                         if len(filteredStreamList) > 0:
-                            # The requested stream was found in the list
-                            # Now check to see if any additonal paths were specified
+                            # The requested stream(s) was found in the list
+                            # Now check to see if any additional paths were specified
                             if len(pathList) > 2:
                                 if pathList[2] == "stats":
                                     response = self.formatResponse("stream " + str(requestedStreamID) + " stats.")
+                                    self._set_response()
                                 elif pathList[2] == "events":
                                     response = self.formatResponse("stream " + str(requestedStreamID) + " events.")
+                                    self._set_response()
                                 else:
                                     # Unrecognised path
                                     self.send_error(404, str("path " + str(self.path) + " not found"))
                             else:
-                                response = self.formatResponse("Stream " + str(requestedStreamID) + " exists")
-
-                            self._set_response()
+                                # response = self.formatResponse("Stream " + str(requestedStreamID) + " exists")
+                                response = (json.dumps(filteredStreamList,
+                                                sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                                self._set_response(contentType='application/json')
                         else:
                             # Requested stream doesn't exist
                             self.send_error(404, str("path " + str(self.path) + " not found"))
+
                     else:
-                        # Catch-all
-                        response = self.formatResponse("isptest http server")
-                        self._set_response()
+                        # Requested path doesn't exist
+                        self.send_error(404, str("path " + str(self.path) + " not found"))
+
+                else:
+                    # Index page
+                    response = self.formatResponse("isptest http server")
+                    self._set_response()
 
                # Write the response back to the client
                 self.wfile.write(response)
