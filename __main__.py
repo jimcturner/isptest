@@ -6,6 +6,8 @@
 from __future__ import unicode_literals # Required for prompt_toolkit
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
+from pathlib import PurePosixPath
+from urllib.parse import unquote, urlparse
 
 from Registry import Registry # This class contains constants/defaults used throughout the program
 
@@ -4106,10 +4108,27 @@ class RtpPacketReceiver(object):
 
 
 # Class to provide an HTTP Server/ web API
+# Note, this Class also provides a stream directory service
 class ISPTestHTTPServer(object):
 
     def __init__(self) -> None:
         super().__init__()
+        # Create a list of dicts to hold a list of Rtp Streams
+        self.streamsList = []
+        # Creates a dummy stream entry and appends it to the streamsList
+        def createDummyStream(streamsList, streamType):
+            try:
+                streamsList.append({"streamID":random.randint(1000, 2000),
+                                     "httpPort":Utils.TCPListenPortCreator().getNext(),
+                                     "streamType":streamType,
+                                     "timeCreated":datetime.datetime.now()
+                                     })
+            except Exception as e:
+                Utils.Message.addMessage("ERR: ISPTestHTTPServer.createDummyStream() " + str(e))
+        # Create a dummy stream
+        createDummyStream(self.streamsList, RtpReceiveStream)
+
+
         # Start a web server running on the first port specified by Registry.httpServerStartingTCPPort
         # NOTE: This is the only server running at a fixed port.
         # All other HTTP servers should call Utils.TCPListenPortCreator.getNext()
@@ -4150,17 +4169,79 @@ class ISPTestHTTPServer(object):
     # Note: A new instance of this class is created with every HTTP request
     class HTTPRequestHandler(BaseHTTPRequestHandler):
         # Http server methods
-        def _set_response(self):
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
+        # For JSON, use contentType='application/json'
+        def _set_response(self, responseCode=200, contentType='text/html'):
+            self.send_response(responseCode)
+            self.send_header('Content-type', contentType)
             self.end_headers()
+
+        # # Split the url path into its component parts. Ignore the initial '/'
+        # Returns a list
+        def splitPath(self, completePath):
+            pathList = str(completePath).split("/")[1:]
+            # Strip off trailing '/' if there is one
+            if pathList[-1] == '':
+                pathList = pathList[:-1]  # Take all except the last item of the list
+            return pathList
+
+        # Re-encodes the incoming string as UTF and terminates with a '/n' character
+        def formatResponse(self, input):
+            output = (str(input) + "\n").encode('utf-8')
+            return output
+
+        # def send_error(self, code, message=None):
+        #     if code == 404:
+        #         self.error_message_format = "Does not compute!"
+        #     BaseHTTPRequestHandler.send_error(self, code, message)
 
         def do_GET(self):
             Utils.Message.addMessage("GET request: " + ", " + "Path: " + str(self.path))
-            # Create the headers
-            self._set_response()
+            pathList = self.splitPath(self.path)
+            Utils.Message.addMessage("pathList:" + str(pathList))
+            # Parse the path
+            response = b"\n"
+            if len(pathList) > 0:
+                if len(pathList) == 1 and pathList[0] == "streams":
+                    # /streams
+                    # Return a json encoded list of the available streams
+                    # response = (str(self.server.parentObject.streamsList) +  "\n").encode('utf-8')
+                    response = (json.dumps(self.server.parentObject.streamsList,
+                                            sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                    # Create the headers
+                    self._set_response(contentType='application/json')
+                elif len(pathList) == 2 and pathList[0] == "streams":
+                    # /streams/[streamID]
+                    # A specific stream has been requested
+                    # Return the json encoded stats for that stream
+                    requestedStreamID = pathList[1]
+                    streamsList = self.server.parentObject.streamsList
+                    # Create a sublist of streamsList containing just the streamID fields.
+                    # If found, this should return a list of length 1, containing entry for the stream object we want
+                    filteredStreamList = []
+                    try:
+                        filteredStreamList =  list(filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
+                    except Exception as e:
+                        response = self.formatResponse(str(e))
+
+                    if len(filteredStreamList) > 0:
+
+                        # The requested stream was found in the list
+                        # response = ("stream " + str(requestedStreamID) + " exists." + "\n").encode('utf-8')
+                        response = self.formatResponse("stream " + str(requestedStreamID) + " exists.")
+                        self._set_response()
+                    else:
+                        # Requested stream doesn't exist
+                        self.send_error(404, "File Not Found {}".format(self.path))
+                else:
+                    # Catch-all
+                    response = ("isptest" + "\n").encode('utf-8')
+                    self._set_response()
+
+
+
+
             # Create the response
-            response = ("GET request: " + str(self.path) + "\n").encode('utf-8')
+            # response = ("GET request: " + str(self.path) + "\n").encode('utf-8')
             # Write the response back to the client
             self.wfile.write(response)
 
@@ -4793,7 +4874,7 @@ def main(argv):
                 # Now iterate of the new streamList, calling .killStream() on all the objects within
                 for stream in tempStreamList:
                     Utils.Message.addMessage("INFO: Killing " + str(type(dict[stream])) + ": " + str(stream))
-                    print("Killing stream " + str(stream) + "\n")
+                    # print("Killing stream " + str(stream) + "\n")
                     # Invoke the kill method of each stream
                     dict[stream].killStream()
 
