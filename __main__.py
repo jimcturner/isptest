@@ -4209,7 +4209,7 @@ class ISPTestHTTPServer(object):
                                             sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
                     # Create the headers
                     self._set_response(contentType='application/json')
-                elif len(pathList) == 2 and pathList[0] == "streams":
+                elif len(pathList) >= 1 and pathList[0] == "streams":
                     # /streams/[streamID]
                     # A specific stream has been requested
                     # Return the json encoded stats for that stream
@@ -4221,13 +4221,24 @@ class ISPTestHTTPServer(object):
                     try:
                         filteredStreamList =  list(filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
                     except Exception as e:
-                        response = self.formatResponse(str(e))
+                        response = "Requested path: " + str(self.path) + ", " + str(e)
+                        # Requested stream doesn't exist
+                        self.send_error(404, response)
+
 
                     if len(filteredStreamList) > 0:
-
                         # The requested stream was found in the list
-                        # response = ("stream " + str(requestedStreamID) + " exists." + "\n").encode('utf-8')
-                        response = self.formatResponse("stream " + str(requestedStreamID) + " exists.")
+                        # Now check to see if any additonal paths were specified
+                        if len(pathList) > 2:
+                            if pathList[2] == "stats":
+                                response = self.formatResponse("stream " + str(requestedStreamID) + " stats.")
+                            elif pathList[2] == "events":
+                                response = self.formatResponse("stream " + str(requestedStreamID) + " events.")
+                            else:
+                                self.send_error(404, str("path " + str(self.path) + " not found"))
+                        else:
+                            response = self.formatResponse("Stream " + str(requestedStreamID) + " exists")
+
                         self._set_response()
                     else:
                         # Requested stream doesn't exist
