@@ -4189,10 +4189,29 @@ class ISPTestHTTPServer(object):
             output = (str(input) + "\n").encode('utf-8')
             return output
 
-        # def send_error(self, code, message=None):
-        #     if code == 404:
-        #         self.error_message_format = "Does not compute!"
-        #     BaseHTTPRequestHandler.send_error(self, code, message)
+        # Searches the streamsList for an entry with the specified ID (and type).
+        # Returns a list containing the dict(s) of the object if found, or None, if not found
+        # It's possible that more than one stream could exist with the same ID (if they are, say an RtpGenerator and
+        # an RtpStreamresults)
+        def getStreamtByID(self, requestedStreamID, streamType=None):
+            # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
+            streamsList = list(self.server.parentObject.streamsList)
+            filteredStreamList = []
+            try:
+                if streamType is None:
+                    filteredStreamList = list(
+                        filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
+                else:
+                    filteredStreamList = list(
+                        filter(lambda stream: (stream["streamID"] == int(requestedStreamID) and
+                                               type(stream["streamType"]) == type(streamType)), streamsList))
+
+                return filteredStreamList
+            except Exception as e:
+                Utils.Message.addMessage("ERR:ISPTestHTTPServer.HTTPRequestHandler.getStreamtByID() " + str(e))
+                return []
+
+
 
         def do_GET(self):
             try:
@@ -4220,7 +4239,7 @@ class ISPTestHTTPServer(object):
                         # If found, this should return a list of length 1, containing entry for the stream object we want
                         filteredStreamList = []
                         try:
-                            filteredStreamList =  list(filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
+                            filteredStreamList = list(filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
                         except Exception as e:
                             # Requested stream doesn't exist
                             self.send_error(404, str("path " + str(self.path) + " not found"))
