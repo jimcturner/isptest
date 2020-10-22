@@ -4200,7 +4200,7 @@ class ISPTestHTTPServer(object):
         # Returns a list containing the dict(s) of the object if found, or None, if not found
         # It's possible that more than one stream could exist with the same ID (if they are, say an RtpGenerator and
         # an RtpStreamresults)
-        def getStreamByID(self, requestedStreamID=None, streamType=None):
+        def getStreamByFilter(self, requestedStreamID=None, streamType=None):
             # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
             streamsList = list(self.server.parentObject.streamsList)
             filteredStreamList = []
@@ -4208,7 +4208,11 @@ class ISPTestHTTPServer(object):
                 Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) +\
                     ", streamType is " + str(streamType))
 
-                if requestedStreamID is not None and streamType is None:
+                if requestedStreamID is None and streamType is None:
+                    # No filtering specified, just return the entire list
+                    filteredStreamList = streamsList
+
+                elif requestedStreamID is not None and streamType is None:
                     # Filter by streamID
                     Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
                     filteredStreamList = list(
@@ -4231,7 +4235,7 @@ class ISPTestHTTPServer(object):
 
 
 
-        def do_GET(self):
+        def do_GET_old(self):
             try:
                 Utils.Message.addMessage("GET request: " + ", " + "Path: " + str(self.path))
                 pathList = self.splitPath(self.path)
@@ -4253,7 +4257,7 @@ class ISPTestHTTPServer(object):
                         # A specific stream has been requested
                         # Return the json encoded stats for that stream
                         requestedStreamID = pathList[1]
-                        filteredStreamList = self.getStreamByID(requestedStreamID=requestedStreamID, streamType=RtpReceiveStream.__name__)
+                        filteredStreamList = self.getStreamByFilter(requestedStreamID=requestedStreamID, streamType=RtpReceiveStream.__name__)
 
                         if len(filteredStreamList) > 0:
                             # The requested stream(s) was found in the list
@@ -4293,6 +4297,104 @@ class ISPTestHTTPServer(object):
                 Utils.Message.addMessage("ERR: ISPTestHTTPServer do_GET() " + str(e))
                 # self.send_error(404, str("ISPTestHTTPServer do_GET() path " + str(self.path) + " not found" + str(e)))
 
+        def do_GET(self):
+            Utils.Message.addMessage("GET request: " + ", " + "Path: " + str(self.path))
+            # Split the path into a list
+            pathList = self.splitPath(self.path)
+            # Get the number of 'steps' in the path
+            pathLen = len(pathList)
+            Utils.Message.addMessage("pathList:" + str(pathList))
+            # Index to iterate over the path steps
+            pathIndex = 0
+            currentStep = None
+            # Previous states to be captured as the path is traversed and parsed
+            filterType = None
+            filteredList = []
+            requestedStream = None
+
+            # Specify default or 'index' page
+            response =b"isptest http server\n"  # 'Default' GET response
+            self._set_response()                # Default headers
+            
+            # Traverse the steps of the path, parsing each step in sequence
+            try:
+                while pathIndex < pathLen:
+                    currentStep = pathList[pathIndex]   # Get the current step
+                    if currentStep == "streams":        # Test the path step
+                        if pathIndex == pathLen - 1:    # Is this the last step of the path
+                            # /streams
+                            # Return the entire list of streams without any filtering
+                            response = (json.dumps(self.server.parentObject.streamsList,
+                                                   sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                            # Create the headers
+                            self._set_response(contentType='application/json')
+                            break # Break out of while loop
+                        else:
+                            # More steps yet to be parsed, let the loop continue
+                            pass
+
+                    # elif currentStep in [RtpGenerator.__name__, RtpReceiveStream.__name__, RtpStreamResults.__name__]:
+                    elif currentStep in ["RtpGenerator", "RtpReceiveStream", "RtpStreamResults"]:
+                        Utils.Message.getMessages("Gets here")
+                        # /streams/RtpGenerator or /streams/RtpReceiveStream or /streams/RtpStreamResults
+                        filterType = currentStep # Capture the current streamType
+                        if pathIndex == pathLen - 1:    # Is this the last step of the path
+                            filteredList = self.getStreamByFilter(streamType=filterType)
+                            # Return a list of streams filtered by type
+                            response = (json.dumps(filteredList,
+                                                   sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                            # Create the headers
+                            self._set_response(contentType='application/json')
+                            break  # Break out of while loop
+                        else:
+                            # More steps yet to be parsed, let the loop continue
+                            pass
+
+                    # elif isinstance(int(currentStep), int): # Check to see if the 3rd step is an integer (streamID specifier)
+                    elif currentStep.isnumeric():  # Check to see if the 3rd step is an integer (streamID specifier)
+                        # Filter by streamID and (previously stored) streamType
+                        # /streams/[streamType]/[streamID]
+                        filteredList = self.getStreamByFilter(requestedStreamID=(currentStep), streamType=filterType)
+                        if len(filteredList) > 0:
+                            # Requested stream exists
+                            if pathIndex == pathLen - 1:  # Is this the last step of the path
+                                # Return the streamsList entry for the reqeusted stream
+                                response = (json.dumps(filteredList,
+                                                       sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                                # Create the headers
+                                self._set_response(contentType='application/json')
+                                break  # Break out of while loop
+                            else:
+                                # Still more steps to parse, store the stream
+                                requestedStream = filteredList[0]
+                        else:
+                            # Stream couldn't be found (or invalid path)
+                            raise Exception
+
+                    elif currentStep in ["stats", "events"]:
+                        # Request the stats/events for the selected stream
+                        # /streams/[streamType]/[streamID]/[command]
+                        if currentStep == "stats":
+                            response = self.formatResponse("stats for event: " + str(requestedStream))
+                            # Create the headers
+                            self._set_response()
+                            break  # Break out of while loop
+                        elif currentStep == "events":
+                            response = self.formatResponse("events for event: " + str(requestedStream))
+                            # Create the headers
+                            self._set_response()
+                            break  # Break out of while loop
+                        else:
+                            raise Exception
+
+                    # Increment the step counter
+                    pathIndex += 1
+
+                # Write the response back to the client
+                self.wfile.write(response)
+            except Exception as e:
+                self.send_error(404, str("path " + str(self.path) + ", current step: " + str(currentStep) + ", " + str(e)))
+            
 
         def do_POST(self):
             content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
