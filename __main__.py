@@ -4168,10 +4168,6 @@ class ISPTestHTTPServer(object):
             Utils.Message.addMessage(
                 "ERR:ISPTestHTTPServer() ISPTestHTTPServer() httpServerThread.join() (on port " + str(self.tcpListenPort) + ") " + str(e))
 
-
-
-
-
     # Define a custom BaseHTTPRequestHandler class to handle HTTP GET, POST requests
     # Note: A new instance of this class is created with every HTTP request
     class HTTPRequestHandler(BaseHTTPRequestHandler):
@@ -4307,6 +4303,7 @@ class ISPTestHTTPServer(object):
             # Index to iterate over the path steps
             pathIndex = 0
             currentStep = None
+            availableStreamTypesList = ["RtpGenerator", "RtpReceiveStream", "RtpStreamResults"]
             # Previous states to be captured as the path is traversed and parsed
             filterType = None
             filteredList = []
@@ -4334,8 +4331,8 @@ class ISPTestHTTPServer(object):
                             # More steps yet to be parsed, let the loop continue
                             pass
 
-                    elif currentStep in [RtpGenerator.__name__, RtpReceiveStream.__name__, RtpStreamResults.__name__]:
-                    # elif currentStep in ["RtpGenerator", "RtpReceiveStream", "RtpStreamResults"]:
+                    # elif currentStep in [RtpGenerator.__name__, RtpReceiveStream.__name__, RtpStreamResults.__name__]:
+                    elif currentStep in availableStreamTypesList:
                         # /streams/RtpGenerator or /streams/RtpReceiveStream or /streams/RtpStreamResults
                         filterType = currentStep # Capture the current streamType
                         if pathIndex == pathLen - 1:    # Is this the last step of the path
