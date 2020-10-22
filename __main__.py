@@ -4200,23 +4200,29 @@ class ISPTestHTTPServer(object):
         # Returns a list containing the dict(s) of the object if found, or None, if not found
         # It's possible that more than one stream could exist with the same ID (if they are, say an RtpGenerator and
         # an RtpStreamresults)
-        def getStreamByID(self, requestedStreamID, streamType=None):
+        def getStreamByID(self, requestedStreamID=None, streamType=None):
             # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
             streamsList = list(self.server.parentObject.streamsList)
             filteredStreamList = []
             try:
-                if streamType is None:
-                    Utils.Message.addMessage("streamType is None")
+                Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) +\
+                    ", streamType is " + str(streamType))
+
+                if requestedStreamID is not None and streamType is None:
+                    # Filter by streamID
+                    Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
                     filteredStreamList = list(
                         filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
+
+                elif requestedStreamID is None and streamType is not None:
+                    # Filter by streamType
+                    filteredStreamList = list(
+                        filter(lambda stream: stream["streamType"] == streamType, streamsList))
                 else:
-                    Utils.Message.addMessage("filter by streamType: " + str(streamType))
-                    # filteredStreamList = list(
-                    #     filter(lambda stream: (stream["streamID"] == int(requestedStreamID) and
-                    #                            type(stream["streamType"]) is type(streamType)), streamsList))
+                    # filter by streamID and streamType
                     filteredStreamList = list(
                         filter(lambda stream: stream["streamID"] == int(requestedStreamID) and
-                                              stream["streamType"] is streamType, streamsList))
+                                              stream["streamType"] == streamType, streamsList))
 
                 return filteredStreamList
             except Exception as e:
@@ -4239,6 +4245,7 @@ class ISPTestHTTPServer(object):
                         # response = (str(self.server.parentObject.streamsList) +  "\n").encode('utf-8')
                         response = (json.dumps(self.server.parentObject.streamsList,
                                                 sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+
                         # Create the headers
                         self._set_response(contentType='application/json')
                     elif len(pathList) >= 1 and pathList[0] == "streams":
@@ -4246,7 +4253,7 @@ class ISPTestHTTPServer(object):
                         # A specific stream has been requested
                         # Return the json encoded stats for that stream
                         requestedStreamID = pathList[1]
-                        filteredStreamList = self.getStreamByID(requestedStreamID, streamType=RtpReceiveStream)
+                        filteredStreamList = self.getStreamByID(requestedStreamID=requestedStreamID, streamType=RtpReceiveStream.__name__)
 
                         if len(filteredStreamList) > 0:
                             # The requested stream(s) was found in the list
