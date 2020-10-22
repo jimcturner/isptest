@@ -4311,6 +4311,7 @@ class ISPTestHTTPServer(object):
             filterType = None
             filteredList = []
             requestedStream = None
+            streamCommand = None
 
             # Specify default or 'index' page
             response =b"isptest http server\n"  # 'Default' GET response
@@ -4374,22 +4375,31 @@ class ISPTestHTTPServer(object):
                     elif currentStep.startswith(("stats", "events")):
                         # Request the stats/events for the selected stream
                         # /streams/[streamType]/[streamID]/[command]
-                        if currentStep.startswith("stats"):
-                            response = self.formatResponse("stats " + str(currentStep) + " for event: " + str(requestedStream))
-                            # Create the headers
-                            self._set_response()
-                            break  # Break out of while loop
-                        elif currentStep.startswith("events"):
-                            # Extract any additional query components (if present)
-                            query_components = parse_qs(urlparse(self.path).query)
-                            response = self.formatResponse("events " + str(currentStep) + "for event: " + \
-                                                           str(requestedStream) + ", " + str(query_components))
-                            # Create the headers
-                            self._set_response()
-                            break  # Break out of while loop
-                        else:
-                            raise Exception
+                        # Requested stream exists
+                        if pathIndex == pathLen - 1:  # Is this the last step of the path?
+                            if currentStep.startswith("stats"):
+                                response = self.formatResponse("stats " + str(currentStep) + " for event: " + str(requestedStream))
+                                # Create the headers
+                                self._set_response()
+                                break  # Break out of while loop
+                            elif currentStep.startswith("events"):
+                                # Extract any additional query components (if present)
+                                query_components = parse_qs(urlparse(self.path).query)
+                                response = self.formatResponse("events " + str(currentStep) + "for event: " + \
+                                                               str(requestedStream) + ", " + str(query_components))
+                                # Create the headers
+                                self._set_response()
+                                break  # Break out of while loop
 
+                            else:
+                                raise Exception
+                        else:
+                            # Still more steps to parse, store the command addressed to this stream. Might be useful later
+                            streamCommand = currentStep
+
+                    else:
+                        # Catchall
+                        raise Exception
                     # Increment the step counter
                     pathIndex += 1
 
