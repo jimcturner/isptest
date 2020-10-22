@@ -4330,7 +4330,7 @@ class ISPTestHTTPServer(object):
                     elif currentStep.isnumeric():  # Check to see if the 3rd step is an integer (streamID specifier)
                         # Filter by streamID and (previously stored) streamType
                         # /streams/[streamType]/[streamID]
-                        filteredList = self.getStreamByFilter(requestedStreamID=(currentStep), streamType=filterType)
+                        filteredList = self.getStreamByFilter(requestedStreamID=currentStep, streamType=filterType)
                         if len(filteredList) > 0:
                             # Requested stream exists
                             if pathIndex == pathLen - 1:  # Is this the last step of the path
@@ -4391,8 +4391,6 @@ class ISPTestHTTPServer(object):
             post_data_dict = parse_qs(post_data_raw) # parse the post data and convert to a dict
 
             Utils.Message.addMessage("POST request, Path: " + str(self.path) + ", data: " + str(post_data_dict))
-            # self._set_response()
-            # self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
 
             # Parse the path
             # Split the path into a list
@@ -4502,6 +4500,96 @@ class ISPTestHTTPServer(object):
 
         def do_DELETE(self):
             Utils.Message.addMessage("do_DELETE()")
+            # Parse the path
+            # Split the path into a list
+            pathList = self.splitPath(self.path)
+            pathLen = len(pathList)
+            # Utils.Message.addMessage("pathList:" + str(pathList))
+
+            # Index to iterate over the path steps
+            pathIndex = 0
+            currentStep = None
+
+            # Previous states to be captured as the path is traversed and parsed
+            filterType = None
+            requestedStream = None
+
+            # Specify default or 'index' page
+            response = b"isptest http server\n"  # 'Default' GET response
+            self._set_response()  # Default headers
+            # Traverse the steps of the path, parsing each step in sequence
+            try:
+                while pathIndex < pathLen:
+                    currentStep = pathList[pathIndex]  # Get the current step
+                    if currentStep == "streams":  # Test the path step
+                        if pathIndex == pathLen - 1:  # Is this the last step of the path
+                            raise Exception("do_DELETE()/streams")
+                        else:
+                            # More steps yet to be parsed, let the loop continue
+                            pass
+
+                    elif currentStep == "delete":  # Test the path step
+                        # Remove an existing stream from  streamsList
+                        # /streams/delete
+                        if pathIndex == pathLen - 1:  # Is this the last step of the path
+                            # Not enough info, we need the streamType and the streamID
+                            raise Exception("do_DELETE()/streams/" + str(currentStep))
+                        else:
+                            # More steps yet to be parsed, let the loop continue
+                            pass
+
+                    elif currentStep in self.server.parentObject.availableStreamTypes:
+                        # /streams/delete/[streamType]
+                        # Capture the streamType for future use
+                        filterType = currentStep
+                        if pathIndex == pathLen - 1:  # Is this the last step of the path
+                            # Not enough info, we still need the streamID
+                            raise Exception("do_DELETE()/streams/delete/" + str(currentStep))
+                        else:
+                            # More steps yet to be parsed, let the loop continue
+                            pass
+
+                    elif currentStep.isnumeric():  # Check to see if the 4thd step is an integer (streamID specifier)
+                        # Filter by streamID and (previously stored) streamType
+                        # /streams/delete/[streamType]/[streamID]
+                        # Have to ensure that filterType has been specified, otherwise we could delete the wrong Rtp Stream
+                        # (if it shares the same id no)
+                        if filterType is not None:
+                            filteredList = self.getStreamByFilter(requestedStreamID=currentStep, streamType=filterType)
+                        else:
+                            raise Exception("do_DELETE()/streams/delete/" + str(filterType) + "/" + str(currentStep) +\
+                                            " -- No streamType set")
+
+                        if len(filteredList) > 0:
+                            # Requested stream exists so we know we can delete it
+                            if pathIndex == pathLen - 1:  # Is this the last step of the path
+                                msg = str(filterType) + " " + str(currentStep) + " to be deleted"
+                                Utils.Message.addMessage(msg)
+                                response = self.formatResponse(msg)
+                                self._set_response()
+                                break # Break out of while loop
+                            else:
+                                # Still more steps to parse, store the stream
+                                requestedStream = filteredList[0]
+                        else:
+                            # Stream couldn't be found (or invalid path)
+                            raise Exception("do_DELETE()/streams/delete/" + str(filterType) + "/" + str(currentStep))
+
+                    else:
+                        # Catchall
+                        raise Exception ("do_DELETE()/" + str(currentStep))
+
+                    # Increment the step counter
+                    pathIndex += 1
+
+                # Write the response back to the client
+                self.wfile.write(response)
+            except Exception as e:
+                self.send_error(404,
+                                str("do_DELETE() path " + str(self.path) + ", current step: " + str(
+                                    currentStep) + ", " + str(e)))
+
+
 
     def __httpServerThread(self):
         # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
