@@ -4119,7 +4119,7 @@ class ISPTestHTTPServer(object):
         self.streamsList = []
         # These keys are required for a stream to be added via the /streams/add POST method. Used for validation
         # Note: uses bytestrings because that is what the POST data is encoded as when it arrives
-        self.streamRequiredKeys = [b"streamID", b"httpPort", b"streamType", b"timeCreated"]
+        self.streamRequiredKeys = [b"streamID", b"httpPort", b"streamType"]
         # The possible different type of Rtp Stream - defines valid URL paths
         self.availableStreamTypes = ["RtpGenerator", "RtpReceiveStream", "RtpStreamResults"]
         # Creates a dummy stream entry and appends it to the streamsList
@@ -4203,7 +4203,7 @@ class ISPTestHTTPServer(object):
         # Returns a list containing the dict(s) of the object if found, or None, if not found
         # It's possible that more than one stream could exist with the same ID (if they are, say an RtpGenerator and
         # an RtpStreamresults)
-        def getStreamByFilter(self, requestedStreamID=None, streamType=None):
+        def getStreamByFilterOld(self, requestedStreamID=None, streamType=None):
             # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
             streamsList = list(self.server.parentObject.streamsList)
             filteredStreamList = []
@@ -4218,6 +4218,44 @@ class ISPTestHTTPServer(object):
                 elif requestedStreamID is not None and streamType is None:
                     # Filter by streamID
                     Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
+                    filteredStreamList = list(
+                        filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
+
+                elif requestedStreamID is None and streamType is not None:
+                    # Filter by streamType
+                    filteredStreamList = list(
+                        filter(lambda stream: stream["streamType"] == streamType, streamsList))
+                else:
+                    # filter by streamID and streamType
+                    filteredStreamList = list(
+                        filter(lambda stream: stream["streamID"] == int(requestedStreamID) and
+                                              stream["streamType"] == streamType, streamsList))
+
+                return filteredStreamList
+            except Exception as e:
+                Utils.Message.addMessage("ERR:ISPTestHTTPServer.HTTPRequestHandler.getStreamtByID() " + str(e))
+                return []
+
+        def getStreamByFilter(self, requestedStreamID=None, streamType=None, httpPort = None):
+            # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
+            streamsList = list(self.server.parentObject.streamsList)
+            filteredStreamList = []
+            try:
+                Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) +\
+                    ", streamType is " + str(streamType))
+
+                if httpPort is not None:
+                    # Filter by http port . This *should* only ever return a single result
+                    filteredStreamList = list(
+                        filter(lambda stream: stream["httpPort"] == int(httpPort), streamsList))
+
+                elif requestedStreamID is None and streamType is None:
+                    # No filtering specified, just return the entire list
+                    filteredStreamList = streamsList
+
+                elif requestedStreamID is not None and streamType is None:
+                    # Filter by streamID
+                    # Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
                     filteredStreamList = list(
                         filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
 
@@ -4400,6 +4438,18 @@ class ISPTestHTTPServer(object):
                                     errorText = "streams/add key " + str(key) + " missing. Cannot add stream"
                                     Utils.Message.addMessage(errorText)
                                     raise Exception(errorText)
+
+                            try:
+                                self.server.parentObject.streamsList.append({"streamID": int(post_data_dict[b"streamID"][0]),
+                                                    "httpPort": int(post_data_dict[b"httpPort"][0]),
+                                                    "streamType": str(post_data_dict[b"streamType"][0].decode('UTF-8')),
+                                                    "timeCreated": datetime.datetime.now()
+                                                })
+                            except Exception as e:
+                                errorText = "ERR:HTTPRequestHandler.do_POST() Failed to append() "+ str(e)
+                                Utils.Message.addMessage(errorText)
+                                raise Exception(errorText)
+
                             # Set the headers
                             self._set_response(responseCode=201)
                             break  # Break out of while loop
