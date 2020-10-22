@@ -7,7 +7,7 @@ from __future__ import unicode_literals # Required for prompt_toolkit
 
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import PurePosixPath
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlparse, parse_qs
 
 from Registry import Registry # This class contains constants/defaults used throughout the program
 
@@ -4333,9 +4333,8 @@ class ISPTestHTTPServer(object):
                             # More steps yet to be parsed, let the loop continue
                             pass
 
-                    # elif currentStep in [RtpGenerator.__name__, RtpReceiveStream.__name__, RtpStreamResults.__name__]:
-                    elif currentStep in ["RtpGenerator", "RtpReceiveStream", "RtpStreamResults"]:
-                        Utils.Message.getMessages("Gets here")
+                    elif currentStep in [RtpGenerator.__name__, RtpReceiveStream.__name__, RtpStreamResults.__name__]:
+                    # elif currentStep in ["RtpGenerator", "RtpReceiveStream", "RtpStreamResults"]:
                         # /streams/RtpGenerator or /streams/RtpReceiveStream or /streams/RtpStreamResults
                         filterType = currentStep # Capture the current streamType
                         if pathIndex == pathLen - 1:    # Is this the last step of the path
@@ -4371,16 +4370,20 @@ class ISPTestHTTPServer(object):
                             # Stream couldn't be found (or invalid path)
                             raise Exception
 
-                    elif currentStep in ["stats", "events"]:
+                    # elif currentStep starts with "stats", "events":
+                    elif currentStep.startswith(("stats", "events")):
                         # Request the stats/events for the selected stream
                         # /streams/[streamType]/[streamID]/[command]
-                        if currentStep == "stats":
-                            response = self.formatResponse("stats for event: " + str(requestedStream))
+                        if currentStep.startswith("stats"):
+                            response = self.formatResponse("stats " + str(currentStep) + " for event: " + str(requestedStream))
                             # Create the headers
                             self._set_response()
                             break  # Break out of while loop
-                        elif currentStep == "events":
-                            response = self.formatResponse("events for event: " + str(requestedStream))
+                        elif currentStep.startswith("events"):
+                            # Extract any additional query components (if present)
+                            query_components = parse_qs(urlparse(self.path).query)
+                            response = self.formatResponse("events " + str(currentStep) + "for event: " + \
+                                                           str(requestedStream) + ", " + str(query_components))
                             # Create the headers
                             self._set_response()
                             break  # Break out of while loop
