@@ -5,6 +5,8 @@
 # 
 from __future__ import unicode_literals # Required for prompt_toolkit
 
+import cgi
+import urllib
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import PurePosixPath
 from urllib.parse import unquote, urlparse, parse_qs
@@ -4115,6 +4117,11 @@ class ISPTestHTTPServer(object):
         super().__init__()
         # Create a list of dicts to hold a list of Rtp Streams
         self.streamsList = []
+        # These keys are required for a stream to be added via the /streams/add POST method. Used for validation
+        # Note: uses bytestrings because that is what the POST data is encoded as when it arrives
+        self.streamRequiredKeys = [b"streamID", b"httpPort", b"streamType", b"timeCreated"]
+        # The possible different type of Rtp Stream - defines valid URL paths
+        self.availableStreamTypes = ["RtpGenerator", "RtpReceiveStream", "RtpStreamResults"]
         # Creates a dummy stream entry and appends it to the streamsList
         def createDummyStream(streamsList, streamType, streamID=random.randint(1000, 2000)):
             try:
@@ -4229,81 +4236,17 @@ class ISPTestHTTPServer(object):
                 Utils.Message.addMessage("ERR:ISPTestHTTPServer.HTTPRequestHandler.getStreamtByID() " + str(e))
                 return []
 
-
-
-        def do_GET_old(self):
-            try:
-                Utils.Message.addMessage("GET request: " + ", " + "Path: " + str(self.path))
-                pathList = self.splitPath(self.path)
-                Utils.Message.addMessage("pathList:" + str(pathList))
-                # Parse the path
-                response = b"\n"
-                if len(pathList) > 0:
-                    if len(pathList) == 1 and pathList[0] == "streams":
-                        # /streams
-                        # Return a json encoded list of the available streams
-                        # response = (str(self.server.parentObject.streamsList) +  "\n").encode('utf-8')
-                        response = (json.dumps(self.server.parentObject.streamsList,
-                                                sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
-
-                        # Create the headers
-                        self._set_response(contentType='application/json')
-                    elif len(pathList) >= 1 and pathList[0] == "streams":
-                        # /streams/[streamID]
-                        # A specific stream has been requested
-                        # Return the json encoded stats for that stream
-                        requestedStreamID = pathList[1]
-                        filteredStreamList = self.getStreamByFilter(requestedStreamID=requestedStreamID, streamType=RtpReceiveStream.__name__)
-
-                        if len(filteredStreamList) > 0:
-                            # The requested stream(s) was found in the list
-                            # Now check to see if any additional paths were specified
-                            if len(pathList) > 2:
-                                if pathList[2] == "stats":
-                                    response = self.formatResponse("stream " + str(requestedStreamID) + " stats.")
-                                    self._set_response()
-                                elif pathList[2] == "events":
-                                    response = self.formatResponse("stream " + str(requestedStreamID) + " events.")
-                                    self._set_response()
-                                else:
-                                    # Unrecognised path
-                                    self.send_error(404, str("path " + str(self.path) + " not found"))
-                            else:
-                                # response = self.formatResponse("Stream " + str(requestedStreamID) + " exists")
-                                response = (json.dumps(filteredStreamList,
-                                                sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
-                                self._set_response(contentType='application/json')
-                        else:
-                            # Requested stream doesn't exist
-                            self.send_error(404, str("path " + str(self.path) + " not found"))
-
-                    else:
-                        # Requested path doesn't exist
-                        self.send_error(404, str("path " + str(self.path) + " not found"))
-
-                else:
-                    # Index page
-                    response = self.formatResponse("isptest http server")
-                    self._set_response()
-
-               # Write the response back to the client
-                self.wfile.write(response)
-            except Exception as e:
-                # Requested stream doesn't exist
-                Utils.Message.addMessage("ERR: ISPTestHTTPServer do_GET() " + str(e))
-                # self.send_error(404, str("ISPTestHTTPServer do_GET() path " + str(self.path) + " not found" + str(e)))
-
         def do_GET(self):
             Utils.Message.addMessage("GET request: " + ", " + "Path: " + str(self.path))
             # Split the path into a list
             pathList = self.splitPath(self.path)
             # Get the number of 'steps' in the path
             pathLen = len(pathList)
-            Utils.Message.addMessage("pathList:" + str(pathList))
+            # Utils.Message.addMessage("pathList:" + str(pathList))
             # Index to iterate over the path steps
             pathIndex = 0
             currentStep = None
-            availableStreamTypesList = ["RtpGenerator", "RtpReceiveStream", "RtpStreamResults"]
+
             # Previous states to be captured as the path is traversed and parsed
             filterType = None
             filteredList = []
@@ -4331,8 +4274,7 @@ class ISPTestHTTPServer(object):
                             # More steps yet to be parsed, let the loop continue
                             pass
 
-                    # elif currentStep in [RtpGenerator.__name__, RtpReceiveStream.__name__, RtpStreamResults.__name__]:
-                    elif currentStep in availableStreamTypesList:
+                    elif currentStep in self.server.parentObject.availableStreamTypes:
                         # /streams/RtpGenerator or /streams/RtpReceiveStream or /streams/RtpStreamResults
                         filterType = currentStep # Capture the current streamType
                         if pathIndex == pathLen - 1:    # Is this the last step of the path
@@ -4347,7 +4289,6 @@ class ISPTestHTTPServer(object):
                             # More steps yet to be parsed, let the loop continue
                             pass
 
-                    # elif isinstance(int(currentStep), int): # Check to see if the 3rd step is an integer (streamID specifier)
                     elif currentStep.isnumeric():  # Check to see if the 3rd step is an integer (streamID specifier)
                         # Filter by streamID and (previously stored) streamType
                         # /streams/[streamType]/[streamID]
@@ -4408,11 +4349,105 @@ class ISPTestHTTPServer(object):
 
         def do_POST(self):
             content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
-            post_data = self.rfile.read(content_length)  # <--- Gets the data itself
-            Utils.Message.addMessage("POST request, Path: " + str(self.path) + "Headers: " + str(self.headers) + \
-                                     "Body:" + post_data.decode('utf-8'))
-            self._set_response()
-            self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
+            post_data_raw = self.rfile.read(content_length)  # <--- Gets the data itself as a string ?foo=bar&x=y etc..
+            post_data_dict = parse_qs(post_data_raw) # parse the post data and convert to a dict
+
+            Utils.Message.addMessage("POST request, Path: " + str(self.path) + ", data: " + str(post_data_dict))
+            # self._set_response()
+            # self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
+
+            # Parse the path
+            # Split the path into a list
+            pathList = self.splitPath(self.path)
+            pathLen = len(pathList)
+            # Utils.Message.addMessage("pathList:" + str(pathList))
+
+            # Index to iterate over the path steps
+            pathIndex = 0
+            currentStep = None
+            # availableStreamTypesList = ["RtpGenerator", "RtpReceiveStream", "RtpStreamResults"]
+
+            # Previous states to be captured as the path is traversed and parsed
+            # filterType = None
+            # requestedStream = None
+
+            # Specify default or 'index' page
+            response = b"isptest http server\n"  # 'Default' GET response
+            self._set_response()  # Default headers
+
+            # Traverse the steps of the path, parsing each step in sequence
+            try:
+                while pathIndex < pathLen:
+                    currentStep = pathList[pathIndex]  # Get the current step
+                    if currentStep == "streams":  # Test the path step
+                        if pathIndex == pathLen - 1:  # Is this the last step of the path
+                            raise Exception("Can't POST to this path")
+                        else:
+                            # More steps yet to be parsed, let the loop continue
+                            pass
+
+                    elif currentStep == "add":  # Test the path step
+                        # add a new stream to streamsList
+                        # /streams/add
+                        if pathIndex == pathLen - 1:  # Is this the last step of the path
+
+                            response = self.formatResponse("Add using " + str(post_data_dict))
+                            # Check that all the required keys are in the fields dict
+                            # requiredKeys = [b"streamID", b"httpPort", b"streamType", b"timeCreated"]
+
+                            for key in self.server.parentObject.streamRequiredKeys:
+                                if key not in post_data_dict:
+                                    errorText = "streams/add key " + str(key) + " missing. Cannot add stream"
+                                    Utils.Message.addMessage(errorText)
+                                    raise Exception(errorText)
+                            # Set the headers
+                            self._set_response(responseCode=201)
+                            break  # Break out of while loop
+                        else:
+                            # More steps yet to be parsed, let the loop continue
+                            pass
+                    # elif currentStep in availableStreamTypesList:
+                    #     # /streams/RtpGenerator or /streams/RtpReceiveStream or /streams/RtpStreamResults
+                    #     filterType = currentStep  # Capture the current streamType
+                    #     if pathIndex == pathLen - 1:  # Is this the last step of the path
+                    #         raise Exception("Can't POST to this path")
+                    #     else:
+                    #         # More steps yet to be parsed, let the loop continue
+                    #         pass
+                    #
+                    # elif currentStep.isnumeric():  # Check to see if the 3rd step is an integer (streamID specifier)
+                    #     # Filter by streamID and (previously stored) streamType
+                    #     # /streams/[streamType]/[streamID]
+                    #     filteredList = self.getStreamByFilter(requestedStreamID=currentStep, streamType=filterType)
+                    #     if len(filteredList) > 0:
+                    #         # Requested stream exists
+                    #         if pathIndex == pathLen - 1:  # Is this the last step of the path
+                    #             # Return the streamsList entry for the reqeusted stream
+                    #             response = (json.dumps(filteredList,
+                    #                                    sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                    #             # Create the headers
+                    #             self._set_response(contentType='application/json')
+                    #             break  # Break out of while loop
+                    #         else:
+                    #             # Still more steps to parse, store the stream
+                    #             requestedStream = filteredList[0]
+                    #
+                    #     else:
+                    #         # Stream couldn't be found (or invalid path)
+                    #         raise Exception
+
+                    else:
+                        # Catchall
+                        raise Exception("Can't POST to this path")
+                    # Increment the step counter
+                    pathIndex += 1
+
+                # Write the response back to the client
+                self.wfile.write(response)
+            except Exception as e:
+                self.send_error(404,
+                        str("do_POST() path " + str(self.path) + ", current step: " + str(currentStep) + ", " + str(e)))
+
 
     def __httpServerThread(self):
         # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
