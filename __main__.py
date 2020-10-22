@@ -4439,6 +4439,8 @@ class ISPTestHTTPServer(object):
                                     Utils.Message.addMessage(errorText)
                                     raise Exception(errorText)
 
+                            # Append the new Rtp Stream to the streamsList[]
+                            # NOTE: each value of incoming data is a list of strings encoded in UTF-8
                             try:
                                 self.server.parentObject.streamsList.append({"streamID": int(post_data_dict[b"streamID"][0]),
                                                     "httpPort": int(post_data_dict[b"httpPort"][0]),
@@ -4498,6 +4500,8 @@ class ISPTestHTTPServer(object):
                 self.send_error(404,
                         str("do_POST() path " + str(self.path) + ", current step: " + str(currentStep) + ", " + str(e)))
 
+        def do_DELETE(self):
+            Utils.Message.addMessage("do_DELETE()")
 
     def __httpServerThread(self):
         # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
