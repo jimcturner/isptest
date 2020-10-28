@@ -16,6 +16,7 @@ import textwrap
 import platform
 from functools import reduce
 from http.server import BaseHTTPRequestHandler, HTTPServer, ThreadingHTTPServer
+import http.client
 from queue import SimpleQueue, Queue, Empty, Full
 from timeit import default_timer as timer  # Used to calculate elapsed time
 import math
@@ -761,18 +762,17 @@ class RtpCommon(object):
         except Exception as e:
             return None
 
-    # # Define a custom HTTPServer. This will allow access to the associated RtpReceiveStream object that created it
-    # class RtpStreamHTTPServer(HTTPServer):
-    #     def __init__(self, *args, **kwargs):
-    #         # Because HTTPServer is an old-style class, super() can't be used.
-    #         HTTPServer.__init__(self, *args, **kwargs)
-    #         self.rtpStream = None
-    #
-    #     # Provide a setter method to allow the server to have access to the RtpStream object that created it
-    #     # The reason not to have this set by the Constructor method is that I didn't want to modify the existing
-    #     # constructor method of HTTPServer
-    #     def setRtpStream(self, parentRtpStreamInstance):
-    #         self.rtpStream = parentRtpStreamInstance
+    # Adds the stream to the streams directory service by way of an HTTP POST
+    def addToStreamsDirectory(self, tcpPort, url='localhost', path = '/'):
+        # Create HTTP connection
+        connection = http.client.HTTPConnection(url, tcpPort, timeout=0.5)
+
+
+
+
+    # removes the stream from the directory service by way of an HTTP DELETE
+    def removeFromStreamsDirectory(self):
+        pass
 
 # Define a Super Class for RTP Receive streams. This will contain methods that are common to both
 # RtpReceiveStream and RtpStreamResults

@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Defines useful non-core objects for use by isptest
+import http.client
 import os
 import pickle
 import random
@@ -1414,4 +1415,48 @@ class CustomHTTPServer(HTTPServer):
     # constructor method of HTTPServer
     def setParentObjectInstance(self, parentObjectInstance):
         self.parentObject = parentObjectInstance
+
+# Performs an http GET
+# Returns a dict
+def httpGET(url, tcpPort=80, path = '/', timeout=0.5):
+
+    reply = {"statusCode": None, "reason":None, "headers":None, "body":None}
+    # Create HTTP connection
+    try:
+        connection = http.client.HTTPConnection(url, tcpPort, timeout=timeout)
+        # Successfully connected
+        try:
+            # Make the GET request
+            connection.request("GET", path)
+        except socket.timeout as st:
+            raise Exception("http timeout " + str(st))
+        except Exception as e:
+            # other kind of error occured during request
+            raise Exception('request error ' + str(e))
+        else:
+            # HTTP GET was successful. Get the response
+            response = connection.getresponse()
+            # Get status
+            reply["statusCode"] = response.status
+            # Get reason phrase
+            reply["reason"] = response.reason
+            # Retrieve the headers from the response
+            reply["headers"] = response.getheaders()
+            # Retrieve the body
+            reply["body"] = response.read()
+        finally:
+            # always close the connection
+            connection.close()
+    except Exception as e:
+        raise Exception("connection error " + str(e))
+
+    return reply
+
+
+
+
+
+
+
+
 
