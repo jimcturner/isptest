@@ -4123,25 +4123,25 @@ class ISPTestHTTPServer(object):
         self.streamRequiredKeys = [b"streamID", b"httpPort", b"streamType"]
         # The possible different type of Rtp Stream - defines valid URL paths
         self.availableStreamTypes = ["RtpGenerator", "RtpReceiveStream", "RtpStreamResults"]
-        # Creates a dummy stream entry and appends it to the streamsList
-        def createDummyStream(streamsList, streamType, streamID=random.randint(1000, 2000)):
-            try:
-                streamsList.append({"streamID":streamID,
-                                     "httpPort":Utils.TCPListenPortCreator().getNext(),
-                                     "streamType":streamType,
-                                     "timeCreated":datetime.datetime.now()
-                                     })
-
-
-            except Exception as e:
-                Utils.Message.addMessage("ERR: ISPTestHTTPServer.createDummyStream() " + str(e))
-        # Create a dummy stream(s)
-        streamID = random.randint(1000, 2000)
-        createDummyStream(self.streamsList, RtpReceiveStream.__name__, streamID=streamID)
-        createDummyStream(self.streamsList, RtpGenerator.__name__, streamID=streamID)
-        streamID = random.randint(1000, 2000)
-        createDummyStream(self.streamsList, RtpReceiveStream.__name__, streamID=streamID)
-        createDummyStream(self.streamsList, RtpGenerator.__name__, streamID=streamID)
+        # # Creates a dummy stream entry and appends it to the streamsList
+        # def createDummyStream(streamsList, streamType, streamID=random.randint(1000, 2000)):
+        #     try:
+        #         streamsList.append({"streamID":streamID,
+        #                              "httpPort":Utils.TCPListenPortCreator().getNext(),
+        #                              "streamType":streamType,
+        #                              "timeCreated":datetime.datetime.now()
+        #                              })
+        #
+        #
+        #     except Exception as e:
+        #         Utils.Message.addMessage("ERR: ISPTestHTTPServer.createDummyStream() " + str(e))
+        # # Create a dummy stream(s)
+        # streamID = random.randint(1000, 2000)
+        # createDummyStream(self.streamsList, RtpReceiveStream.__name__, streamID=streamID)
+        # createDummyStream(self.streamsList, RtpGenerator.__name__, streamID=streamID)
+        # streamID = random.randint(1000, 2000)
+        # createDummyStream(self.streamsList, RtpReceiveStream.__name__, streamID=streamID)
+        # createDummyStream(self.streamsList, RtpGenerator.__name__, streamID=streamID)
 
 
         # Start a web server running on the first port specified by Registry.httpServerStartingTCPPort
