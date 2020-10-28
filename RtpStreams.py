@@ -1625,7 +1625,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     streamDefinition = {
                                         "streamID": self.__stats["stream_syncSource"],
                                         "httpPort": self.tcpListenPort,
-                                        "streamTiype": "RtpReceiveStream"
+                                        "streamType": "RtpReceiveStream"
                                         }
                     status = self.addToStreamsDirectory(streamDefinition)
                     if status is False:
