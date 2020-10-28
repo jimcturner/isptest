@@ -11,6 +11,7 @@ dependencies=(
 	scapy==2.4.3 
 	ipwhois==1.2.0
 	pympler==0.8
+	requests==2.24.0
 	)
 
 # Temporary folder where pip will collect the dependencies. The name of this folder will determine the name of the file executable archive

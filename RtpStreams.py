@@ -26,6 +26,7 @@ from copy import deepcopy
 import pickle
 from collections import deque   # Used for circular buffers
 
+import requests
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 # Additonal libraries required (of my own making)
@@ -763,10 +764,23 @@ class RtpCommon(object):
             return None
 
     # Adds the stream to the streams directory service by way of an HTTP POST
-    def addToStreamsDirectory(self, tcpPort, url='localhost', path = '/'):
-        # Create HTTP connection
-        connection = http.client.HTTPConnection(url, tcpPort, timeout=0.5)
+    def addToStreamsDirectory(self, streamDefinition, url='http://localhost:10000/streams/add'):
+        # Create dict containing the data to be sent
+        # streamData= {"streamID":9876, "httpPort":5555, "streamType":"RtpReceiveStream"}
+        # POST the data
+        status = False
+        try:
+            r = requests.post(url, streamDefinition)
+            # test the response
+            if r.status_code == requests.codes.ok:
+                Utils.Message.addMessage("INFO: Successfully registered stream " + str(streamDefinition["streamID"]))
 
+            else:
+                Utils.Message.addMessage("ERR: RtpCommon.addToStreamsDirectory() " + \
+                                         str(streamDefinition) + ", status code: " + str(r.status_code))
+        except Exception as e:
+            Utils.Message.addMessage("ERR: RtpCommon.addToStreamsDirectory() " +\
+                                         str(streamDefinition) + ", error: " + str(e))
 
 
 
@@ -1595,6 +1609,7 @@ class RtpReceiveStream(RtpReceiveCommon):
 
             # Create an HTTP server thread
             self.httpd = None
+            self.tcpListenPort = None
             try:
                 Utils.Message.addMessage("DBUG:************Creating httpServerThread")
                 self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
@@ -1603,6 +1618,24 @@ class RtpReceiveStream(RtpReceiveCommon):
                 self.httpServerThread.start()
             except Exception as e:
                 Utils.Message.addMessage("ERR:Couldn't create httpServerThread " + str(e))
+
+            # Now register the stream with the stream directory service
+            try:
+                if self.tcpListenPort is not None:
+                    streamDefinition = {
+                                        "streamID": self.__stats["stream_syncSource"],
+                                        "httpPort": self.tcpListenPort,
+                                        "streamTiype": "RtpReceiveStream"
+                                        }
+                    status = self.addToStreamsDirectory(streamDefinition)
+                    if status is False:
+                        raise Exception
+                else:
+                    Utils.Message.addMessage("DBUG: RtpReceiveStream.__init.addToStreamsDirectory() self.tcpListenPort not set for stream " + str(self.__stats["stream_syncSource"]) )
+            except Exception as e:
+                Utils.Message.addMessage("ERR:RtpReceiveStream.__init.addToStreamsDirectory() " + str(e))
+
+
 
             # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
             self.rtpRxStreamsDictMutex.acquire()
@@ -1655,11 +1688,11 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
         try:
             # Request an unused TCP port for the HTTP server to listen on
-            tcpListenPort = Utils.TCPListenPortCreator.getNext()
+            self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
             # This call will block
-            self.httpd =  Utils.CustomHTTPServer(('localhost', tcpListenPort), RtpReceiveStream.HTTPRequestHandler)
+            self.httpd =  Utils.CustomHTTPServer(('localhost', self.tcpListenPort), RtpReceiveStream.HTTPRequestHandler)
             Utils.Message.addMessage("DBUG: Creating " + str(self.__stats["stream_syncSource"]) +
-                                     ":httpServerThread, listening on TCP port " + str(tcpListenPort))
+                                     ":httpServerThread, listening on TCP port " + str(self.tcpListenPort))
             # Pass this RtpReceiveStream instance to the server
             self.httpd.setParentObjectInstance(self)
             # Start the http server

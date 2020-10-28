@@ -25,6 +25,7 @@ from urllib.parse import urlparse, unquote
 from Registry import Registry
 from ipwhois import IPWhois, exceptions
 import math
+import requests
 
 # Formats a datetime.timedelta object as a simple string hh:mm:ss
 # If showDays=True, returns dd:hh:mm:ss
@@ -1488,7 +1489,6 @@ def httpPOST(url, data, headers={},  tcpPort=80, path='/', timeout=0.5):
         raise Exception("connection error " + str(e))
 
     return reply
-
 
 
 
