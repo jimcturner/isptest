@@ -41,7 +41,12 @@ class Registry(object):
 
     ######### RtpCommon
     rtpCommonHistoricTracerouteEventsToKeep = 10 # No of previous traceroute results to hold in memory
-    httpServerStartingTCPPort = 10000 # The starting tcp http server port no
+    # TCP listen ports for the embedded HTTP servers
+    httpServerRtpReceiverTCPPort = 10000
+    httpServerRtpTransmitterTCPPort = 10001
+    httpServerRtpResultsTCPPort = 10002
+
+    httpServerStartingTCPPort = 10010 # The starting tcp http server port no for adhoc server creation
 
     ######### RtpReceiveStream
     receiveStreamAcceptThreshold = 15 # The minimum no of rtp packets for particular sync source ID to be received

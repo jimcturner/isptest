@@ -1401,7 +1401,8 @@ class TCPListenPortCreator(object):
     def getLastProvided(cls):
         return cls.tcpPort
 
-# Define a custom HTTPServer. This will allow access to the associated RtpReceiveStream object that created it
+# Define a custom HTTPServer. This will allow access to the associated object that created it,
+# from the server (and httpHandler)
 class CustomHTTPServer(HTTPServer):
     def __init__(self, *args, **kwargs):
         # Because HTTPServer is an old-style class, super() can't be used.

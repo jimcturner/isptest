@@ -4113,8 +4113,9 @@ class RtpPacketReceiver(object):
 # Note, this Class also provides a stream directory service
 class ISPTestHTTPServer(object):
 
-    def __init__(self) -> None:
+    def __init__(self, operationMode = None) -> None:
         super().__init__()
+        self.operationMode = operationMode
         # Create a list of dicts to hold a list of Rtp Streams
         self.streamsList = []
         # These keys are required for a stream to be added via the /streams/add POST method. Used for validation
@@ -4146,7 +4147,13 @@ class ISPTestHTTPServer(object):
         # Start a web server running on the first port specified by Registry.httpServerStartingTCPPort
         # NOTE: This is the only server running at a fixed port.
         # All other HTTP servers should call Utils.TCPListenPortCreator.getNext()
-        self.tcpListenPort = Registry.httpServerStartingTCPPort
+        if self.operationMode == "RECEIVE":
+            self.tcpListenPort = Registry.httpServerRtpReceiverTCPPort
+        elif self.operationMode == "TRANSMIT":
+            self.tcpListenPort = Registry.httpServerRtpTransmitterTCPPort
+        else:
+            self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
+
         self.tcpListernAddr = '127.0.0.1' # '' will listen on all interfaces but there is a startup delay
         # start an http server thread
         self.httpd = None

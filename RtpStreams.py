@@ -1600,7 +1600,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
                 self.httpServerThread.daemon = False
                 self.httpServerThread.setName(str(self.__stats["stream_syncSource"]) + ":httpServerThread")
-                self.httpServerThread.start()
+                # self.httpServerThread.start()
             except Exception as e:
                 Utils.Message.addMessage("ERR:Couldn't create httpServerThread " + str(e))
 
@@ -1657,11 +1657,11 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Request an unused TCP port for the HTTP server to listen on
             tcpListenPort = Utils.TCPListenPortCreator.getNext()
             # This call will block
-            self.httpd = RtpCommon.RtpStreamHTTPServer(('localhost', tcpListenPort), RtpReceiveStream.HTTPRequestHandler)
+            self.httpd =  Utils.CustomHTTPServer(('localhost', tcpListenPort), RtpReceiveStream.HTTPRequestHandler)
             Utils.Message.addMessage("DBUG: Creating " + str(self.__stats["stream_syncSource"]) +
                                      ":httpServerThread, listening on TCP port " + str(tcpListenPort))
             # Pass this RtpReceiveStream instance to the server
-            self.httpd.setRtpStream(self)
+            self.httpd.httpd.setParentObjectInstance(self)
             # Start the http server
             self.httpd.serve_forever()
             Utils.Message.addMessage(
@@ -1686,16 +1686,34 @@ class RtpReceiveStream(RtpReceiveCommon):
         else:
             return False
 
-    def killStream(self):
+    # Method to destroy this object
+    # Caller is an optional field to allow the method to check where the call is coming from
+    # This is important because it calls join() on threads to make sure that they've shut down
+    # A thread can't call join() on itself (it will block forever) so we need to check
+    # Since __samplingThread calls kill() when the autoremove stream is triggered, this is a real danger
+    def killStream(self, caller=None):
         # Kill the  __queueReceiverThread associated with this receive stream
         self.queueReceiverThreadActiveFlag = False
+
         self.queueReceiverThread.join()
-        Utils.Message.addMessage("DBUG: self.queueReceiverThread.join() complete")
+        Utils.Message.addMessage("DBUG: self.queueReceiverThread.join() complete for " + str(self.__stats["stream_syncSource"]))
 
         # Kill the __samplingThread associated with this stream
         self.samplingThreadActiveFlag = False
-        self.samplingThread.join()
-        Utils.Message.addMessage("DBUG: self.samplingThread.join() complete")
+        # Test to see if the kill() method is being called by the object itself
+        try:
+            if caller is self:
+                # If the object is killing 'itself' from the same thread we're trying to join()
+                # from it will block indefintely. This is bad!
+                Utils.Message.addMessage("DBUG: ***** thread trying to join() itself ***** "  + str(self.__stats["stream_syncSource"]))
+            else:
+                # Otherwise, kill() is being called by another thread/object so we can safely wait on join()
+                # to verify that the thread has ended
+                self.samplingThread.join()
+                Utils.Message.addMessage("DBUG: self.samplingThread.join() complete"  + str(self.__stats["stream_syncSource"]))
+        except Exception as e:
+            Utils.Message.addMessage("ERR:self.samplingThread.join() filed " + str(self.__stats["stream_syncSource"]) +\
+                                     ", "+ str(e))
 
         # Kill the http server
         try:
@@ -2482,7 +2500,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Write a report to disk
                     Utils.writeReportToDisk(report, fileName=_filename)
                     # Kill itself
-                    self.killStream()
+                    self.killStream(caller=self)
             except Exception as e:
                 Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread auto remove stream " + str(e))
 
