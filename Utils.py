@@ -1419,7 +1419,6 @@ class CustomHTTPServer(HTTPServer):
 # Performs an http GET
 # Returns a dict
 def httpGET(url, tcpPort=80, path = '/', timeout=0.5):
-
     reply = {"statusCode": None, "reason":None, "headers":None, "body":None}
     # Create HTTP connection
     try:
@@ -1435,6 +1434,44 @@ def httpGET(url, tcpPort=80, path = '/', timeout=0.5):
             raise Exception('request error ' + str(e))
         else:
             # HTTP GET was successful. Get the response
+            response = connection.getresponse()
+            # Get status
+            reply["statusCode"] = response.status
+            # Get reason phrase
+            reply["reason"] = response.reason
+            # Retrieve the headers from the response
+            reply["headers"] = response.getheaders()
+            # Retrieve the body
+            reply["body"] = response.read()
+        finally:
+            # always close the connection
+            connection.close()
+    except Exception as e:
+        raise Exception("connection error " + str(e))
+
+    return reply
+
+
+# Performs an http POST
+# Returns a dict
+# data is the bytestring to be sent
+# headers is a dict of the form {'Content-type': 'application/json'} for json
+def httpPOST(url, data, headers={},  tcpPort=80, path='/', timeout=0.5):
+    reply = {"statusCode": None, "reason": None, "headers": None, "body": None}
+    # Create HTTP connection
+    try:
+        connection = http.client.HTTPConnection(url, tcpPort, timeout=timeout)
+        # Successfully connected
+        try:
+            # Make the POST request
+            connection.request("POST", path, data, headers)
+        except socket.timeout as st:
+            raise Exception("http timeout " + str(st))
+        except Exception as e:
+            # other kind of error occured during request
+            raise Exception('request error ' + str(e))
+        else:
+            # HTTP POST was successful. Get the response
             response = connection.getresponse()
             # Get status
             reply["statusCode"] = response.status
