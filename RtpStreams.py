@@ -1600,7 +1600,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
                 self.httpServerThread.daemon = False
                 self.httpServerThread.setName(str(self.__stats["stream_syncSource"]) + ":httpServerThread")
-                # self.httpServerThread.start()
+                self.httpServerThread.start()
             except Exception as e:
                 Utils.Message.addMessage("ERR:Couldn't create httpServerThread " + str(e))
 
@@ -1661,7 +1661,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             Utils.Message.addMessage("DBUG: Creating " + str(self.__stats["stream_syncSource"]) +
                                      ":httpServerThread, listening on TCP port " + str(tcpListenPort))
             # Pass this RtpReceiveStream instance to the server
-            self.httpd.httpd.setParentObjectInstance(self)
+            self.httpd.setParentObjectInstance(self)
             # Start the http server
             self.httpd.serve_forever()
             Utils.Message.addMessage(

@@ -5128,7 +5128,7 @@ def main(argv):
 
     # Create and start the main HTTP Server
     try:
-        isptesttHTTPServer = ISPTestHTTPServer()
+        isptesttHTTPServer = ISPTestHTTPServer(operationMode=MODE)
     except Exception as e:
         Utils.Message.addMessage("ERR:isptesttHTTPServer = ISPTestHTTPServer() " + str(e))
 
