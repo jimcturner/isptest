@@ -738,8 +738,10 @@ class RtpData(object):
 # This will contain methods that are useful to all
 class RtpCommon(object):
     def __init__(self) -> None:
-        # super().__init__()
-        pass
+        super().__init__()
+        # Default timeout for all http requests
+        self.httpRequestTimeout=0.1
+
 
 
     # Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
@@ -1622,14 +1624,31 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Now register the stream with the stream directory service
             try:
                 if self.tcpListenPort is not None:
+                    # Construct the URL required to add streams to the directory service
+                    self.addStreamURL = "http://127.0.0.1:" + str(
+                        Registry.httpServerRtpReceiverTCPPort) + "/streams/add"
+
+                    # Create a dict to define the stream
                     streamDefinition = {
                                         "streamID": self.__stats["stream_syncSource"],
                                         "httpPort": self.tcpListenPort,
                                         "streamType": "RtpReceiveStream"
                                         }
-                    status = self.addToStreamsDirectory(streamDefinition)
-                    if status is False:
-                        raise Exception
+                    # POST the stream definition into the streams directory
+                    r = requests.post(self.addStreamURL, streamDefinition, timeout=self.httpRequestTimeout)
+                    # Test the response status code to see if the POST was successful
+                    try:
+                        r.raise_for_status() # If this doesn;t raise an exception, all is good!
+                        Utils.Message.addMessage("DBUG:Successful Register Receive Stream " + \
+                                                 str(self.__stats["stream_syncSource"]) + \
+                                                 ", response code: " + str(r.status_code))
+
+                    except Exception as e:
+                        Utils.Message.addMessage("ERR: Register Receive Stream FAILED " + \
+                                                 str(self.__stats["stream_syncSource"]) + \
+                                                 ", response code: " + str(r.status_code) + ", " + str(e))
+                        raise Exception(str(e))
+
                 else:
                     Utils.Message.addMessage("DBUG: RtpReceiveStream.__init.addToStreamsDirectory() self.tcpListenPort not set for stream " + str(self.__stats["stream_syncSource"]) )
             except Exception as e:

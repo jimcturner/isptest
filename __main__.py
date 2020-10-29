@@ -4397,7 +4397,7 @@ class ISPTestHTTPServer(object):
             post_data_raw = self.rfile.read(content_length)  # <--- Gets the data itself as a string ?foo=bar&x=y etc..
             post_data_dict = parse_qs(post_data_raw) # parse the post data and convert to a dict
 
-            Utils.Message.addMessage("POST request, Path: " + str(self.path) + ", data: " + str(post_data_dict))
+            Utils.Message.addMessage("DBUG:do_POST(), Path: " + str(self.path) + ", data: " + str(post_data_dict))
 
             # Parse the path
             # Split the path into a list
@@ -4416,7 +4416,6 @@ class ISPTestHTTPServer(object):
 
             # Specify default or 'index' page
             response = b"isptest http server\n"  # 'Default' GET response
-            self._set_response()  # Default headers
 
             # Traverse the steps of the path, parsing each step in sequence
             try:
@@ -4440,7 +4439,7 @@ class ISPTestHTTPServer(object):
 
                             for key in self.server.parentObject.streamRequiredKeys:
                                 if key not in post_data_dict:
-                                    errorText = "streams/add key " + str(key) + " missing. Cannot add stream"
+                                    errorText = "ERR:streams/add key " + str(key) + " missing. Cannot add stream"
                                     Utils.Message.addMessage(errorText)
                                     raise Exception(errorText)
 
@@ -4463,36 +4462,6 @@ class ISPTestHTTPServer(object):
                         else:
                             # More steps yet to be parsed, let the loop continue
                             pass
-                    # elif currentStep in availableStreamTypesList:
-                    #     # /streams/RtpGenerator or /streams/RtpReceiveStream or /streams/RtpStreamResults
-                    #     filterType = currentStep  # Capture the current streamType
-                    #     if pathIndex == pathLen - 1:  # Is this the last step of the path
-                    #         raise Exception("Can't POST to this path")
-                    #     else:
-                    #         # More steps yet to be parsed, let the loop continue
-                    #         pass
-                    #
-                    # elif currentStep.isnumeric():  # Check to see if the 3rd step is an integer (streamID specifier)
-                    #     # Filter by streamID and (previously stored) streamType
-                    #     # /streams/[streamType]/[streamID]
-                    #     filteredList = self.getStreamByFilter(requestedStreamID=currentStep, streamType=filterType)
-                    #     if len(filteredList) > 0:
-                    #         # Requested stream exists
-                    #         if pathIndex == pathLen - 1:  # Is this the last step of the path
-                    #             # Return the streamsList entry for the reqeusted stream
-                    #             response = (json.dumps(filteredList,
-                    #                                    sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
-                    #             # Create the headers
-                    #             self._set_response(contentType='application/json')
-                    #             break  # Break out of while loop
-                    #         else:
-                    #             # Still more steps to parse, store the stream
-                    #             requestedStream = filteredList[0]
-                    #
-                    #     else:
-                    #         # Stream couldn't be found (or invalid path)
-                    #         raise Exception
-
                     else:
                         # Catchall
                         raise Exception("Can't POST to this path")
@@ -4502,8 +4471,14 @@ class ISPTestHTTPServer(object):
                 # Write the response back to the client
                 self.wfile.write(response)
             except Exception as e:
-                self.send_error(404,
-                        str("do_POST() path " + str(self.path) + ", current step: " + str(currentStep) + ", " + str(e)))
+                Utils.Message.addMessage("ERR:ISPTestHTTPServer.do_ Post():" + \
+                                         ", Error:" + str(e))
+                try:
+                    self.send_error(404,
+                            str("do_POST() path " + str(self.path) + ", current step: " + str(currentStep) + ", " +\
+                                 str(self.headers) + ", " + str(e)))
+                except Exception as e:
+                    Utils.Message.addMessage("#####FAILED TO send error " + str(e))
 
         def do_DELETE(self):
             Utils.Message.addMessage("do_DELETE()")
@@ -4523,7 +4498,6 @@ class ISPTestHTTPServer(object):
 
             # Specify default or 'index' page
             response = b"isptest http server\n"  # 'Default' GET response
-            self._set_response()  # Default headers
             # Traverse the steps of the path, parsing each step in sequence
             try:
                 while pathIndex < pathLen:
