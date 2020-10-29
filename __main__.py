@@ -4118,6 +4118,7 @@ class ISPTestHTTPServer(object):
         self.operationMode = operationMode
         # Create a list of dicts to hold a list of Rtp Streams
         self.streamsList = []
+        self.streamsListMutex = threading.Lock()
         # These keys are required for a stream to be added via the /streams/add POST method. Used for validation
         # Note: uses bytestrings because that is what the POST data is encoded as when it arrives
         self.streamRequiredKeys = [b"streamID", b"httpPort", b"streamType"]
@@ -4162,6 +4163,60 @@ class ISPTestHTTPServer(object):
         self.httpServerThread.setName("ISPTestHTTPServer:" + str(self.tcpListenPort))
         self.httpServerThread.start()
 
+    # Threadsafe method to append an item to the streamsList
+    def appendToStreamsList(self, item):
+        self.streamsListMutex.acquire()
+        self.streamsList.append(item)
+        self.streamsListMutex.release()
+
+    # Threadsafe method to remove an item from the streamsList
+    def removeFromStreamsList(self, item):
+        self.streamsListMutex.acquire()
+        self.streamsList.remove(item)
+        self.streamsListMutex.release()
+
+    # Threadsafe method to get a filtered version of streamsList
+    # If all args are 'None' i.e not set, it will return the whole list
+    def getStreamByFilter(self, requestedStreamID=None, streamType=None, httpPort=None):
+        # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
+        self.streamsListMutex.acquire()
+        streamsList = list(self.streamsList)
+        self.streamsListMutex.release()
+
+        filteredStreamList = []
+        try:
+            Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) + \
+                                     ", streamType is " + str(streamType))
+
+            if httpPort is not None:
+                # Filter by http port . This *should* only ever return a single result
+                filteredStreamList = list(
+                    filter(lambda stream: stream["httpPort"] == int(httpPort), streamsList))
+
+            elif requestedStreamID is None and streamType is None:
+                # No filtering specified, just return the entire list
+                filteredStreamList = streamsList
+
+            elif requestedStreamID is not None and streamType is None:
+                # Filter by streamID
+                # Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
+                filteredStreamList = list(
+                    filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
+
+            elif requestedStreamID is None and streamType is not None:
+                # Filter by streamType
+                filteredStreamList = list(
+                    filter(lambda stream: stream["streamType"] == streamType, streamsList))
+            else:
+                # filter by streamID and streamType
+                filteredStreamList = list(
+                    filter(lambda stream: stream["streamID"] == int(requestedStreamID) and
+                                          stream["streamType"] == streamType, streamsList))
+
+            return filteredStreamList
+        except Exception as e:
+            Utils.Message.addMessage("ERR:ISPTestHTTPServer.HTTPRequestHandler.getStreamtByID() " + str(e))
+            return []
 
     def kill(self):
         # Kill the http server
@@ -4206,87 +4261,88 @@ class ISPTestHTTPServer(object):
             output = (str(input) + "\n").encode('utf-8')
             return output
 
-        # Searches the streamsList for an entry with the specified ID (and type).
-        # Returns a list containing the dict(s) of the object if found, or None, if not found
-        # It's possible that more than one stream could exist with the same ID (if they are, say an RtpGenerator and
-        # an RtpStreamresults)
-        def getStreamByFilterOld(self, requestedStreamID=None, streamType=None):
-            # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
-            streamsList = list(self.server.parentObject.streamsList)
-            filteredStreamList = []
-            try:
-                Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) +\
-                    ", streamType is " + str(streamType))
+        # # Searches the streamsList for an entry with the specified ID (and type).
+        # # Returns a list containing the dict(s) of the object if found, or None, if not found
+        # # It's possible that more than one stream could exist with the same ID (if they are, say an RtpGenerator and
+        # # an RtpStreamresults)
+        # def getStreamByFilterOld(self, requestedStreamID=None, streamType=None):
+        #     # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
+        #     streamsList = list(self.server.parentObject.streamsList)
+        #     filteredStreamList = []
+        #     try:
+        #         Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) +\
+        #             ", streamType is " + str(streamType))
+        #
+        #         if requestedStreamID is None and streamType is None:
+        #             # No filtering specified, just return the entire list
+        #             filteredStreamList = streamsList
+        #
+        #         elif requestedStreamID is not None and streamType is None:
+        #             # Filter by streamID
+        #             Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
+        #             filteredStreamList = list(
+        #                 filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
+        #
+        #         elif requestedStreamID is None and streamType is not None:
+        #             # Filter by streamType
+        #             filteredStreamList = list(
+        #                 filter(lambda stream: stream["streamType"] == streamType, streamsList))
+        #         else:
+        #             # filter by streamID and streamType
+        #             filteredStreamList = list(
+        #                 filter(lambda stream: stream["streamID"] == int(requestedStreamID) and
+        #                                       stream["streamType"] == streamType, streamsList))
+        #
+        #         return filteredStreamList
+        #     except Exception as e:
+        #         Utils.Message.addMessage("ERR:ISPTestHTTPServer.HTTPRequestHandler.getStreamtByID() " + str(e))
+        #         return []
 
-                if requestedStreamID is None and streamType is None:
-                    # No filtering specified, just return the entire list
-                    filteredStreamList = streamsList
-
-                elif requestedStreamID is not None and streamType is None:
-                    # Filter by streamID
-                    Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
-                    filteredStreamList = list(
-                        filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
-
-                elif requestedStreamID is None and streamType is not None:
-                    # Filter by streamType
-                    filteredStreamList = list(
-                        filter(lambda stream: stream["streamType"] == streamType, streamsList))
-                else:
-                    # filter by streamID and streamType
-                    filteredStreamList = list(
-                        filter(lambda stream: stream["streamID"] == int(requestedStreamID) and
-                                              stream["streamType"] == streamType, streamsList))
-
-                return filteredStreamList
-            except Exception as e:
-                Utils.Message.addMessage("ERR:ISPTestHTTPServer.HTTPRequestHandler.getStreamtByID() " + str(e))
-                return []
-
-        def getStreamByFilter(self, requestedStreamID=None, streamType=None, httpPort = None):
-            # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
-            streamsList = list(self.server.parentObject.streamsList)
-            filteredStreamList = []
-            try:
-                Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) +\
-                    ", streamType is " + str(streamType))
-
-                if httpPort is not None:
-                    # Filter by http port . This *should* only ever return a single result
-                    filteredStreamList = list(
-                        filter(lambda stream: stream["httpPort"] == int(httpPort), streamsList))
-
-                elif requestedStreamID is None and streamType is None:
-                    # No filtering specified, just return the entire list
-                    filteredStreamList = streamsList
-
-                elif requestedStreamID is not None and streamType is None:
-                    # Filter by streamID
-                    # Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
-                    filteredStreamList = list(
-                        filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
-
-                elif requestedStreamID is None and streamType is not None:
-                    # Filter by streamType
-                    filteredStreamList = list(
-                        filter(lambda stream: stream["streamType"] == streamType, streamsList))
-                else:
-                    # filter by streamID and streamType
-                    filteredStreamList = list(
-                        filter(lambda stream: stream["streamID"] == int(requestedStreamID) and
-                                              stream["streamType"] == streamType, streamsList))
-
-                return filteredStreamList
-            except Exception as e:
-                Utils.Message.addMessage("ERR:ISPTestHTTPServer.HTTPRequestHandler.getStreamtByID() " + str(e))
-                return []
+        # def getStreamByFilter(self, requestedStreamID=None, streamType=None, httpPort = None):
+        #     # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
+        #     streamsList = list(self.server.parentObject.streamsList)
+        #     filteredStreamList = []
+        #     try:
+        #         Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) +\
+        #             ", streamType is " + str(streamType))
+        #
+        #         if httpPort is not None:
+        #             # Filter by http port . This *should* only ever return a single result
+        #             filteredStreamList = list(
+        #                 filter(lambda stream: stream["httpPort"] == int(httpPort), streamsList))
+        #
+        #         elif requestedStreamID is None and streamType is None:
+        #             # No filtering specified, just return the entire list
+        #             filteredStreamList = streamsList
+        #
+        #         elif requestedStreamID is not None and streamType is None:
+        #             # Filter by streamID
+        #             # Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
+        #             filteredStreamList = list(
+        #                 filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
+        #
+        #         elif requestedStreamID is None and streamType is not None:
+        #             # Filter by streamType
+        #             filteredStreamList = list(
+        #                 filter(lambda stream: stream["streamType"] == streamType, streamsList))
+        #         else:
+        #             # filter by streamID and streamType
+        #             filteredStreamList = list(
+        #                 filter(lambda stream: stream["streamID"] == int(requestedStreamID) and
+        #                                       stream["streamType"] == streamType, streamsList))
+        #
+        #         return filteredStreamList
+        #     except Exception as e:
+        #         Utils.Message.addMessage("ERR:ISPTestHTTPServer.HTTPRequestHandler.getStreamtByID() " + str(e))
+        #         return []
 
         def do_GET(self):
-            Utils.Message.addMessage("GET request: " + ", " + "Path: " + str(self.path))
+
             # Split the path into a list
             pathList = self.splitPath(self.path)
             # Get the number of 'steps' in the path
             pathLen = len(pathList)
+            Utils.Message.addMessage("GET request: " + ", " + "Path: " + str(self.path) + ", len: " + str(pathLen))
             # Utils.Message.addMessage("pathList:" + str(pathList))
             # Index to iterate over the path steps
             pathIndex = 0
@@ -4299,18 +4355,21 @@ class ISPTestHTTPServer(object):
             streamCommand = None
 
             # Specify default or 'index' page
-            response =b"isptest http server\n"  # 'Default' GET response
-            self._set_response()                # Default headers
-            
+            response = self.formatResponse("isptest http server")
+
             # Traverse the steps of the path, parsing each step in sequence
             try:
-                while pathIndex < pathLen:
+                if pathLen == 0:  # Was / requested (i.e no path)?
+                    self._set_response()
+
+                # Else if there are subfolders in the path
+                while pathIndex < pathLen: # Will execute if pathlen > 0
                     currentStep = pathList[pathIndex]   # Get the current step
                     if currentStep == "streams":        # Test the path step
                         if pathIndex == pathLen - 1:    # Is this the last step of the path
                             # /streams
                             # Return the entire list of streams without any filtering
-                            response = (json.dumps(self.server.parentObject.streamsList,
+                            response = (json.dumps(self.server.parentObject.getStreamByFilter(),
                                                    sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
                             # Create the headers
                             self._set_response(contentType='application/json')
@@ -4323,7 +4382,7 @@ class ISPTestHTTPServer(object):
                         # /streams/RtpGenerator or /streams/RtpReceiveStream or /streams/RtpStreamResults
                         filterType = currentStep # Capture the current streamType
                         if pathIndex == pathLen - 1:    # Is this the last step of the path
-                            filteredList = self.getStreamByFilter(streamType=filterType)
+                            filteredList = self.server.parentObject.getStreamByFilter(streamType=filterType)
                             # Return a list of streams filtered by type
                             response = (json.dumps(filteredList,
                                                    sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
@@ -4337,7 +4396,7 @@ class ISPTestHTTPServer(object):
                     elif currentStep.isnumeric():  # Check to see if the 3rd step is an integer (streamID specifier)
                         # Filter by streamID and (previously stored) streamType
                         # /streams/[streamType]/[streamID]
-                        filteredList = self.getStreamByFilter(requestedStreamID=currentStep, streamType=filterType)
+                        filteredList = self.server.parentObject.getStreamByFilter(requestedStreamID=currentStep, streamType=filterType)
                         if len(filteredList) > 0:
                             # Requested stream exists
                             if pathIndex == pathLen - 1:  # Is this the last step of the path
@@ -4415,7 +4474,7 @@ class ISPTestHTTPServer(object):
             # requestedStream = None
 
             # Specify default or 'index' page
-            response = b"isptest http server\n"  # 'Default' GET response
+            response = self.formatResponse("isptest http server")
 
             # Traverse the steps of the path, parsing each step in sequence
             try:
@@ -4446,7 +4505,7 @@ class ISPTestHTTPServer(object):
                             # Append the new Rtp Stream to the streamsList[]
                             # NOTE: each value of incoming data is a list of strings encoded in UTF-8
                             try:
-                                self.server.parentObject.streamsList.append({"streamID": int(post_data_dict[b"streamID"][0]),
+                                self.server.parentObject.appendToStreamsList({"streamID": int(post_data_dict[b"streamID"][0]),
                                                     "httpPort": int(post_data_dict[b"httpPort"][0]),
                                                     "streamType": str(post_data_dict[b"streamType"][0].decode('UTF-8')),
                                                     "timeCreated": datetime.datetime.now()
@@ -4497,7 +4556,7 @@ class ISPTestHTTPServer(object):
             requestedStream = None
 
             # Specify default or 'index' page
-            response = b"isptest http server\n"  # 'Default' GET response
+            response = self.formatResponse("isptest http server")
             # Traverse the steps of the path, parsing each step in sequence
             try:
                 while pathIndex < pathLen:
@@ -4536,7 +4595,8 @@ class ISPTestHTTPServer(object):
                         # Have to ensure that filterType has been specified, otherwise we could delete the wrong Rtp Stream
                         # (if it shares the same id no)
                         if filterType is not None:
-                            filteredList = self.getStreamByFilter(requestedStreamID=currentStep, streamType=filterType)
+                            filteredList = self.server.parentObject.getStreamByFilter(requestedStreamID=currentStep,
+                                                                                      streamType=filterType)
                         else:
                             raise Exception("do_DELETE()/streams/delete/" + str(filterType) + "/" + str(currentStep) +\
                                             " -- No streamType set")
@@ -4545,10 +4605,15 @@ class ISPTestHTTPServer(object):
                             # Requested stream exists so we know we can delete it
                             if pathIndex == pathLen - 1:  # Is this the last step of the path
                                 msg = str(filterType) + " " + str(currentStep) + " to be deleted"
-                                Utils.Message.addMessage(msg)
-                                response = self.formatResponse(msg)
-                                self._set_response()
-                                break # Break out of while loop
+                                try:
+                                    # Remove the stream from the list
+                                    self.server.parentObject.removeFromStreamsList(filteredList[0])
+                                    Utils.Message.addMessage(msg)
+                                    response = self.formatResponse(msg)
+                                    self._set_response()
+                                    break # Break out of while loop
+                                except Exception as e:
+                                    raise Exception(str(e))
                             else:
                                 # Still more steps to parse, store the stream
                                 requestedStream = filteredList[0]
