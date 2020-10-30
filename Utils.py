@@ -328,7 +328,7 @@ class Message(object):
         # Currently for verbosityLevel = 0, all messages containing the strings in listOfFilters[] will be hidden
         # For verbosityLevel = 1, ERR: messages will be displayed
         # For verbosityLevel = 2, ERR: and INFO: messages will be displayed
-        # For verbosityLevel = 3, ERR:, INFO: and DBUG: messages will be diplayed
+        # For verbosityLevel = 3, ERR:, INFO: and DBUG: messages will be displayed
         # etc...
 
         # Verbosity definitions (in ascending order of importance)

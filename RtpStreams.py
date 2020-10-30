@@ -1691,7 +1691,16 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Create the headers
                     self._set_response(contentType='application/json')
                 elif self.path == '/log':
-                    response = Utils.formatHttpResponse("Log info for RtpReceiveStream " + str(syncSourceID))
+                    # Retreive log messages
+                    messagesList = Utils.Message.getMessages()
+                    # Reverse the list (most recent first)
+                    messagesList.reverse()
+                    # format messages into a response string
+                    response = b""
+                    for message in messagesList:
+                        response += (message[0].strftime("%Y:%m:%d-%H:%M:%S ") + message[1] + "<br>").encode('utf-8')
+                    response += b"\n"
+
                     # Create the headers
                     self._set_response()
                 elif self.path == '/debug':
@@ -1704,13 +1713,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                         eventsList = rtpStream.getRTPStreamEventList()
                         # Retrieve the event summaries as json
                         eventsListJSON = [event.getJSON() for event in eventsList]
-                        # eventsListJSON    = []
-                        # for event in eventsList:
-                        #     eventsListJSON.append(event.getJSON())
-                        # eventsListJSON = eventsList[0].getJSON()
 
-                        # response = (json.dumps(eventsListJSON, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
-                        # Create response
+                        # Create response by concatenating all the json events together
                         response = b"[\n"
                         for eventNo in range(len(eventsListJSON)):
                             response += str(eventsListJSON[eventNo]).encode('utf-8')
@@ -1718,7 +1722,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                             if eventNo < len(eventsListJSON) - 1:
                                 response += b"\n,\n"
                         response += b"\n]"
-                        # response = str(eventsListJSON + "\n").encode('utf-8')
+
                         # Create the headers
                         self._set_response(contentType='application/json')
                     except Exception as e:
