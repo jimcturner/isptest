@@ -1658,35 +1658,78 @@ class RtpReceiveStream(RtpReceiveCommon):
 
     # Define a custom BaseHTTPRequestHandler class to handle HTTP GET, POST requests
     class HTTPRequestHandler(BaseHTTPRequestHandler):
-        # Http server methods
-        def _set_response(self):
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html')
+        # For JSON, use contentType='application/json'
+        def _set_response(self, responseCode=200, contentType='text/html'):
+            self.send_response(responseCode)
+            self.send_header('Content-type', contentType)
             self.end_headers()
 
+        # Http server methods
         def do_GET(self):
-            #
             # Access parent Rtp Stream object via server attribute
             syncSourceID = None
             stats = None
+            rtpStream = self.server.parentObject
             try:
-                stats = self.server.rtpStream.getRtpStreamStats()
+                stats = rtpStream.getRtpStreamStats()
                 syncSourceID = stats["stream_syncSource"]
 
             except Exception as e:
-                Utils.Message.addMessage("GET failed: " + str(e))
+                Utils.Message.addMessage("ERR:RtpReceiveStream.HttpRequestHandler.do_GET() getRtpStreamStats()" + str(e))
 
-            Utils.Message.addMessage("GET request: " + str(syncSourceID) + ", " + "Path: " + str(self.path))
-            # Create the headers
-            self._set_response()
-            # Validate self.path to see what was requested
-            if self.path == '/stats':
-                response = (json.dumps(stats, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
-            else:
-                response = ("GET request for stream " + str(syncSourceID) + ", " + str(self.path) + "\n").encode('utf-8')
+            Utils.Message.addMessage("DBUG:RtpReceiveStream.HttpRequestHandler.do_GET(): " + str(syncSourceID) + ", " + "Path: " + str(self.path))
+            # Default response if no path specified in the URL
+            response = Utils.formatHttpResponse("RtpReceiveStream " + str(syncSourceID))
+            try:
+                # Validate self.path to see what was requested
+                if self.path =='/':
+                    # path = '/'
+                    # Create the headers
+                    self._set_response()
+                elif self.path == '/stats':
+                    response = (json.dumps(stats, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                    # Create the headers
+                    self._set_response(contentType='application/json')
+                elif self.path == '/log':
+                    response = Utils.formatHttpResponse("Log info for RtpReceiveStream " + str(syncSourceID))
+                    # Create the headers
+                    self._set_response()
+                elif self.path == '/debug':
+                    response = Utils.formatHttpResponse("Debug info for RtpReceiveStream " + str(syncSourceID))
+                    # Create the headers
+                    self._set_response()
+                elif self.path == '/events':
+                    try:
+                        # Get list of events
+                        eventsList = rtpStream.getRTPStreamEventList()
+                        # Retrieve the event summaries as json
+                        # eventsListJSON = [event.getJSON() for event in eventsList]
+                        # for event in eventsList:
+                        #     eventsListJSON.append(event.getJSON())
+                        eventsListJSON = []
 
-            # Write the response back to the client
-            self.wfile.write(response)
+                        response = (json.dumps(eventsListJSON, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                        # Create the headers
+                        self._set_response(contentType='application/json')
+                    except Exception as e:
+                        raise Exception(str(self.path) + ", " + str(e))
+                elif self.path == '/traceroute':
+                    response = Utils.formatHttpResponse("traceroute ")
+                    # Create the headers
+                    self._set_response()
+                elif self.path == '/remotecontrol':
+                    # Will be used to remote control a transmitter
+                    response = Utils.formatHttpResponse("remotecontrol ")
+                    # Create the headers
+                    self._set_response()
+                else:
+                    # Unknown path requested
+                    raise Exception("Path not recognised " + str(self.path))
+
+                # Write the response back to the client
+                self.wfile.write(response)
+            except Exception as e:
+                self.send_error(404, "RtpReceiveStream.HttpRequestHandler.do_GET() " + str(syncSourceID) + ", " + str(e))
 
 
         def do_POST(self):

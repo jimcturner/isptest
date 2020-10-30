@@ -17,7 +17,7 @@ import platform
 # import psutil
 from collections import deque
 from functools import reduce
-from http.server import HTTPServer
+from http.server import HTTPServer, ThreadingHTTPServer
 from pathlib import PurePosixPath
 from queue import SimpleQueue
 from urllib.parse import urlparse, unquote
@@ -1403,9 +1403,24 @@ class TCPListenPortCreator(object):
     def getLastProvided(cls):
         return cls.tcpPort
 
+# # Define a custom HTTPServer. This will allow access to the associated object that created it,
+# # from the server (and httpHandler)
+# class CustomHTTPServer(HTTPServer):
+#     def __init__(self, *args, **kwargs):
+#         # Because HTTPServer is an old-style class, super() can't be used.
+#         HTTPServer.__init__(self, *args, **kwargs)
+#         self.parentObject = None
+#
+#     # Provide a setter method to allow the server to have access to the instance of the object that created it
+#     # The reason not to have this set by the Constructor method is that I didn't want to modify the existing
+#     # constructor method of HTTPServer
+#     def setParentObjectInstance(self, parentObjectInstance):
+#         self.parentObject = parentObjectInstance
+
 # Define a custom HTTPServer. This will allow access to the associated object that created it,
 # from the server (and httpHandler)
-class CustomHTTPServer(HTTPServer):
+# Note this inherits from ThreadingHTTPServer in an attempt to make it 'Google Chrome proof'
+class CustomHTTPServer(ThreadingHTTPServer):
     def __init__(self, *args, **kwargs):
         # Because HTTPServer is an old-style class, super() can't be used.
         HTTPServer.__init__(self, *args, **kwargs)
@@ -1417,80 +1432,92 @@ class CustomHTTPServer(HTTPServer):
     def setParentObjectInstance(self, parentObjectInstance):
         self.parentObject = parentObjectInstance
 
-# Performs an http GET
-# Returns a dict
-def httpGET(url, tcpPort=80, path = '/', timeout=0.5):
-    reply = {"statusCode": None, "reason":None, "headers":None, "body":None}
-    # Create HTTP connection
-    try:
-        connection = http.client.HTTPConnection(url, tcpPort, timeout=timeout)
-        # Successfully connected
-        try:
-            # Make the GET request
-            connection.request("GET", path)
-        except socket.timeout as st:
-            raise Exception("http timeout " + str(st))
-        except Exception as e:
-            # other kind of error occured during request
-            raise Exception('request error ' + str(e))
-        else:
-            # HTTP GET was successful. Get the response
-            response = connection.getresponse()
-            # Get status
-            reply["statusCode"] = response.status
-            # Get reason phrase
-            reply["reason"] = response.reason
-            # Retrieve the headers from the response
-            reply["headers"] = response.getheaders()
-            # Retrieve the body
-            reply["body"] = response.read()
-        finally:
-            # always close the connection
-            connection.close()
-    except Exception as e:
-        raise Exception("connection error " + str(e))
+# # Performs an http GET
+# # Returns a dict
+# def httpGET(url, tcpPort=80, path = '/', timeout=0.5):
+#     reply = {"statusCode": None, "reason":None, "headers":None, "body":None}
+#     # Create HTTP connection
+#     try:
+#         connection = http.client.HTTPConnection(url, tcpPort, timeout=timeout)
+#         # Successfully connected
+#         try:
+#             # Make the GET request
+#             connection.request("GET", path)
+#         except socket.timeout as st:
+#             raise Exception("http timeout " + str(st))
+#         except Exception as e:
+#             # other kind of error occured during request
+#             raise Exception('request error ' + str(e))
+#         else:
+#             # HTTP GET was successful. Get the response
+#             response = connection.getresponse()
+#             # Get status
+#             reply["statusCode"] = response.status
+#             # Get reason phrase
+#             reply["reason"] = response.reason
+#             # Retrieve the headers from the response
+#             reply["headers"] = response.getheaders()
+#             # Retrieve the body
+#             reply["body"] = response.read()
+#         finally:
+#             # always close the connection
+#             connection.close()
+#     except Exception as e:
+#         raise Exception("connection error " + str(e))
+#
+#     return reply
+#
+#
+# # Performs an http POST
+# # Returns a dict
+# # data is the bytestring to be sent
+# # headers is a dict of the form {'Content-type': 'application/json'} for json
+# def httpPOST(url, data, headers={},  tcpPort=80, path='/', timeout=0.5):
+#     reply = {"statusCode": None, "reason": None, "headers": None, "body": None}
+#     # Create HTTP connection
+#     try:
+#         connection = http.client.HTTPConnection(url, tcpPort, timeout=timeout)
+#         # Successfully connected
+#         try:
+#             # Make the POST request
+#             connection.request("POST", path, data, headers)
+#         except socket.timeout as st:
+#             raise Exception("http timeout " + str(st))
+#         except Exception as e:
+#             # other kind of error occured during request
+#             raise Exception('request error ' + str(e))
+#         else:
+#             # HTTP POST was successful. Get the response
+#             response = connection.getresponse()
+#             # Get status
+#             reply["statusCode"] = response.status
+#             # Get reason phrase
+#             reply["reason"] = response.reason
+#             # Retrieve the headers from the response
+#             reply["headers"] = response.getheaders()
+#             # Retrieve the body
+#             reply["body"] = response.read()
+#         finally:
+#             # always close the connection
+#             connection.close()
+#     except Exception as e:
+#         raise Exception("connection error " + str(e))
+#
+#     return reply
 
-    return reply
+# # Splits a url path into its component parts. Ignores the initial '/'
+# Returns a list
+def splitPath(completePath):
+    pathList = str(completePath).split("/")[1:]
+    # Strip off trailing '/' if there is one
+    if pathList[-1] == '':
+        pathList = pathList[:-1]  # Take all except the last item of the list
+    return pathList
 
-
-# Performs an http POST
-# Returns a dict
-# data is the bytestring to be sent
-# headers is a dict of the form {'Content-type': 'application/json'} for json
-def httpPOST(url, data, headers={},  tcpPort=80, path='/', timeout=0.5):
-    reply = {"statusCode": None, "reason": None, "headers": None, "body": None}
-    # Create HTTP connection
-    try:
-        connection = http.client.HTTPConnection(url, tcpPort, timeout=timeout)
-        # Successfully connected
-        try:
-            # Make the POST request
-            connection.request("POST", path, data, headers)
-        except socket.timeout as st:
-            raise Exception("http timeout " + str(st))
-        except Exception as e:
-            # other kind of error occured during request
-            raise Exception('request error ' + str(e))
-        else:
-            # HTTP POST was successful. Get the response
-            response = connection.getresponse()
-            # Get status
-            reply["statusCode"] = response.status
-            # Get reason phrase
-            reply["reason"] = response.reason
-            # Retrieve the headers from the response
-            reply["headers"] = response.getheaders()
-            # Retrieve the body
-            reply["body"] = response.read()
-        finally:
-            # always close the connection
-            connection.close()
-    except Exception as e:
-        raise Exception("connection error " + str(e))
-
-    return reply
-
-
+# Re-encodes the incoming string as UTF-8 and terminates with a '/n' character
+def formatHttpResponse(input):
+    output = (str(input) + "\n").encode('utf-8')
+    return output
 
 
 
