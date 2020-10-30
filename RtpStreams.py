@@ -1777,11 +1777,11 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Test the response status code to see if the DELETE was successful
             try:
                 r.raise_for_status()  # If this doesn;t raise an exception, all is good!
-                Utils.Message.addMessage("DBUG: Successfully deleted stream " +\
+                Utils.Message.addMessage("DBUG: RtpReceiveStream.killStream() Successfully unregistered stream " +\
                                          str(self.__stats["stream_syncSource"]) + " from streams directory. status_code:" +\
                                          str(r.status_code))
             except Exception as e:
-                Utils.Message.addMessage("ERR: Failed to delete stream " +\
+                Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() Failed to unregister stream " +\
                                          str(self.__stats["stream_syncSource"]) + " from streams directory. status_code:" +\
                                          str(r.status_code))
 
