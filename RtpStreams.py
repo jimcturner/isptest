@@ -1707,7 +1707,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     response = Utils.formatHttpResponse("Debug info for RtpReceiveStream " + str(syncSourceID))
                     # Create the headers
                     self._set_response()
-                elif self.path == '/events':
+                # Return a list of events encoded as an array of json objects
+                elif self.path == '/events/json':
                     try:
                         # Get list of events
                         eventsList = rtpStream.getRTPStreamEventList()
@@ -1723,10 +1724,32 @@ class RtpReceiveStream(RtpReceiveCommon):
                                 response += b"\n,\n"
                         response += b"\n]"
 
+                        # # Attempt to decode the encoded JSON to prove that it's valid
+                        # try:
+                        #     decodedEventsList = []
+                        #     decodedEventsList = json.loads(response)
+                        #     if len(decodedEventsList) > 0:
+                        #         Utils.Message.addMessage("Events: " + str(len(decodedEventsList)) + ", " + str(decodedEventsList[0]))
+                        # except Exception as e:
+                        #     Utils.Message.addMessage("ERR: JSON decode err " + str(e))
                         # Create the headers
                         self._set_response(contentType='application/json')
                     except Exception as e:
                         raise Exception(str(self.path) + ", " + str(e))
+
+                elif self.path == '/events/summary':
+                    try:
+                        # Get list of events
+                        eventsList = rtpStream.getRTPStreamEventList()
+                        # Retrieve the event summaries as text
+                        eventsListSummaries = [event.getSummary() for event in eventsList]
+                        # Encode the list of summaries as json
+                        response = (json.dumps(eventsListSummaries, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                        # Create the headers
+                        self._set_response(contentType='application/json')
+                    except Exception as e:
+                        raise Exception(str(self.path) + ", " + str(e))
+
                 elif self.path == '/traceroute':
                     response = Utils.formatHttpResponse("traceroute ")
                     # Create the headers
