@@ -25,6 +25,7 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import pickle
 from collections import deque   # Used for circular buffers
+from urllib.parse import parse_qs, urlparse, parse_qsl
 
 import requests
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
@@ -1708,7 +1709,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Create the headers
                     self._set_response()
                 # Return a list of events encoded as an array of json objects
-                elif self.path == '/events/json':
+                elif str(self.path).startswith('/events/json'):
                     try:
                         # Get list of events
                         eventsList = rtpStream.getRTPStreamEventList()
@@ -1737,12 +1738,17 @@ class RtpReceiveStream(RtpReceiveCommon):
                     except Exception as e:
                         raise Exception(str(self.path) + ", " + str(e))
 
-                elif self.path == '/events/summary':
+                elif str(self.path).startswith('/events/summary'):
                     try:
+                        # Extract any additional query components (if present)
+                        query_components = parse_qs(urlparse(self.path).query)
+                        if len(query_components) > 0:
+                            parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
+
                         # Get list of events
                         eventsList = rtpStream.getRTPStreamEventList()
                         # Retrieve the event summaries as text
-                        eventsListSummaries = [event.getSummary() for event in eventsList]
+                        eventsListSummaries = [event.getSummary(**parsedArgsDict) for event in eventsList]
                         # Encode the list of summaries as json
                         response = (json.dumps(eventsListSummaries, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
                         # Create the headers
@@ -3079,7 +3085,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Create copy of events list
         unfilteredEventList = list(self.__eventList)
 
-        # If eventNo is specified, look for and return a list containing a single event with that event no (if it still exists)
+        # If eventNo is specified, look for and return a list containing a *single* event with that event no (if it still exists)
         if requestedEventNo is not None:
             # Iterate over unfilteredEventList looking for an event whose eventNo matches requestedEventNo
             filteredEventList = list(filter(lambda event: event.eventNo == requestedEventNo, unfilteredEventList))

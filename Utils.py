@@ -1519,6 +1519,33 @@ def formatHttpResponse(input):
     output = (str(input) + "\n").encode('utf-8')
     return output
 
+# This function is designed to take the key/value pairs sent as a query at the end of a URL
+# It will then reformat the dictionary so that it can be passed straight into an existing
+# function/method as a set of kwargs
+# It's expecting to be fed from the output of urllib.parse.parse_qs()
+# parse_qs will return a key and value. However, the value will always be as a list,
+#  even if there is only a single value associated with that key.
+# Therefore we need to reformat the query_components so that they appear as key:value
+# NOT key:[value]
+# Additionally, test vfor presence of boolean values and convert them from strings to bools as expected
+# by the destination function/method
+def mapURLQueryToFnArgs(query_componentsDict):
+    # Take a shallow copy of the incoming dict
+    functionArgsDict = dict(query_componentsDict)
+    for key in functionArgsDict:
+        # Test to see if there is only a single value corresponding with that key
+        # i.e does the list only contain a single element?
+        if len(functionArgsDict[key]) == 1:
+            # If so, get rid of the list encompassing the value and assign the
+            # value directly to the key instead
+            functionArgsDict[key] = functionArgsDict[key][0]
+            # Now test to see if this is a boolean val. If so, recast as a bool (since all
+            # incoming values are strings)
+            if functionArgsDict[key] == "False" or functionArgsDict[key] == "false":
+                functionArgsDict[key] = False
+            if functionArgsDict[key] == "True" or functionArgsDict[key] == "true":
+                functionArgsDict[key] = True
+    return functionArgsDict
 
 
 
