@@ -1739,16 +1739,40 @@ class RtpReceiveStream(RtpReceiveCommon):
                         raise Exception(str(self.path) + ", " + str(e))
 
                 elif str(self.path).startswith('/events/summary'):
+                    # Path /events/summary
+                    # Will test for the presence of other args sent with the GET request. This map directly to
+                    # existing optional parameters accepted by the getRTPStreamEventList() and Event.getSummary()
+                    # methods
+                    # recent=[x] Returns the last [x] events
+                    # start=[x] specifies the start of the range of event nos requested
+                    # end=[y] specifies the start of the range of event nos requested
+                    # filterList[] is a list of names of objects by to filter by (the original implementation
+                    # of getRTPStreamEventList took a list of Objects. Since we can't pass a Class definition in
+                    # a URL (only strings) we have to search by ClassName instead
+                    # reverseOrder = [True/False]
+                    # requestedEventNo = [x] requests a specific event no
+
                     try:
-                        # Extract any additional query components (if present)
+                        parsedArgsDict = {} # Will be populated with the parsed contents of query_components{}
+                        filteredArgsDict = {} # a subset of parsedArgsDict containing *only* a preset list of keys
+                        # Extract any additional query components from the URL (if present)
                         query_components = parse_qs(urlparse(self.path).query)
                         if len(query_components) > 0:
                             parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
 
+                            # Extract only the keys from the parsedArgsDict as a list
+                            # wanted_keys = ['l', 'm', 'n']  # The keys you want
+                            # dict((k, bigdict[k]) for k in wanted_keys if k in bigdict)
+
+                            # Extract the keys from the URL query that are relevant to the getRTPStreamEventList() method
+                            # and create a new dictionary containing just them (if present)
+                            wanted_keys = ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]
+                            filteredArgsDict = dict((k, parsedArgsDict[k]) for k in wanted_keys if k in parsedArgsDict)
+
                         # Get list of events
-                        eventsList = rtpStream.getRTPStreamEventList()
+                        eventsList = rtpStream.getRTPStreamEventList(**filteredArgsDict)
                         # Retrieve the event summaries as text
-                        eventsListSummaries = [event.getSummary(**parsedArgsDict) for event in eventsList]
+                        eventsListSummaries = [event.getSummary() for event in eventsList]
                         # Encode the list of summaries as json
                         response = (json.dumps(eventsListSummaries, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
                         # Create the headers
@@ -3076,12 +3100,18 @@ class RtpReceiveStream(RtpReceiveCommon):
     # No args: Returns the entire list
     # 1 arg: Returns the last n events
     # 2 args: returns the range specified (inclusive)
+    # ALTERNATIVELY: Use kwargs, recent=None, start=None, end=None instead
+
     # filterList is an optional arg containing a list of Event object types to test against within EventsList
     # eg filterList = [Glitch] will return only a list of glitches, [Glitch, StreamStarted] would give you a list
     # containing all Glitch and StreamStarted events
+
+    # Alternatively, filterList can also be a list of strings which are the class names of the objects to be
+    # filtered (as opposed to the Class name itself (as in, the Object.__name attribute)
     # The filter (if present) is applied first, then the range specifier
     # Finally, if reverseOrder==True, the list will be returned in reverse order
-    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, requestedEventNo=None):
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, requestedEventNo=None,
+                                recent=None, start=None, end=None):
         # Create copy of events list
         unfilteredEventList = list(self.__eventList)
 
@@ -3109,20 +3139,26 @@ class RtpReceiveStream(RtpReceiveCommon):
         if reverseOrder:
             filteredEventList.reverse()
 
-        if len(args) == 2:
+        if len(args) == 2 or (start is not None and end is not None):
             # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
+            # (or else, if kwarg 'start' and 'end' are  specified'
+            if len(args) == 2:
+                start = args[0]
+                end = args[1]
             try:
                 # Slice the list
-                return filteredEventList[args[0]:args[1] + 1]
+                return filteredEventList[start:end + 1]
             except Exception as e:
-                Utils.Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
-                                   str(args[1]) + ") requested start and end indexes out of range: " + str(e))
+                Utils.Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(start) + ":" +
+                                   str(end) + ") requested start and end indexes out of range: " + str(e))
                 return []
-        elif len(args) == 1:
-            # If one arg supplied, return the last n events.
+        elif len(args) == 1 or recent is not None:
+            # If one arg supplied, return the last n events (or else, if kwarg 'recent' is specified'
             # IF event list not as long as n, return what does exist
+            if len(args) == 1: # If non kwarg supplied, use that instead
+                recent = args[0]
             try:
-                return filteredEventList[(args[0] * -1):]
+                return filteredEventList[(recent * -1):]
             except:
                 return filteredEventList
         else:

@@ -1545,6 +1545,10 @@ def mapURLQueryToFnArgs(query_componentsDict):
                 functionArgsDict[key] = False
             if functionArgsDict[key] == "True" or functionArgsDict[key] == "true":
                 functionArgsDict[key] = True
+            # Now test to see if any incoming values are numbers
+            if str(functionArgsDict[key]).isnumeric():
+                # Should really be able to deal with ints or floats
+                pass
     return functionArgsDict
 
 
