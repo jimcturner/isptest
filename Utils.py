@@ -1532,24 +1532,61 @@ def formatHttpResponse(input):
 def mapURLQueryToFnArgs(query_componentsDict):
     # Take a shallow copy of the incoming dict
     functionArgsDict = dict(query_componentsDict)
+    # Iterate over all the key/value pairs
     for key in functionArgsDict:
-        # Test to see if there is only a single value corresponding with that key
+        # Iterate over each of the values in the list associated with each key and convert from strings to normal
+        # Python types, based on the contents
+        for listItem in range(len(functionArgsDict[key])):
+            # Values will be a list
+            # Test to see if this is a boolean val. If so, recast as a bool (since all
+            # incoming values are strings)
+            if functionArgsDict[key][listItem] == "False" or functionArgsDict[key][listItem] == "false":
+                functionArgsDict[key][listItem] = False
+            elif functionArgsDict[key][listItem] == "True" or functionArgsDict[key][listItem] == "true":
+                functionArgsDict[key][listItem] = True
+            else:
+                # Test if the value is an integer
+                if str(functionArgsDict[key][listItem]).isnumeric():
+                    # only values 0-9 present, so cast as an integer
+                    functionArgsDict[key][listItem] = int(functionArgsDict[key][listItem])
+                else:
+                    # See if the value is float by trying to cast it as a float (this will fail, if it's not)
+                    try:
+                        functionArgsDict[key][listItem] = float(functionArgsDict[key][listItem])
+                    except:
+                    # Casting as a float failed, so ignore
+                        pass
+
+        # Finally, test to see if there is only a single value corresponding with that key
         # i.e does the list only contain a single element?
         if len(functionArgsDict[key]) == 1:
             # If so, get rid of the list encompassing the value and assign the
             # value directly to the key instead
             functionArgsDict[key] = functionArgsDict[key][0]
-            # Now test to see if this is a boolean val. If so, recast as a bool (since all
-            # incoming values are strings)
-            if functionArgsDict[key] == "False" or functionArgsDict[key] == "false":
-                functionArgsDict[key] = False
-            if functionArgsDict[key] == "True" or functionArgsDict[key] == "true":
-                functionArgsDict[key] = True
-            # Now test to see if any incoming values are numbers
-            if str(functionArgsDict[key]).isnumeric():
-                # Should really be able to deal with ints or floats
-                pass
+
     return functionArgsDict
+
+# Simple shortcut function to remove a list[] of keys from the supplied dictionary
+# If the searched-for key is missing, it will be ignored
+# NOTE: It acts on the src dictionary (a bit like a C function)
+# Returns a list of the keys that were actually removed
+def removeMultipleDictKeys(dictToBeModified, keysToBeRemoved):
+    # List returned by function to contain a list of the keys that were actually removed
+    keysRemoved = []
+    for k in keysToBeRemoved:
+        if k in dictToBeModified:
+            # Delete key k from the dict
+            dictToBeModified.pop(k, None)
+            # Record the deletion
+            keysRemoved.append(k)
+    return keysRemoved
+
+# Shortcut function to create a subset of the supplied dictionary containing only wantedKeys[]
+# If the wanted keys are missing from sourceDict, they will be ignored
+# Answer from here: https://stackoverflow.com/a/5352649
+def extractWantedKeysFromDict(sourceDict, wantedKeys):
+    filteredDict = dict((k, sourceDict[k]) for k in wantedKeys if k in sourceDict)
+    return filteredDict
 
 
 

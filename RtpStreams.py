@@ -1751,32 +1751,51 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # a URL (only strings) we have to search by ClassName instead
                     # reverseOrder = [True/False]
                     # requestedEventNo = [x] requests a specific event no
-
+                    getEventsKeys = ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]
+                    getSummaryKeys = ["includeStreamSyncSourceID", "includeEventNo", "includeType",
+                                      "includeFriendlyName"]
                     try:
-                        parsedArgsDict = {} # Will be populated with the parsed contents of query_components{}
-                        filteredArgsDict = {} # a subset of parsedArgsDict containing *only* a preset list of keys
-                        # Extract any additional query components from the URL (if present)
-                        query_components = parse_qs(urlparse(self.path).query)
-                        if len(query_components) > 0:
-                            parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
+                        if str(self.path).startswith('/events/summary/help'):
+                            # Send back a help page showing the available keys
+                            response = Utils.formatHttpResponse(f"Available args for /events/summary/ " +\
+                                                                f"{getEventsKeys + getSummaryKeys}")
+                            # set the headers
+                            self._set_response()
+                        else:
+                            getEventsArgs = {} # A dict of kwargs to be passed to getRTPStreamEventList()
+                            getSummaryArgs = {} # A dict of kwargs to be passed to Event.getSummary()
+                            # Extract any additional query components from the URL (if present)
+                            query_components = parse_qs(urlparse(self.path).query)
+                            if len(query_components) > 0:
+                                # Utils.Message.addMessage(f"raw {query_components}")
+                                # Convert the string values of the HTTP query back to Python  data types
+                                parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
 
-                            # Extract only the keys from the parsedArgsDict as a list
-                            # wanted_keys = ['l', 'm', 'n']  # The keys you want
-                            # dict((k, bigdict[k]) for k in wanted_keys if k in bigdict)
 
-                            # Extract the keys from the URL query that are relevant to the getRTPStreamEventList() method
-                            # and create a new dictionary containing just them (if present)
-                            wanted_keys = ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]
-                            filteredArgsDict = dict((k, parsedArgsDict[k]) for k in wanted_keys if k in parsedArgsDict)
+                                # Extract the keys from the URL query that are relevant to the getRTPStreamEventList() method
+                                # and create a new dictionary containing just them (if present)
+                                getEventsArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, getEventsKeys)
+                                Utils.Message.addMessage("getEventsArgs " + str(getEventsArgs))
 
-                        # Get list of events
-                        eventsList = rtpStream.getRTPStreamEventList(**filteredArgsDict)
-                        # Retrieve the event summaries as text
-                        eventsListSummaries = [event.getSummary() for event in eventsList]
-                        # Encode the list of summaries as json
-                        response = (json.dumps(eventsListSummaries, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
-                        # Create the headers
-                        self._set_response(contentType='application/json')
+                                # Extract the keys from the URL query that are relevant to the Event.getSummary() method
+                                # and create a new dictionary containing just them (if present)
+                                getSummaryArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, getSummaryKeys)
+
+                                # Prune filteredArgsDict of the 'already used so far' keys
+                                Utils.removeMultipleDictKeys(parsedArgsDict, getEventsKeys + getSummaryKeys)
+                                # Utils.Message.addMessage(f"parsedArgsDict after pruning {parsedArgsDict}")
+                                if len(parsedArgsDict) > 0:
+                                    raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
+
+                            # Get list of events - passing the args gleaned from the URL to the getRTPStreamEventList method
+                            eventsList = rtpStream.getRTPStreamEventList(**getEventsArgs)
+
+                            # Retrieve the event summaries as text
+                            eventsListSummaries = [event.getSummary(**getSummaryArgs) for event in eventsList]
+                            # Encode the list of summaries as json
+                            response = (json.dumps(eventsListSummaries, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                            # Create the headers
+                            self._set_response(contentType='application/json')
                     except Exception as e:
                         raise Exception(str(self.path) + ", " + str(e))
 
