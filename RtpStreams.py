@@ -1710,31 +1710,69 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self._set_response()
                 # Return a list of events encoded as an array of json objects
                 elif str(self.path).startswith('/events/json'):
+                    # Path /events/summary/json
+                    # Will test for the presence of other args sent with the GET request. This map directly to
+                    # existing optional parameters accepted by the getRTPStreamEventList()
+                    helpText = "\n/events/json/help will return a list of possible arguments\n" + \
+                               "recent=[x] Returns the last [x] events\n" + \
+                               "start=[x] specifies the start of the range of event nos requested\n" + \
+                               "end=[y] specifies the start of the range of event nos requested\n" + \
+                               "filterList[] is a list of names of objects by to filter by (the original implementation\n" + \
+                               "of getRTPStreamEventList took a list of Objects. Since we can't pass a Class definition in\n" + \
+                               "a URL (only strings) we can search by ClassName instead\n" + \
+                               "reverseOrder = [True/False]\n" + \
+                               "requestedEventNo = [x] requests a specific event no\n" + \
+                               "\n Allowed parameters are:-\n\n"
+                    getEventsKeys = ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]
+
                     try:
-                        # Get list of events
-                        eventsList = rtpStream.getRTPStreamEventList()
-                        # Retrieve the event summaries as json
-                        eventsListJSON = [event.getJSON() for event in eventsList]
+                        if str(self.path).startswith('/events/json/help'):
+                            # Send back a help page showing the available keys
+                            response = Utils.formatHttpResponse(f"{helpText}{getEventsKeys}")
+                            # set the headers
+                            self._set_response()
+                        else:
+                            getEventsArgs = {}  # A dict of kwargs to be passed to getRTPStreamEventList()
+                            # Extract any additional query components from the URL (if present)
+                            query_components = parse_qs(urlparse(self.path).query)
+                            if len(query_components) > 0:
+                                # If args are present, convert the string values of the HTTP query back to Python data types
+                                Utils.Message.addMessage(f"raw {query_components}")
+                                parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
+                                # Extract the keys from the URL query that are relevant to the getRTPStreamEventList() method
+                                # and create a new dictionary containing just them (if present)
+                                getEventsArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, getEventsKeys)
+                                Utils.Message.addMessage("getEventsArgs " + str(getEventsArgs))
+                                # Prune filteredArgsDict of the 'already used so far' keys
+                                Utils.removeMultipleDictKeys(parsedArgsDict, getEventsKeys)
+                                if len(parsedArgsDict) > 0:
+                                # If there are any unexpected args, raise an Exception
+                                    raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
 
-                        # Create response by concatenating all the json events together
-                        response = b"[\n"
-                        for eventNo in range(len(eventsListJSON)):
-                            response += str(eventsListJSON[eventNo]).encode('utf-8')
-                            # Add a comma between each event JSON object
-                            if eventNo < len(eventsListJSON) - 1:
-                                response += b"\n,\n"
-                        response += b"\n]"
+                            # Get list of events
+                            eventsList = rtpStream.getRTPStreamEventList(**getEventsArgs)
+                            # Retrieve the event summaries as json
+                            eventsListJSON = [event.getJSON() for event in eventsList]
 
-                        # # Attempt to decode the encoded JSON to prove that it's valid
-                        # try:
-                        #     decodedEventsList = []
-                        #     decodedEventsList = json.loads(response)
-                        #     if len(decodedEventsList) > 0:
-                        #         Utils.Message.addMessage("Events: " + str(len(decodedEventsList)) + ", " + str(decodedEventsList[0]))
-                        # except Exception as e:
-                        #     Utils.Message.addMessage("ERR: JSON decode err " + str(e))
-                        # Create the headers
-                        self._set_response(contentType='application/json')
+                            # Create response by concatenating all the json events together
+                            response = b"[\n"
+                            for eventNo in range(len(eventsListJSON)):
+                                response += str(eventsListJSON[eventNo]).encode('utf-8')
+                                # Add a comma between each event JSON object
+                                if eventNo < len(eventsListJSON) - 1:
+                                    response += b"\n,\n"
+                            response += b"\n]"
+
+                            # # Attempt to decode the encoded JSON to prove that it's valid
+                            # try:
+                            #     decodedEventsList = []
+                            #     decodedEventsList = json.loads(response)
+                            #     if len(decodedEventsList) > 0:
+                            #         Utils.Message.addMessage("Events: " + str(len(decodedEventsList)) + ", " + str(decodedEventsList[0]))
+                            # except Exception as e:
+                            #     Utils.Message.addMessage("ERR: JSON decode err " + str(e))
+                            # Create the headers
+                            self._set_response(contentType='application/json')
                     except Exception as e:
                         raise Exception(str(self.path) + ", " + str(e))
 
@@ -1743,22 +1781,24 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Will test for the presence of other args sent with the GET request. This map directly to
                     # existing optional parameters accepted by the getRTPStreamEventList() and Event.getSummary()
                     # methods
-                    # recent=[x] Returns the last [x] events
-                    # start=[x] specifies the start of the range of event nos requested
-                    # end=[y] specifies the start of the range of event nos requested
-                    # filterList[] is a list of names of objects by to filter by (the original implementation
-                    # of getRTPStreamEventList took a list of Objects. Since we can't pass a Class definition in
-                    # a URL (only strings) we have to search by ClassName instead
-                    # reverseOrder = [True/False]
-                    # requestedEventNo = [x] requests a specific event no
+                    helpText = "\n/events/summary/help will return a list of possible arguments\n" +\
+                        "recent=[x] Returns the last [x] events\n" +\
+                        "start=[x] specifies the start of the range of event nos requested\n" +\
+                        "end=[y] specifies the start of the range of event nos requested\n" +\
+                        "filterList[] is a list of names of objects by to filter by (the original implementation\n" +\
+                        "of getRTPStreamEventList took a list of Objects. Since we can't pass a Class definition in\n" +\
+                        "a URL (only strings) we can search by ClassName instead\n" +\
+                        "reverseOrder = [True/False]\n" +\
+                        "requestedEventNo = [x] requests a specific event no\n" +\
+                        "\n Allowed parameters are:-\n\n"
+
                     getEventsKeys = ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]
                     getSummaryKeys = ["includeStreamSyncSourceID", "includeEventNo", "includeType",
                                       "includeFriendlyName"]
                     try:
                         if str(self.path).startswith('/events/summary/help'):
                             # Send back a help page showing the available keys
-                            response = Utils.formatHttpResponse(f"Available args for /events/summary/ " +\
-                                                                f"{getEventsKeys + getSummaryKeys}")
+                            response = Utils.formatHttpResponse(f"{helpText}{getEventsKeys + getSummaryKeys}")
                             # set the headers
                             self._set_response()
                         else:
@@ -1767,15 +1807,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                             # Extract any additional query components from the URL (if present)
                             query_components = parse_qs(urlparse(self.path).query)
                             if len(query_components) > 0:
-                                # Utils.Message.addMessage(f"raw {query_components}")
-                                # Convert the string values of the HTTP query back to Python  data types
+                                # If args are present, convert the string values of the HTTP query back to Python data types
                                 parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
 
 
                                 # Extract the keys from the URL query that are relevant to the getRTPStreamEventList() method
                                 # and create a new dictionary containing just them (if present)
                                 getEventsArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, getEventsKeys)
-                                Utils.Message.addMessage("getEventsArgs " + str(getEventsArgs))
+                                # Utils.Message.addMessage("getEventsArgs " + str(getEventsArgs))
 
                                 # Extract the keys from the URL query that are relevant to the Event.getSummary() method
                                 # and create a new dictionary containing just them (if present)
