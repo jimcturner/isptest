@@ -3173,14 +3173,14 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Create copy of events list
         unfilteredEventList = list(self.__eventList)
 
-        # If eventNo is specified, look for and return a list containing a *single* event with that event no (if it still exists)
+        # Special case: If eventNo is specified, look for and return a list
+        # containing a *single* event with that event no (if it still exists)
         if requestedEventNo is not None:
             # Iterate over unfilteredEventList looking for an event whose eventNo matches requestedEventNo
             filteredEventList = list(filter(lambda event: event.eventNo == requestedEventNo, unfilteredEventList))
             return filteredEventList
 
-        # Now apply a filter (if specified)
-        filteredEventList = []
+        # Now apply a 'type' filter (if specified)
         if filterList is not None:
             # Iterate over unfilteredEventList creating a sublist containing objects (Events) that match the entries
             # specified in filterList[]
@@ -3193,9 +3193,9 @@ class RtpReceiveStream(RtpReceiveCommon):
             # If no filter spcified, all take all the events
             filteredEventList = unfilteredEventList
 
-        # Now, if reverseOrder=True, reverse the order of the filtered list
-        if reverseOrder:
-            filteredEventList.reverse()
+        # # Now, if reverseOrder=True, reverse the order of the filtered list
+        # if reverseOrder:
+        #     filteredEventList.reverse()
 
         if len(args) == 2 or (start is not None and end is not None):
             # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
@@ -3205,22 +3205,30 @@ class RtpReceiveStream(RtpReceiveCommon):
                 end = args[1]
             try:
                 # Slice the list
-                return filteredEventList[start:end + 1]
+                # Guard against a -ve start value
+                # Inclusive, so start = 1 (or start = 0) and end = 4 will return events 1,2,3 and 4
+                if start < 1:
+                    start = 1
+                filteredEventList = filteredEventList[start-1:end]
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(start) + ":" +
                                    str(end) + ") requested start and end indexes out of range: " + str(e))
-                return []
+                filteredEventList = []
         elif len(args) == 1 or recent is not None:
             # If one arg supplied, return the last n events (or else, if kwarg 'recent' is specified'
             # IF event list not as long as n, return what does exist
             if len(args) == 1: # If non kwarg supplied, use that instead
                 recent = args[0]
             try:
-                return filteredEventList[(recent * -1):]
+                filteredEventList = filteredEventList[(recent * -1):]
             except:
-                return filteredEventList
-        else:
-            return filteredEventList
+                pass
+
+        # Finally, if reverseOrder=True, reverse the order of the returned list
+        if reverseOrder:
+            filteredEventList.reverse()
+
+        return filteredEventList
 
 
     # Define setter methods
