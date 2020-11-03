@@ -3188,7 +3188,15 @@ class RtpReceiveStream(RtpReceiveCommon):
             # filter() is a built in method that can iterate over an iterable object (unfilteredEventList)
             # We supply it with a lambda function which takes the current event and checks to see if that type of event is
             # present in filterList[]. If it is, that Event gets added to the filteredEventsList
-            filteredEventList = list(filter(lambda event: (type(event) in filterList), unfilteredEventList))
+
+            # Use __class__.__name__ to get the 'concrete name' (i.e the Type of Class an object is an instance of
+            # Therefore we can filter by Object type or by Object type name
+
+            filteredEventList = \
+                list(filter(lambda event: ((type(event) in filterList) or (event.__class__.__name__ in filterList)),
+                                           unfilteredEventList))
+
+
         else:
             # If no filter spcified, all take all the events
             filteredEventList = unfilteredEventList

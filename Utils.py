@@ -1306,6 +1306,9 @@ class TestObject(object):
     def __init__(self) -> None:
         super().__init__()
         self.myDict = {"a": 1, "b": 2, "c": 3, "d": 4}
+
+    def __str__(self):
+        return "TestObject"
     def getMyDict(self):
         return self.myDict
 
