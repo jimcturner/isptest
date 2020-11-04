@@ -949,7 +949,8 @@ class RtpReceiveCommon(RtpCommon):
         pass
 
     @abstractmethod
-    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, eventNo=None):
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, requestedEventNo=None,
+                              recent=None, start=None, end=None):
         pass
 
     @abstractmethod
@@ -1333,6 +1334,80 @@ class RtpReceiveCommon(RtpCommon):
         except Exception as e:
             Utils.Message.addMessage("ERR:RtpReceiveCommon.humanise() value: " + str(value) + ", " + str(e))
             return value
+
+    # Method to return a filtered version of the eventsList
+    def filterEventsList(self, unfilteredEventList, filterList=None, reverseOrder=False, requestedEventNo=None,
+                                recent=None, start=None, end=None):
+
+        # Special case: If eventNo is specified, look for and return a list
+        # containing a *single* event with that event no (if it still exists)
+        if requestedEventNo is not None:
+            # Iterate over unfilteredEventList looking for an event whose eventNo matches requestedEventNo
+            filteredEventList = list(filter(lambda event: event.eventNo == requestedEventNo, unfilteredEventList))
+            return filteredEventList
+
+        # Now apply a 'type' filter (if specified)
+        if filterList is not None:
+            # Test to see if filterList is actually a list, or a single variable
+            if type(filterList) == list:
+                # A list has been passed, so carry on as normal
+                pass
+            else:
+                # A single value has been supplied. Convert the single value to a one element list to preserve the
+                # existing filter() code
+                filterList = [filterList]
+
+            # Iterate over unfilteredEventList creating a sublist containing objects (Events) that match the entries
+            # specified in filterList[]
+            # Note:
+            # filter() is a built in method that can iterate over an iterable object (unfilteredEventList)
+            # We supply it with a lambda function which takes the current event and checks to see if that type of event is
+            # present in filterList[]. If it is, that Event gets added to the filteredEventsList
+
+            # Use __class__.__name__ to get the 'concrete name' (i.e the Type of Class an object is an instance of
+            # Therefore we can filter by Object type or by Object type name
+
+            filteredEventList = \
+                list(filter(lambda event: ((type(event) in filterList) or (event.__class__.__name__ in filterList)),
+                            unfilteredEventList))
+
+
+        else:
+            # If no filter spcified, all take all the events
+            filteredEventList = unfilteredEventList
+
+        # # Now, if reverseOrder=True, reverse the order of the filtered list
+        # if reverseOrder:
+        #     filteredEventList.reverse()
+
+        if start is not None and end is not None:
+            # If kwarg 'start' and 'end' are  specified'
+            try:
+                # Slice the list
+                # Guard against a -ve start value
+                # Inclusive, so start = 1 (or start = 0) and end = 4 will return events 1,2,3 and 4
+                if start < 1:
+                    start = 1
+                filteredEventList = filteredEventList[start - 1:end]
+            except Exception as e:
+                Utils.Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(start) + ":" +
+                                         str(end) + ") requested start and end indexes out of range: " + str(e))
+                filteredEventList = []
+        elif recent is not None:
+            # Return the last n events (or else, if kwarg 'recent' is specified'
+            # IF event list not as long as n, return what does exist
+            try:
+                filteredEventList = filteredEventList[(recent * -1):]
+            except:
+                pass
+
+        # Finally, if reverseOrder=True, reverse the order of the returned list
+        if reverseOrder:
+            filteredEventList.reverse()
+
+        return filteredEventList
+
+
 
 
 # Define a class to represent a stream of received rtp packets (and associated stats)
@@ -2703,6 +2778,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # except Exception as e:
                 #     Utils.Message.addMessage("ERR: Last glitch: " + str(e))
 
+                # Utils.Message.addMessage(f"DBUG:sampling Thread__eventList {self.__eventList}")
+
                 ######## 1 second counter end of code ########
 
             try:
@@ -3166,7 +3243,6 @@ class RtpReceiveStream(RtpReceiveCommon):
     # eg these are all valid: filterList="Glitch", filterList=Glitch (where Glitch is a Python class) or
     # filterlist=[Glitch], or filterList = ["Glitch"]
 
-
     # eg filterList = [Glitch] will return only a list of glitches, [Glitch, StreamStarted] would give you a list
     # containing all Glitch and StreamStarted events
 
@@ -3179,78 +3255,19 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Create copy of events list
         unfilteredEventList = list(self.__eventList)
 
-        # Special case: If eventNo is specified, look for and return a list
-        # containing a *single* event with that event no (if it still exists)
-        if requestedEventNo is not None:
-            # Iterate over unfilteredEventList looking for an event whose eventNo matches requestedEventNo
-            filteredEventList = list(filter(lambda event: event.eventNo == requestedEventNo, unfilteredEventList))
-            return filteredEventList
+        # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
+        # (or else, if kwarg 'start' and 'end' are  specified'
+        if len(args) == 2:
+            start = args[0]
+            end = args[1]
+        # If one arg supplied, return the last n events (or else, if kwarg 'recent' is specified'
+        # IF event list not as long as n, return what does exist
+        elif len(args) == 1: # If non kwarg supplied, use that instead
+            recent = args[0]
 
-        # Now apply a 'type' filter (if specified)
-        if filterList is not None:
-            # Test to see if filterList is actually a list, or a single variable
-            if type(filterList) == list:
-                # A list has been passed, so carry on as normal
-                pass
-            else:
-                # A single value has been supplied. Convert the single value to a one element list to preserve the
-                # existing filter() code
-                filterList = [filterList]
-
-            # Iterate over unfilteredEventList creating a sublist containing objects (Events) that match the entries
-            # specified in filterList[]
-            # Note:
-            # filter() is a built in method that can iterate over an iterable object (unfilteredEventList)
-            # We supply it with a lambda function which takes the current event and checks to see if that type of event is
-            # present in filterList[]. If it is, that Event gets added to the filteredEventsList
-
-            # Use __class__.__name__ to get the 'concrete name' (i.e the Type of Class an object is an instance of
-            # Therefore we can filter by Object type or by Object type name
-
-            filteredEventList = \
-                list(filter(lambda event: ((type(event) in filterList) or (event.__class__.__name__ in filterList)),
-                                           unfilteredEventList))
-
-
-        else:
-            # If no filter spcified, all take all the events
-            filteredEventList = unfilteredEventList
-
-        # # Now, if reverseOrder=True, reverse the order of the filtered list
-        # if reverseOrder:
-        #     filteredEventList.reverse()
-
-        if len(args) == 2 or (start is not None and end is not None):
-            # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
-            # (or else, if kwarg 'start' and 'end' are  specified'
-            if len(args) == 2:
-                start = args[0]
-                end = args[1]
-            try:
-                # Slice the list
-                # Guard against a -ve start value
-                # Inclusive, so start = 1 (or start = 0) and end = 4 will return events 1,2,3 and 4
-                if start < 1:
-                    start = 1
-                filteredEventList = filteredEventList[start-1:end]
-            except Exception as e:
-                Utils.Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(start) + ":" +
-                                   str(end) + ") requested start and end indexes out of range: " + str(e))
-                filteredEventList = []
-        elif len(args) == 1 or recent is not None:
-            # If one arg supplied, return the last n events (or else, if kwarg 'recent' is specified'
-            # IF event list not as long as n, return what does exist
-            if len(args) == 1: # If non kwarg supplied, use that instead
-                recent = args[0]
-            try:
-                filteredEventList = filteredEventList[(recent * -1):]
-            except:
-                pass
-
-        # Finally, if reverseOrder=True, reverse the order of the returned list
-        if reverseOrder:
-            filteredEventList.reverse()
-
+        # Filter the events list using the specified criteria
+        filteredEventList = self.filterEventsList(unfilteredEventList, filterList=filterList, reverseOrder=reverseOrder,
+                                                  requestedEventNo=requestedEventNo, recent=recent, start=start, end=end)
         return filteredEventList
 
 
@@ -3417,54 +3434,28 @@ class RtpStreamResults(RtpReceiveCommon):
     # containing all Glitch and StreamStarted events
     # The filter (if present) is applied first, then the range specifier
     # Finally, if reverseOrder==True, the list will be returned in reverse order
-    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, requestedEventNo=None):
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, requestedEventNo=None,
+                              recent=None, start=None, end=None):
         self.__accessRtpStreamEventListMutex.acquire()
         # Create copy of events list
-        # unfilteredEventList = deepcopy(self.__eventList)
         unfilteredEventList = list(self.__eventList)
         self.__accessRtpStreamEventListMutex.release()
 
-        # If eventNo is specified, look for and return a list containing a single event with that event no (if it still exists)
-        if requestedEventNo is not None:
-            # Iterate over unfilteredEventList looking for an event whose eventNo matches requestedEventNo
-            filteredEventList = list(filter(lambda event: event.eventNo == requestedEventNo, unfilteredEventList))
-            return filteredEventList
-
-        # Now apply a filter (if specified)
-        filteredEventList = []
-        if filterList is not None:
-            # Iterate over unfilteredEventList creating a sublist containing objects (Events) that match the entries
-            # specified in filterList[]
-            # Note:
-            # filter() is a built in method that can iterate over an iterable object (unfilteredEventList)
-            # We supply it with a lambda function which takes the current event and checks to see if that type of event is
-            # present in filterList[]. If it is, that Event gets added to the filteredEventsList
-            filteredEventList = list(filter(lambda event: (type(event) in filterList), unfilteredEventList))
-        else:
-            # If no filter spcified, all take all the events
-            filteredEventList = unfilteredEventList
-
-        # Now, if reverseOrder=True, reverse the order of the filtered list
-        if reverseOrder:
-            filteredEventList.reverse()
-
+        # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
+        # (or else, if kwarg 'start' and 'end' are  specified'
         if len(args) == 2:
-            # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
-            try:
-                # Slice the list
-                return filteredEventList[args[0]:args[1] + 1]
-            except Exception as e:
-                Utils.Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(args[0]) + ":" +
-                                   str(args[1]) + ") requested start and end indexes out of range: " + str(e))
-        elif len(args) == 1:
-            # If one arg supplied, return the last n events.
-            # IF event list not as long as n, return what does exist
-            try:
-                return filteredEventList[(args[0] * -1):]
-            except:
-                return filteredEventList
-        else:
-            return filteredEventList
+            start = args[0]
+            end = args[1]
+        # If one arg supplied, return the last n events (or else, if kwarg 'recent' is specified'
+        # IF event list not as long as n, return what does exist
+        elif len(args) == 1:  # If non kwarg supplied, use that instead
+            recent = args[0]
+
+        # Filter the events list using the specified criteria
+        filteredEventList = self.filterEventsList(unfilteredEventList, filterList=filterList, reverseOrder=reverseOrder,
+                                                  requestedEventNo=requestedEventNo, recent=recent, start=start,
+                                                  end=end)
+        return filteredEventList
 
 
 # Define an RTP Generator that can run autonomously as a thread

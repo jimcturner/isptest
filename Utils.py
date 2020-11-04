@@ -1306,11 +1306,22 @@ class TestObject(object):
     def __init__(self) -> None:
         super().__init__()
         self.myDict = {"a": 1, "b": 2, "c": 3, "d": 4}
+        self.__privateVar = "this is private"
+        self.publicVar = "this is public"
 
     def __str__(self):
         return "TestObject"
     def getMyDict(self):
         return self.myDict
+    def getPrivateVar(self):
+        return self.__privateVar
+
+class TestSubClass(TestObject):
+    def __init__(self) -> None:
+        super().__init__()
+    def modifySuperClassPrivateVar(self, newVal):
+        self.__privateVar = newVal
+
 
 #  Takes a python object (likely to be an RTPReceiveStream object and writes it to disk
 # The object is first serialised using Pickle
