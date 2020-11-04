@@ -3161,6 +3161,12 @@ class RtpReceiveStream(RtpReceiveCommon):
     # ALTERNATIVELY: Use kwargs, recent=None, start=None, end=None instead
 
     # filterList is an optional arg containing a list of Event object types to test against within EventsList
+    # UPDATE 4/11/20 filterList can now be a single item (either a string corresponding to the __class__.__name__
+    # attribute of an object or a Python Object) instead of a list.
+    # eg these are all valid: filterList="Glitch", filterList=Glitch (where Glitch is a Python class) or
+    # filterlist=[Glitch], or filterList = ["Glitch"]
+
+
     # eg filterList = [Glitch] will return only a list of glitches, [Glitch, StreamStarted] would give you a list
     # containing all Glitch and StreamStarted events
 
@@ -3182,6 +3188,15 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Now apply a 'type' filter (if specified)
         if filterList is not None:
+            # Test to see if filterList is actually a list, or a single variable
+            if type(filterList) == list:
+                # A list has been passed, so carry on as normal
+                pass
+            else:
+                # A single value has been supplied. Convert the single value to a one element list to preserve the
+                # existing filter() code
+                filterList = [filterList]
+
             # Iterate over unfilteredEventList creating a sublist containing objects (Events) that match the entries
             # specified in filterList[]
             # Note:
