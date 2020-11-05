@@ -4165,6 +4165,10 @@ class ISPTestHTTPServer(object):
         self.httpServerThread.setName("ISPTestHTTPServer:" + str(self.tcpListenPort))
         self.httpServerThread.start()
 
+    # Gets the TCP listener port of the HTTP Server
+    def getTCPPort(self):
+        return self.tcpListenPort
+
     # Threadsafe method to append an item to the streamsList
     def appendToStreamsList(self, item):
         self.streamsListMutex.acquire()
@@ -5375,7 +5379,8 @@ def main(argv):
                                                             # packets start arriving
                                                             restoredStreamFlag=True,
                                                             historicStatsDict=stats,
-                                                            historicEventsList=eventsList
+                                                            historicEventsList=eventsList,
+                                                            controllerTCPPort=isptesttHTTPServer.getTCPPort()
                                                             )
 
                         except Exception as e:
@@ -5405,7 +5410,9 @@ def main(argv):
 
             # Create an RtpPacketReceiver to capture incoming rtp packets and create RtpReceiveStreams
             rtpPacketReceiver = RtpPacketReceiver(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
-                       UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, ui, txMessageQueue)
+                       UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
+                                                  glitchEventTriggerThreshold,
+                                                  ui, txMessageQueue, controllerTCPPort=isptesttHTTPServer.getTCPPort())
 
             # Wait for socket (Created by rtpPacketReceiver) to become available (this might take some time)
             while rtpPacketReceiver.getSocket() is None:

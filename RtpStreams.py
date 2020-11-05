@@ -1733,6 +1733,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.rtpRxStreamsDict[self.__stats["stream_syncSource"]] = self
             self.rtpRxStreamsDictMutex.release()
 
+            Utils.Message.postMessage(f"DBUG:RtpReceiveStream.__init__(): {self.__stats['stream_syncSource']}", tcpPort=self.controllerTCPPort)
     # Define a custom BaseHTTPRequestHandler class to handle HTTP GET, POST requests
     class HTTPRequestHandler(BaseHTTPRequestHandler):
         # For JSON, use contentType='application/json'
