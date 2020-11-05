@@ -9,7 +9,7 @@ import cgi
 import urllib
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import PurePosixPath
-from urllib.parse import unquote, urlparse, parse_qs
+from urllib.parse import unquote, urlparse, parse_qs, parse_qsl
 
 from Registry import Registry # This class contains constants/defaults used throughout the program
 
@@ -4113,11 +4113,14 @@ class RtpPacketReceiver(object):
 
 # Class to provide an HTTP Server/ web API
 # Note, this Class also provides a stream directory service
+# externalResourcesDict is a dictionary of external objects that ISPTestHTTPServer would like access to
 class ISPTestHTTPServer(object):
 
-    def __init__(self, operationMode = None) -> None:
+    def __init__(self, operationMode=None, externalResourcesDict=None) -> None:
         super().__init__()
         self.operationMode = operationMode
+        # Dictionary to hold reference to the instances of useful external objects (eg the WhoIsResolver)
+        self.externalResourcesDict = externalResourcesDict
         # Create a list of dicts to hold a list of Rtp Streams
         self.streamsList = []
         self.streamsListMutex = threading.Lock()
@@ -4383,6 +4386,51 @@ class ISPTestHTTPServer(object):
                             # More steps yet to be parsed, let the loop continue
                             pass
 
+                    elif str(currentStep).startswith("whois"):
+                        # GET /whois?0=1.2.3.4&2=2.3.4.
+                        # Takes an indexed list of ip addresses and queries them with the WhoIs Resolver.
+                        # It then returns a json encoded list of tuples containing [ip address, whois_name]
+                        if pathIndex == pathLen - 1:  # Is this the last step of the path
+                            try:
+                                # parse the GET query as a list
+                                getQueryList = parse_qsl(urlparse(self.path).query)  # Extract just the query
+                                # Utils.Message.postMessage(f"do_GET/whois {get_query}",
+                                #                           tcpPort=self.server.parentObject.tcpListenPort)
+
+                                response = Utils.formatHttpResponse(f"query: {getQueryList}")
+                                if len (getQueryList) > 0:
+                                    outputList = [] # A list of tuples containing [ip addr, whois name]
+                                    # Now iterate over the list of ip addresses looking up each one in turn
+                                    for hopNo in range(len(getQueryList)):
+                                        # Extract the ip address
+                                        hopAddr=getQueryList[hopNo][1]
+                                        # Get handle on WhoIsResolver instance
+                                        whoIsResolver = self.server.parentObject.externalResourcesDict["whoIsResolver"]
+                                        # Query the Whois Resolver for that name
+                                        whoisResult = whoIsResolver.queryWhoisCache(hopAddr)
+                                        whoisNetName = ""
+                                        if whoisResult is not None:
+                                            whoisNetName = " " + whoisResult[0]['asn_description']
+
+                                        outputList.append([hopAddr, whoisNetName])
+                                    # Encode the list as json
+                                    response = (json.dumps(outputList, sort_keys=True, indent=4,
+                                                           default=str) + "\n").encode('utf-8')
+                                    # Create the headers
+                                    self._set_response(contentType='application/json')
+
+                                else:
+                                    response = Utils.formatHttpResponse(f"do_GET/whois -- no data")
+                                    # Create the headers
+                                    self._set_response()
+                                break  # Break out of while loop
+
+                            except Exception as e:
+                                raise Exception(f"do__GET() /whois err {str(e)}")
+                        else:
+                            # More steps yet to be parsed, let the loop continue
+                            pass
+
                     elif currentStep in self.server.parentObject.availableStreamTypes:
                         # /streams/RtpGenerator or /streams/RtpReceiveStream or /streams/RtpStreamResults
                         filterType = currentStep # Capture the current streamType
@@ -4516,7 +4564,6 @@ class ISPTestHTTPServer(object):
                         else:
                             # More steps yet to be parsed, let the loop continue
                             pass
-
 
                     elif currentStep == "streams":  # Test the path step
                         if pathIndex == pathLen - 1:  # Is this the last step of the path
@@ -5203,7 +5250,9 @@ def main(argv):
 
     # Create and start the main HTTP Server
     try:
-        isptesttHTTPServer = ISPTestHTTPServer(operationMode=MODE)
+        # Create dict to hold a list of Object instances that the HTTP server will need access to
+        u = {"whoIsResolver":whoIsResolver}
+        isptesttHTTPServer = ISPTestHTTPServer(operationMode=MODE, externalResourcesDict=u)
     except Exception as e:
         Utils.Message.addMessage("ERR:isptesttHTTPServer = ISPTestHTTPServer() " + str(e))
 
