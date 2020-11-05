@@ -1700,8 +1700,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Now register the stream with the stream directory service
             try:
                 # Construct the URL required to add streams to the directory service
-                self.addStreamURL = "http://127.0.0.1:" + str(
-                    Registry.httpServerRtpReceiverTCPPort) + "/streams/add"
+                self.addStreamURL = "http://127.0.0.1:" + str(self.controllerTCPPort) + "/streams/add"
 
                 # Create a dict to define the stream
                 streamDefinition = {
@@ -2014,7 +2013,7 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Now attempt to remove the stream from the streams directory
         # Create the URL for the DELETE request
-        deleteStreamURL = "http://127.0.0.1:" + str(Registry.httpServerRtpReceiverTCPPort) +\
+        deleteStreamURL = "http://127.0.0.1:" + str(self.controllerTCPPort) +\
                           "/streams/delete/RtpReceiveStream/" + str(self.__stats["stream_syncSource"])
         # DELETE via HTTP method
         try:
