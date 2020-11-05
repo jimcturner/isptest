@@ -3608,7 +3608,7 @@ class RtpPacketReceiver(object):
 
     def __init__(self, rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
                        UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, uiInstance,
-                       txMessageQueue):
+                       txMessageQueue, controllerTCPPort=None):
         self.rtpRxStreamsDict = rtpRxStreamsDict
         self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
         self.shutdownFlag = shutdownFlag
@@ -3618,6 +3618,7 @@ class RtpPacketReceiver(object):
         self.glitchEventTriggerThreshold = glitchEventTriggerThreshold
         self.uiInstance = uiInstance
         self.txMessageQueue = txMessageQueue
+        self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
 
         # Create and initialise variables used for debugging -tracing lost packets
         self.rawPacketsReceivedByRxThreadCount = 0
@@ -4006,7 +4007,8 @@ class RtpPacketReceiver(object):
                                         newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
                                                                         self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
                                                                         self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex,
-                                                                        self.txMessageQueue)
+                                                                        self.txMessageQueue,
+                                                                        controllerTCPPort=self.controllerTCPPort)
                                         # Add the most recent packet to the newly created stream
                                         newRtpStream.addData(seqNo, udpPayloadLength, packetArrivedTimestamp,
                                                              syncSourceID, isptestHeaderData, rxTTL, srcAddress,

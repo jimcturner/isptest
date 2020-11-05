@@ -1420,7 +1420,7 @@ class RtpReceiveStream(RtpReceiveCommon):
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold,
                  rtpRxStreamsDict, rtpRxStreamsDictMutex, txMessageQueue,
-                 restoredStreamFlag=False, historicStatsDict=None, historicEventsList=None):
+                 restoredStreamFlag=False, historicStatsDict=None, historicEventsList=None, controllerTCPPort=None):
         # Call super constructor
         super().__init__()
         # Create Queue to accept the received packets
@@ -1433,6 +1433,7 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         self.rtpRxStreamsDict = rtpRxStreamsDict
         self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
+        self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
         # # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
         self.__stats = {}
         # Assign to instance variable
