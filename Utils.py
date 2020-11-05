@@ -252,9 +252,26 @@ class Message(object):
     outputFileName = "isptest_messages_default.txt"
 
     # posts a message using HTTP POST
+    # tcpPort is mandatory
+    # Returns True or False depending upon success
     @classmethod
-    def postMessage(cls, newMessage, port, logToDisk=True, path="http://127.0.0.1/log"):
-        pass
+    def postMessage(cls, newMessage, tcpPort, logToDisk=True, server="http://127.0.0.1", path="/log", timeout=0.1):
+        statusCode = None
+        try:
+            # create URL
+            postURL = server + f":{tcpPort}{path}"
+            # Create a dict containing the data to be posted
+            postData= {"message":newMessage, "logToDisk":str(logToDisk)}
+            # POST the data to the log server
+            r = requests.post(postURL, postData, timeout=timeout)
+            statusCode = r.status_code
+            r.raise_for_status()  # If this doesn;t raise an exception, all is good!
+        except requests.Timeout:
+            print("timeout")
+        except Exception as e:
+            print("Exception:" + str(e))
+        finally:
+            return False
 
     @classmethod
     def setVerbosity(cls, verbosity):

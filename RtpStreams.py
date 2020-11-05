@@ -771,7 +771,7 @@ class RtpCommon(object):
         # POST the data
         status = False
         try:
-            r = requests.post(url, streamDefinition)
+            r = requests.post(url, streamDefinition, timeout=self.httpRequestTimeout)
             # test the response
             if r.status_code == requests.codes.ok:
                 Utils.Message.addMessage("INFO: Successfully registered stream " + str(streamDefinition["streamID"]))
