@@ -249,10 +249,12 @@ class Message(object):
     # Determines which messages will be revealed by getMessages
     # 0 = no warning messages, > 0 = warning messages displayed
     verbosityLevel = 0
-
     outputFileName = "isptest_messages_default.txt"
 
-
+    # posts a message using HTTP POST
+    @classmethod
+    def postMessage(cls, newMessage, port, logToDisk=True, path="http://127.0.0.1/log"):
+        pass
 
     @classmethod
     def setVerbosity(cls, verbosity):

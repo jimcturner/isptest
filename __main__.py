@@ -4482,7 +4482,37 @@ class ISPTestHTTPServer(object):
             try:
                 while pathIndex < pathLen:
                     currentStep = pathList[pathIndex]  # Get the current step
-                    if currentStep == "streams":  # Test the path step
+                    if currentStep == "log":
+                        # add a new stream to streamsList
+                        # /log
+                        if pathIndex == pathLen - 1:  # Is this the last step of the path
+                            response = Utils.formatHttpResponse(f"{self.path}, {post_data_dict}")
+                            try:
+                                # Extract message
+                                message = str(post_data_dict[b"message"][0].decode('UTF-8'))
+
+                                # Is the logToDisk key present in the POST
+                                logToDiskFlag = True # default value if not present
+                                if b"logToDisk" in post_data_dict:
+                                    logToDiskFlag = str(post_data_dict[b"logToDisk"][0].decode('UTF-8'))
+                                    if logToDiskFlag in ["False", "false", "0", "no", "No"]:
+                                        logToDiskFlag = False
+
+                                # Add the message
+                                Utils.Message.addMessage(message, logToDisk=logToDiskFlag)
+                            except Exception as e:
+                                raise Exception(f"do__POST() /log {post_data_dict}, err {str(e)}")
+
+                            # Set the headers
+                            self._set_response(responseCode=201)
+                            break  # Break out of while loop
+
+                        else:
+                            # More steps yet to be parsed, let the loop continue
+                            pass
+
+
+                    elif currentStep == "streams":  # Test the path step
                         if pathIndex == pathLen - 1:  # Is this the last step of the path
                             raise Exception("Can't POST to this path")
                         else:
