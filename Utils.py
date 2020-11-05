@@ -253,10 +253,9 @@ class Message(object):
 
     # posts a message using HTTP POST
     # tcpPort is mandatory
-    # Returns True or False depending upon success
+    # Returns True if successful, None if tied out or an error depending upon success
     @classmethod
     def postMessage(cls, newMessage, tcpPort, logToDisk=True, server="http://127.0.0.1", path="/log", timeout=0.1):
-        statusCode = None
         try:
             # create URL
             postURL = server + f":{tcpPort}{path}"
@@ -266,12 +265,13 @@ class Message(object):
             r = requests.post(postURL, postData, timeout=timeout)
             statusCode = r.status_code
             r.raise_for_status()  # If this doesn;t raise an exception, all is good!
+            return True
         except requests.Timeout:
-            print("timeout")
+            return None
         except Exception as e:
-            print("Exception:" + str(e))
-        finally:
-            return False
+            return str(e)
+
+
 
     @classmethod
     def setVerbosity(cls, verbosity):
