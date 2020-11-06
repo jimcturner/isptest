@@ -2611,41 +2611,51 @@ class UI(object):
                 # Request the whois lookup via the API
                 url = f"http://127.0.0.1:{self.controllerTCPPort}/whois?{httpQuery}"
 
-                contents = ""
+                apiResponse = "" # Will hold the contents of the HTTP response
                 try:
                     r = requests.get(url, timeout=Registry.httpRequestTimeout)
-                    contents = r.text
-                    Utils.Message.addMessage(f"contents: {contents}")
+                    r.raise_for_status() # Will raise an Exception if there was a problem
+                    # Attempt to parse the contents as JSON
+                    # This should be a list of tuples [[ip address, whois name], [ip address, whois name],...]
+                    apiResponse = r.json()
+                    # Utils.Message.addMessage(f"contents: {contents}")
+                    # Now create the table contents to be displayed
+                    for hopNo in range(len(apiResponse)):
+                        # Create each table row as [hopNo, ip address, whois name]
+                        addr = apiResponse[hopNo][0]
+                        whoisName = apiResponse[hopNo][1]
+                        tableContents.append([hopNo+1, addr, whoisName])
+
                 except Exception as e:
-                    Utils.Message.addMessage(f"ERR:UI.__renderTracerouteTable() {contents}, {e}")
+                    Utils.Message.addMessage(f"ERR:UI.__renderTracerouteTable() GET /whois {apiResponse}, {e}")
 
-
-                for hopNo in range(len(tracerouteHopsList)):
-                    # Construct a string containing the IP address octets
-                    try:
-                        # This will fail if the tracerouteHopsList hop hasn't been received in the carousel yet
-                        # If so, the hopAddr entry in tracerouteHopsList will still be 'None'
-                        hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
-                                  str(tracerouteHopsList[hopNo][1]) + "." + \
-                                  str(tracerouteHopsList[hopNo][2]) + "." + \
-                                  str(tracerouteHopsList[hopNo][3])
-                        # Now query the isptest whois cache for the address
-                        whoisResult = Utils.WhoisResolver.queryWhoisCache(hopAddr)
-                        if whoisResult is not None:
-                            whoisNetName = " " + whoisResult[0]['asn_description']
-                            # Truncate the string (if too long to fit on the table)
-                            whoisNetName = (whoisNetName[:maxWidth] + '..') if len(whoisNetName) > maxWidth else whoisNetName
-                    except:
-                        hopAddr = "Waiting...."
-
-                    # Create a table row containing the hop no and ip address of the hop
-                    tableRow=[str(hopNo + 1), hopAddr, whoisNetName]
-                    # Clear whoisNetName ready for next line
-                    whoisNetName = ""
-                    # Append the table row tuple to the tableContents[] list
-                    tableContents.append(tableRow)
-                    # Clear the tableRow list ready for next time around the loop
-                    tableRow = []
+                # Old non-API version
+                # for hopNo in range(len(tracerouteHopsList)):
+                #     # Construct a string containing the IP address octets
+                #     try:
+                #         # This will fail if the tracerouteHopsList hop hasn't been received in the carousel yet
+                #         # If so, the hopAddr entry in tracerouteHopsList will still be 'None'
+                #         hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
+                #                   str(tracerouteHopsList[hopNo][1]) + "." + \
+                #                   str(tracerouteHopsList[hopNo][2]) + "." + \
+                #                   str(tracerouteHopsList[hopNo][3])
+                #         # Now query the isptest whois cache for the address
+                #         whoisResult = Utils.WhoisResolver.queryWhoisCache(hopAddr)
+                #         if whoisResult is not None:
+                #             whoisNetName = " " + whoisResult[0]['asn_description']
+                #             # Truncate the string (if too long to fit on the table)
+                #             whoisNetName = (whoisNetName[:maxWidth] + '..') if len(whoisNetName) > maxWidth else whoisNetName
+                #     except:
+                #         hopAddr = "Waiting...."
+                #
+                #     # Create a table row containing the hop no and ip address of the hop
+                #     tableRow=[str(hopNo + 1), hopAddr, whoisNetName]
+                #     # Clear whoisNetName ready for next line
+                #     whoisNetName = ""
+                #     # Append the table row tuple to the tableContents[] list
+                #     tableContents.append(tableRow)
+                #     # Clear the tableRow list ready for next time around the loop
+                #     tableRow = []
             else:
                 tableContents.append(["", "", "No traceroute data to display yet. Please wait".ljust(maxWidth)])
             # Now actually display the paged table list
