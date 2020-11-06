@@ -800,15 +800,10 @@ class RtpReceiveCommon(RtpCommon):
         self.worstGlitchesList = []
         self.worstGlitchesMutex = threading.Lock()
 
-        # A list to contain the *live* traceroute hops as received as part of the isptestheader data
-        # Note: This list is liable to be in a state of flux as it's being continuaously updated
+        # A list to contain the traceroute hops as received as part of the isptestheader data
         self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
         self.tracerouteHopsListMutex = threading.Lock()
 
-        # A list to contain the *live* traceroute hops as received as part of the isptestheader data
-        # Note: This list is liable to be in a state of flux as it's being continuaously updated
-        self.liveTracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
-        self.liveTracerouteHopsListMutex = threading.Lock()
 
         # A mutex-protected *viewing* copy of self.tracerouteHopsList
         # This is also a list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
@@ -1462,6 +1457,12 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_transmitter_Return_Loss_percent"] = 0  # Will be populated by incoming isptest header data
         Utils.Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
 
+        # A list to contain the *live* traceroute hops as received as part of the isptestheader data
+        # Note: This list is liable to be in a state of flux as it's being continuaously updated
+        self.liveTracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
+        self.liveTracerouteHopsListMutex = threading.Lock()
+        self.liveTracerouteHopsListLastUpdated = None  # Timestamps the last traceroute update
+
         # Var to store the traceroute checksum value extracted from the isptestheader data
         self.tracerouteReceivedChecksum = 0
         # Create a mutex lock to be used by the a thread
@@ -1741,6 +1742,44 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.rtpRxStreamsDictMutex.release()
 
             Utils.Message.postMessage(f"DBUG:RtpReceiveStream.__init__(): {self.__stats['stream_syncSource']}", tcpPort=self.controllerTCPPort)
+
+    # Thread-safe method to update individual elements of the *live* (i.e unstable) traceroute hops list
+    # It should be much faster than setTraceRouteHopsList (which has to copy the entire list)
+    # It begins by comparing the lengths of the current stored list with the latest known length
+    # If there is a discrepency, it will reinitialise the list to the new length
+    # The arg 'hop' is zero indexed (so hop 0 is the first address in the hop list)
+    def updateLiveTraceRouteHopsList(self, hopNo, noOfHops, hopAddr):
+        if noOfHops > 0:
+            self.liveTracerouteHopsListMutex.acquire()
+            try:
+                if len(self.liveTracerouteHopsList) == noOfHops:
+                    pass
+                else:
+                    # If there is a discrepancy between the length the list and the latest known length
+                    # Throw away the current list and initialise a new empty list
+                    self.liveTracerouteHopsList = [None] * noOfHops
+                self.liveTracerouteHopsList[hopNo] = hopAddr
+            except Exception as e:
+                Utils.Message.addMessage("ERR:RtpReceiveStream.liveTracerouteHopsList() " + str(e))
+            self.liveTracerouteHopsListMutex.release()
+
+    # Thread-safe method to completely replace the *live* self.liveTracerouteHopsList[] with a new list
+    def setLiveTraceRouteHopsList(self, newList):
+        self.liveTracerouteHopsListMutex.acquire()
+        # Copy the new list into the instance variable list
+        self.liveTracerouteHopsList = deepcopy(newList)
+        self.liveTracerouteHopsListMutex.release()
+        # Update the timestamp
+        self.liveTracerouteHopsListLastUpdated = datetime.datetime.now()
+
+    # Thread-safe method to return a list of the *live* traceroute hops
+    # Returns a tuple of the lastUpdatedTimestamp and the hops list
+    def getLiveTraceRouteHopsList(self):
+        self.liveTracerouteHopsListMutex.acquire()
+        hl = deepcopy(self.liveTracerouteHopsList)
+        self.liveTracerouteHopsListMutex.release()
+        return self.liveTracerouteHopsListLastUpdated, hl
+
     # Define a custom BaseHTTPRequestHandler class to handle HTTP GET, POST requests
     class HTTPRequestHandler(BaseHTTPRequestHandler):
         # For JSON, use contentType='application/json'
