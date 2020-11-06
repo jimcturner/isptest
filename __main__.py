@@ -2611,23 +2611,22 @@ class UI(object):
                 # Request the whois lookup via the API
                 url = f"http://127.0.0.1:{self.controllerTCPPort}/whois?{httpQuery}"
 
-                apiResponse = "" # Will hold the contents of the HTTP response
+                apiResponseBody = "" # Will hold the contents of the HTTP response
                 try:
                     r = requests.get(url, timeout=Registry.httpRequestTimeout)
                     r.raise_for_status() # Will raise an Exception if there was a problem
                     # Attempt to parse the contents as JSON
                     # This should be a list of tuples [[ip address, whois name], [ip address, whois name],...]
-                    apiResponse = r.json()
-                    # Utils.Message.addMessage(f"contents: {contents}")
+                    apiResponseBody = r.json()
                     # Now create the table contents to be displayed
-                    for hopNo in range(len(apiResponse)):
+                    for hopNo in range(len(apiResponseBody)):
                         # Create each table row as [hopNo, ip address, whois name]
-                        addr = apiResponse[hopNo][0]
-                        whoisName = apiResponse[hopNo][1]
+                        addr = apiResponseBody[hopNo][0]
+                        whoisName = apiResponseBody[hopNo][1]
                         tableContents.append([hopNo+1, addr, whoisName])
 
                 except Exception as e:
-                    Utils.Message.addMessage(f"ERR:UI.__renderTracerouteTable() GET /whois {apiResponse}, {e}")
+                    Utils.Message.addMessage(f"ERR:UI.__renderTracerouteTable() GET /whois {apiResponseBody}, {e}")
 
                 # Old non-API version
                 # for hopNo in range(len(tracerouteHopsList)):
