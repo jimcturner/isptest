@@ -805,6 +805,11 @@ class RtpReceiveCommon(RtpCommon):
         self.tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
         self.tracerouteHopsListMutex = threading.Lock()
 
+        # A list to contain the *live* traceroute hops as received as part of the isptestheader data
+        # Note: This list is liable to be in a state of flux as it's being continuaously updated
+        self.liveTracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
+        self.liveTracerouteHopsListMutex = threading.Lock()
+
         # A mutex-protected *viewing* copy of self.tracerouteHopsList
         # This is also a list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
         # Explanation:
