@@ -820,9 +820,10 @@ class RtpReceiveCommon(RtpCommon):
         # data for the whole of the traceroute has been received - through the use of the traceroute checksum)
 
         self.__stableTracerouteHopsList = []
-        # A timestamp showing representing this list was last updated
+        # A timestamp showing representing this (stable) list was last updated
         self.__stableTracerouteHopsListLastUpdated = None
         self.__stableTracerouteHopsListMutex = threading.Lock()
+        self.tracerouteHopsListLastUpdated = None  # Timestamps the last successful traceroute update
 
         # Deque list to hold previous traceroute results (used for the traceroute viewer)
         self.historicTracerouteEvents = deque(maxlen=Registry.rtpCommonHistoricTracerouteEventsToKeep)
@@ -2732,7 +2733,6 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                         # Update the __stableTracerouteHopsList (this will be used for reports/display purposes)
                         self.setStableTracerouteHopsList(hopsList)
-                        # Utils.Message.addMessage("stable tr: " + str(self.getStableTracerouteHopsList()))
 
                         # Attempt to detect a route change
                         if hopsListChangeExpected is False:
@@ -3628,6 +3628,7 @@ class RtpGenerator(RtpCommon):
         self._tracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ipopctet4]
                                         # Should only be accessed by the setter/getter methods
         self.tracerouteHopsListMutex = threading.Lock() # Protects tracerouteHopsListMutex
+        self.tracerouteHopsListLastUpdated = None # Timestamps the last successful traceroute update
         self.tracerouteCarouselIndexNo = 0  # Keeps track of which traceroute hop value is currently being transmitted
                                             # in the isptest header (in RtpGenerator.generateIsptestHeader()
 
@@ -5769,8 +5770,9 @@ class RtpGenerator(RtpCommon):
                     if testHopsListsForEquality(tracerouteResultsList):
                         # If the lists are all identical that means that n consecutive traceroutes gave the same result
                         # so the traceroute has been validated. Update the instance variable (via the setter method)
-
                         self.setTraceRouteHopsList(hopsList)
+                        # Update the timestamp
+                        self.tracerouteHopsListLastUpdated=datetime.datetime.now()
                         # Successful (replicated) traceroute has completed, so reset the mismatch counter
                         tracerouteHopsListMismatchCounter = 0
                         # Recalculate the checksum for the (transmitted( hopsList
@@ -5785,6 +5787,8 @@ class RtpGenerator(RtpCommon):
 
                             ### Copy the traceroute hops list into the object instance var
                             rtpStreamResults.setTraceRouteHopsList(hopsList)
+                            # Update the timestamp
+                            rtpStreamResults.tracerouteHopsListLastUpdated = datetime.datetime.now()
 
 
                         except Exception as e:
