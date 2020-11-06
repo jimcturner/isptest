@@ -9,7 +9,9 @@ import cgi
 import urllib
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import PurePosixPath
-from urllib.parse import unquote, urlparse, parse_qs, parse_qsl
+from urllib.parse import unquote, urlparse, parse_qs, parse_qsl, urlencode
+
+import requests
 
 from Registry import Registry # This class contains constants/defaults used throughout the program
 
@@ -560,7 +562,7 @@ class UI(object):
                     rtpTxStreamsDict, rtpTxStreamsDictMutex,
                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
                     rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
-                    receiversAndSendersList):
+                    receiversAndSendersList, controllerTCPPort=None):
 
         self.operationMode = operationMode
         self.specialFeaturesModeFlag = specialFeaturesModeFlag
@@ -572,6 +574,7 @@ class UI(object):
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
 
         self.receiversAndSendersList = receiversAndSendersList # This will contain the UDP_RX_IP and  UDP_RX_PORT(s)
+        self.controllerTCPPort = controllerTCPPort # The TCP listen port for the HTTP server
         self.pid = os.getpid() # Stores the processID (pid of this process. Used as a source id in
         # control messages sent back to the transmitter (so that the source of the message can be identified)
 
@@ -2586,6 +2589,37 @@ class UI(object):
                 tableRow = []
                 whoisNetName = ""
                 hopAddr = ""
+                # Iterate over tracerouteHopsList creating a query string to be passed to the WhoisResolver
+                # via the /whoIs API
+                httpQueryList = [] # List of tuples of the form (indexNo, hopAddr)
+                for hopNo in range(len(tracerouteHopsList)):
+                    # Construct a string containing the IP address octets
+                    try:
+                        # This will fail if the tracerouteHopsList hop hasn't been received in the carousel yet
+                        # If so, the hopAddr entry in tracerouteHopsList will still be 'None'
+                        hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
+                                  str(tracerouteHopsList[hopNo][1]) + "." + \
+                                  str(tracerouteHopsList[hopNo][2]) + "." + \
+                                  str(tracerouteHopsList[hopNo][3])
+                    except Exception as e:
+                        hopAddr="waiting..."
+                    # Create a tuple of (index, hopAddr) and append to httpQueryList
+                    httpQueryList.append((hopNo, hopAddr))
+                # Now create an HTTP GET query string URL (of the form key1=value1&key2=value2 etc. Prefaced with a '?'
+                httpQuery=urlencode(httpQueryList)
+                # Utils.Message.addMessage(f"httpQuery: {httpQuery}")
+                # Request the whois lookup via the API
+                url = f"http://127.0.0.1:{self.controllerTCPPort}/whois?{httpQuery}"
+
+                contents = ""
+                try:
+                    r = requests.get(url, timeout=Registry.httpRequestTimeout)
+                    contents = r.text
+                    Utils.Message.addMessage(f"contents: {contents}")
+                except Exception as e:
+                    Utils.Message.addMessage(f"ERR:UI.__renderTracerouteTable() {contents}, {e}")
+
+
                 for hopNo in range(len(tracerouteHopsList)):
                     # Construct a string containing the IP address octets
                     try:
@@ -4116,9 +4150,10 @@ class RtpPacketReceiver(object):
 # externalResourcesDict is a dictionary of external objects that ISPTestHTTPServer would like access to
 class ISPTestHTTPServer(object):
 
-    def __init__(self, operationMode=None, externalResourcesDict=None) -> None:
+    def __init__(self, operationMode=None, tcpListenPort=None, externalResourcesDict=None) -> None:
         super().__init__()
         self.operationMode = operationMode
+        self.tcpListenPort = tcpListenPort
         # Dictionary to hold reference to the instances of useful external objects (eg the WhoIsResolver)
         self.externalResourcesDict = externalResourcesDict
         # Create a list of dicts to hold a list of Rtp Streams
@@ -4150,14 +4185,10 @@ class ISPTestHTTPServer(object):
         # createDummyStream(self.streamsList, RtpGenerator.__name__, streamID=streamID)
 
 
-        # Start a web server running on the first port specified by Registry.httpServerStartingTCPPort
-        # NOTE: This is the only server running at a fixed port.
-        # All other HTTP servers should call Utils.TCPListenPortCreator.getNext()
-        if self.operationMode == "RECEIVE":
-            self.tcpListenPort = Registry.httpServerRtpReceiverTCPPort
-        elif self.operationMode == "TRANSMIT":
-            self.tcpListenPort = Registry.httpServerRtpTransmitterTCPPort
-        else:
+        # Start a web server running on the specified port
+        # If the port is nor specified at init, call Utils.TCPListenPortCreator.getNext()
+        # to get the next free port
+        if self.tcpListenPort is None:
             self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
 
         self.tcpListernAddr = '127.0.0.1' # '' will listen on all interfaces but there is a startup delay
@@ -5215,6 +5246,30 @@ def main(argv):
     # # Make sure flag is initially set
     # enableUIFlag.set()
 
+    # Create dict to hold a list of Object instances that will be shared
+    sharedObjects = {}
+
+    # Create new instance of WhoisResolver (which will create a background __whoisLookupThread)
+    whoIsResolver = Utils.WhoisResolver()
+    # Register whoIsResolver with the shared objects dict
+    sharedObjects = {"whoIsResolver": whoIsResolver}
+
+    # Create and start the main HTTP Server
+    try:
+        # Establish what port the http server should be running on
+        httpListenPort = None  # Default value
+        # Let the http server allocate its own listen port
+        if MODE == "RECEIVE":
+            httpListenPort = Registry.httpServerRtpReceiverTCPPort
+        elif MODE == "TRANSMIT":
+            httpListenPort = Registry.httpServerRtpTransmitterTCPPort
+
+        # Create the server object
+        isptesttHTTPServer = ISPTestHTTPServer(operationMode=MODE, tcpListenPort=httpListenPort,
+                                               externalResourcesDict=sharedObjects)
+    except Exception as e:
+        Utils.Message.addMessage("ERR:isptesttHTTPServer = ISPTestHTTPServer() " + str(e))
+
     # # Create a UI flag that will allow the UI thread to be woken up (to force a redraw)
     # wakeUpUI = threading.Event()
 
@@ -5222,10 +5277,8 @@ def main(argv):
         rtpTxStreamsDict, rtpTxStreamsDictMutex,\
         rtpRxStreamsDict, rtpRxStreamsDictMutex,\
         rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,\
-        receiversAndSendersList)
+        receiversAndSendersList, controllerTCPPort=isptesttHTTPServer.getTCPPort())
 
-    # Create new instance of WhoisResolver (which will create a background __whoisLookupThread)
-    whoIsResolver = Utils.WhoisResolver()
 
     # Start traffic generator thread
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
@@ -5247,14 +5300,6 @@ def main(argv):
         diskLoggerThread.start()
 
     # Main program execution loops
-
-    # Create and start the main HTTP Server
-    try:
-        # Create dict to hold a list of Object instances that the HTTP server will need access to
-        u = {"whoIsResolver":whoIsResolver}
-        isptesttHTTPServer = ISPTestHTTPServer(operationMode=MODE, externalResourcesDict=u)
-    except Exception as e:
-        Utils.Message.addMessage("ERR:isptesttHTTPServer = ISPTestHTTPServer() " + str(e))
 
 
     # A local function to take a snapshot of the Events lists and stats[] dictionaries for all Receive streams

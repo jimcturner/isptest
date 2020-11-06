@@ -20,7 +20,8 @@ class Registry(object):
                                                     # on startup
     streamsSnapshotAutoSaveInterval_s = 5       # The frequency of stream snapshot auto saves (when in RECEIVE mode)
 
-     # This string will be added between the UDP header
+    httpRequestTimeout = 0.1 # The default timeout for all HTTP requests (GET, POST etc)
+    # This string will be added between the UDP header
     # and Rtp header of the geenrated RTp traffic. It's purpose is to obscure the generated
     # packets to stop them looking like RTP (to aid investigation of ISPs that
     # block RTP. Note: it is overwritten in main() if the program is started with the '-o' option
