@@ -1915,9 +1915,26 @@ class RtpReceiveStream(RtpReceiveCommon):
                         raise Exception(str(self.path) + ", " + str(e))
 
                 elif self.path == '/traceroute':
-                    response = Utils.formatHttpResponse("traceroute ")
-                    # Create the headers
-                    self._set_response()
+                    # Returns the current 'stable' traceroute hops list encoded as a json dict
+                    # with the keys {lastUpdated, tracerouteHopsList[[1,2,3,4],[5,6,7,8],...]}
+                    # GET /traceroute
+                    tracerouteHopsList = []
+                    # Get the latest stable list of traceroute hops
+                    try:
+                        # getStableTracerouteHopsList() returns a tuple of (lastUpdate, hopsList[])
+                        lastUpdated, tracerouteHopsList = rtpStream.getStableTracerouteHopsList()
+
+                        # A create a dict containing lastUpdated/hopsList to be returned as json
+                        tracerouteHopsListDict = {"lastUpdated":lastUpdated,
+                                                  "tracerouteHopsList":tracerouteHopsList}
+                        # Encode the dict of as json
+                        response = (json.dumps(tracerouteHopsListDict, sort_keys=True, indent=4,
+                                               default=str) + "\n").encode('utf-8')
+                        # Create the headers
+                        self._set_response(contentType='application/json')
+                    except Exception as e:
+                        raise Exception(f"/traceroute {e}")
+
                 elif self.path == '/remotecontrol':
                     # Will be used to remote control a transmitter
                     response = Utils.formatHttpResponse("remotecontrol ")
@@ -1950,12 +1967,19 @@ class RtpReceiveStream(RtpReceiveCommon):
                 stats = rtpStream.getRtpStreamStats()
                 syncSourceID = stats["stream_syncSource"]
                 Utils.Message.addMessage(f"DBUG:RtpReceiveStream.HTTPRequestHandler.do_DELETE() {syncSourceID}")
-                # Attempt to kill the parent Rtp Stream object
+                # Attempt to kill the parent Rtp Stream object (this should block until the object is dead)
                 rtpStream.killStream(caller=self)
+                # Set the headers
+                self._set_response()
+                response = Utils.formatHttpResponse(f"Stream {syncSourceID} DELETE successful")
+                # Write the response
+                self.wfile.write(response)
 
             except Exception as e:
                 Utils.Message.addMessage(
                     "ERR:RtpReceiveStream.HttpRequestHandler.do_DELETE() getRtpStreamStats()" + str(e))
+                self.send_error(404,
+                                "ERR:RtpReceiveStream.HttpRequestHandler.do_DELETE() " + ", " + str(e))
 
 
 
