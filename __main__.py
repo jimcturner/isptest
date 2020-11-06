@@ -2081,7 +2081,7 @@ class UI(object):
                     Utils.Message.addMessage("[d] Deleting Tx Stream: " + str(self.selectedStreamID))
                     # Instruct the RtpGenerator object to die (and it's associated corrseponding RtpStreamResults, if it exists)
                     self.selectedStream.killStream()
-                    # Additionally, remove the corrseponding RtpStreamResults object for this stream
+
 
 
                 elif type(self.selectedStream) == RtpReceiveStream:

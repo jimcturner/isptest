@@ -1941,6 +1941,23 @@ class RtpReceiveStream(RtpReceiveCommon):
             self._set_response()
             self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
             
+        def do_DELETE(self):
+            # Access parent Rtp Stream object via server attribute
+            syncSourceID = None
+            stats = None
+            rtpStream = self.server.parentObject
+            try:
+                stats = rtpStream.getRtpStreamStats()
+                syncSourceID = stats["stream_syncSource"]
+                Utils.Message.addMessage(f"DBUG:RtpReceiveStream.HTTPRequestHandler.do_DELETE() {syncSourceID}")
+                # Attempt to kill the parent Rtp Stream object
+                rtpStream.killStream(caller=self)
+
+            except Exception as e:
+                Utils.Message.addMessage(
+                    "ERR:RtpReceiveStream.HttpRequestHandler.do_DELETE() getRtpStreamStats()" + str(e))
+
+
 
     def __httpServerThread(self):
         # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
