@@ -2571,7 +2571,7 @@ class UI(object):
                 # feature of an RtpReceiveStream object, which receives its hopslist piecemeal via the isptestheader
 
                 if type(selectedStream) == RtpGenerator or type(selectedStream) == RtpStreamResults:
-                    tracerouteHopsList = selectedStream.getTraceRouteHopsList()
+                    lastUpdated, tracerouteHopsList = selectedStream.getTraceRouteHopsList()
                 elif type(selectedStream) == RtpReceiveStream:
                     # Select the 'stable' viewing copy of the traceroute hops list if the selected
                     # stream is an RtpReceiveStream object

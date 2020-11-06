@@ -910,12 +910,12 @@ class RtpReceiveCommon(RtpCommon):
 
 
     # Thread-safe method to return a list of the traceroute hops
-    # If trimEndOfList=True, all the trailing '0.0.0.0' hops will omitted from the returned list
+    # Returns a tuple of the lastUpdatedTimestamp and the hops list
     def getTraceRouteHopsList(self):
         self.tracerouteHopsListMutex.acquire()
         tracerouteHopsList = deepcopy(self.tracerouteHopsList)
         self.tracerouteHopsListMutex.release()
-        return tracerouteHopsList
+        return self.tracerouteHopsListLastUpdated, tracerouteHopsList
 
     # Thread-safe method to set the self.tracerouteHopsList[]
     # This completely replaces the existing list with a new supplied list
@@ -924,6 +924,8 @@ class RtpReceiveCommon(RtpCommon):
         # Copy the new list into the instance variable list
         self.tracerouteHopsList = deepcopy(newList)
         self.tracerouteHopsListMutex.release()
+        # Update the timestamp
+        self.tracerouteHopsListLastUpdated = datetime.datetime.now()
 
     # This method attempts to update an individual tracerouteHopsList list entry
     # It should be much faster than setTraceRouteHopsList (which has to copy the entire list)
@@ -988,7 +990,7 @@ class RtpReceiveCommon(RtpCommon):
         tracerouteLastUpdate = None
         try:
             if getOperationMode() == "TRANSMIT":
-                tracerouteHopsList = self.getTraceRouteHopsList()
+                tracerouteLastUpdate, tracerouteHopsList = self.getTraceRouteHopsList()
 
             elif getOperationMode() == "RECEIVE":
                 # Since the receiver is at the mercy of a slow bitrate transmission of the traceroute hops,
@@ -2645,10 +2647,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                 try:
                     if self.__stats["packet_instantaneous_ttl"] != prevRxTTL:
                         # Change in the value of rxTTL detected
-                        oldLen = len(self.getTraceRouteHopsList())
+                        # # Get copy of the current 'live' hopslist
+                        # lastUpdate, hopsList =  self.getTraceRouteHopsList()
+                        # oldLen = len(hopsList)
                         # Utils.Message.addMessage("rxTTL change " + str(prevRxTTL) + ">>" + \
                         #                          str(self.__stats["packet_instantaneous_ttl"]))
-                        # RxTTL change detected, create a new IPRoutingTTLChange event
+                        # RxTTL change detected, create a new IPRoutingTTLChange Event
                         ipRoutingTTLChange = IPRoutingTTLChange(self.__stats, prevRxTTL, self.__stats["packet_instantaneous_ttl"])
                         # Add the event to the event list
                         self.__eventList.append(ipRoutingTTLChange)
@@ -2720,7 +2724,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Also update self.__stableTracerouteHopsList if the checksum has been validated
                 try:
                     # Get the current hops list
-                    hopsList = self.getTraceRouteHopsList()
+                    lastUpdate, hopsList = self.getTraceRouteHopsList()
                     # Calculate checksum of current hops list. Does it match that of self.tracerouteReceivedChecksum?
                     # if it doesn't, that suggests we have an incomplete or jumbled up hopsList
                     # This could happen if the traceroute hops have jjst changed but the transmitter bitrate is slow
@@ -3899,7 +3903,7 @@ class RtpGenerator(RtpCommon):
             if self.isptestHeaderMessageIndex == 0:
                 # This is traceroute message - Get copy of tracerouteHopsList[]
                 # We don't want to hold up the transmission of packets, so instruct getTraceRouteHopsList to not block
-                tracerouteHopsList = self.getTraceRouteHopsList(allowBlocking=False)
+                tracerouteLastUpdate, tracerouteHopsList = self.getTraceRouteHopsList(allowBlocking=False)
                 # Check to see that we have received a valid hopslist
                 if tracerouteHopsList is not None:
                     # Transmit each element of the self.tracerouteHopsList sequentially (as a carousel)
@@ -5019,10 +5023,10 @@ class RtpGenerator(RtpCommon):
         except Exception as e:
             Utils.Message.addMessage("ERR:__newImprovedRtpGeneratorThread " + str(e))
 
-    # Thread-safe method to return a list of the traceroute hops
+    # Thread-safe method to return a tuple of the last update timestamp and the list of the traceroute hops
     # Optional allowBlocking argument. If True, the method will block until the data is available
     # If allowBlocking is False, the method will check to see if the data is available in this instance and, if not
-    # it will return None
+    # it will return None, []
     def getTraceRouteHopsList(self, allowBlocking=True):
         # Check status of lock before attempting to lock it
         isAccessible = self.tracerouteHopsListMutex.acquire(blocking=allowBlocking)
@@ -5030,11 +5034,11 @@ class RtpGenerator(RtpCommon):
             # Data is available
             tracerouteHopsList = deepcopy(self._tracerouteHopsList)
             self.tracerouteHopsListMutex.release()
-            return tracerouteHopsList
+            return self.tracerouteHopsListLastUpdated, tracerouteHopsList
         else:
             # Data is currently locked by another process
             Utils.Message.addMessage("DBUG:RtpGenerator.getTraceRouteHopsList() blocked")
-            return None
+            return None, []
 
     # Thread-safe method to set the traceroute hops list
     def setTraceRouteHopsList(self, newHopsList):
@@ -5043,6 +5047,8 @@ class RtpGenerator(RtpCommon):
         self.tracerouteHopsListMutex.acquire()
         self._tracerouteHopsList = tempList
         self.tracerouteHopsListMutex.release()
+        # Update the timestamp
+        self.tracerouteHopsListLastUpdated = datetime.datetime.now()
 
 
 
@@ -5771,8 +5777,6 @@ class RtpGenerator(RtpCommon):
                         # If the lists are all identical that means that n consecutive traceroutes gave the same result
                         # so the traceroute has been validated. Update the instance variable (via the setter method)
                         self.setTraceRouteHopsList(hopsList)
-                        # Update the timestamp
-                        self.tracerouteHopsListLastUpdated=datetime.datetime.now()
                         # Successful (replicated) traceroute has completed, so reset the mismatch counter
                         tracerouteHopsListMismatchCounter = 0
                         # Recalculate the checksum for the (transmitted( hopsList
@@ -5787,8 +5791,7 @@ class RtpGenerator(RtpCommon):
 
                             ### Copy the traceroute hops list into the object instance var
                             rtpStreamResults.setTraceRouteHopsList(hopsList)
-                            # Update the timestamp
-                            rtpStreamResults.tracerouteHopsListLastUpdated = datetime.datetime.now()
+
 
 
                         except Exception as e:
