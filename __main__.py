@@ -2090,7 +2090,6 @@ class UI(object):
                     # Safely shutdown the RtpStream object itself
                     self.selectedStream.killStream()
 
-
             except Exception as e:
                 Utils.Message.addMessage(
                     "ERR: __displayThread. [d] Delete Stream request failed: " + str(self.selectedStreamID) +

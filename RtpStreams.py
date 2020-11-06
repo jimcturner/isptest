@@ -1951,30 +1951,60 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
         def do_POST(self):
-            content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
-            post_data = self.rfile.read(content_length)  # <--- Gets the data itself
-            Utils.Message.addMessage("POST request, Path: " + str(self.path) + "Headers: " + str(self.headers) + \
-                                     "Body:" + post_data.decode('utf-8'))
-            self._set_response()
-            self.wfile.write("POST request for {}".format(self.path).encode('utf-8'))
-            
+            try:
+                rtpStream = self.server.parentObject
+                if str(self.path).startswith("/label"):
+                    # HTTP POST /label name=xyz
+                    # Modifies the friendly name of the stream
+                    stats = rtpStream.getRtpStreamStats()
+                    syncSourceID = stats["stream_syncSource"]
+                    # Get POST data
+                    content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
+                    post_data_raw = self.rfile.read(
+                        content_length)  # <--- Gets the data itself as a string ?foo=bar&x=y etc..
+                    post_data_dict = parse_qs(post_data_raw)  # parse the post data and convert to a dict
+                    # Is "name" dictionary
+                    if b"name" in post_data_dict:
+                        newLabel = str(post_data_dict[b"name"][0].decode('UTF-8'))
+                        rtpStream.setFriendlyName(newLabel)
+                        # Set the headers
+                        self._set_response()
+                        # Create the response
+                        response = Utils.formatHttpResponse(f"Stream {syncSourceID} friendly name changed to {newLabel}")
+                        # Write the response
+                        self.wfile.write(response)
+                    else:
+                        # If "name" key not present, raise an Exception
+                        raise Exception(f"POST /label {post_data_dict}")
+                else:
+                    # URL path not recognised
+                    raise Exception(f"Can't POST  {self.path}")
+
+            except Exception as e:
+                Utils.Message.addMessage(
+                    "ERR:RtpReceiveStream.HttpRequestHandler.do_POST() /label" + str(e))
+                self.send_error(404,
+                                "ERR:RtpReceiveStream.HttpRequestHandler.do_POST() /label " + ", " + str(e))
+
         def do_DELETE(self):
             # Access parent Rtp Stream object via server attribute
-            syncSourceID = None
-            stats = None
             rtpStream = self.server.parentObject
-            try:
-                stats = rtpStream.getRtpStreamStats()
-                syncSourceID = stats["stream_syncSource"]
-                Utils.Message.addMessage(f"DBUG:RtpReceiveStream.HTTPRequestHandler.do_DELETE() {syncSourceID}")
-                # Attempt to kill the parent Rtp Stream object (this should block until the object is dead)
-                rtpStream.killStream(caller=self)
-                # Set the headers
-                self._set_response()
-                response = Utils.formatHttpResponse(f"Stream {syncSourceID} DELETE successful")
-                # Write the response
-                self.wfile.write(response)
 
+            try:
+                if str(self.path).startswith("/delete"):
+                    stats = rtpStream.getRtpStreamStats()
+                    syncSourceID = stats["stream_syncSource"]
+                    Utils.Message.addMessage(f"DBUG:RtpReceiveStream.HTTPRequestHandler.do_DELETE() {syncSourceID}")
+                    # Attempt to kill the parent Rtp Stream object (this should block until the object is dead)
+                    rtpStream.killStream(caller=self)
+                    # Set the headers
+                    self._set_response()
+                    response = Utils.formatHttpResponse(f"Stream {syncSourceID} DELETE successful")
+                    # Write the response
+                    self.wfile.write(response)
+                else:
+                    # URL path not recognised
+                    raise Exception (f"Can't DELETE  {self.path}")
             except Exception as e:
                 Utils.Message.addMessage(
                     "ERR:RtpReceiveStream.HttpRequestHandler.do_DELETE() getRtpStreamStats()" + str(e))
