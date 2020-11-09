@@ -4416,6 +4416,24 @@ class ISPTestHTTPServer(object):
                             # More steps yet to be parsed, let the loop continue
                             pass
 
+                    elif str(currentStep).startswith("log"):
+                        # GET /log
+                        # Retreive log messages
+                        messagesList = Utils.Message.getMessages()
+                        # Reverse the list (most recent first)
+                        messagesList.reverse()
+                        # format messages into an html table
+                        messageTable = "<table>"
+                        for message in messagesList:
+                            # Create a table row containing timestamp and message columns
+                            messageTable += "<tr><td>" + message[0].strftime("%Y:%m:%d-%H:%M:%S ") + "</td><td>" + \
+                                        message[1] + "</td></tr>"
+                        messageTable += "</table>"
+
+                        response = Utils.formatHttpResponse(messageTable)
+                        # Create the headers
+                        self._set_response()
+
                     elif str(currentStep).startswith("whois"):
                         # GET /whois?0=1.2.3.4&2=2.3.4.
                         # Takes an indexed list of ip addresses and queries them with the WhoIs Resolver.
