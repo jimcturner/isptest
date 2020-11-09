@@ -2568,16 +2568,6 @@ class UI(object):
             try:
                 # Get latest stable tracerouteHopsList from selected stream
                 lastUpdated, tracerouteHopsList = selectedStream.getTraceRouteHopsList()
-                # # Note: If this is a Transmitter, StableTracerouteHopsList won't exist (it doesn't need to - it's a
-                # # feature of an RtpReceiveStream object, which receives its hopslist piecemeal via the isptestheader
-                #
-                # if type(selectedStream) == RtpGenerator or type(selectedStream) == RtpStreamResults:
-                #     lastUpdated, tracerouteHopsList = selectedStream.getTraceRouteHopsList()
-                # elif type(selectedStream) == RtpReceiveStream:
-                #     # Select the 'stable' viewing copy of the traceroute hops list if the selected
-                #     # stream is an RtpReceiveStream object
-                #     lastUpdated, tracerouteHopsList = selectedStream.getStableTracerouteHopsList()
-
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
                 friendlyName = str(selectedStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
                 syncSourceID = str(selectedStream.getRtpStreamStatsByKey("stream_syncSource"))
