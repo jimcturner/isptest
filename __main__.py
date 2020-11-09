@@ -4425,11 +4425,11 @@ class ISPTestHTTPServer(object):
                         # format messages into an html table
                         messageTable = "<table>"
                         for message in messagesList:
-                            # Create a table row containing timestamp and message columns
+                            # Create an html table row containing timestamp and message columns
                             messageTable += "<tr><td>" + message[0].strftime("%Y:%m:%d-%H:%M:%S ") + "</td><td>" + \
                                         message[1] + "</td></tr>"
                         messageTable += "</table>"
-
+                        # Convert the messageTable to ASCII with /n characters etc...
                         response = Utils.formatHttpResponse(messageTable)
                         # Create the headers
                         self._set_response()
