@@ -1817,14 +1817,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                             eventsListJSON = [event.getJSON() for event in eventsList]
 
                             # Create response by concatenating all the json events together
-                            response = b"[\n"
-                            for eventNo in range(len(eventsListJSON)):
-                                response += str(eventsListJSON[eventNo]).encode('utf-8')
-                                # Add a comma between each event JSON object
-                                if eventNo < len(eventsListJSON) - 1:
-                                    response += b"\n,\n"
-                            response += b"\n]"
+                            concatenatedJSONList = "[" + ",".join(eventsListJSON) + "]"
+                            # Convery back to ASCII
+                            response = concatenatedJSONList.encode('utf-8')
 
+                            # self._set_response()
                             # # Attempt to decode the encoded JSON to prove that it's valid
                             # try:
                             #     decodedEventsList = []
