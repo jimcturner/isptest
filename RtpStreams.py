@@ -1755,27 +1755,39 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self._set_response(contentType='application/json')
                 elif str(self.path).startswith('/report'):
                     # GET /report
-                    try:
-                        # Extract any additional query components from the URL (if present)
-                        query_components = parse_qs(urlparse(self.path).query)
-                        generateReportArgs = {} # A dict of args to be sent to generateReport()
-                        if len(query_components) > 0:
-                            # If args are present, convert the string values of the HTTP query back to Python data types
-                            parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
-                            # Create list to contain the additinal keys we can use to to tailor the report
-                            generateReportKeys = ["eventFilterList"]
-                            # and create a new dictionary containing just them (if present)
-                            generateReportArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, generateReportKeys)
-                            # Prune filteredArgsDict of the 'already used so far' keys
-                            Utils.removeMultipleDictKeys(parsedArgsDict, generateReportKeys)
-                            if len(parsedArgsDict) > 0:
-                                # If there are any unexpected args, raise an Exception
-                                raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
-                        # Get the stream report using the selected query args sent in the HTTP
-                        response = rtpStream.generateReport(**generateReportArgs).encode('utf-8')
+                    # Create list to contain the additinal keys we can use to to tailor the report
+                    generateReportKeys = ["eventFilterList"]
+                    helpText = \
+                        f"\n/report/help will return a list of possible arguments<br>"\
+                        f"/report?eventFilterList='string' will generate a report with a filtered list of events<br>"\
+                        f"eg: /report?eventFilterList=StreamLost&eventFilterList=Glitch would return a "\
+                        f"report containing StreamLost and Glitch Events"
 
-                        # Create the headers - We're sending plain text, not html
-                        self._set_response(contentType='text/plain')
+                    try:
+                        if str(self.path).startswith('/report/help'):
+                            # Send back a help page showing the available keys
+                            response = Utils.formatHttpResponse(f"{helpText}{generateReportKeys}")
+                            # set the headers
+                            self._set_response()
+                        else:
+                            # Extract any additional query components from the URL (if present)
+                            query_components = parse_qs(urlparse(self.path).query)
+                            generateReportArgs = {} # A dict of args to be sent to generateReport()
+                            if len(query_components) > 0:
+                                # If args are present, convert the string values of the HTTP query back to Python data types
+                                parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
+                                # and create a new dictionary containing just them (if present)
+                                generateReportArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, generateReportKeys)
+                                # Prune filteredArgsDict of the 'already used so far' keys
+                                Utils.removeMultipleDictKeys(parsedArgsDict, generateReportKeys)
+                                if len(parsedArgsDict) > 0:
+                                    # If there are any unexpected args, raise an Exception
+                                    raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
+                            # Get the stream report using the selected query args sent in the HTTP
+                            response = rtpStream.generateReport(**generateReportArgs).encode('utf-8')
+
+                            # Create the headers - We're sending plain text, not html
+                            self._set_response(contentType='text/plain')
                     except Exception as e:
                         raise Exception(f"GET /report (stream {syncSourceID}, {e}")
 
