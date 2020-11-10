@@ -805,7 +805,7 @@ class UI(object):
                            ["Name", "stream_friendly_name"],
                            ["Target\nTx Bps", 'stream_transmitter_txRate_bps'],
                            [" Time\nremain", 'stream_transmitter_TimeToLive_sec'],
-                           ["Return\n loss %", "stream_transmitter_Return_Loss_percent"]
+                           ["Return\n loss %", "stream_transmitter_return_loss_percent"]
                            ], self.streamResultsDataSet])
         # self.views.append(["Misc",
         #               [["#", 0],  # Used as an index[]

@@ -1573,9 +1573,9 @@ def mapURLQueryToFnArgs(query_componentsDict):
             # Values will be a list
             # Test to see if this is a boolean val. If so, recast as a bool (since all
             # incoming values are strings)
-            if functionArgsDict[key][listItem] == "False" or functionArgsDict[key][listItem] == "false":
+            if functionArgsDict[key][listItem] in ["False", "false", "No", "no"]:
                 functionArgsDict[key][listItem] = False
-            elif functionArgsDict[key][listItem] == "True" or functionArgsDict[key][listItem] == "true":
+            elif functionArgsDict[key][listItem] in ["True", "true", "Yes", "yes"]:
                 functionArgsDict[key][listItem] = True
             else:
                 # Test if the value is an integer

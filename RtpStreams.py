@@ -958,7 +958,7 @@ class RtpReceiveCommon(RtpCommon):
             transmitterDetails = \
                 "Transmitter version: v" + str(stats["stream_transmitterVersion"]) + \
                 ", Transmit bitrate: " + str(Utils.bToMb(stats["stream_transmitter_txRate_bps"])) + "bps" + \
-                ", Return loss " + str("%0.2f" % stats["stream_transmitter_Return_Loss_percent"]) + "%" + "\r\n"
+                ", Return loss " + str("%0.2f" % stats["stream_transmitter_return_loss_percent"]) + "%" + "\r\n"
 
 
         labelWidth = 33
@@ -1393,7 +1393,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_transmitter_PID"] = 0
         self.__stats["stream_transmitter_txRate_bps"] = 0 # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_TimeToLive_sec"] = 0  # Will be populated by incoming isptest header data
-        self.__stats["stream_transmitter_Return_Loss_percent"] = 0  # Will be populated by incoming isptest header data
+        self.__stats["stream_transmitter_return_loss_percent"] = 0  # Will be populated by incoming isptest header data
         Utils.Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
 
         # A list to contain the *live* traceroute hops as received as part of the isptestheader data
@@ -1751,17 +1751,36 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self._set_response()
                 elif str(self.path).startswith('/stats'):
                     try:
-                        statsKeys = ["keyIs", "keyContains", "keyStartWith", "listKeys"]
+                        filteredStats = {} # Dict to hold the requested stats keys
+                        statsFilterKeys = ["keyIs", "keyContains", "keyStartsWith", "listKeys"]
                         if str(self.path).startswith('/stats/help'):
                             helpText = f"GET /stats<br>" \
                                        f"Additional query args:-<br>" \
-                                       f"{statsKeys}"
+                                       f"{statsFilterKeys}"
                             # Send back a help page showing the available keys
                             response = Utils.formatHttpResponse(helpText)
                             # set the headers
                             self._set_response()
                         else:
-                            response = (json.dumps(stats, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                            # Extract any additional query components from the URL (if present)
+                            query_components = parse_qs(urlparse(self.path).query)
+                            statsKeyFilterArgs = {}  # A dict of args to be sent to Utils.filterDictByKey()
+                            if len(query_components) > 0:
+                                # If args are present, convert the string values of the HTTP query back to Python data types
+                                parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
+                                # and create a new dictionary containing just them (if present)
+                                statsKeyFilterArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, statsFilterKeys)
+                                # Prune parsedArgsDict of the 'already used so far' keys
+                                Utils.removeMultipleDictKeys(parsedArgsDict, statsFilterKeys)
+                                if len(parsedArgsDict) > 0:
+                                    # If there are any unexpected args (ie keys left over), raise an Exception
+                                    raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
+                                # Get a filtered version of the stats dict
+                                filteredStats = Utils.filterDictByKey(stats, **statsKeyFilterArgs)
+                            else:
+                                # No key filtering specified, return the stats dict as-is
+                                filteredStats = stats
+                            response = (json.dumps(filteredStats, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
                             # Create the headers
                             self._set_response(contentType='application/json')
                     except Exception as e:
@@ -2215,7 +2234,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # This is a message containing the return loss (as a float  , 4 bytes)
                 try:
                     # Convert the 4 bytes back to a float
-                    self.__stats["stream_transmitter_Return_Loss_percent"] = \
+                    self.__stats["stream_transmitter_return_loss_percent"] = \
                         struct.unpack_from("!f", bytes(isptestHeaderData[4:8]))[0]
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
