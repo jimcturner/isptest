@@ -1621,7 +1621,23 @@ def extractWantedKeysFromDict(sourceDict, wantedKeys):
     filteredDict = dict((k, sourceDict[k]) for k in wantedKeys if k in sourceDict)
     return filteredDict
 
-
-
-
+# Utility function that takes a dictionary of keys and allows the dict keys to be filtered
+# Based on the name of the key
+# listKeys will return a list, otherwise all other args will return a dict
+def filterDictByKey(sourceDict, keyIs=None, keyContains=None, keyStartsWith=None, listKeys=False):
+    if listKeys == True:
+        # Overrides all other args, just returns a list of keys, but not the values
+        return [keys for keys in sourceDict]
+    elif keyIs in sourceDict:
+        # If a specific key is requested, return a dict containing only that key
+        return {keyIs:sourceDict[keyIs]}
+    elif keyContains is not None:
+        # Return a dict of keys/values whose key name contains the string in 'keyContains'
+        return {k: v for k, v in sourceDict.items() if k.find(keyContains) > -1}
+    elif keyStartsWith is not None:
+        # Return a dict of keys/values whose key name starts with the string in 'keyStartWith'
+        return {k: v for k, v in sourceDict.items() if k.startswith(keyStartsWith)}
+    else:
+        # Otherwise, return an empty dict
+        return {}
 

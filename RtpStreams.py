@@ -893,7 +893,7 @@ class RtpReceiveCommon(RtpCommon):
             self.tracerouteHopsListMutex.release()
 
     @abstractmethod
-    def getRtpStreamStats(self):
+    def getRtpStreamStats(self, keyIs=None, keyContains=None, keyStartWith=None, listKeys=False):
         pass
 
     @abstractmethod
@@ -1749,10 +1749,24 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # path = '/'
                     # Create the headers
                     self._set_response()
-                elif self.path == '/stats':
-                    response = (json.dumps(stats, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
-                    # Create the headers
-                    self._set_response(contentType='application/json')
+                elif str(self.path).startswith('/stats'):
+                    try:
+                        statsKeys = ["keyIs", "keyContains", "keyStartWith", "listKeys"]
+                        if str(self.path).startswith('/stats/help'):
+                            helpText = f"GET /stats<br>" \
+                                       f"Additional query args:-<br>" \
+                                       f"{statsKeys}"
+                            # Send back a help page showing the available keys
+                            response = Utils.formatHttpResponse(helpText)
+                            # set the headers
+                            self._set_response()
+                        else:
+                            response = (json.dumps(stats, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                            # Create the headers
+                            self._set_response(contentType='application/json')
+                    except Exception as e:
+                        raise Exception(f"GET /stats {e}")
+
                 elif str(self.path).startswith('/report'):
                     # GET /report
                     # Create list to contain the additinal keys we can use to to tailor the report
@@ -3279,7 +3293,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats = copiedStatsDict
 
     # Thread-safe method for accessing all RtpStream stats
-    def getRtpStreamStats(self):
+    def getRtpStreamStats(self, keyIs=None, keyContains=None, keyStartWith=None, listKeys=False):
         stats = self.__stats.copy()
         return stats
 
@@ -3292,7 +3306,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         return filteredStats
 
     def getRtpStreamStatsByKey(self, key):
-        # Thread safe method to retrive a single stats item by key
+        # Thread safe method to retrieve a single stats item by key
         # If the key doesn't exist, it will return None type
         stats = self.__stats.copy()
         if key in stats:
