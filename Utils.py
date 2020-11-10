@@ -1671,7 +1671,7 @@ class APIHelper(object):
             # Now create an HTTP GET query string URL (of the form key1=value1&key2=value2 etc.
             httpQuery = urlencode(httpQueryList)
             # Request the whois lookup via the API
-            url = f"{self.addr}:{self.port}/whois?{httpQuery}"
+            url = f"http://{self.addr}:{self.port}/whois?{httpQuery}"
             r = requests.get(url, timeout=self.timeout)
             r.raise_for_status()  # Will raise an Exception if there was a problem
             # Attempt to parse the contents as JSON

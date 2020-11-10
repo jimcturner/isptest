@@ -1115,6 +1115,19 @@ class RtpReceiveCommon(RtpCommon):
     # This method will generate a formatted report containing the last n IPRoutingTracerouteChange Events
     # Setting historyLength will modify the no of historic events to include
     def generateTracerouteHistoryReport(self, historyLength=10):
+        # Takes a list of tuples [[ip address, whoisLookup],...] and renders them as a table
+        # Returns a string containing /t and newline chars
+        def renderTracerouteDataAsTable(tracerouteData):
+            # String to hold the output
+            renderedTable = f""
+            for hopNo in range(len(tracerouteData)):
+                # Create each table row as [hopNo, ip address, whois name]
+                addr = str(tracerouteData[hopNo][0]).ljust(16) # Pad each IP address to 16 characters
+                whoisName = tracerouteData[hopNo][1]
+                # Create the table row
+                renderedTable += f"{hopNo + 1}\t{addr}\t{whoisName}\r\n"
+            return renderedTable
+
         try:
             # Get a filtered eventlist of the selected Rx or RxResults stream containing only the
             # IPRoutingTracerouteChange Events
@@ -1148,18 +1161,14 @@ class RtpReceiveCommon(RtpCommon):
                     tracerouteLastUpdate, tracerouteHopsList = self.getTraceRouteHopsList()
                     currentTraceRoute = f"Current: Last updated {tracerouteLastUpdate.strftime('%d/%m/%Y %H:%M:%S')}\r\n"
                     # Create an API helper
-                    api= Utils.APIHelper(self.controllerTCPPort, addr="127.0.0.1")
+                    api = Utils.APIHelper(self.controllerTCPPort, addr="127.0.0.1")
                     # Use the API helper to query the WhoisResolver
                     apiResponseBody = api.whoisLookup(tracerouteHopsList)
-                    # Now create the table contents to be displayed
-                    for hopNo in range(len(apiResponseBody)):
-                        # Create each table row as [hopNo, ip address, whois name]
-                        addr = str(apiResponseBody[hopNo][0]).ljust(16)
-                        whoisName = apiResponseBody[hopNo][1]
-                        # Create the table row
-                        currentTraceRoute += f"{hopNo+1}\t{addr}\t{whoisName}\r\n"
+                    # Now create the table contents to be displayed using the data returned from the API
+                    currentTraceRoute = renderTracerouteDataAsTable(apiResponseBody)
                     # Append the *current* traceroute hops table string to streamReport
-                    streamReport += currentTraceRoute + separator
+                    streamReport += f"Current: Last updated {tracerouteLastUpdate.strftime('%d/%m/%Y %H:%M:%S')}\r\n" +\
+                                     currentTraceRoute + separator
                 except Exception as e:
                     Utils.Message.addMessage("ERR: RtpReceiveCommon.generateTracerouteHistoryReport, get traceroute hops list. stream " + \
                                              str(stats["stream_syncSource"]) + ", " + str(e))
