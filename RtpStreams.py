@@ -1147,26 +1147,10 @@ class RtpReceiveCommon(RtpCommon):
                 try:
                     tracerouteLastUpdate, tracerouteHopsList = self.getTraceRouteHopsList()
                     currentTraceRoute = f"Current: Last updated {tracerouteLastUpdate.strftime('%d/%m/%Y %H:%M:%S')}\r\n"
-                    # Iterate over tracerouteHopsList creating a query string to be passed to the WhoisResolver
-                    # via the /whoIs API
-                    httpQueryList = []  # List of tuples of the form (indexNo, hopAddr)
-                    for hopNo in range(len(tracerouteHopsList)):
-                        # Render each list of IP address octets as a string a.b.c.d
-                        hopAddr = f"{tracerouteHopsList[hopNo][0]}" \
-                                  f".{tracerouteHopsList[hopNo][1]}" \
-                                  f".{tracerouteHopsList[hopNo][2]}" \
-                                  f".{tracerouteHopsList[hopNo][3]}"
-                        # Create a tuple of (index, hopAddr) and append to httpQueryList
-                        httpQueryList.append((hopNo, hopAddr))
-                    # Now create an HTTP GET query string URL (of the form key1=value1&key2=value2 etc. Prefaced with a '?'
-                    httpQuery = urlencode(httpQueryList)
-                    # Request the whois lookup via the API
-                    url = f"http://127.0.0.1:{self.controllerTCPPort}/whois?{httpQuery}"
-                    r = requests.get(url, timeout=Registry.httpRequestTimeout)
-                    r.raise_for_status()  # Will raise an Exception if there was a problem
-                    # Attempt to parse the contents as JSON
-                    # This should be a list of tuples [[ip address, whois name], [ip address, whois name],...]
-                    apiResponseBody = r.json() # Decode HTTP response as JSON
+                    # Create an API helper
+                    api= Utils.APIHelper(self.controllerTCPPort, addr="127.0.0.1")
+                    # Use the API helper to query the WhoisResolver
+                    apiResponseBody = api.whoisLookup(tracerouteHopsList)
                     # Now create the table contents to be displayed
                     for hopNo in range(len(apiResponseBody)):
                         # Create each table row as [hopNo, ip address, whois name]

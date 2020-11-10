@@ -20,7 +20,7 @@ from functools import reduce
 from http.server import HTTPServer, ThreadingHTTPServer
 from pathlib import PurePosixPath
 from queue import SimpleQueue
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, urlencode
 
 from Registry import Registry
 from ipwhois import IPWhois, exceptions
@@ -1640,4 +1640,44 @@ def filterDictByKey(sourceDict, keyIs=None, keyContains=None, keyStartsWith=None
     else:
         # Otherwise, return an empty dict
         return {}
+
+# Contains  methods to ease the the retreival of data from the API
+class APIHelper(object):
+    # Creates an API helper object
+    # Takes the ip address and port no of the
+    def __init__(self, port, addr="127.0.0.1") -> None:
+        super().__init__()
+        self.addr = addr
+        self.port = port
+        self.timeout = Registry.httpRequestTimeout
+
+    # Performs a whois lookup of the supplied hops list
+    # hopsList is a list of ip addresses to be queried
+    # Each address is represented as a list of octets (as expected to be returned by getTraceRouteHopsList()
+    # It will attempt to decode the data returned from the API as json, and return it as-is
+    # This should be a list of tuples [[ip address, whois name], [ip address, whois name],...]
+    def whoisLookup(self, tracerouteHopsList):
+            # Iterate over tracerouteHopsList creating a query string to be passed to the WhoisResolver
+            # via the /whoIs API
+            httpQueryList = []  # List of tuples of the form (indexNo, hopAddr)
+            for hopNo in range(len(tracerouteHopsList)):
+                # Render each list of IP address octets as a string a.b.c.d
+                hopAddr = f"{tracerouteHopsList[hopNo][0]}" \
+                          f".{tracerouteHopsList[hopNo][1]}" \
+                          f".{tracerouteHopsList[hopNo][2]}" \
+                          f".{tracerouteHopsList[hopNo][3]}"
+                # Create a tuple of (index, hopAddr) and append to httpQueryList
+                httpQueryList.append((hopNo, hopAddr))
+            # Now create an HTTP GET query string URL (of the form key1=value1&key2=value2 etc.
+            httpQuery = urlencode(httpQueryList)
+            # Request the whois lookup via the API
+            url = f"{self.addr}:{self.port}/whois?{httpQuery}"
+            r = requests.get(url, timeout=self.timeout)
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+            # Attempt to parse the contents as JSON
+            apiResponseBody = r.json()  # Decode HTTP response as JSON (should return a list of tuples)
+            # This should be a list of tuples [[ip address, whois name], [ip address, whois name],...]
+            return apiResponseBody
+
+
 
