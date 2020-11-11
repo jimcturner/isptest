@@ -3629,12 +3629,11 @@ class RtpGenerator(RtpCommon):
 
         # Http server methods
         def do_GET(self):
-
-
             # Access parent Rtp Stream object via server attribute
             rtpGen = self.server.parentObject
-            # Dictionary to maps URL paths to RtpGenerator methods and method parameters
-            getMethods = {
+            # Dictionary to maps URL paths to RtpGenerator methods and method parameters for *preset* tx modifiers
+            # Dict is of the form {"URL to be matched": [methodToBeCalled,[listOfMethodParameters]]}
+            getMethodssNoArgs = {
                 "/txrate/inc": [rtpGen.setTxRate, [0, 1]],
                 "/txrate/dec": [rtpGen.setTxRate, [0, -1]],
                 "/length/inc": [rtpGen.setPayloadLength, [0, 1]],
@@ -3642,18 +3641,45 @@ class RtpGenerator(RtpCommon):
                 "/ttl/inc" : [rtpGen.setTimeToLive, [0, 1]],
                 "/ttl/dec": [rtpGen.setTimeToLive, [0, -1]],
                 "/burst": [rtpGen.enableBurstMode, []],
+                "/enable": [rtpGen.enableStream, []],
+                "/disable": [rtpGen.disableStream, []],
+                "/jitter/on": [rtpGen.enableJitter, []],
+                "/jitter/off": [rtpGen.disableJitter, []],
                 }
             syncSourceID = None
             try:
                 syncSourceID = rtpGen.syncSourceIdentifier
-            except Exception as e:
-                Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler() Can't access parent object {e}")
-            try:
-                if self.path in getMethods:
-                    fn = getMethods[self.path][0]
-                    params = getMethods[self.path][1]
+                # Does the URL match any of those in getMethods?
+                if self.path in getMethodssNoArgs:
+                    # Extract the method to be called
+                    fn = getMethodssNoArgs[self.path][0]
+                    # Extract the preset method parameters
+                    params = getMethodssNoArgs[self.path][1]
                     Utils.Message.addMessage(f"GET fn:{fn}, params:{params}")
-                    fn(*params)
+                    # Execute the specified method, expanding out the parameter list
+                    retVal = fn(*params)
+                # Methods to map
+                # Getters
+                #   getStats (RtpGenerator Stats)
+                #   getStats (RtpStreamResults Stats)
+                #   getRtpStreamEventsList (RtpStreamResults)
+                #           enableStream
+                #           disableSTream
+                #           enableJitter
+                #           disableJitter
+                #   getTraceRouteHopsList
+                # POST
+                #   setFriendlyName
+                #   setSyncSourceID
+                #   setTxRate
+                #   setPayload
+                #   setTimeToLive
+                #   enableBurstMode
+                #   simulatePacketLoss
+                # DELETE
+                #   killStream
+
+
                 response = Utils.formatHttpResponse(f"RtpGenerator:{syncSourceID} {self.path}")
                 # Set headers
                 self._set_response()
@@ -3661,6 +3687,44 @@ class RtpGenerator(RtpCommon):
                 self.wfile.write(response)
             except Exception as e:
                 self.send_error(404,"RtpGenerator.HttpRequestHandler.do_GET() " + str(syncSourceID) + ", " + str(e))
+
+        def do_POST(self):
+            # Access parent Rtp Stream object via server attribute
+            rtpGen = self.server.parentObject
+            # Dict to map incoming URL to an RtpGenerator method (including mandatory args and optional kwargs)
+            postMethods = {
+                "/label": {"method": rtpGen.setFriendlyName, "args": ["name"], "kwargs": {}}
+            }
+            syncSourceID = None
+            try:
+                syncSourceID = rtpGen.syncSourceIdentifier
+                # Does the URL match any of those in getMethods?
+                if self.path in postMethods:
+                    # Extract the target function
+                    fn = postMethods[self.path]["method"]
+                    # Extract the mandatory args for the mapped-to method
+                    requiredArgs = postMethods[self.path]["args"]
+                    # Extract optional args (kwargs) for the mapped-to method
+                    optionalArgs = postMethods[self.path]["kwargs"]
+
+                    # Get POST data
+                    # Gets the size of data
+                    content_length = int(self.headers['Content-Length'])
+                    # Gets the data itself as a string ?foo=bar&x=y etc.. NOTE: Arrives as UTF-8, so have to decode back to unicode
+                    post_data_raw = self.rfile.read(content_length).decode('UTF-8')
+                    # parse the post data and convert to a dict (note this is UTF-8 (ASCII) encoded
+                    post_data_dict = parse_qs(post_data_raw)
+                    Utils.Message.addMessage(f"DBUG:RtpGen do_POST raw:{post_data_raw}, post_data_dict {post_data_dict}")
+
+                response = Utils.formatHttpResponse(f"RtpGenerator do_POST:{syncSourceID} {self.path}")
+                # Set headers
+                self._set_response()
+                # Write the response back to the client
+                self.wfile.write(response)
+
+            except Exception as e:
+                self.send_error(404, "RtpGenerator.HttpRequestHandler.do_POST() " + str(syncSourceID) + ", " + str(e))
+
 
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
@@ -4277,7 +4341,7 @@ class RtpGenerator(RtpCommon):
         # Return the isptestheader data (as a bytestring)
         return header
 
-    def setSyncSourceIdentifier(self,value):
+    def setSyncSourceIdentifier(self, value):
         # Sets the self self.syncSourceIdentifier value
         # This is only allowed to be 32 bits long (specified by the RTP header)
         # so mask input value for safety
@@ -4491,7 +4555,7 @@ class RtpGenerator(RtpCommon):
             Utils.Message.addMessage("Burst mode already active for stream " + str(self.syncSourceIdentifier) +\
                     ". " + str(self.burstTimer) + "s remaining")
 
-    def simulatePacketLoss(self, packetsToSkip):
+    def simulatePacketLoss(self, packetsToSkip=0):
         # Used to simulate packet loss by skipping x packets (whilst incrementing the seq no internally)
         self.packetsToSkip = packetsToSkip
 
