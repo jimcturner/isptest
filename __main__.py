@@ -4532,8 +4532,8 @@ class ISPTestHTTPServer(object):
                 while pathIndex < pathLen:
                     currentStep = pathList[pathIndex]  # Get the current step
                     if currentStep == "log":
-                        # add a new stream to streamsList
-                        # /log
+                        # add a new message to the logger
+                        # POST /log {message:"", logToDisk:bool}
                         if pathIndex == pathLen - 1:  # Is this the last step of the path
                             response = Utils.formatHttpResponse(f"{self.path}, {post_data_dict}")
                             try:
