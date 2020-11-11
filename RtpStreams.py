@@ -766,6 +766,25 @@ class RtpCommon(object):
         except Exception as e:
             return None
 
+    # Blocking method to be run as an HTTP Server
+    # Because it actually invokes the HTTP Server, it needs access to the HTTPRequestHandler which will contain the
+    # do_GET(), do_POST etc methods
+    # StreasmID is not actually required for the http server, but is useful for logging purposes
+    def httpServerThreadCommon(self, tcpListenPort, streamID, httpRequestHandler, addr="127.0.0.1"):
+        # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
+        try:
+            # This call will block
+            self.httpd = Utils.CustomHTTPServer((addr, tcpListenPort), httpRequestHandler)
+
+            # Pass this RtpReceiveStream instance to the server (so that the dynamically created instances of
+            # httpRequestHandler will have access to the parent object)
+            self.httpd.setParentObjectInstance(self)
+            # Start the http server - *This will block until self.httpd.shutdown() is called (but only by another thread)*
+            self.httpd.serve_forever()
+
+        except Exception as e:
+            raise Exception(f"ERR: RtpCommon.httpServerThread stream:{streamID}, port:{tcpListenPort}, error:{e}")
+
 # Define a Super Class for RTP Receive streams. This will contain methods that are common to both
 # RtpReceiveStream and RtpStreamResults
 class RtpReceiveCommon(RtpCommon):
@@ -1631,10 +1650,18 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Create an HTTP server thread
             try:
                 Utils.Message.addMessage("DBUG:************Creating httpServerThread")
-                self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
+                self.httpServerThread = threading.Thread(target=self.httpServerThreadCommon,
+                                                         args=(self.tcpListenPort,
+                                                               self.__stats["stream_syncSource"],
+                                                               RtpReceiveStream.HTTPRequestHandler))
+                # self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
                 self.httpServerThread.daemon = False
                 self.httpServerThread.setName(str(self.__stats["stream_syncSource"]) + ":httpServerThread")
                 self.httpServerThread.start()
+
+
+
+
             except Exception as e:
                 Utils.Message.addMessage("ERR:Couldn't create httpServerThread " + str(e))
 
@@ -2056,27 +2083,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                     "ERR:RtpReceiveStream.HttpRequestHandler.do_DELETE() getRtpStreamStats()" + str(e))
                 self.send_error(404,
                                 "ERR:RtpReceiveStream.HttpRequestHandler.do_DELETE() " + ", " + str(e))
-
-
-
-    def __httpServerThread(self):
-        # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
-        try:
-            # This call will block
-            self.httpd =  Utils.CustomHTTPServer(('localhost', self.tcpListenPort), RtpReceiveStream.HTTPRequestHandler)
-            Utils.Message.addMessage("DBUG: Creating " + str(self.__stats["stream_syncSource"]) +
-                                     ":httpServerThread, listening on TCP port " + str(self.tcpListenPort))
-            # Pass this RtpReceiveStream instance to the server
-            self.httpd.setParentObjectInstance(self)
-            # Start the http server
-            self.httpd.serve_forever()
-            Utils.Message.addMessage(
-                "DBUG:Stream " + str(self.__stats["stream_syncSource"]) + ":httpServerThread serve_forever() returned")
-
-        except Exception as e:
-            Utils.Message.addMessage("ERR:Failed to start __httpServerThread " + str(e))
-        Utils.Message.addMessage("DBUG:Stream " + str(self.__stats["stream_syncSource"]) + ":httpServerThread ended")
-
 
     # Getter method for self.resultsTxQueue
     def getResultsTxQueue(self):
