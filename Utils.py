@@ -1679,5 +1679,7 @@ class APIHelper(object):
             # This should be a list of tuples [[ip address, whois name], [ip address, whois name],...]
             return apiResponseBody
 
-
+    # Posts a message the the isptest logger using the api
+    def addMessage(self, message, logToDisk=True):
+        pass
 
