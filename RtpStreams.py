@@ -3629,11 +3629,32 @@ class RtpGenerator(RtpCommon):
 
         # Http server methods
         def do_GET(self):
+
+
             # Access parent Rtp Stream object via server attribute
-            rtpGenerator = self.server.parentObject
+            rtpGen = self.server.parentObject
+            # Dictionary to maps URL paths to RtpGenerator methods and method parameters
+            getMethods = {
+                "/txrate/inc": [rtpGen.setTxRate, [0, 1]],
+                "/txrate/dec": [rtpGen.setTxRate, [0, -1]],
+                "/length/inc": [rtpGen.setPayloadLength, [0, 1]],
+                "/length/dec": [rtpGen.setPayloadLength, [0, -1]],
+                "/ttl/inc" : [rtpGen.setTimeToLive, [0, 1]],
+                "/ttl/dec": [rtpGen.setTimeToLive, [0, -1]],
+                "/burst": [rtpGen.enableBurstMode, []],
+                }
+            syncSourceID = None
             try:
-                syncSourceID = rtpGenerator.syncSourceIdentifier
-                response = Utils.formatHttpResponse(f"RtpGenerator:{syncSourceID}")
+                syncSourceID = rtpGen.syncSourceIdentifier
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler() Can't access parent object {e}")
+            try:
+                if self.path in getMethods:
+                    fn = getMethods[self.path][0]
+                    params = getMethods[self.path][1]
+                    Utils.Message.addMessage(f"GET fn:{fn}, params:{params}")
+                    fn(*params)
+                response = Utils.formatHttpResponse(f"RtpGenerator:{syncSourceID} {self.path}")
                 # Set headers
                 self._set_response()
                 # Write the response back to the client
