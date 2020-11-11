@@ -1689,3 +1689,26 @@ class APIHelper(object):
             # Fail silently
             pass
 
+    # Adds the stream to the streams directory service
+    # POSTS to /streams/add
+    # A stream definition is a dict. Example {"streamID":9876, "httpPort":5555, "streamType":"RtpReceiveStream"}
+    def addToStreamsDirectory(self, streamDefinition):
+        url = f"http://{self.addr}:{self.port}/streams/add"
+        try:
+            r = requests.post(url, streamDefinition, timeout=self.timeout)
+            # test the response
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+        except Exception as e:
+            raise Exception(f"ERR: APIHelper.addToStreamsDirectory() {streamDefinition}, error: {e}")
+
+    # Adds the stream to the streams directory service
+    # HTTP DELETE to /streams/delete/[streamType]/[streamID]
+    # The streamID is the RTP sync source ID
+    def removeFromStreamsDirectory(self, streamType, streamID):
+        url = f"http://{self.addr}:{self.port}/streams/delete/{streamType}/{streamID}"
+        try:
+            r = requests.delete(url, timeout=self.timeout)
+            # test the response
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+        except Exception as e:
+            raise Exception(f"ERR: APIHelper.removeFromStreamsDirectory() {streamType}/{streamID}, error: {e}")

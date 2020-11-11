@@ -766,31 +766,6 @@ class RtpCommon(object):
         except Exception as e:
             return None
 
-    # Adds the stream to the streams directory service by way of an HTTP POST
-    def addToStreamsDirectory(self, streamDefinition, url='http://localhost:10000/streams/add'):
-        # Create dict containing the data to be sent
-        # streamData= {"streamID":9876, "httpPort":5555, "streamType":"RtpReceiveStream"}
-        # POST the data
-        status = False
-        try:
-            r = requests.post(url, streamDefinition, timeout=self.httpRequestTimeout)
-            # test the response
-            if r.status_code == requests.codes.ok:
-                Utils.Message.addMessage("INFO: Successfully registered stream " + str(streamDefinition["streamID"]))
-
-            else:
-                Utils.Message.addMessage("ERR: RtpCommon.addToStreamsDirectory() " + \
-                                         str(streamDefinition) + ", status code: " + str(r.status_code))
-        except Exception as e:
-            Utils.Message.addMessage("ERR: RtpCommon.addToStreamsDirectory() " +\
-                                         str(streamDefinition) + ", error: " + str(e))
-
-
-
-    # removes the stream from the directory service by way of an HTTP DELETE
-    def removeFromStreamsDirectory(self):
-        pass
-
 # Define a Super Class for RTP Receive streams. This will contain methods that are common to both
 # RtpReceiveStream and RtpStreamResults
 class RtpReceiveCommon(RtpCommon):
@@ -1392,6 +1367,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpRxStreamsDict = rtpRxStreamsDict
         self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
         self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
+        # Create an API helper to allow access to the HTTP API of the Controller
+        self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
         # # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
         self.__stats = {}
         # Assign to instance variable
@@ -1663,29 +1640,14 @@ class RtpReceiveStream(RtpReceiveCommon):
 
             # Now register the stream with the stream directory service
             try:
-                # Construct the URL required to add streams to the directory service
-                self.addStreamURL = "http://127.0.0.1:" + str(self.controllerTCPPort) + "/streams/add"
-
                 # Create a dict to define the stream
                 streamDefinition = {
                                     "streamID": self.__stats["stream_syncSource"],
                                     "httpPort": self.tcpListenPort,
                                     "streamType": "RtpReceiveStream"
                                     }
-                # POST the stream definition into the streams directory
-                r = requests.post(self.addStreamURL, streamDefinition, timeout=self.httpRequestTimeout)
-                # Test the response status code to see if the POST was successful
-                try:
-                    r.raise_for_status() # If this doesn;t raise an exception, all is good!
-                    Utils.Message.addMessage("DBUG:Successful Register Receive Stream " + \
-                                             str(self.__stats["stream_syncSource"]) + \
-                                             ", response code: " + str(r.status_code))
-
-                except Exception as e:
-                    Utils.Message.addMessage("ERR: Register Receive Stream FAILED " + \
-                                             str(self.__stats["stream_syncSource"]) + \
-                                             ", response code: " + str(r.status_code) + ", " + str(e))
-
+                # Register the stream
+                self.ctrlAPI.addToStreamsDirectory(streamDefinition)
             except Exception as e:
                 Utils.Message.addMessage("ERR:RtpReceiveStream.__init.addToStreamsDirectory() " + str(e))
 
@@ -2167,25 +2129,10 @@ class RtpReceiveStream(RtpReceiveCommon):
             Utils.Message.addMessage("ERR:Closing http server for stream " + str(self.__stats["stream_syncSource"]) + str(e))
 
         # Now attempt to remove the stream from the streams directory
-        # Create the URL for the DELETE request
-        deleteStreamURL = "http://127.0.0.1:" + str(self.controllerTCPPort) +\
-                          "/streams/delete/RtpReceiveStream/" + str(self.__stats["stream_syncSource"])
-        # DELETE via HTTP method
         try:
-            r = requests.delete(deleteStreamURL, timeout=self.httpRequestTimeout)
-            # Test the response status code to see if the DELETE was successful
-            try:
-                r.raise_for_status()  # If this doesn;t raise an exception, all is good!
-                Utils.Message.addMessage("DBUG: RtpReceiveStream.killStream() Successfully unregistered stream " +\
-                                         str(self.__stats["stream_syncSource"]) + " from streams directory. status_code:" +\
-                                         str(r.status_code))
-            except Exception as e:
-                Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() Failed to unregister stream " +\
-                                         str(self.__stats["stream_syncSource"]) + " from streams directory. status_code:" +\
-                                         str(r.status_code))
-
+            self.ctrlAPI.removeFromStreamsDirectory("RtpReceiveStream", self.__stats["stream_syncSource"])
         except Exception as e:
-            Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() requests.delete() for stream " +\
+            Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() requests.delete() for stream " + \
                                      str(self.__stats["stream_syncSource"]))
 
         # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
