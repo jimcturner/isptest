@@ -4172,8 +4172,8 @@ class ISPTestHTTPServer(object):
 
         filteredStreamList = []
         try:
-            Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) + \
-                                     ", streamType is " + str(streamType))
+            # Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) + \
+            #                          ", streamType is " + str(streamType))
 
             if httpPort is not None:
                 # Filter by http port . This *should* only ever return a single result

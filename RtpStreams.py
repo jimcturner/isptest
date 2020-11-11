@@ -744,6 +744,9 @@ class RtpCommon(object):
         self.httpRequestTimeout=0.1
         # the TCP listener port of the HTTP Server running on the controller process (used for whois lookups etc via tha API)
         self.controllerTCPPort = None
+        # Var to store the instance of the HTTP Server created in httpServerThreadCommon.
+        # Required in order to be able to access the  HTTPServer.shutdown() method
+        self.httpd = None
 
     # Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
     # Returns None on failure, otherwise returns an int
@@ -1644,41 +1647,31 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.samplingThread.setName(str(self.__stats["stream_syncSource"]) + ":samplingThread")
             self.samplingThread.start()
 
-            self.httpd = None
             # Request an unused TCP port for the HTTP server to listen on
             self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
             # Create an HTTP server thread
             try:
-                Utils.Message.addMessage("DBUG:************Creating httpServerThread")
+                Utils.Message.addMessage(f'DBUG: Creating httpServerThread for RtpReceiveStream:{self.__stats["stream_syncSource"]}')
                 self.httpServerThread = threading.Thread(target=self.httpServerThreadCommon,
                                                          args=(self.tcpListenPort,
                                                                self.__stats["stream_syncSource"],
                                                                RtpReceiveStream.HTTPRequestHandler))
-                # self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
                 self.httpServerThread.daemon = False
                 self.httpServerThread.setName(str(self.__stats["stream_syncSource"]) + ":httpServerThread")
                 self.httpServerThread.start()
 
-
-
-
-            except Exception as e:
-                Utils.Message.addMessage("ERR:Couldn't create httpServerThread " + str(e))
-
-            # Now register the stream with the stream directory service
-            try:
+                # Now register the stream with the stream directory service
                 # Create a dict to define the stream
                 streamDefinition = {
-                                    "streamID": self.__stats["stream_syncSource"],
-                                    "httpPort": self.tcpListenPort,
-                                    "streamType": "RtpReceiveStream"
-                                    }
+                    "streamID": self.__stats["stream_syncSource"],
+                    "httpPort": self.tcpListenPort,
+                    "streamType": "RtpReceiveStream"
+                }
                 # Register the stream
                 self.ctrlAPI.addToStreamsDirectory(streamDefinition)
+
             except Exception as e:
-                Utils.Message.addMessage("ERR:RtpReceiveStream.__init.addToStreamsDirectory() " + str(e))
-
-
+                Utils.Message.addMessage(f'ERR:Couldn\'t create httpServerThread {self.__stats["stream_syncSource"]}, {e}')
 
             # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
             self.rtpRxStreamsDictMutex.acquire()
@@ -2138,8 +2131,8 @@ class RtpReceiveStream(RtpReceiveCommon):
         try:
             self.ctrlAPI.removeFromStreamsDirectory("RtpReceiveStream", self.__stats["stream_syncSource"])
         except Exception as e:
-            Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() requests.delete() for stream " + \
-                                     str(self.__stats["stream_syncSource"]))
+            Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() removeFromStreamsDirectory() for stream " + \
+                                     str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
         # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
         self.rtpRxStreamsDictMutex.acquire()
@@ -3626,6 +3619,29 @@ class RtpGenerator(RtpCommon):
     def getUniqueIDforISPTESTstreams(cls):
         return cls.UNIQUE_ID_FOR_ISPTEST_STREAMS
 
+    # Define a custom BaseHTTPRequestHandler class to handle HTTP GET, POST requests
+    class HTTPRequestHandler(BaseHTTPRequestHandler):
+        # For JSON, use contentType='application/json'
+        def _set_response(self, responseCode=200, contentType='text/html'):
+            self.send_response(responseCode)
+            self.send_header('Content-type', contentType)
+            self.end_headers()
+
+        # Http server methods
+        def do_GET(self):
+            # Access parent Rtp Stream object via server attribute
+            rtpGenerator = self.server.parentObject
+            try:
+                syncSourceID = rtpGenerator.syncSourceIdentifier
+                response = Utils.formatHttpResponse(f"RtpGenerator:{syncSourceID}")
+                # Set headers
+                self._set_response()
+                # Write the response back to the client
+                self.wfile.write(response)
+            except Exception as e:
+                self.send_error(404,"RtpGenerator.HttpRequestHandler.do_GET() " + str(syncSourceID) + ", " + str(e))
+
+
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
                  rtpTxStreamsDict, rtpTxStreamsDictMutex,\
                  rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance = None,
@@ -3638,6 +3654,8 @@ class RtpGenerator(RtpCommon):
 
         # Assign instance variables
         self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
+        # Create an API helper to allow access to the HTTP API of the Controller
+        self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
         self.UDP_TX_IP = UDP_TX_IP  # The destination address
         self.UDP_TX_PORT = int(UDP_TX_PORT)
         self.UDP_TX_SRC_PORT = 0
@@ -3800,6 +3818,31 @@ class RtpGenerator(RtpCommon):
         self.samplingThread.daemon = False
         self.samplingThread.setName(str(self.syncSourceIdentifier) + ":samplingThread")
         self.samplingThread.start()
+
+        # Request an unused TCP port for the HTTP server to listen on
+        self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
+
+        # Create an HTTP server thread. If successful, register the stream
+        try:
+            Utils.Message.addMessage(f"DBUG: Creating httpServerThread for RtpGenerator:{self.syncSourceIdentifier}")
+            self.httpServerThread = threading.Thread(target=self.httpServerThreadCommon,
+                                                     args=(self.tcpListenPort,
+                                                           self.syncSourceIdentifier,
+                                                           RtpGenerator.HTTPRequestHandler))
+            self.httpServerThread.daemon = False
+            self.httpServerThread.setName(str(self.syncSourceIdentifier) + ":httpServerThread")
+            self.httpServerThread.start()
+            # Now register the stream with the stream directory service
+            # Create a dict to define the stream
+            streamDefinition = {
+                "streamID": self.syncSourceIdentifier,
+                "httpPort": self.tcpListenPort,
+                "streamType": "RtpGenerator"
+            }
+            self.ctrlAPI.addToStreamsDirectory(streamDefinition)
+
+        except Exception as e:
+            Utils.Message.addMessage(f'ERR:Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
 
     def getRtpStreamStats(self):
         # Returns a dictionary of useful stats
@@ -4381,6 +4424,20 @@ class RtpGenerator(RtpCommon):
             Utils.Message.addMessage(
                 "ERR: RtpGenerator.killStream()::udpTxSocket.close() for stream: " + str(self.syncSourceIdentifier))
 
+        # Kill the http server
+        try:
+            self.httpd.shutdown()
+            Utils.Message.addMessage(
+                "DBUG:Closing http server for RtpGenerator  " + str(self.syncSourceIdentifier))
+        except Exception as e:
+            Utils.Message.addMessage(
+                "ERR:Closing http server for RtpGenerator " + str(self.syncSourceIdentifier) + str(e))
+        # Now attempt to remove the stream from the streams directory
+        try:
+            self.ctrlAPI.removeFromStreamsDirectory("RtpGenerator", self.syncSourceIdentifier)
+        except Exception as e:
+            Utils.Message.addMessage("ERR: RtpGenerator.killStream() removeFromStreamsDirectory() for stream " + \
+                                         str(self.syncSourceIdentifier) + ", " + str(e))
 
     def disableStream(self):
         # Disables transmission of packets to simulate packet loss by clearing flag
