@@ -742,6 +742,8 @@ class RtpCommon(object):
         super().__init__()
         # Default timeout for all http requests
         self.httpRequestTimeout=0.1
+        # the TCP listener port of the HTTP Server running on the controller process (used for whois lookups etc via tha API)
+        self.controllerTCPPort = None
 
     # Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
     # Returns None on failure, otherwise returns an int
@@ -807,9 +809,6 @@ class RtpReceiveCommon(RtpCommon):
 
         # Deque list to hold previous traceroute results (used for the traceroute viewer)
         self.historicTracerouteEvents = deque(maxlen=Registry.rtpCommonHistoricTracerouteEventsToKeep)
-
-        # the TCP listener port of the HTTP Server running on the controller process (used for whois lookups etc via tha API)
-        self.controllerTCPPort = None
 
     # Thread-safe method to return a list of the worst glitches
     # If returnSummaries is True, will return a list of summary strings. Otherwise will return a list of events
@@ -3473,9 +3472,10 @@ class RtpReceiveStream(RtpReceiveCommon):
 # It does't perform any calculations itself (unlike RtpReceiveStream) but it does have similar getter methods for results,
 # which should allow displayThread to treat this like an RtpStream object without any additional code alteration
 class RtpStreamResults(RtpReceiveCommon):
-    def __init__(self, syncSourceID, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex):
+    def __init__(self, syncSourceID, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, controllerTCPPort=None):
 
         super().__init__()
+        self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
         self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
         self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
         self.syncSourceID = syncSourceID
@@ -3675,7 +3675,8 @@ class RtpGenerator(RtpCommon):
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
                  rtpTxStreamsDict, rtpTxStreamsDictMutex,\
-                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance = None, **kwargs):
+                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance = None,
+                 controllerTCPPort=None, **kwargs):
         # The last arguments (**kwargs) are optional. it allows you to specify a source port or friendly name on creation
         # kwargs are "friendlyName" and "UDP_SRC_PORT"
 
@@ -3683,6 +3684,7 @@ class RtpGenerator(RtpCommon):
         super().__init__()
 
         # Assign instance variables
+        self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
         self.UDP_TX_IP = UDP_TX_IP  # The destination address
         self.UDP_TX_PORT = int(UDP_TX_PORT)
         self.UDP_TX_SRC_PORT = 0
@@ -3845,7 +3847,6 @@ class RtpGenerator(RtpCommon):
         self.samplingThread.daemon = False
         self.samplingThread.setName(str(self.syncSourceIdentifier) + ":samplingThread")
         self.samplingThread.start()
-
 
     def getRtpStreamStats(self):
         # Returns a dictionary of useful stats
@@ -6184,7 +6185,8 @@ class ResultsReceiver(object):
                                     # Create new RtpStreamResults object
                                     rtpStreamResults = RtpStreamResults(stats["stream_syncSource"],
                                                                         self.rtpTxStreamResultsDict,
-                                                                        self.rtpTxStreamResultsDictMutex)
+                                                                        self.rtpTxStreamResultsDictMutex,
+                                                                        controllerTCPPort=self.relatedRtpGenerator.controllerTCPPort)
                                     # Immediately update the stats
                                     rtpStreamResults.updateStats(stats)
 

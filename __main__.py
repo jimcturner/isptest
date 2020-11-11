@@ -2575,17 +2575,13 @@ class UI(object):
                 syncSourceID = str(selectedStream.getRtpStreamStatsByKey("stream_syncSource"))
             except Exception as e:
                 Utils.Message.addMessage("ERR: UI.__onShowTracerouteDialogue(). getTraceRouteHopsList() " + str(e))
-            # Create a list of tuples containing the index no and the IP address
+            # Create a list of tuples containing the index no and the IP address and whois name
             tableContents = []
             if len(tracerouteHopsList) > 0:
                 apiResponse = None
                 try:
                     # Use the API helper to query the WhoisResolver. This will yield a list of lists [[addr, whois_name],...]
                     apiResponse = api.whoisLookup(tracerouteHopsList)
-                    tableRow = []
-                    whoisNetName = ""
-                    hopAddr = ""
-
                     # Now create the table contents to be displayed
                     for hopNo in range(len(apiResponse)):
                         # Create each table row as [hopNo, ip address, whois name]
@@ -5221,7 +5217,7 @@ def main(argv):
     whoIsResolver = Utils.WhoisResolver()
     # Register whoIsResolver with the shared objects dict
     sharedObjects = {"whoIsResolver": whoIsResolver}
-
+    isptesttHTTPServerPort = None
     # Create and start the main HTTP Server
     try:
         # Establish what port the http server should be running on
@@ -5235,6 +5231,8 @@ def main(argv):
         # Create the server object
         isptesttHTTPServer = ISPTestHTTPServer(operationMode=MODE, tcpListenPort=httpListenPort,
                                                externalResourcesDict=sharedObjects)
+        # Get the TCP listener port from the ISPTestHTTPServer object
+        isptesttHTTPServerPort = isptesttHTTPServer.getTCPPort()
     except Exception as e:
         Utils.Message.addMessage("ERR:isptesttHTTPServer = ISPTestHTTPServer() " + str(e))
 
@@ -5245,7 +5243,7 @@ def main(argv):
         rtpTxStreamsDict, rtpTxStreamsDictMutex,\
         rtpRxStreamsDict, rtpRxStreamsDictMutex,\
         rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,\
-        receiversAndSendersList, controllerTCPPort=isptesttHTTPServer.getTCPPort())
+        receiversAndSendersList, controllerTCPPort=isptesttHTTPServerPort)
 
 
     # Start traffic generator thread
@@ -5256,7 +5254,8 @@ def main(argv):
                                     payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
                                     rtpTxStreamsDict, rtpTxStreamsDictMutex,
                                     rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance=ui,
-                                    UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME)
+                                    UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME,
+                                        controllerTCPPort=isptesttHTTPServerPort)
 
         except Exception as e:
             Utils.Message.addMessage("ERR:main() Create RtpGenerator() " + str(e))
@@ -5442,7 +5441,7 @@ def main(argv):
                                                             restoredStreamFlag=True,
                                                             historicStatsDict=stats,
                                                             historicEventsList=eventsList,
-                                                            controllerTCPPort=isptesttHTTPServer.getTCPPort()
+                                                            controllerTCPPort=isptesttHTTPServerPort
                                                             )
 
                         except Exception as e:
