@@ -3729,6 +3729,19 @@ class RtpGenerator(RtpCommon):
             return requiredArgsList, optionalArgsDict
 
 
+        # Shows the available endpoints
+        def listEndpoints(self):
+            # Get GET endpoints
+            getMappings = self.apiGETEndpoints()
+            getList = f""
+            # Create list
+            for x in getMappings:
+                getList += f"{x} + Optional keys:{x[optKeys]}<br>"
+
+            helpText = f"Available RtpGenerator API endpoints:<br>" \
+                       f"{getList}<br>"
+            return helpText
+
         # Http server methods
         def do_GET(self):
             # Access parent Rtp Stream object via server attribute
@@ -3738,27 +3751,30 @@ class RtpGenerator(RtpCommon):
             syncSourceID = None
             try:
                 syncSourceID = rtpGen.syncSourceIdentifier
-                # Does the URL match any of those in getMethods?
+                # Does the URL match any of those key entries in in getMappings{}?
                 # Create a version of the URL that doesn't include any ?key=value suffixes
                 # pathMinusQuery = str(self.path).split('?')[0]
                 # Split of the URL and query (?key=value suffixes)
-                path = urlparse(self.path).path
-                query = urlparse(self.path).query
-                Utils.Message.addMessage(f"path:{path}, Query:{query}")
+                urlDecoded = urlparse(self.path)
+                path = urlDecoded.path
+                query = urlDecoded.query
+                # Utils.Message.addMessage(f"path:{path}, Query:{query}")
 
                 if path in getMappings:
                     # Extract the method to be called
                     fn = getMappings[path]["targetMethod"]
                     # Extract the 'preset' method arguments
-                    requiredArgKeys = getMappings[path]["args"]
-                    # Extract the 'optional' method arguments list
+                    args = getMappings[path]["args"]
+                    # Extract the 'optional' method arguments list (i.e the kwarg keys that targetMethod() would accept)
                     optionalArgKeys = getMappings[path]["optKeys"]
-                    # Parse query to create a list of required and optional parameters to be passed to targetMethod()
-                    requiredArgs, optionalArgs = self.convertKeysToMethodArgs(query, requiredArgKeys, optionalArgKeys)
 
-                    Utils.Message.addMessage(f"GET fn:{fn}, reqd:{requiredArgs}, opt:{optionalArgs}")
+                    # Parse query to create a list of optional parameters to be passed to targetMethod()
+                    # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
+                    notUsed, optionalArgs = self.convertKeysToMethodArgs(query, [], optionalArgKeys)
+
+                    Utils.Message.addMessage(f"GET fn:{fn}, args:{args}, opt:{optionalArgs}")
                     # Execute the specified method, expanding out the parameter list
-                    retVal = fn(*requiredArgs, **optionalArgs)
+                    retVal = fn(*args, **optionalArgs)
                     # Create the response - Encode the dict of as json
                     response = (json.dumps(retVal, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
                     # Create the headers
@@ -3771,7 +3787,7 @@ class RtpGenerator(RtpCommon):
                 # Methods to map
                 # Getters
                 #           txStats (RtpGenerator Stats)
-                #   stats (RtpStreamResults Stats)
+                #           stats (RtpStreamResults Stats)
                 #   getRtpStreamEventsList (RtpStreamResults)
                 #           enableStream
                 #           disableSTream
