@@ -3632,23 +3632,35 @@ class RtpGenerator(RtpCommon):
             # Access parent Rtp Stream object via server attribute
             rtpGen = self.server.parentObject
             # A dictionary to map incoming GET URLs to an existing RtpGenerator method
-            # These URLS are not expecting any additional query parameters.
-            # Instead, the "args" key contains a lost with the preset values that will be passed to targetMethod() when
+            # The "args" key contains a lost with the preset values that will be passed to targetMethod() when
+            # "optKeys" is a list of keys that  targetMethod will accept as a kwarg
             # that particular URL is requested
             getMappings = {
                 #"/url": {"targetMethod": None, "args": [], "kwargs": []},
-                "/txrate/inc": {"targetMethod": rtpGen.setTxRate, "args": [0, 1], "kwargs": []},
-                "/txrate/dec": {"targetMethod": rtpGen.setTxRate, "args": [0, -1], "kwargs": []},
-                "/length/inc": {"targetMethod": rtpGen.setPayloadLength, "args": [0, 1], "kwargs": []},
-                "/length/dec": {"targetMethod": rtpGen.setPayloadLength, "args": [0, -1], "kwargs": []},
-                "/ttl/inc": {"targetMethod": rtpGen.setTimeToLive, "args": [0, 1], "kwargs": []},
-                "/ttl/dec": {"targetMethod": rtpGen.setTimeToLive, "args": [0, -1], "kwargs": []},
-                "/burst": {"targetMethod": rtpGen.enableBurstMode, "args": [], "kwargs": []},
-                "/enable": {"targetMethod": rtpGen.enableStream, "args": [], "kwargs": []},
-                "/disable": {"targetMethod": rtpGen.disableStream, "args": [], "kwargs": []},
-                "/jitter/on": {"targetMethod": rtpGen.enableJitter, "args": [], "kwargs": []},
-                "/jitter/off": {"targetMethod": rtpGen.disableJitter, "args": [], "kwargs": []}
+                "/txrate/inc": {"targetMethod": rtpGen.setTxRate, "args": [0, 1], "optKeys": []},
+                "/txrate/dec": {"targetMethod": rtpGen.setTxRate, "args": [0, -1], "optKeys": []},
+                "/length/inc": {"targetMethod": rtpGen.setPayloadLength, "args": [0, 1], "optKeys": []},
+                "/length/dec": {"targetMethod": rtpGen.setPayloadLength, "args": [0, -1], "optKeys": []},
+                "/ttl/inc": {"targetMethod": rtpGen.setTimeToLive, "args": [0, 1], "optKeys": []},
+                "/ttl/dec": {"targetMethod": rtpGen.setTimeToLive, "args": [0, -1], "optKeys": []},
+                "/burst": {"targetMethod": rtpGen.enableBurstMode, "args": [], "optKeys": []},
+                "/enable": {"targetMethod": rtpGen.enableStream, "args": [], "optKeys": []},
+                "/disable": {"targetMethod": rtpGen.disableStream, "args": [], "optKeys": []},
+                "/jitter/on": {"targetMethod": rtpGen.enableJitter, "args": [], "optKeys": []},
+                "/jitter/off": {"targetMethod": rtpGen.disableJitter, "args": [], "optKeys": []},
+                "/txstats": {"targetMethod": rtpGen.getRtpStreamStats, "args": [], "optKeys": []}
             }
+            # Add additonal endpoints that relate to the RtpStreamResults associated with this RtpGenerator
+            # Note, this object (and therefore its methods) will only exist if the Receiver has responded to
+            # the transmitter.
+            # Therefore we can't assume that the methods will be available
+            try:
+                # Attempt to add a /stats endpoint
+                getMappings["/stats"] = {"targetMethod": rtpGen.relatedRtpStreamResults.getRtpStreamStats, "args": [], "optKeys": []}
+            except Exception as e:
+                # Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() {e}")
+                pass
+
             return getMappings
 
         # Acts a repository for the POST endpoints provided by the RtpGenerator HTTP API
@@ -3657,21 +3669,21 @@ class RtpGenerator(RtpCommon):
             rtpGen = self.server.parentObject
             # A dictionary to map incoming POST URLs to an existing RtpGenerator method
             # The keys/values within the POST data will be mapped to the keys listed in "args"[] and "kwargs"[]
-            # "args"[] lists the mandatory parameters expected by targetMethod()
-            # "kwargs"[] lists the optional key/value parameters that targetMethod() will accept
+            # "reqKeys"[] lists the mandatory parameters expected by targetMethod()
+            # "optKeys"[] lists the optional key/value parameters that targetMethod() will accept
             #{"url path":
             #   {
             #       "targetMethod":target method/function,
-            #       "args":[required arg1, required arg2..],    <---only the values are passed to the mapped function
-            #       "kwargs":[optional arg1, arg2..]    <------the key/value pairs are passed to the function
+            #       "reqKeys":[required arg1, required arg2..],    <---*only* the values are passed to the mapped function
+            #       "optKeys":[optional arg1, arg2..]    <------the key/value pairs are passed to the function
             #   }
             postMappings = {
-                "/label": {"targetMethod": rtpGen.setFriendlyName, "args": ["name"], "kwargs": []},
-                "/txrate": {"targetMethod": rtpGen.setTxRate, "args": ["bps"], "kwargs": []},
-                "/length": {"targetMethod": rtpGen.setPayloadLength, "args": ["bytes"], "kwargs": []},
-                "/ttl": {"targetMethod": rtpGen.setTimeToLive, "args": ["seconds"], "kwargs": []},
-                "/burst": {"targetMethod": rtpGen.enableBurstMode, "args": [], "kwargs": ["burstLength_s", "burstRatio"]},
-                "/simulateloss": {"targetMethod": rtpGen.simulatePacketLoss, "args": [], "kwargs": ["packetsToSkip"]}
+                "/label": {"targetMethod": rtpGen.setFriendlyName, "reqKeys": ["name"], "optKeys": []},
+                "/txrate": {"targetMethod": rtpGen.setTxRate, "reqKeys": ["bps"], "optKeys": []},
+                "/length": {"targetMethod": rtpGen.setPayloadLength, "reqKeys": ["bytes"], "optKeys": []},
+                "/ttl": {"targetMethod": rtpGen.setTimeToLive, "reqKeys": ["seconds"], "optKeys": []},
+                "/burst": {"targetMethod": rtpGen.enableBurstMode, "reqKeys": [], "optKeys": ["burstLength_s", "burstRatio"]},
+                "/simulateloss": {"targetMethod": rtpGen.simulatePacketLoss, "reqKeys": [], "optKeys": ["packetsToSkip"]}
             }
             return postMappings
 
@@ -3694,15 +3706,29 @@ class RtpGenerator(RtpCommon):
                 if self.path in getMappings:
                     # Extract the method to be called
                     fn = getMappings[self.path]["targetMethod"]
-                    # Extract the preset method parameters
-                    params = getMappings[self.path]["args"]
-                    Utils.Message.addMessage(f"GET fn:{fn}, params:{params}")
+                    # Extract the 'preset' method arguments
+                    args = getMappings[self.path]["args"]
+                    # Extract the 'optional' method arguments list
+                    optKeys = getMappings[self.path]["optKeys"]
+
+
+
+                    Utils.Message.addMessage(f"GET fn:{fn}, params:{args}")
                     # Execute the specified method, expanding out the parameter list
-                    retVal = fn(*params)
+                    retVal = fn(*args)
+                    # Create the response - Encode the dict of as json
+                    response = (json.dumps(retVal, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                    # Create the headers
+                    self._set_response(contentType='application/json')
+                else:
+                    # path not recognised
+                    response = Utils.formatHttpResponse(f"Rtpgenerator {syncSourceID}")
+                    # Create the headers
+                    self._set_response()
                 # Methods to map
                 # Getters
-                #   getStats (RtpGenerator Stats)
-                #   getStats (RtpStreamResults Stats)
+                #           txStats (RtpGenerator Stats)
+                #   stats (RtpStreamResults Stats)
                 #   getRtpStreamEventsList (RtpStreamResults)
                 #           enableStream
                 #           disableSTream
@@ -3720,9 +3746,9 @@ class RtpGenerator(RtpCommon):
                 # DELETE
                 #   killStream
 
-                response = Utils.formatHttpResponse(f"RtpGenerator:{syncSourceID} {self.path}")
-                # Set headers
-                self._set_response()
+                # response = Utils.formatHttpResponse(f"RtpGenerator:{syncSourceID} {self.path}")
+                # # Set headers
+                # self._set_response()
                 # Write the response back to the client
                 self.wfile.write(response)
             except Exception as e:
@@ -3945,6 +3971,11 @@ class RtpGenerator(RtpCommon):
 
         # create a stream results receiver object for this tx stream
         self.rtpStreamResultsReceiver = ResultsReceiver(self)
+
+        # create a placeholder for the related RtpStreamResults object
+        # This will be updated by rtpStreamResultsReceiver once it has successfullly created the RtpStreamResults object
+        # (but only if the reply packets from the Receiver have been received)
+        self.relatedRtpStreamResults = None
 
         # Add the object to the specified dictionary with using rtpStreamID as the key
         self.rtpTxStreamsDictMutex.acquire()
@@ -4546,6 +4577,8 @@ class RtpGenerator(RtpCommon):
         # Now kill corresponding RtpResultsReceiver object (should be a blocking call)
         try:
             self.rtpStreamResultsReceiver.kill()
+            # Clear any reference to the relatedRtpStreamResults (to ensure that it will be garbage collected)
+            self.relatedRtpStreamResults = None
         except Exception as e:
             Utils.Message.addMessage("ERR:RtpGenerator.killStream() kill rtpStreamResultsReceiver " + str(e))
 
@@ -6132,6 +6165,7 @@ class ResultsReceiver(object):
         self.resultsReceiverThread.join()
         Utils.Message.addMessage("DBUG: ResultsReceiver.kill() resultsReceiverThread has ended")
 
+
         # Finally, attempt to remove the RtpStreamResults object created by __resultsReceiverThread from
         # the rtpTxStreamResultsDict
 
@@ -6335,6 +6369,8 @@ class ResultsReceiver(object):
                                                                         self.rtpTxStreamResultsDict,
                                                                         self.rtpTxStreamResultsDictMutex,
                                                                         controllerTCPPort=self.relatedRtpGenerator.controllerTCPPort)
+                                    # Pass the rtpStreamResults back to the related RtpGenerator object
+                                    self.relatedRtpGenerator.relatedRtpStreamResults = rtpStreamResults
                                     # Immediately update the stats
                                     rtpStreamResults.updateStats(stats)
 
