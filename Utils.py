@@ -1625,7 +1625,10 @@ def extractWantedKeysFromDict(sourceDict, wantedKeys):
 # Based on the name of the key
 # listKeys will return a list, otherwise all other args will return a dict
 def filterDictByKey(sourceDict, keyIs=None, keyContains=None, keyStartsWith=None, listKeys=False):
-    if listKeys == True:
+    # If all optional filter parameters are set to their defaults, return the source dict unmodified
+    if keyIs is None and keyContains is None and keyStartsWith is None and listKeys is False:
+        return sourceDict
+    elif listKeys == True:
         # Overrides all other args, just returns a list of keys, but not the values
         return [keys for keys in sourceDict]
     elif keyIs in sourceDict:

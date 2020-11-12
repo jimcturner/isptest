@@ -3309,6 +3309,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                               listKeys=listKeys)
         return filteredStats
 
+    ## DEPRECATED: Use optional args in getRtpStreamStats() instead
     def getRtpStreamStatsByFilter(self, keyFilter):
         # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
         # Returns a list of tuples
@@ -3317,6 +3318,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         filteredStats = {k: v for k, v in stats.items() if k.startswith(keyFilter)}
         return filteredStats
 
+    ## DEPRECATED: Use optional args in getRtpStreamStats() instead
     def getRtpStreamStatsByKey(self, key):
         # Thread safe method to retrieve a single stats item by key
         # If the key doesn't exist, it will return None type
@@ -3506,12 +3508,14 @@ class RtpStreamResults(RtpReceiveCommon):
 
     # Thread-safe method for accessing all RtpStream stats
     def getRtpStreamStats(self, keyIs=None, keyContains=None, keyStartsWith=None, listKeys=False):
+    # def getRtpStreamStats(self, **kwargs):
         self.__accessRtpStreamStatsMutex.acquire()
         stats = self.__stats.copy()
         self.__accessRtpStreamStatsMutex.release()
         # Get a filtered version of the stats dict
         filteredStats = Utils.filterDictByKey(stats, keyIs=keyIs, keyContains=keyContains, keyStartsWith=keyStartsWith, listKeys=listKeys)
         return filteredStats
+
 
     def getRtpStreamStatsByFilter(self, keyFilter):
         # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
@@ -3735,19 +3739,26 @@ class RtpGenerator(RtpCommon):
             try:
                 syncSourceID = rtpGen.syncSourceIdentifier
                 # Does the URL match any of those in getMethods?
-                if self.path in getMappings:
+                # Create a version of the URL that doesn't include any ?key=value suffixes
+                # pathMinusQuery = str(self.path).split('?')[0]
+                # Split of the URL and query (?key=value suffixes)
+                path = urlparse(self.path).path
+                query = urlparse(self.path).query
+                Utils.Message.addMessage(f"path:{path}, Query:{query}")
+
+                if path in getMappings:
                     # Extract the method to be called
-                    fn = getMappings[self.path]["targetMethod"]
+                    fn = getMappings[path]["targetMethod"]
                     # Extract the 'preset' method arguments
-                    args = getMappings[self.path]["args"]
+                    requiredArgKeys = getMappings[path]["args"]
                     # Extract the 'optional' method arguments list
-                    optKeys = getMappings[self.path]["optKeys"]
+                    optionalArgKeys = getMappings[path]["optKeys"]
+                    # Parse query to create a list of required and optional parameters to be passed to targetMethod()
+                    requiredArgs, optionalArgs = self.convertKeysToMethodArgs(query, requiredArgKeys, optionalArgKeys)
 
-
-
-                    Utils.Message.addMessage(f"GET fn:{fn}, params:{args}")
+                    Utils.Message.addMessage(f"GET fn:{fn}, reqd:{requiredArgs}, opt:{optionalArgs}")
                     # Execute the specified method, expanding out the parameter list
-                    retVal = fn(*args)
+                    retVal = fn(*requiredArgs, **optionalArgs)
                     # Create the response - Encode the dict of as json
                     response = (json.dumps(retVal, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
                     # Create the headers
@@ -3811,13 +3822,9 @@ class RtpGenerator(RtpCommon):
                     post_data_raw = self.rfile.read(content_length).decode('UTF-8')
                     # Examine the supplied keys, divide them up between requiredArgKeys, optionalArgKeys and then
                     # generate a list and a dict that can be expanded using * and ** to be used as method parameters
+                    # Will raise an Exception if unexpected keys are present
                     requiredArgs, optionalArgs = self.convertKeysToMethodArgs(post_data_raw, requiredArgKeys, optionalArgKeys)
-                    # # Now remove the 'expected' keys from parsedPostDataDict to see if any unexpected keys are left over
-                    # Utils.removeMultipleDictKeys(parsedPostDataDict, requiredArgKeys + optionalArgKeys)
-                    # if len(parsedPostDataDict) > 0:
-                    #     raise Exception(f"do_GET unexpected keys provided {parsedPostDataDict}")
-                    # # Finally execute the mapped method, passing to it the required args and optional kwargs
-                    # Utils.Message.addMessage(f"reqd:{requiredArgs}, opt:{optionalArgs}, unxpd:{parsedPostDataDict}")
+
                     retVal = fn(*requiredArgs, **optionalArgs)
                     response = Utils.formatHttpResponse(f"RtpGenerator do_POST:{syncSourceID} {self.path}, retVal:{retVal}")
                     # Set headers
