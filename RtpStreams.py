@@ -3627,34 +3627,75 @@ class RtpGenerator(RtpCommon):
             self.send_header('Content-type', contentType)
             self.end_headers()
 
+        # Acts a repository for the GET endpoints provided by the RtpGenerator HTTP API
+        def apiGETEndpoints(self):
+            # Access parent Rtp Stream object via server attribute
+            rtpGen = self.server.parentObject
+            # A dictionary to map incoming GET URLs to an existing RtpGenerator method
+            # These URLS are not expecting any additional query parameters.
+            # Instead, the "args" key contains a lost with the preset values that will be passed to targetMethod() when
+            # that particular URL is requested
+            getMappings = {
+                #"/url": {"targetMethod": None, "args": [], "kwargs": []},
+                "/txrate/inc": {"targetMethod": rtpGen.setTxRate, "args": [0, 1], "kwargs": []},
+                "/txrate/dec": {"targetMethod": rtpGen.setTxRate, "args": [0, -1], "kwargs": []},
+                "/length/inc": {"targetMethod": rtpGen.setPayloadLength, "args": [0, 1], "kwargs": []},
+                "/length/dec": {"targetMethod": rtpGen.setPayloadLength, "args": [0, -1], "kwargs": []},
+                "/ttl/inc": {"targetMethod": rtpGen.setTimeToLive, "args": [0, 1], "kwargs": []},
+                "/ttl/dec": {"targetMethod": rtpGen.setTimeToLive, "args": [0, -1], "kwargs": []},
+                "/burst": {"targetMethod": rtpGen.enableBurstMode, "args": [], "kwargs": []},
+                "/enable": {"targetMethod": rtpGen.enableStream, "args": [], "kwargs": []},
+                "/disable": {"targetMethod": rtpGen.disableStream, "args": [], "kwargs": []},
+                "/jitter/on": {"targetMethod": rtpGen.enableJitter, "args": [], "kwargs": []},
+                "/jitter/off": {"targetMethod": rtpGen.disableJitter, "args": [], "kwargs": []}
+            }
+            return getMappings
+
+        # Acts a repository for the POST endpoints provided by the RtpGenerator HTTP API
+        def apiPOSTEndpoints(self):
+            # Access parent Rtp Stream object via server attribute
+            rtpGen = self.server.parentObject
+            # A dictionary to map incoming POST URLs to an existing RtpGenerator method
+            # The keys/values within the POST data will be mapped to the keys listed in "args"[] and "kwargs"[]
+            # "args"[] lists the mandatory parameters expected by targetMethod()
+            # "kwargs"[] lists the optional key/value parameters that targetMethod() will accept
+            #{"url path":
+            #   {
+            #       "targetMethod":target method/function,
+            #       "args":[required arg1, required arg2..],    <---only the values are passed to the mapped function
+            #       "kwargs":[optional arg1, arg2..]    <------the key/value pairs are passed to the function
+            #   }
+            postMappings = {
+                "/label": {"targetMethod": rtpGen.setFriendlyName, "args": ["name"], "kwargs": []},
+                "/txrate": {"targetMethod": rtpGen.setTxRate, "args": ["bps"], "kwargs": []},
+                "/length": {"targetMethod": rtpGen.setPayloadLength, "args": ["bytes"], "kwargs": []},
+                "/ttl": {"targetMethod": rtpGen.setTimeToLive, "args": ["seconds"], "kwargs": []},
+                "/burst": {"targetMethod": rtpGen.enableBurstMode, "args": [], "kwargs": ["burstLength_s", "burstRatio"]},
+                "/simulateloss": {"targetMethod": rtpGen.simulatePacketLoss, "args": [], "kwargs": ["packetsToSkip"]}
+            }
+            return postMappings
+
+        def apiDELETEEndpoints(self):
+            # Access parent Rtp Stream object via server attribute
+            rtpGen = self.server.parentObject
+            deleteMappings = {}
+            return deleteMappings
+
         # Http server methods
         def do_GET(self):
             # Access parent Rtp Stream object via server attribute
             rtpGen = self.server.parentObject
-            # Dictionary to maps URL paths to RtpGenerator methods and method parameters for *preset* tx modifiers
-            # Dict is of the form {"URL to be matched": [methodToBeCalled,[listOfMethodParameters]]}
-            getMethodssNoArgs = {
-                "/txrate/inc": [rtpGen.setTxRate, [0, 1]],
-                "/txrate/dec": [rtpGen.setTxRate, [0, -1]],
-                "/length/inc": [rtpGen.setPayloadLength, [0, 1]],
-                "/length/dec": [rtpGen.setPayloadLength, [0, -1]],
-                "/ttl/inc" : [rtpGen.setTimeToLive, [0, 1]],
-                "/ttl/dec": [rtpGen.setTimeToLive, [0, -1]],
-                "/burst": [rtpGen.enableBurstMode, []],
-                "/enable": [rtpGen.enableStream, []],
-                "/disable": [rtpGen.disableStream, []],
-                "/jitter/on": [rtpGen.enableJitter, []],
-                "/jitter/off": [rtpGen.disableJitter, []],
-                }
+            # Get the dict of url/method mappings
+            getMappings = self.apiGETEndpoints()
             syncSourceID = None
             try:
                 syncSourceID = rtpGen.syncSourceIdentifier
                 # Does the URL match any of those in getMethods?
-                if self.path in getMethodssNoArgs:
+                if self.path in getMappings:
                     # Extract the method to be called
-                    fn = getMethodssNoArgs[self.path][0]
+                    fn = getMappings[self.path]["targetMethod"]
                     # Extract the preset method parameters
-                    params = getMethodssNoArgs[self.path][1]
+                    params = getMappings[self.path]["args"]
                     Utils.Message.addMessage(f"GET fn:{fn}, params:{params}")
                     # Execute the specified method, expanding out the parameter list
                     retVal = fn(*params)
@@ -3669,16 +3710,15 @@ class RtpGenerator(RtpCommon):
                 #           disableJitter
                 #   getTraceRouteHopsList
                 # POST
-                #   setFriendlyName
-                #   setSyncSourceID
-                #   setTxRate
-                #   setPayload
-                #   setTimeToLive
-                #   enableBurstMode
-                #   simulatePacketLoss
+                #       setFriendlyName
+                #       setSyncSourceID
+                #       setTxRate
+                #       setPayload
+                #       setTimeToLive
+                #       enableBurstMode
+                #       simulatePacketLoss
                 # DELETE
                 #   killStream
-
 
                 response = Utils.formatHttpResponse(f"RtpGenerator:{syncSourceID} {self.path}")
                 # Set headers
@@ -3691,22 +3731,20 @@ class RtpGenerator(RtpCommon):
         def do_POST(self):
             # Access parent Rtp Stream object via server attribute
             rtpGen = self.server.parentObject
-            # Dict to map incoming URL to an RtpGenerator method (including mandatory args and optional kwargs)
-            postMethods = {
-                "/label": {"method": rtpGen.setFriendlyName, "args": ["name"], "kwargs": []}
-            }
+            # Get the dict of url/method mappings
+            postMappings = self.apiPOSTEndpoints()
             syncSourceID = None
             retVal = None # Captures the return value of the mapped method (if there is one)
             try:
                 syncSourceID = rtpGen.syncSourceIdentifier
-                # Does the URL match any of those in getMethods?
-                if self.path in postMethods:
+                # Does the URL match any of those in postMappings{}?
+                if self.path in postMappings:
                     # Extract the target function
-                    fn = postMethods[self.path]["method"]
+                    fn = postMappings[self.path]["targetMethod"]
                     # Extract the mandatory args for the mapped-to method
-                    requiredArgKeys = postMethods[self.path]["args"]
+                    requiredArgKeys = postMappings[self.path]["args"]
                     # Extract optional args (kwargs) for the mapped-to method
-                    optionalArgKeys = postMethods[self.path]["kwargs"]
+                    optionalArgKeys = postMappings[self.path]["kwargs"]
 
                     # Get POST data
                     # Gets the size of data
