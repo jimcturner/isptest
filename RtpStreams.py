@@ -890,7 +890,7 @@ class RtpReceiveCommon(RtpCommon):
             self.tracerouteHopsListMutex.release()
 
     @abstractmethod
-    def getRtpStreamStats(self, keyIs=None, keyContains=None, keyStartWith=None, listKeys=False):
+    def getRtpStreamStats(self, keyIs=None, keyContains=None, keyStartsWith=None, listKeys=False):
         pass
 
     @abstractmethod
@@ -3302,9 +3302,12 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats = copiedStatsDict
 
     # Thread-safe method for accessing all RtpStream stats
-    def getRtpStreamStats(self, keyIs=None, keyContains=None, keyStartWith=None, listKeys=False):
+    def getRtpStreamStats(self, keyIs=None, keyContains=None, keyStartsWith=None, listKeys=False):
         stats = self.__stats.copy()
-        return stats
+        # Get a filtered version of the stats dict
+        filteredStats = Utils.filterDictByKey(stats, keyIs=keyIs, keyContains=keyContains, keyStartsWith=keyStartsWith,
+                                              listKeys=listKeys)
+        return filteredStats
 
     def getRtpStreamStatsByFilter(self, keyFilter):
         # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
@@ -3502,11 +3505,13 @@ class RtpStreamResults(RtpReceiveCommon):
                stats["stream_srcPort"], self.__stats["stream_friendly_name"]
 
     # Thread-safe method for accessing all RtpStream stats
-    def getRtpStreamStats(self):
+    def getRtpStreamStats(self, keyIs=None, keyContains=None, keyStartsWith=None, listKeys=False):
         self.__accessRtpStreamStatsMutex.acquire()
         stats = self.__stats.copy()
         self.__accessRtpStreamStatsMutex.release()
-        return stats
+        # Get a filtered version of the stats dict
+        filteredStats = Utils.filterDictByKey(stats, keyIs=keyIs, keyContains=keyContains, keyStartsWith=keyStartsWith, listKeys=listKeys)
+        return filteredStats
 
     def getRtpStreamStatsByFilter(self, keyFilter):
         # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
@@ -3656,7 +3661,9 @@ class RtpGenerator(RtpCommon):
             # Therefore we can't assume that the methods will be available
             try:
                 # Attempt to add a /stats endpoint
-                getMappings["/stats"] = {"targetMethod": rtpGen.relatedRtpStreamResults.getRtpStreamStats, "args": [], "optKeys": []}
+                getMappings["/stats"] = {"targetMethod": rtpGen.relatedRtpStreamResults.getRtpStreamStats,
+                                         "args": [],
+                                         "optKeys": ["keyIs", "keyContains", "keyStartsWith", "listKeys"]}
             except Exception as e:
                 # Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() {e}")
                 pass
@@ -3692,6 +3699,31 @@ class RtpGenerator(RtpCommon):
             rtpGen = self.server.parentObject
             deleteMappings = {}
             return deleteMappings
+
+        # Shortcut method to take raw POST or GET Query data (*as unicode*, of the form key1=value1&key2=value2...
+        # (TIP use .decode('UTF-8') to convert an ASCII string to unicode)
+        # It will then return two items a list of args and a dict of kwargs that can be passed straight to a function/method.
+        # Required args are contained within a list, and optional args as a dict
+        # The parameters should be passed to the target method as follows reVal = myFunc(*requiredArgs, **optionalArgs)
+        # The '*' and '**' will expand out the requiredArgsList and optionalArgsDict respectively
+        # Additionally, it will check to see that all the keys in rawKeysValuesString have been used.
+        # If not, it will raise an Exception
+        def convertKeysToMethodArgs(self, rawKeysValuesString, requiredArgKeysList, optionalArgKeysList):
+            # parse the rawKeysValuesString and convert to a dict
+            post_data_dict = parse_qs(rawKeysValuesString)
+            # 'Pythonize' post_data_dict to convert it from all strings to ints/bools etc
+            # and reduce values of single length lists to a single value
+            parsedPostDataDict = Utils.mapURLQueryToFnArgs(post_data_dict)
+            # Create list of mandatory args. *This will fail* if not al the keys are present in post_data_dict
+            requiredArgsList = [parsedPostDataDict[key] for key in requiredArgKeysList]
+            # Now create a sub-dict of the just the optional keys
+            optionalArgsDict = Utils.extractWantedKeysFromDict(parsedPostDataDict, optionalArgKeysList)
+            # Finally remove the 'expected' keys from parsedPostDataDict to see if any unexpected keys are left over
+            Utils.removeMultipleDictKeys(parsedPostDataDict, requiredArgKeysList + optionalArgKeysList)
+            if len(parsedPostDataDict) > 0:
+                raise Exception(f"convertKeysToMethodArgs() unexpected keys provided {parsedPostDataDict}")
+            return requiredArgsList, optionalArgsDict
+
 
         # Http server methods
         def do_GET(self):
@@ -3768,36 +3800,30 @@ class RtpGenerator(RtpCommon):
                     # Extract the target function
                     fn = postMappings[self.path]["targetMethod"]
                     # Extract the mandatory args for the mapped-to method
-                    requiredArgKeys = postMappings[self.path]["args"]
+                    requiredArgKeys = postMappings[self.path]["reqKeys"]
                     # Extract optional args (kwargs) for the mapped-to method
-                    optionalArgKeys = postMappings[self.path]["kwargs"]
+                    optionalArgKeys = postMappings[self.path]["optKeys"]
 
                     # Get POST data
                     # Gets the size of data
                     content_length = int(self.headers['Content-Length'])
-                    # Gets the data itself as a string ?foo=bar&x=y etc.. NOTE: Arrives as UTF-8, so have to decode back to unicode
+                    # Get the data itself as a string ?foo=bar&x=y etc.. NOTE: Arrives as UTF-8, so have to decode back to unicode
                     post_data_raw = self.rfile.read(content_length).decode('UTF-8')
-                    # parse the post data and convert to a dict (note this is UTF-8 (ASCII) encoded
-                    post_data_dict = parse_qs(post_data_raw)
-                    Utils.Message.addMessage(f"DBUG:RtpGen do_POST raw:{post_data_raw}, post_data_dict {post_data_dict}")
-                    # 'Pythonize' post_data_dict to convert it from all strings to ints/bools etc
-                    # and reduce values of single length lists to a single value
-                    parsedPostDataDict = Utils.mapURLQueryToFnArgs(post_data_dict)
-                    Utils.Message.addMessage(f"DBUG:RtpGen do_POST modified post_data_dict {parsedPostDataDict}")
-                    # Create list of mandatory args. This will fail if not al the keys are present in post_data_dict
-                    requiredArgs = [parsedPostDataDict[key] for key in requiredArgKeys]
-                    # Now create a sub-dict of the just the optional keys
-                    optionalArgs = Utils.extractWantedKeysFromDict(parsedPostDataDict, optionalArgKeys)
-                    # Now remove the 'expected' keys from parsedPostDataDict to see if any unexpected keys are left over
-                    Utils.removeMultipleDictKeys(parsedPostDataDict, requiredArgKeys + optionalArgKeys)
-                    if len(parsedPostDataDict) > 0:
-                        raise Exception(f"do_GET unexpected keys provided {parsedPostDataDict}")
-                    # Finally execute the mapped method, passing to it the required args and optional kwargs
-                    Utils.Message.addMessage(f"reqd:{requiredArgs}, opt:{optionalArgs}, unxpd:{parsedPostDataDict}")
+                    # Examine the supplied keys, divide them up between requiredArgKeys, optionalArgKeys and then
+                    # generate a list and a dict that can be expanded using * and ** to be used as method parameters
+                    requiredArgs, optionalArgs = self.convertKeysToMethodArgs(post_data_raw, requiredArgKeys, optionalArgKeys)
+                    # # Now remove the 'expected' keys from parsedPostDataDict to see if any unexpected keys are left over
+                    # Utils.removeMultipleDictKeys(parsedPostDataDict, requiredArgKeys + optionalArgKeys)
+                    # if len(parsedPostDataDict) > 0:
+                    #     raise Exception(f"do_GET unexpected keys provided {parsedPostDataDict}")
+                    # # Finally execute the mapped method, passing to it the required args and optional kwargs
+                    # Utils.Message.addMessage(f"reqd:{requiredArgs}, opt:{optionalArgs}, unxpd:{parsedPostDataDict}")
                     retVal = fn(*requiredArgs, **optionalArgs)
-                response = Utils.formatHttpResponse(f"RtpGenerator do_POST:{syncSourceID} {self.path}, retVal:{retVal}")
-                # Set headers
-                self._set_response()
+                    response = Utils.formatHttpResponse(f"RtpGenerator do_POST:{syncSourceID} {self.path}, retVal:{retVal}")
+                    # Set headers
+                    self._set_response()
+                else:
+                    raise Exception(f"Unrecognised path {self.path}")
                 # Write the response back to the client
                 self.wfile.write(response)
 
