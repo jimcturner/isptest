@@ -3693,9 +3693,10 @@ class RtpGenerator(RtpCommon):
             rtpGen = self.server.parentObject
             # Dict to map incoming URL to an RtpGenerator method (including mandatory args and optional kwargs)
             postMethods = {
-                "/label": {"method": rtpGen.setFriendlyName, "args": ["name"], "kwargs": {}}
+                "/label": {"method": rtpGen.setFriendlyName, "args": ["name"], "kwargs": []}
             }
             syncSourceID = None
+            retVal = None # Captures the return value of the mapped method (if there is one)
             try:
                 syncSourceID = rtpGen.syncSourceIdentifier
                 # Does the URL match any of those in getMethods?
@@ -3703,9 +3704,9 @@ class RtpGenerator(RtpCommon):
                     # Extract the target function
                     fn = postMethods[self.path]["method"]
                     # Extract the mandatory args for the mapped-to method
-                    requiredArgs = postMethods[self.path]["args"]
+                    requiredArgKeys = postMethods[self.path]["args"]
                     # Extract optional args (kwargs) for the mapped-to method
-                    optionalArgs = postMethods[self.path]["kwargs"]
+                    optionalArgKeys = postMethods[self.path]["kwargs"]
 
                     # Get POST data
                     # Gets the size of data
@@ -3715,8 +3716,22 @@ class RtpGenerator(RtpCommon):
                     # parse the post data and convert to a dict (note this is UTF-8 (ASCII) encoded
                     post_data_dict = parse_qs(post_data_raw)
                     Utils.Message.addMessage(f"DBUG:RtpGen do_POST raw:{post_data_raw}, post_data_dict {post_data_dict}")
-
-                response = Utils.formatHttpResponse(f"RtpGenerator do_POST:{syncSourceID} {self.path}")
+                    # 'Pythonize' post_data_dict to convert it from all strings to ints/bools etc
+                    # and reduce values of single length lists to a single value
+                    parsedPostDataDict = Utils.mapURLQueryToFnArgs(post_data_dict)
+                    Utils.Message.addMessage(f"DBUG:RtpGen do_POST modified post_data_dict {parsedPostDataDict}")
+                    # Create list of mandatory args. This will fail if not al the keys are present in post_data_dict
+                    requiredArgs = [parsedPostDataDict[key] for key in requiredArgKeys]
+                    # Now create a sub-dict of the just the optional keys
+                    optionalArgs = Utils.extractWantedKeysFromDict(parsedPostDataDict, optionalArgKeys)
+                    # Now remove the 'expected' keys from parsedPostDataDict to see if any unexpected keys are left over
+                    Utils.removeMultipleDictKeys(parsedPostDataDict, requiredArgKeys + optionalArgKeys)
+                    if len(parsedPostDataDict) > 0:
+                        raise Exception(f"do_GET unexpected keys provided {parsedPostDataDict}")
+                    # Finally execute the mapped method, passing to it the required args and optional kwargs
+                    Utils.Message.addMessage(f"reqd:{requiredArgs}, opt:{optionalArgs}, unxpd:{parsedPostDataDict}")
+                    retVal = fn(*requiredArgs, **optionalArgs)
+                response = Utils.formatHttpResponse(f"RtpGenerator do_POST:{syncSourceID} {self.path}, retVal:{retVal}")
                 # Set headers
                 self._set_response()
                 # Write the response back to the client
