@@ -1716,3 +1716,28 @@ class APIHelper(object):
         except Exception as e:
             raise Exception(f"ERR: APIHelper.removeFromStreamsDirectory() {streamType}/{streamID}, error: {e}")
 
+# Renders a nested dict of dicts as an html table
+# columnTitles is a list of string reprresenting the column titles
+# columnKeys is list of keys to be picked from the nested dict within each key of srcDict
+def createHTMLTable(srcDict, title, columnTitles, columnKeys):
+    tableData = f"<table>"
+    # Create title row
+    tableData += f"<tr><td>{title}</tr></td>"
+    # Create table column headings
+    if len(columnTitles) > 0:
+        tableData += f"<tr><td>{'</td><td>'.join(columnTitles)}</td></tr>"
+    # Extract values from srcDict to create the data rows
+    if len(columnKeys) > 0:
+        # Iterate over srcDict to create the rows
+        for row in srcDict:
+            tableData += f"<tr><td>{row}</td>" # The srcDict key itself should be the first cell data
+            if len(columnKeys) > 0:
+                for key in columnKeys:
+                    if key in srcDict[row]:
+                        cellData = srcDict[row][key]
+                    else:
+                        cellData = f"key {key} missing"
+                    tableData += f'<td>{cellData}</td>'
+            tableData += f"</tr>"
+    tableData += f"</table>"
+    return tableData

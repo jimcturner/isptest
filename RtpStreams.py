@@ -3790,20 +3790,34 @@ class RtpGenerator(RtpCommon):
             # Get GET endpoints
             getMappings = self.apiGETEndpoints()
 
-            # Create HTML table
-            def createHTMLTable(title, col_1_title, col_2_title, srcDict, keyCol2, col_3_title=None, keyCol3=None):
-                tableData = f"<table>" \
-                          f"<tr><td>{title}</td></tr>" \
-                          f"<tr><td>{col_1_title}</td><td>{col_2_title}</td></tr>"
-
-                for key in srcDict:
-                    tableData += f'<tr><td>{key}</td><td>{srcDict[key][keyCol2]}</td></tr>'
-                tableData += f"</table>"
-                return tableData
+            # # Method to take a nested dict of dicts and render an html table
+            # def createHTMLTable(srcDict, title, columnTitles, columnKeys):
+            #     tableData = f"<table>"
+            #     # Create title row
+            #     tableData += f"<tr><td>{title}</tr></td>"
+            #     # Create table column headings
+            #     if len(columnTitles) > 0:
+            #         tableData += f"<tr><td>{'</td><td>'.join(columnTitles)}</td></tr>"
+            #     # Extract values from srcDict to create the data rows
+            #     if len(columnKeys) > 0:
+            #         # Iterate over srcDict to create the rows
+            #         for row in srcDict:
+            #             tableData += f"<tr><td>{row}</td>" # The srcDict key itself should be the first cell data
+            #             if len(columnKeys) > 0:
+            #                 for key in columnKeys:
+            #                     if key in srcDict[row]:
+            #                         cellData = srcDict[row][key]
+            #                     else:
+            #                         cellData = f"key {key} missing"
+            #                     tableData += f'<td>{cellData}</td>'
+            #             tableData += f"</tr>"
+            #     tableData += f"</table>"
+            #     return tableData
 
             helpText = f"Available RtpGenerator API endpoints:<br>" \
-                       f"{createHTMLTable('GET', 'Path', 'Optional keys', self.apiGETEndpoints(), 'optKeys')}<br><br>" \
-                       f"{createHTMLTable('POST', 'Path', 'Optional keys', self.apiPOSTEndpoints(), 'optKeys')}<br><br>"
+                       f"{Utils.createHTMLTable(self.apiGETEndpoints(), 'GET', ['Path', 'Optional keys'], ['optKeys'])}<br><br>" \
+                       # f"{createHTMLTable2('POST', 'Path', 'Optional keys', self.apiPOSTEndpoints(), 'optKeys')}<br><br>"
+
             return helpText
 
         # Http server methods
