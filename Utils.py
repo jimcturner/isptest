@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # Defines useful non-core objects for use by isptest
 import http.client
+import json
 import os
 import pickle
 import random
@@ -15,12 +16,13 @@ import threading
 import platform
 # psutil seems to be broken on Linux
 # import psutil
+from abc import abstractmethod
 from collections import deque
 from functools import reduce
-from http.server import HTTPServer, ThreadingHTTPServer
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import PurePosixPath
 from queue import SimpleQueue
-from urllib.parse import urlparse, unquote, urlencode
+from urllib.parse import urlparse, unquote, urlencode, parse_qs
 
 from Registry import Registry
 from ipwhois import IPWhois, exceptions
@@ -1741,3 +1743,264 @@ def createHTMLTable(srcDict, title, columnTitles, columnKeys):
             tableData += f"</tr>"
     tableData += f"</table>"
     return tableData
+
+# Define a custom HTTPRequestHandler class to handle HTTP GET, POST requests
+class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
+    # For JSON, use contentType='application/json'
+    # For plain text use contentType='text/plain'
+    def _set_response(self, responseCode=200, contentType='text/html'):
+        self.send_response(responseCode)
+        self.send_header('Content-type', contentType)
+        self.end_headers()
+
+    # Method to retrieve list of Events and return them as a list that is **already json encoded**
+    @abstractmethod
+    def getEventsListAsJson(self, **kwargs):
+        pass
+
+    @abstractmethod
+    # Returns a list of Event summaries
+    def getEventsSummaries(self, **kwargs):
+        pass
+
+    @abstractmethod
+    # Acts a repository for the GET endpoints provided by the HTTP API
+    def apiGETEndpoints(self):
+        # Access parent Rtp Stream object methods via server attribute
+        parent = self.server.parentObject
+        # A dictionary to map incoming GET URLs to an existing RtpGenerator method
+        # The "args" key contains a lost with the preset values that will be passed to targetMethod() when
+        # "optKeys" is a list of keys that  targetMethod will accept as a kwarg
+        # that particular URL is requested
+        # "contentType" is an additional key that specifies the type of data returned by targetMethod (if known)
+        # The default behaviour of do_GET() will be to try and encode all targetMethod() return values as json
+        # Some methods (eg getEventsListAsJson()) already return json, so there is no need to re-encode it
+        # Additionally, the /report generation methods return plaintext so the "contentType" key is a means of
+        # signalling to do_GET() how to handle the returned values
+        getMappings = {
+            "/url": {"targetMethod": None, "args": [], "optKeys": [], "contentType": 'application/json'}
+        }
+        return getMappings
+
+    @abstractmethod
+    # Acts a repository for the POST endpoints provided by the  HTTP API
+    def apiPOSTEndpoints(self):
+        # Access parent Rtp Stream object methods via server attribute
+        parent = self.server.parentObject
+        # A dictionary to map incoming POST URLs to an existing RtpGenerator method
+        # The keys/values within the POST data will be mapped to the keys listed in "args"[] and "kwargs"[]
+        # "reqKeys"[] lists the mandatory parameters expected by targetMethod()
+        # "optKeys"[] lists the optional key/value parameters that targetMethod() will accept
+        # {"url path":
+        #   {
+        #       "targetMethod":target method/function,
+        #       "reqKeys":[required arg1, required arg2..],    <---*only* the values are passed to the mapped function
+        #       "optKeys":[optional arg1, arg2..]    <------the key/value pairs are passed to the function
+        #   }
+        postMappings = {
+            "/url": {"targetMethod": None, "reqKeys": [], "optKeys": []}
+        }
+        return postMappings
+
+    @abstractmethod
+    # Acts a repository for the DELETE endpoints provided by the HTTP API
+    def apiDELETEEndpoints(self):
+        # Access parent Rtp Stream object methods via server attribute
+        parent = self.server.parentObject
+        deleteMappings = {"/delete": {"targetMethod": None, "reqKeys": [], "optKeys": []}}
+        return deleteMappings
+
+    # Shortcut method to take raw POST or GET Query data (*as unicode*, of the form key1=value1&key2=value2...
+    # (TIP use .decode('UTF-8') to convert an ASCII string to unicode)
+    # It will then return two items a list of args and a dict of kwargs that can be passed straight to a function/method.
+    # Required args are contained within a list, and optional args as a dict
+    # The parameters should be passed to the target method as follows reVal = myFunc(*requiredArgs, **optionalArgs)
+    # The '*' and '**' will expand out the requiredArgsList and optionalArgsDict respectively
+    # Additionally, it will check to see that all the keys in rawKeysValuesString have been used.
+    # If not, it will raise an Exception
+    def convertKeysToMethodArgs(self, rawKeysValuesString, requiredArgKeysList, optionalArgKeysList):
+        # parse the rawKeysValuesString and convert to a dict
+        post_data_dict = parse_qs(rawKeysValuesString)
+        # 'Pythonize' post_data_dict to convert it from all strings to ints/bools etc
+        # and reduce values of single length lists to a single value
+        parsedPostDataDict = mapURLQueryToFnArgs(post_data_dict)
+        # Create list of mandatory args. *This will fail* if not al the keys are present in post_data_dict
+        requiredArgsList = [parsedPostDataDict[key] for key in requiredArgKeysList]
+        # Now create a sub-dict of the just the optional keys
+        optionalArgsDict = extractWantedKeysFromDict(parsedPostDataDict, optionalArgKeysList)
+        # Finally remove the 'expected' keys from parsedPostDataDict to see if any unexpected keys are left over
+        removeMultipleDictKeys(parsedPostDataDict, requiredArgKeysList + optionalArgKeysList)
+        if len(parsedPostDataDict) > 0:
+            raise Exception(f"convertKeysToMethodArgs() unexpected keys provided {parsedPostDataDict}")
+        return requiredArgsList, optionalArgsDict
+
+    # Shows the available endpoints
+    def listEndpoints(self):
+        # Get HTML rendered tables of all the types of endpoints
+        getEndpoints = createHTMLTable(self.apiGETEndpoints(), 'GET', ['Path', 'Optional keys'], ['optKeys'])
+        postEndpoints = createHTMLTable(self.apiPOSTEndpoints(), 'POST',
+                                              ['Path', 'Required keys', 'Optional keys'], ['reqKeys', 'optKeys'])
+        deleteEndpoints = createHTMLTable(self.apiDELETEEndpoints(), 'DELETE',
+                                                ['Path', 'Required keys', 'Optional keys'], ['reqKeys', 'optKeys'])
+
+        # Create an output string
+        helpText = f"Available  API endpoints:<br>" \
+                   f"{getEndpoints}<br><br>" \
+                   f"{postEndpoints}<br><br>" \
+                   f"{deleteEndpoints}<br><br>"
+
+        return helpText
+
+
+    @abstractmethod
+    # Http server methods
+    def do_GET(self):
+        # Access parent Rtp Stream object via server attribute
+        parent = self.server.parentObject
+        # Get the dict of url/method mappings
+        getMappings = self.apiGETEndpoints()
+        syncSourceID = None
+        try:
+            syncSourceID = parent.syncSourceIdentifier
+            # Does the URL match any of those key entries in in getMappings{}?
+            # Create a version of the URL that doesn't include any ?key=value suffixes
+            # pathMinusQuery = str(self.path).split('?')[0]
+            # Split of the URL and query (?key=value suffixes)
+            urlDecoded = urlparse(self.path)
+            path = urlDecoded.path
+            query = urlDecoded.query
+            # Utils.Message.addMessage(f"path:{path}, Query:{query}")
+
+            # Special case. If no path specified, return an html page with a list of api endpoints
+            if path == "/":
+                response = formatHttpResponse(f"<html>{parent.__class__.__name__} {syncSourceID}<br>{self.listEndpoints()}</html>")
+                # Create the headers
+                self._set_response()
+
+            # Otherwise, test the path to see if it is recognised
+            elif path in getMappings:
+                # Extract the method to be called
+                fn = getMappings[path]["targetMethod"]
+                # Extract the 'preset' method arguments
+                args = getMappings[path]["args"]
+                # Extract the 'optional' method arguments list (i.e the kwarg keys that targetMethod() would accept)
+                optionalArgKeys = getMappings[path]["optKeys"]
+                # Test to see if a 'contentType' is specified for this method. If not, set as 'None'
+                if "contentType" in getMappings[path]:
+                    contentType = getMappings[path]["contentType"]
+                else:
+                    # Otherwise set a 'default/unknown' contentType
+                    contentType = None
+
+                # Parse query to create a list of optional parameters to be passed to targetMethod()
+                # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
+                notUsed, optionalArgs = self.convertKeysToMethodArgs(query, [], optionalArgKeys)
+
+                Message.addMessage(f"GET fn:{fn}, args:{args}, opt:{optionalArgs}")
+                # Execute the specified method, expanding out the parameter list
+                retVal = fn(*args, **optionalArgs)
+
+                # Test the contentType expected to be returned by fn() and set headers/encode as JSON accordingly
+                if contentType == 'text/plain':
+                    response =retVal.encode('utf-8')
+                    # Create the headers - We're sending plain text, not html
+                    self._set_response(contentType='text/plain')
+                elif contentType == 'application/json':
+                    # Return value of fn() already encoded as JSON, pass it on as-is
+                    response = retVal
+                    # Set the headers
+                    self._set_response(contentType='application/json')
+                else:
+                    # We don't know the format, so encode as JSON as a default
+                    response = (json.dumps(retVal, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                    # Set the headers
+                    self._set_response(contentType='application/json')
+
+            else:
+                # path not recognised
+                raise Exception(f"Path not recognised {self.path}")
+
+            # Write the response back to the client
+            self.wfile.write(response)
+        except Exception as e:
+            self.send_error(404,f"{parent.__class__.__name__} HttpRequestHandler.do_GET() " + str(syncSourceID) + ", " + str(e))
+
+    @abstractmethod
+    def do_POST(self):
+        # Access parent Rtp Stream object via server attribute
+        parent = self.server.parentObject
+        # Get the dict of url/method mappings
+        postMappings = self.apiPOSTEndpoints()
+        syncSourceID = None
+        retVal = None  # Captures the return value of the mapped method (if there is one)
+        try:
+            syncSourceID = parent.syncSourceIdentifier
+            # Split off the URL and query (?key=value suffixes)
+            urlDecoded = urlparse(self.path)
+            path = urlDecoded.path
+            query = urlDecoded.query
+            # Does the URL match any of those in postMappings{}?
+            if path in postMappings:
+                # Extract the target function
+                fn = postMappings[path]["targetMethod"]
+                # Extract the mandatory args for the mapped-to method
+                requiredArgKeys = postMappings[path]["reqKeys"]
+                # Extract optional args (kwargs) for the mapped-to method
+                optionalArgKeys = postMappings[path]["optKeys"]
+
+                # Get POST data
+                # Gets the size of data
+                content_length = int(self.headers['Content-Length'])
+                # Get the data itself as a string ?foo=bar&x=y etc.. NOTE: Arrives as UTF-8, so have to decode back to unicode
+                post_data_raw = self.rfile.read(content_length).decode('UTF-8')
+                # Examine the supplied keys, divide them up between requiredArgKeys, optionalArgKeys and then
+                # generate a list and a dict that can be expanded using * and ** to be used as method parameters
+                # Will raise an Exception if unexpected keys are present
+                requiredArgs, optionalArgs = self.convertKeysToMethodArgs(post_data_raw, requiredArgKeys,
+                                                                          optionalArgKeys)
+
+                retVal = fn(*requiredArgs, **optionalArgs)
+                response = formatHttpResponse(f"{type(parent)} do_POST:{syncSourceID} {self.path}, retVal:{retVal}")
+                # Set headers
+                self._set_response()
+            else:
+                raise Exception(f"Unrecognised path {self.path}")
+            # Write the response back to the client
+            self.wfile.write(response)
+
+        except Exception as e:
+            self.send_error(404, f"{parent.__class__.__name__}.HttpRequestHandler.do_POST() " + str(syncSourceID) + ", " + str(e))
+
+    @abstractmethod
+    def do_DELETE(self):
+        # Access parent Rtp Stream object via server attribute
+        parent = self.server.parentObject
+        # Get the dict of url/method mappings
+        deleteMappings = self.apiDELETEEndpoints()
+        syncSourceID = None
+        retVal = None  # Captures the return value of the mapped method (if there is one)
+        try:
+            syncSourceID = parent.syncSourceIdentifier
+            # Split off the URL and query (?key=value suffixes)
+            urlDecoded = urlparse(self.path)
+            path = urlDecoded.path
+            query = urlDecoded.query
+
+            # Does the URL match any of those in postMappings{}?
+            if path in deleteMappings:
+                # Extract the target function
+                fn = deleteMappings[path]["targetMethod"]
+                # Execute the target method
+                retVal = fn()
+                response = formatHttpResponse(
+                    f"{type(parent)} do_DELETE:{syncSourceID} {self.path}, retVal:{retVal}")
+                # Set headers
+                self._set_response()
+            else:
+                raise Exception(f"Unrecognised path {self.path}")
+
+            # Write the response back to the client
+            self.wfile.write(response)
+
+        except Exception as e:
+            self.send_error(404, f"{parent.__class__.__name__}.HttpRequestHandler.do_DELETE() {syncSourceID}, {e}")

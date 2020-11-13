@@ -748,6 +748,8 @@ class RtpCommon(object):
         # Required in order to be able to access the  HTTPServer.shutdown() method
         self.httpd = None
 
+        self.syncSourceIdentifier = None
+
     # Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
     # Returns None on failure, otherwise returns an int
     def createTracerouteChecksum(self, hopsList):
@@ -1395,6 +1397,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats = {}
         # Assign to instance variable
         self.__stats["stream_syncSource"] = syncSource
+        self.syncSourceIdentifier = syncSource # Added, to retain consistency with class RtpGenerator
         self.__stats["stream_srcAddress"] = srcAddress
         self.__srcAddress = srcAddress
         self.__stats["stream_srcPort"] = srcPort
@@ -1718,364 +1721,416 @@ class RtpReceiveStream(RtpReceiveCommon):
         return self.liveTracerouteHopsListLastUpdated, hl
 
     # Define a custom BaseHTTPRequestHandler class to handle HTTP GET, POST requests
-    class HTTPRequestHandler(BaseHTTPRequestHandler):
-        # For JSON, use contentType='application/json'
-        def _set_response(self, responseCode=200, contentType='text/html'):
-            self.send_response(responseCode)
-            self.send_header('Content-type', contentType)
-            self.end_headers()
+    # class HTTPRequestHandler(BaseHTTPRequestHandler):
+    #     # For JSON, use contentType='application/json'
+    #     def _set_response(self, responseCode=200, contentType='text/html'):
+    #         self.send_response(responseCode)
+    #         self.send_header('Content-type', contentType)
+    #         self.end_headers()
+    #
+    #     # Http server methods
+    #     def do_GET(self):
+    #         # Access parent Rtp Stream object via server attribute
+    #         syncSourceID = None
+    #         stats = None
+    #         rtpStream = self.server.parentObject
+    #         try:
+    #             stats = rtpStream.getRtpStreamStats()
+    #             syncSourceID = stats["stream_syncSource"]
+    #
+    #         except Exception as e:
+    #             Utils.Message.addMessage("ERR:RtpReceiveStream.HttpRequestHandler.do_GET() getRtpStreamStats()" + str(e))
+    #
+    #         Utils.Message.addMessage("DBUG:RtpReceiveStream.HttpRequestHandler.do_GET(): " + str(syncSourceID) + ", " + "Path: " + str(self.path))
+    #         # Default response if no path specified in the URL
+    #         response = Utils.formatHttpResponse("RtpReceiveStream " + str(syncSourceID))
+    #         try:
+    #             # Validate self.path to see what was requested
+    #             if self.path =='/':
+    #                 # path = '/'
+    #                 # Create the headers
+    #                 self._set_response()
+    #             elif str(self.path).startswith('/stats'):
+    #                 try:
+    #                     filteredStats = {} # Dict to hold the requested stats keys
+    #                     statsFilterKeys = ["keyIs", "keyContains", "keyStartsWith", "listKeys"]
+    #                     if str(self.path).startswith('/stats/help'):
+    #                         helpText = f"GET /stats<br>" \
+    #                                    f"Additional query args:-<br>" \
+    #                                    f"{statsFilterKeys}"
+    #                         # Send back a help page showing the available keys
+    #                         response = Utils.formatHttpResponse(helpText)
+    #                         # set the headers
+    #                         self._set_response()
+    #                     else:
+    #                         # Extract any additional query components from the URL (if present)
+    #                         query_components = parse_qs(urlparse(self.path).query)
+    #                         statsKeyFilterArgs = {}  # A dict of args to be sent to Utils.filterDictByKey()
+    #                         if len(query_components) > 0:
+    #                             # If args are present, convert the string values of the HTTP query back to Python data types
+    #                             parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
+    #                             # and create a new dictionary containing just them (if present)
+    #                             statsKeyFilterArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, statsFilterKeys)
+    #                             # Prune parsedArgsDict of the 'already used so far' keys
+    #                             Utils.removeMultipleDictKeys(parsedArgsDict, statsFilterKeys)
+    #                             if len(parsedArgsDict) > 0:
+    #                                 # If there are any unexpected args (ie keys left over), raise an Exception
+    #                                 raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
+    #                             # Get a filtered version of the stats dict
+    #                             filteredStats = Utils.filterDictByKey(stats, **statsKeyFilterArgs)
+    #                         else:
+    #                             # No key filtering specified, return the stats dict as-is
+    #                             filteredStats = stats
+    #                         response = (json.dumps(filteredStats, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+    #                         # Create the headers
+    #                         self._set_response(contentType='application/json')
+    #                 except Exception as e:
+    #                     raise Exception(f"GET /stats {e}")
+    #
+    #             elif str(self.path).startswith('/report'):
+    #                 # GET /report
+    #                 # Create list to contain the additinal keys we can use to to tailor the report
+    #                 generateReportKeys = ["eventFilterList"]
+    #                 tracerouteReportKeys = ["historyLength"]
+    #                 helpText = \
+    #                     f"\n/report/help will return a list of possible arguments<br>" \
+    #                     f"/report/summary will return a text report summarising the stream report"\
+    #                     f"/report/summary?eventFilterList='string' will generate a report with a filtered list of events<br>"\
+    #                     f"eg: /report?eventFilterList=StreamLost&eventFilterList=Glitch would return a "\
+    #                     f"report containing StreamLost and Glitch Events<br>" \
+    #                     f"stream summary report modifiers are {generateReportKeys}<br>" \
+    #                     f"/report/traceroute will return a text report showing the history of traceroute changes.<br>" \
+    #                     f"traceroute modifiers are: {tracerouteReportKeys}"
+    #
+    #                 try:
+    #                     if str(self.path).startswith('/report/help'):
+    #                         # Send back a help page showing the available keys
+    #                         response = Utils.formatHttpResponse(helpText)
+    #                         # set the headers
+    #                         self._set_response()
+    #
+    #                     elif str(self.path).startswith('/report/summary'):
+    #                         # Extract any additional query components from the URL (if present)
+    #                         query_components = parse_qs(urlparse(self.path).query)
+    #                         generateReportArgs = {} # A dict of args to be sent to generateReport()
+    #                         if len(query_components) > 0:
+    #                             # If args are present, convert the string values of the HTTP query back to Python data types
+    #                             parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
+    #                             # and create a new dictionary containing just them (if present)
+    #                             generateReportArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, generateReportKeys)
+    #                             # Prune filteredArgsDict of the 'already used so far' keys
+    #                             Utils.removeMultipleDictKeys(parsedArgsDict, generateReportKeys)
+    #                             if len(parsedArgsDict) > 0:
+    #                                 # If there are any unexpected args, raise an Exception
+    #                                 raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
+    #                         # Get the stream report using the selected query args sent in the HTTP
+    #                         response = rtpStream.generateReport(**generateReportArgs).encode('utf-8')
+    #
+    #                         # Create the headers - We're sending plain text, not html
+    #                         self._set_response(contentType='text/plain')
+    #
+    #                     elif str(self.path).startswith('/report/traceroute'):
+    #                         # GET /report/traceroute
+    #                         # returns a text report showing the traceroute history
+    #                         # Extract any additional query components from the URL (if present)
+    #                         query_components = parse_qs(urlparse(self.path).query)
+    #                         tracerouteReportArgs = {} # A dict of args to be sent to generateTracerouteHistoryReport()
+    #                         if len(query_components) > 0:
+    #                             # If args are present, convert the string values of the HTTP query back to Python data types
+    #                             parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
+    #                             # and create a new dictionary containing just them (if present)
+    #                             tracerouteReportArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, tracerouteReportKeys)
+    #                             # Prune filteredArgsDict of the 'already used so far' keys
+    #                             Utils.removeMultipleDictKeys(parsedArgsDict, tracerouteReportKeys)
+    #                             if len(parsedArgsDict) > 0:
+    #                                 # If there are any unexpected args, raise an Exception
+    #                                 raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
+    #                         # Get a traceroute history report, passing in any additional args
+    #                         response = rtpStream.generateTracerouteHistoryReport(**tracerouteReportArgs).encode('utf-8')
+    #                         # Create the headers - We're sending plain text, not html
+    #                         self._set_response(contentType='text/plain')
+    #
+    #                 except Exception as e:
+    #                     raise Exception(f"GET /report (stream {syncSourceID}, {e}")
+    #
+    #             elif self.path == '/debug':
+    #                 response = Utils.formatHttpResponse("Debug info for RtpReceiveStream " + str(syncSourceID))
+    #                 # Create the headers
+    #                 self._set_response()
+    #             # Return a list of events encoded as an array of json objects
+    #             elif str(self.path).startswith('/events/json'):
+    #                 # Path /events/summary/json
+    #                 # Will test for the presence of other args sent with the GET request. This map directly to
+    #                 # existing optional parameters accepted by the getRTPStreamEventList()
+    #                 helpText = "\n/events/json/help will return a list of possible arguments\n" + \
+    #                            "recent=[x] Returns the last [x] events\n" + \
+    #                            "start=[x] specifies the start of the range of event nos requested\n" + \
+    #                            "end=[y] specifies the start of the range of event nos requested\n" + \
+    #                            "filterList[] is a list of names of objects by to filter by (the original implementation\n" + \
+    #                            "of getRTPStreamEventList took a list of Objects. Since we can't pass a Class definition in\n" + \
+    #                            "a URL (only strings) we can search by ClassName instead\n" + \
+    #                            "reverseOrder = [True/False]\n" + \
+    #                            "requestedEventNo = [x] requests a specific event no\n" + \
+    #                            "\n Allowed parameters are:-\n\n"
+    #                 getEventsKeys = ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]
+    #
+    #                 try:
+    #                     if str(self.path).startswith('/events/json/help'):
+    #                         # Send back a help page showing the available keys
+    #                         response = Utils.formatHttpResponse(f"{helpText}{getEventsKeys}")
+    #                         # set the headers
+    #                         self._set_response()
+    #                     else:
+    #                         getEventsArgs = {}  # A dict of kwargs to be passed to getRTPStreamEventList()
+    #                         # Extract any additional query components from the URL (if present)
+    #                         query_components = parse_qs(urlparse(self.path).query)
+    #                         if len(query_components) > 0:
+    #                             # If args are present, convert the string values of the HTTP query back to Python data types
+    #                             Utils.Message.addMessage(f"raw {query_components}")
+    #                             parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
+    #                             # Extract the keys from the URL query that are relevant to the getRTPStreamEventList() method
+    #                             # and create a new dictionary containing just them (if present)
+    #                             getEventsArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, getEventsKeys)
+    #                             Utils.Message.addMessage("getEventsArgs " + str(getEventsArgs))
+    #                             # Prune filteredArgsDict of the 'already used so far' keys
+    #                             Utils.removeMultipleDictKeys(parsedArgsDict, getEventsKeys)
+    #                             if len(parsedArgsDict) > 0:
+    #                             # If there are any unexpected args, raise an Exception
+    #                                 raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
+    #
+    #                         # Get list of events
+    #                         eventsList = rtpStream.getRTPStreamEventList(**getEventsArgs)
+    #                         # Retrieve the event summaries as json
+    #                         eventsListJSON = [event.getJSON() for event in eventsList]
+    #
+    #                         # Create response by concatenating all the json events together
+    #                         concatenatedJSONList = "[" + ",".join(eventsListJSON) + "]"
+    #                         # Convery back to ASCII
+    #                         response = concatenatedJSONList.encode('utf-8')
+    #
+    #                         # self._set_response()
+    #                         # # Attempt to decode the encoded JSON to prove that it's valid
+    #                         # try:
+    #                         #     decodedEventsList = []
+    #                         #     decodedEventsList = json.loads(response)
+    #                         #     if len(decodedEventsList) > 0:
+    #                         #         Utils.Message.addMessage("Events: " + str(len(decodedEventsList)) + ", " + str(decodedEventsList[0]))
+    #                         # except Exception as e:
+    #                         #     Utils.Message.addMessage("ERR: JSON decode err " + str(e))
+    #                         # Create the headers
+    #                         self._set_response(contentType='application/json')
+    #                 except Exception as e:
+    #                     raise Exception(str(self.path) + ", " + str(e))
+    #
+    #             elif str(self.path).startswith('/events/summary'):
+    #                 # Path /events/summary
+    #                 # Will test for the presence of other args sent with the GET request. This map directly to
+    #                 # existing optional parameters accepted by the getRTPStreamEventList() and Event.getSummary()
+    #                 # methods
+    #                 helpText = "\n/events/summary/help will return a list of possible arguments\n" +\
+    #                     "recent=[x] Returns the last [x] events\n" +\
+    #                     "start=[x] specifies the start of the range of event nos requested\n" +\
+    #                     "end=[y] specifies the start of the range of event nos requested\n" +\
+    #                     "filterList[] is a list of names of objects by to filter by (the original implementation\n" +\
+    #                     "of getRTPStreamEventList took a list of Objects. Since we can't pass a Class definition in\n" +\
+    #                     "a URL (only strings) we can search by ClassName instead\n" +\
+    #                     "reverseOrder = [True/False]\n" +\
+    #                     "requestedEventNo = [x] requests a specific event no\n" +\
+    #                     "\n Allowed parameters are:-\n\n"
+    #
+    #                 getEventsKeys = ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]
+    #                 getSummaryKeys = ["includeStreamSyncSourceID", "includeEventNo", "includeType",
+    #                                   "includeFriendlyName"]
+    #                 try:
+    #                     if str(self.path).startswith('/events/summary/help'):
+    #                         # Send back a help page showing the available keys
+    #                         response = Utils.formatHttpResponse(f"{helpText}{getEventsKeys + getSummaryKeys}")
+    #                         # set the headers
+    #                         self._set_response()
+    #                     else:
+    #                         getEventsArgs = {} # A dict of kwargs to be passed to getRTPStreamEventList()
+    #                         getSummaryArgs = {} # A dict of kwargs to be passed to Event.getSummary()
+    #                         # Extract any additional query components from the URL (if present)
+    #                         query_components = parse_qs(urlparse(self.path).query)
+    #                         if len(query_components) > 0:
+    #                             # If args are present, convert the string values of the HTTP query back to Python data types
+    #                             parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
+    #
+    #
+    #                             # Extract the keys from the URL query that are relevant to the getRTPStreamEventList() method
+    #                             # and create a new dictionary containing just them (if present)
+    #                             getEventsArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, getEventsKeys)
+    #                             # Utils.Message.addMessage("getEventsArgs " + str(getEventsArgs))
+    #
+    #                             # Extract the keys from the URL query that are relevant to the Event.getSummary() method
+    #                             # and create a new dictionary containing just them (if present)
+    #                             getSummaryArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, getSummaryKeys)
+    #
+    #                             # Prune filteredArgsDict of the 'already used so far' keys
+    #                             Utils.removeMultipleDictKeys(parsedArgsDict, getEventsKeys + getSummaryKeys)
+    #                             # Utils.Message.addMessage(f"parsedArgsDict after pruning {parsedArgsDict}")
+    #                             if len(parsedArgsDict) > 0:
+    #                                 raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
+    #
+    #                         # Get list of events - passing the args gleaned from the URL to the getRTPStreamEventList method
+    #                         eventsList = rtpStream.getRTPStreamEventList(**getEventsArgs)
+    #
+    #                         # Retrieve the event summaries as text
+    #                         eventsListSummaries = [event.getSummary(**getSummaryArgs) for event in eventsList]
+    #                         # Encode the list of summaries as json
+    #                         response = (json.dumps(eventsListSummaries, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+    #                         # Create the headers
+    #                         self._set_response(contentType='application/json')
+    #                 except Exception as e:
+    #                     raise Exception(str(self.path) + ", " + str(e))
+    #
+    #             elif str(self.path).startswith('/traceroute'):
+    #                 # GET /traceroute Returns the current 'stable' traceroute hops list encoded as a json dict
+    #                 # with the keys {lastUpdated, tracerouteHopsList[[1,2,3,4],[5,6,7,8],...]}
+    #
+    #                 tracerouteHopsList = []
+    #                 # Get the latest stable list of traceroute hops
+    #                 try:
+    #                     lastUpdated, tracerouteHopsList = rtpStream.getTraceRouteHopsList()
+    #
+    #                     # A create a dict containing lastUpdated/hopsList to be returned as json
+    #                     tracerouteHopsListDict = {"lastUpdated":lastUpdated,
+    #                                               "tracerouteHopsList":tracerouteHopsList}
+    #                     # Encode the dict of as json
+    #                     response = (json.dumps(tracerouteHopsListDict, sort_keys=True, indent=4,
+    #                                            default=str) + "\n").encode('utf-8')
+    #                     # Create the headers
+    #                     self._set_response(contentType='application/json')
+    #                 except Exception as e:
+    #                     raise Exception(f"/traceroute {e}")
+    #
+    #             elif self.path == '/remotecontrol':
+    #                 # Will be used to remote control a transmitter
+    #                 response = Utils.formatHttpResponse("remotecontrol ")
+    #                 # Create the headers
+    #                 self._set_response()
+    #             else:
+    #                 # Unknown path requested
+    #                 raise Exception("Path not recognised " + str(self.path))
+    #
+    #             # Write the response back to the client
+    #             self.wfile.write(response)
+    #         except Exception as e:
+    #             self.send_error(404, "RtpReceiveStream.HttpRequestHandler.do_GET() " + str(syncSourceID) + ", " + str(e))
+    #
+    #
+    #     def do_POST(self):
+    #         try:
+    #             rtpStream = self.server.parentObject
+    #             if str(self.path).startswith("/label"):
+    #                 # HTTP POST /label name=xyz
+    #                 # Modifies the friendly name of the stream
+    #                 stats = rtpStream.getRtpStreamStats()
+    #                 syncSourceID = stats["stream_syncSource"]
+    #                 # Get POST data
+    #                 content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
+    #                 post_data_raw = self.rfile.read(
+    #                     content_length)  # <--- Gets the data itself as a string ?foo=bar&x=y etc..
+    #                 post_data_dict = parse_qs(post_data_raw)  # parse the post data and convert to a dict
+    #                 # Is "name" dictionary
+    #                 if b"name" in post_data_dict:
+    #                     newLabel = str(post_data_dict[b"name"][0].decode('UTF-8'))
+    #                     rtpStream.setFriendlyName(newLabel)
+    #                     # Set the headers
+    #                     self._set_response()
+    #                     # Create the response
+    #                     response = Utils.formatHttpResponse(f"Stream {syncSourceID} friendly name changed to {newLabel}")
+    #                     # Write the response
+    #                     self.wfile.write(response)
+    #                 else:
+    #                     # If "name" key not present, raise an Exception
+    #                     raise Exception(f"POST /label {post_data_dict}")
+    #             else:
+    #                 # URL path not recognised
+    #                 raise Exception(f"Can't POST  {self.path}")
+    #
+    #         except Exception as e:
+    #             Utils.Message.addMessage(
+    #                 "ERR:RtpReceiveStream.HttpRequestHandler.do_POST() /label" + str(e))
+    #             self.send_error(404,
+    #                             "ERR:RtpReceiveStream.HttpRequestHandler.do_POST() /label " + ", " + str(e))
+    #
+    #     def do_DELETE(self):
+    #         # Access parent Rtp Stream object via server attribute
+    #         rtpStream = self.server.parentObject
+    #
+    #         try:
+    #             if str(self.path).startswith("/delete"):
+    #                 stats = rtpStream.getRtpStreamStats()
+    #                 syncSourceID = stats["stream_syncSource"]
+    #                 Utils.Message.addMessage(f"DBUG:RtpReceiveStream.HTTPRequestHandler.do_DELETE() {syncSourceID}")
+    #                 # Attempt to kill the parent Rtp Stream object (this should block until the object is dead)
+    #                 rtpStream.killStream(caller=self)
+    #                 # Set the headers
+    #                 self._set_response()
+    #                 response = Utils.formatHttpResponse(f"Stream {syncSourceID} DELETE successful")
+    #                 # Write the response
+    #                 self.wfile.write(response)
+    #             else:
+    #                 # URL path not recognised
+    #                 raise Exception (f"Can't DELETE  {self.path}")
+    #         except Exception as e:
+    #             Utils.Message.addMessage(
+    #                 "ERR:RtpReceiveStream.HttpRequestHandler.do_DELETE() getRtpStreamStats()" + str(e))
+    #             self.send_error(404,
+    #                             "ERR:RtpReceiveStream.HttpRequestHandler.do_DELETE() " + ", " + str(e))
 
-        # Http server methods
-        def do_GET(self):
-            # Access parent Rtp Stream object via server attribute
-            syncSourceID = None
-            stats = None
-            rtpStream = self.server.parentObject
-            try:
-                stats = rtpStream.getRtpStreamStats()
-                syncSourceID = stats["stream_syncSource"]
+    class HTTPRequestHandler(Utils.HTTPRequestHandlerRTP):
+        # Acts a repository for the GET endpoints provided by the HTTP API
+        def apiGETEndpoints(self):
+            # Access parent Rtp Stream object methods via server attribute
+            parent = self.server.parentObject
+            # A dictionary to map incoming GET URLs to an existing RtpGenerator method
+            # The "args" key contains a lost with the preset values that will be passed to targetMethod() when
+            # "optKeys" is a list of keys that  targetMethod will accept as a kwarg
+            # that particular URL is requested
+            # "contentType" is an additional key that specifies the type of data returned by targetMethod (if known)
+            # The default behaviour of do_GET() will be to try and encode all targetMethod() return values as json
+            # Some methods (eg getEventsListAsJson()) already return json, so there is no need to re-encode it
+            # Additionally, the /report generation methods return plaintext so the "contentType" key is a means of
+            # signalling to do_GET() how to handle the returned values
+            getMappings = {
+                "/url": {"targetMethod": None, "args": [], "optKeys": [], "contentType": 'application/json'}
 
-            except Exception as e:
-                Utils.Message.addMessage("ERR:RtpReceiveStream.HttpRequestHandler.do_GET() getRtpStreamStats()" + str(e))
+            }
+            return getMappings
 
-            Utils.Message.addMessage("DBUG:RtpReceiveStream.HttpRequestHandler.do_GET(): " + str(syncSourceID) + ", " + "Path: " + str(self.path))
-            # Default response if no path specified in the URL
-            response = Utils.formatHttpResponse("RtpReceiveStream " + str(syncSourceID))
-            try:
-                # Validate self.path to see what was requested
-                if self.path =='/':
-                    # path = '/'
-                    # Create the headers
-                    self._set_response()
-                elif str(self.path).startswith('/stats'):
-                    try:
-                        filteredStats = {} # Dict to hold the requested stats keys
-                        statsFilterKeys = ["keyIs", "keyContains", "keyStartsWith", "listKeys"]
-                        if str(self.path).startswith('/stats/help'):
-                            helpText = f"GET /stats<br>" \
-                                       f"Additional query args:-<br>" \
-                                       f"{statsFilterKeys}"
-                            # Send back a help page showing the available keys
-                            response = Utils.formatHttpResponse(helpText)
-                            # set the headers
-                            self._set_response()
-                        else:
-                            # Extract any additional query components from the URL (if present)
-                            query_components = parse_qs(urlparse(self.path).query)
-                            statsKeyFilterArgs = {}  # A dict of args to be sent to Utils.filterDictByKey()
-                            if len(query_components) > 0:
-                                # If args are present, convert the string values of the HTTP query back to Python data types
-                                parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
-                                # and create a new dictionary containing just them (if present)
-                                statsKeyFilterArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, statsFilterKeys)
-                                # Prune parsedArgsDict of the 'already used so far' keys
-                                Utils.removeMultipleDictKeys(parsedArgsDict, statsFilterKeys)
-                                if len(parsedArgsDict) > 0:
-                                    # If there are any unexpected args (ie keys left over), raise an Exception
-                                    raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
-                                # Get a filtered version of the stats dict
-                                filteredStats = Utils.filterDictByKey(stats, **statsKeyFilterArgs)
-                            else:
-                                # No key filtering specified, return the stats dict as-is
-                                filteredStats = stats
-                            response = (json.dumps(filteredStats, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
-                            # Create the headers
-                            self._set_response(contentType='application/json')
-                    except Exception as e:
-                        raise Exception(f"GET /stats {e}")
+        # Acts a repository for the POST endpoints provided by the HTTP API
+        def apiPOSTEndpoints(self):
+            # Access parent Rtp Stream object methods via server attribute
+            parent = self.server.parentObject
+            # A dictionary to map incoming POST URLs to an existing RtpGenerator method
+            # The keys/values within the POST data will be mapped to the keys listed in "args"[] and "kwargs"[]
+            # "reqKeys"[] lists the mandatory parameters expected by targetMethod()
+            # "optKeys"[] lists the optional key/value parameters that targetMethod() will accept
+            # {"url path":
+            #   {
+            #       "targetMethod":target method/function,
+            #       "reqKeys":[required arg1, required arg2..],    <---*only* the values are passed to the mapped function
+            #       "optKeys":[optional arg1, arg2..]    <------the key/value pairs are passed to the function
+            #   }
+            postMappings = {
+                "/url": {"targetMethod": None, "reqKeys": [], "optKeys": []}
+            }
+            return postMappings
 
-                elif str(self.path).startswith('/report'):
-                    # GET /report
-                    # Create list to contain the additinal keys we can use to to tailor the report
-                    generateReportKeys = ["eventFilterList"]
-                    tracerouteReportKeys = ["historyLength"]
-                    helpText = \
-                        f"\n/report/help will return a list of possible arguments<br>" \
-                        f"/report/summary will return a text report summarising the stream report"\
-                        f"/report/summary?eventFilterList='string' will generate a report with a filtered list of events<br>"\
-                        f"eg: /report?eventFilterList=StreamLost&eventFilterList=Glitch would return a "\
-                        f"report containing StreamLost and Glitch Events<br>" \
-                        f"stream summary report modifiers are {generateReportKeys}<br>" \
-                        f"/report/traceroute will return a text report showing the history of traceroute changes.<br>" \
-                        f"traceroute modifiers are: {tracerouteReportKeys}"
+        # Acts a repository for the DELETE endpoints provided by the HTTP API
+        def apiDELETEEndpoints(self):
+            # Access parent Rtp Stream object methods via server attribute
+            parent = self.server.parentObject
+            deleteMappings = {"/delete": {"targetMethod": None, "reqKeys": [], "optKeys": []}}
+            return deleteMappings
 
-                    try:
-                        if str(self.path).startswith('/report/help'):
-                            # Send back a help page showing the available keys
-                            response = Utils.formatHttpResponse(helpText)
-                            # set the headers
-                            self._set_response()
+        def getEventsListAsJson(self, **kwargs):
+            return ["eventsAsJson"]
 
-                        elif str(self.path).startswith('/report/summary'):
-                            # Extract any additional query components from the URL (if present)
-                            query_components = parse_qs(urlparse(self.path).query)
-                            generateReportArgs = {} # A dict of args to be sent to generateReport()
-                            if len(query_components) > 0:
-                                # If args are present, convert the string values of the HTTP query back to Python data types
-                                parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
-                                # and create a new dictionary containing just them (if present)
-                                generateReportArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, generateReportKeys)
-                                # Prune filteredArgsDict of the 'already used so far' keys
-                                Utils.removeMultipleDictKeys(parsedArgsDict, generateReportKeys)
-                                if len(parsedArgsDict) > 0:
-                                    # If there are any unexpected args, raise an Exception
-                                    raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
-                            # Get the stream report using the selected query args sent in the HTTP
-                            response = rtpStream.generateReport(**generateReportArgs).encode('utf-8')
-
-                            # Create the headers - We're sending plain text, not html
-                            self._set_response(contentType='text/plain')
-
-                        elif str(self.path).startswith('/report/traceroute'):
-                            # GET /report/traceroute
-                            # returns a text report showing the traceroute history
-                            # Extract any additional query components from the URL (if present)
-                            query_components = parse_qs(urlparse(self.path).query)
-                            tracerouteReportArgs = {} # A dict of args to be sent to generateTracerouteHistoryReport()
-                            if len(query_components) > 0:
-                                # If args are present, convert the string values of the HTTP query back to Python data types
-                                parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
-                                # and create a new dictionary containing just them (if present)
-                                tracerouteReportArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, tracerouteReportKeys)
-                                # Prune filteredArgsDict of the 'already used so far' keys
-                                Utils.removeMultipleDictKeys(parsedArgsDict, tracerouteReportKeys)
-                                if len(parsedArgsDict) > 0:
-                                    # If there are any unexpected args, raise an Exception
-                                    raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
-                            # Get a traceroute history report, passing in any additional args
-                            response = rtpStream.generateTracerouteHistoryReport(**tracerouteReportArgs).encode('utf-8')
-                            # Create the headers - We're sending plain text, not html
-                            self._set_response(contentType='text/plain')
-
-                    except Exception as e:
-                        raise Exception(f"GET /report (stream {syncSourceID}, {e}")
-
-                elif self.path == '/debug':
-                    response = Utils.formatHttpResponse("Debug info for RtpReceiveStream " + str(syncSourceID))
-                    # Create the headers
-                    self._set_response()
-                # Return a list of events encoded as an array of json objects
-                elif str(self.path).startswith('/events/json'):
-                    # Path /events/summary/json
-                    # Will test for the presence of other args sent with the GET request. This map directly to
-                    # existing optional parameters accepted by the getRTPStreamEventList()
-                    helpText = "\n/events/json/help will return a list of possible arguments\n" + \
-                               "recent=[x] Returns the last [x] events\n" + \
-                               "start=[x] specifies the start of the range of event nos requested\n" + \
-                               "end=[y] specifies the start of the range of event nos requested\n" + \
-                               "filterList[] is a list of names of objects by to filter by (the original implementation\n" + \
-                               "of getRTPStreamEventList took a list of Objects. Since we can't pass a Class definition in\n" + \
-                               "a URL (only strings) we can search by ClassName instead\n" + \
-                               "reverseOrder = [True/False]\n" + \
-                               "requestedEventNo = [x] requests a specific event no\n" + \
-                               "\n Allowed parameters are:-\n\n"
-                    getEventsKeys = ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]
-
-                    try:
-                        if str(self.path).startswith('/events/json/help'):
-                            # Send back a help page showing the available keys
-                            response = Utils.formatHttpResponse(f"{helpText}{getEventsKeys}")
-                            # set the headers
-                            self._set_response()
-                        else:
-                            getEventsArgs = {}  # A dict of kwargs to be passed to getRTPStreamEventList()
-                            # Extract any additional query components from the URL (if present)
-                            query_components = parse_qs(urlparse(self.path).query)
-                            if len(query_components) > 0:
-                                # If args are present, convert the string values of the HTTP query back to Python data types
-                                Utils.Message.addMessage(f"raw {query_components}")
-                                parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
-                                # Extract the keys from the URL query that are relevant to the getRTPStreamEventList() method
-                                # and create a new dictionary containing just them (if present)
-                                getEventsArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, getEventsKeys)
-                                Utils.Message.addMessage("getEventsArgs " + str(getEventsArgs))
-                                # Prune filteredArgsDict of the 'already used so far' keys
-                                Utils.removeMultipleDictKeys(parsedArgsDict, getEventsKeys)
-                                if len(parsedArgsDict) > 0:
-                                # If there are any unexpected args, raise an Exception
-                                    raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
-
-                            # Get list of events
-                            eventsList = rtpStream.getRTPStreamEventList(**getEventsArgs)
-                            # Retrieve the event summaries as json
-                            eventsListJSON = [event.getJSON() for event in eventsList]
-
-                            # Create response by concatenating all the json events together
-                            concatenatedJSONList = "[" + ",".join(eventsListJSON) + "]"
-                            # Convery back to ASCII
-                            response = concatenatedJSONList.encode('utf-8')
-
-                            # self._set_response()
-                            # # Attempt to decode the encoded JSON to prove that it's valid
-                            # try:
-                            #     decodedEventsList = []
-                            #     decodedEventsList = json.loads(response)
-                            #     if len(decodedEventsList) > 0:
-                            #         Utils.Message.addMessage("Events: " + str(len(decodedEventsList)) + ", " + str(decodedEventsList[0]))
-                            # except Exception as e:
-                            #     Utils.Message.addMessage("ERR: JSON decode err " + str(e))
-                            # Create the headers
-                            self._set_response(contentType='application/json')
-                    except Exception as e:
-                        raise Exception(str(self.path) + ", " + str(e))
-
-                elif str(self.path).startswith('/events/summary'):
-                    # Path /events/summary
-                    # Will test for the presence of other args sent with the GET request. This map directly to
-                    # existing optional parameters accepted by the getRTPStreamEventList() and Event.getSummary()
-                    # methods
-                    helpText = "\n/events/summary/help will return a list of possible arguments\n" +\
-                        "recent=[x] Returns the last [x] events\n" +\
-                        "start=[x] specifies the start of the range of event nos requested\n" +\
-                        "end=[y] specifies the start of the range of event nos requested\n" +\
-                        "filterList[] is a list of names of objects by to filter by (the original implementation\n" +\
-                        "of getRTPStreamEventList took a list of Objects. Since we can't pass a Class definition in\n" +\
-                        "a URL (only strings) we can search by ClassName instead\n" +\
-                        "reverseOrder = [True/False]\n" +\
-                        "requestedEventNo = [x] requests a specific event no\n" +\
-                        "\n Allowed parameters are:-\n\n"
-
-                    getEventsKeys = ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]
-                    getSummaryKeys = ["includeStreamSyncSourceID", "includeEventNo", "includeType",
-                                      "includeFriendlyName"]
-                    try:
-                        if str(self.path).startswith('/events/summary/help'):
-                            # Send back a help page showing the available keys
-                            response = Utils.formatHttpResponse(f"{helpText}{getEventsKeys + getSummaryKeys}")
-                            # set the headers
-                            self._set_response()
-                        else:
-                            getEventsArgs = {} # A dict of kwargs to be passed to getRTPStreamEventList()
-                            getSummaryArgs = {} # A dict of kwargs to be passed to Event.getSummary()
-                            # Extract any additional query components from the URL (if present)
-                            query_components = parse_qs(urlparse(self.path).query)
-                            if len(query_components) > 0:
-                                # If args are present, convert the string values of the HTTP query back to Python data types
-                                parsedArgsDict = Utils.mapURLQueryToFnArgs(query_components)
-
-
-                                # Extract the keys from the URL query that are relevant to the getRTPStreamEventList() method
-                                # and create a new dictionary containing just them (if present)
-                                getEventsArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, getEventsKeys)
-                                # Utils.Message.addMessage("getEventsArgs " + str(getEventsArgs))
-
-                                # Extract the keys from the URL query that are relevant to the Event.getSummary() method
-                                # and create a new dictionary containing just them (if present)
-                                getSummaryArgs = Utils.extractWantedKeysFromDict(parsedArgsDict, getSummaryKeys)
-
-                                # Prune filteredArgsDict of the 'already used so far' keys
-                                Utils.removeMultipleDictKeys(parsedArgsDict, getEventsKeys + getSummaryKeys)
-                                # Utils.Message.addMessage(f"parsedArgsDict after pruning {parsedArgsDict}")
-                                if len(parsedArgsDict) > 0:
-                                    raise Exception(f"Unexpected arguments in path: {parsedArgsDict}")
-
-                            # Get list of events - passing the args gleaned from the URL to the getRTPStreamEventList method
-                            eventsList = rtpStream.getRTPStreamEventList(**getEventsArgs)
-
-                            # Retrieve the event summaries as text
-                            eventsListSummaries = [event.getSummary(**getSummaryArgs) for event in eventsList]
-                            # Encode the list of summaries as json
-                            response = (json.dumps(eventsListSummaries, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
-                            # Create the headers
-                            self._set_response(contentType='application/json')
-                    except Exception as e:
-                        raise Exception(str(self.path) + ", " + str(e))
-
-                elif str(self.path).startswith('/traceroute'):
-                    # GET /traceroute Returns the current 'stable' traceroute hops list encoded as a json dict
-                    # with the keys {lastUpdated, tracerouteHopsList[[1,2,3,4],[5,6,7,8],...]}
-
-                    tracerouteHopsList = []
-                    # Get the latest stable list of traceroute hops
-                    try:
-                        lastUpdated, tracerouteHopsList = rtpStream.getTraceRouteHopsList()
-
-                        # A create a dict containing lastUpdated/hopsList to be returned as json
-                        tracerouteHopsListDict = {"lastUpdated":lastUpdated,
-                                                  "tracerouteHopsList":tracerouteHopsList}
-                        # Encode the dict of as json
-                        response = (json.dumps(tracerouteHopsListDict, sort_keys=True, indent=4,
-                                               default=str) + "\n").encode('utf-8')
-                        # Create the headers
-                        self._set_response(contentType='application/json')
-                    except Exception as e:
-                        raise Exception(f"/traceroute {e}")
-
-                elif self.path == '/remotecontrol':
-                    # Will be used to remote control a transmitter
-                    response = Utils.formatHttpResponse("remotecontrol ")
-                    # Create the headers
-                    self._set_response()
-                else:
-                    # Unknown path requested
-                    raise Exception("Path not recognised " + str(self.path))
-
-                # Write the response back to the client
-                self.wfile.write(response)
-            except Exception as e:
-                self.send_error(404, "RtpReceiveStream.HttpRequestHandler.do_GET() " + str(syncSourceID) + ", " + str(e))
-
-
-        def do_POST(self):
-            try:
-                rtpStream = self.server.parentObject
-                if str(self.path).startswith("/label"):
-                    # HTTP POST /label name=xyz
-                    # Modifies the friendly name of the stream
-                    stats = rtpStream.getRtpStreamStats()
-                    syncSourceID = stats["stream_syncSource"]
-                    # Get POST data
-                    content_length = int(self.headers['Content-Length'])  # <--- Gets the size of data
-                    post_data_raw = self.rfile.read(
-                        content_length)  # <--- Gets the data itself as a string ?foo=bar&x=y etc..
-                    post_data_dict = parse_qs(post_data_raw)  # parse the post data and convert to a dict
-                    # Is "name" dictionary
-                    if b"name" in post_data_dict:
-                        newLabel = str(post_data_dict[b"name"][0].decode('UTF-8'))
-                        rtpStream.setFriendlyName(newLabel)
-                        # Set the headers
-                        self._set_response()
-                        # Create the response
-                        response = Utils.formatHttpResponse(f"Stream {syncSourceID} friendly name changed to {newLabel}")
-                        # Write the response
-                        self.wfile.write(response)
-                    else:
-                        # If "name" key not present, raise an Exception
-                        raise Exception(f"POST /label {post_data_dict}")
-                else:
-                    # URL path not recognised
-                    raise Exception(f"Can't POST  {self.path}")
-
-            except Exception as e:
-                Utils.Message.addMessage(
-                    "ERR:RtpReceiveStream.HttpRequestHandler.do_POST() /label" + str(e))
-                self.send_error(404,
-                                "ERR:RtpReceiveStream.HttpRequestHandler.do_POST() /label " + ", " + str(e))
-
-        def do_DELETE(self):
-            # Access parent Rtp Stream object via server attribute
-            rtpStream = self.server.parentObject
-
-            try:
-                if str(self.path).startswith("/delete"):
-                    stats = rtpStream.getRtpStreamStats()
-                    syncSourceID = stats["stream_syncSource"]
-                    Utils.Message.addMessage(f"DBUG:RtpReceiveStream.HTTPRequestHandler.do_DELETE() {syncSourceID}")
-                    # Attempt to kill the parent Rtp Stream object (this should block until the object is dead)
-                    rtpStream.killStream(caller=self)
-                    # Set the headers
-                    self._set_response()
-                    response = Utils.formatHttpResponse(f"Stream {syncSourceID} DELETE successful")
-                    # Write the response
-                    self.wfile.write(response)
-                else:
-                    # URL path not recognised
-                    raise Exception (f"Can't DELETE  {self.path}")
-            except Exception as e:
-                Utils.Message.addMessage(
-                    "ERR:RtpReceiveStream.HttpRequestHandler.do_DELETE() getRtpStreamStats()" + str(e))
-                self.send_error(404,
-                                "ERR:RtpReceiveStream.HttpRequestHandler.do_DELETE() " + ", " + str(e))
+        def getEventsSummaries(self, **kwargs):
+            return ["eventsSummaries"]
 
     # Getter method for self.resultsTxQueue
     def getResultsTxQueue(self):
@@ -3631,6 +3686,7 @@ class RtpGenerator(RtpCommon):
     # Define a custom BaseHTTPRequestHandler class to handle HTTP GET, POST requests
     class HTTPRequestHandler(BaseHTTPRequestHandler):
         # For JSON, use contentType='application/json'
+        # For plain text use contentType='text/plain'
         def _set_response(self, responseCode=200, contentType='text/html'):
             self.send_response(responseCode)
             self.send_header('Content-type', contentType)
@@ -3694,7 +3750,7 @@ class RtpGenerator(RtpCommon):
             # Additionally, the /report generation methods return plaintext so the "contentType" key is a means of
             # signalling to do_GET() how to handle the returned values
             getMappings = {
-                #"/url": {"targetMethod": None, "args": [], "kwargs": []},
+                #"/url": {"targetMethod": None, "args": [], "optKeys": [], "contentType": 'application/json'},
                 "/txrate/inc": {"targetMethod": rtpGen.setTxRate, "args": [0, 1], "optKeys": []},
                 "/txrate/dec": {"targetMethod": rtpGen.setTxRate, "args": [0, -1], "optKeys": []},
                 "/length/inc": {"targetMethod": rtpGen.setPayloadLength, "args": [0, 1], "optKeys": []},
@@ -3838,7 +3894,7 @@ class RtpGenerator(RtpCommon):
                 query = urlDecoded.query
                 # Utils.Message.addMessage(f"path:{path}, Query:{query}")
 
-                # If no path specified, return an html page with a list of api endpoints
+                # Special case. If no path specified, return an html page with a list of api endpoints
                 if path =="/":
                     response = Utils.formatHttpResponse(f"<html>Rtpgenerator {syncSourceID}<br>{self.listEndpoints()}</html>")
                     # Create the headers
@@ -3856,6 +3912,7 @@ class RtpGenerator(RtpCommon):
                     if "contentType" in getMappings[path]:
                         contentType = getMappings[path]["contentType"]
                     else:
+                        # Otherwise set a 'default/unknown' contentType
                         contentType = None
 
                     # Parse query to create a list of optional parameters to be passed to targetMethod()
@@ -3867,7 +3924,6 @@ class RtpGenerator(RtpCommon):
                     retVal = fn(*args, **optionalArgs)
 
                     # Test the contentType expected to be returned by fn() and set headers/encode as JSON accordingly
-                    Utils.Message.addMessage(f"contentType={contentType}")
                     if contentType == 'text/plain':
                         response =retVal.encode('utf-8')
                         # Create the headers - We're sending plain text, not html
@@ -3883,37 +3939,10 @@ class RtpGenerator(RtpCommon):
                         # Set the headers
                         self._set_response(contentType='application/json')
 
-
                 else:
                     # path not recognised
                     raise Exception(f"Path not recognised {self.path}")
 
-                # Methods to map
-                # Getters
-                #           txStats (RtpGenerator Stats)
-                #           stats (RtpStreamResults Stats)
-                #           getRtpStreamEventsList (RtpStreamResults)
-                #           enableStream
-                #           disableSTream
-                #           enableJitter
-                #           disableJitter
-                #           getTraceRouteHopsList
-                #           report
-                #           traceroute history
-                # POST
-                #       setFriendlyName
-                #       setSyncSourceID
-                #       setTxRate
-                #       setPayload
-                #       setTimeToLive
-                #       enableBurstMode
-                #       simulatePacketLoss
-                # DELETE
-                #       killStream
-
-                # response = Utils.formatHttpResponse(f"RtpGenerator:{syncSourceID} {self.path}")
-                # # Set headers
-                # self._set_response()
                 # Write the response back to the client
                 self.wfile.write(response)
             except Exception as e:
