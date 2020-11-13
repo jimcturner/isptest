@@ -3637,9 +3637,8 @@ class RtpGenerator(RtpCommon):
             self.end_headers()
 
 
-        # Macro function to get get a requested list of events and return them as a json encoded list
+        # Method to retrieve list of Events and return them as a list that is **already json encoded**
         def getEventsListAsJson(self, **kwargs):
-
             try:
                 # Get a handle on the RtpStreamsResults object
                 # This will fail if the object doesn;t exist yet
@@ -3655,7 +3654,29 @@ class RtpGenerator(RtpCommon):
                 response = concatenatedJSONList.encode('utf-8')
 
                 return response
+            except Exception as e:
+                return [str(e)]
 
+        # Returns a list of Event summaries
+        def getEventsSummaries(self, **kwargs):
+            try:
+                # Get a handle on the RtpStreamsResults object
+                # This will fail if the object doesn;t exist yet
+                rtpStreamResults = self.server.parentObject.relatedRtpStreamResults
+
+                # Prefilter the kwargs to allow only the keys accepted by getRTPStreamEventList()
+                filteredKwargs = Utils.extractWantedKeysFromDict(kwargs,
+                                ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"])
+                # Get the events list - pass in the kwargs
+                eventsList = rtpStreamResults.getRTPStreamEventList(**filteredKwargs)
+
+                # Prefilter the kwargs to allow only the keys accepted by Event.getSummary()
+                filteredKwargs = Utils.extractWantedKeysFromDict(kwargs,
+                    ["includeStreamSyncSourceID", "includeEventNo", "includeType", "includeFriendlyName"])
+                # Create a list of Events summaries
+                eventsListSummaries = [event.getSummary(**filteredKwargs) for event in eventsList]
+                # Return the list
+                return eventsListSummaries
             except Exception as e:
                 return [str(e)]
 
@@ -3697,6 +3718,12 @@ class RtpGenerator(RtpCommon):
                                          "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end",
                                                      ]
                                          }
+                getMappings["/events/summary"] = {
+                    "targetMethod": self.getEventsSummaries,
+                    "args": [],
+                    "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]+ \
+                                ["includeStreamSyncSourceID", "includeEventNo", "includeType","includeFriendlyName"]
+                    }
             except Exception as e:
                 # Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() {e}")
                 pass
