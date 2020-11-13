@@ -3928,13 +3928,29 @@ class RtpGenerator(RtpCommon):
             # Access parent Rtp Stream object via server attribute
             rtpGen = self.server.parentObject
             # Get the dict of url/method mappings
-            postMappings = self.apiPOSTEndpoints()
+            deleteMappings = self.apiDELETEEndpoints()
             syncSourceID = None
             retVal = None  # Captures the return value of the mapped method (if there is one)
             try:
-                response = Utils.formatHttpResponse(f"RtpGenerator do_DELETE() {self.path}")
-                # Set headers
-                self._set_response()
+                syncSourceID = rtpGen.syncSourceIdentifier
+                # Split of the URL and query (?key=value suffixes)
+                urlDecoded = urlparse(self.path)
+                path = urlDecoded.path
+                query = urlDecoded.query
+
+                # Does the URL match any of those in postMappings{}?
+                if path in deleteMappings:
+                    # Extract the target function
+                    fn = deleteMappings[path]["targetMethod"]
+                    # Execute the target method
+                    retVal = fn()
+                    response = Utils.formatHttpResponse(
+                        f"RtpGenerator do_DELETE:{syncSourceID} {self.path}, retVal:{retVal}")
+                    # Set headers
+                    self._set_response()
+                else:
+                    raise Exception(f"Unrecognised path {self.path}")
+
                 # Write the response back to the client
                 self.wfile.write(response)
 
