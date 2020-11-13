@@ -3636,6 +3636,29 @@ class RtpGenerator(RtpCommon):
             self.send_header('Content-type', contentType)
             self.end_headers()
 
+
+        # Macro function to get get a requested list of events and return them as a json encoded list
+        def getEventsListAsJson(self, **kwargs):
+
+            try:
+                # Get a handle on the RtpStreamsResults object
+                # This will fail if the object doesn;t exist yet
+                rtpStreamResults = self.server.parentObject.relatedRtpStreamResults
+                # Get the events list - pass in the kwargs
+                eventsList = rtpStreamResults.getRTPStreamEventList(**kwargs)
+                # Retrieve the event summaries as json
+                eventsListJSON = [event.getJSON() for event in eventsList]
+
+                # Create response by concatenating all the json events together
+                concatenatedJSONList = "[" + ",".join(eventsListJSON) + "]"
+                # Convert back to ASCII
+                response = concatenatedJSONList.encode('utf-8')
+
+                return response
+
+            except Exception as e:
+                return [str(e)]
+
         # Acts a repository for the GET endpoints provided by the RtpGenerator HTTP API
         def apiGETEndpoints(self):
             # Access parent Rtp Stream object via server attribute
@@ -3667,7 +3690,13 @@ class RtpGenerator(RtpCommon):
                 # Attempt to add a /stats endpoint
                 getMappings["/stats"] = {"targetMethod": rtpGen.relatedRtpStreamResults.getRtpStreamStats,
                                          "args": [],
-                                         "optKeys": ["keyIs", "keyContains", "keyStartsWith", "listKeys"]}
+                                         "optKeys": ["keyIs", "keyContains", "keyStartsWith", "listKeys"]
+                                         }
+                getMappings["/events/json"] = {"targetMethod": self.getEventsListAsJson,
+                                         "args": [],
+                                         "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end",
+                                                     ]
+                                         }
             except Exception as e:
                 # Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() {e}")
                 pass
@@ -3733,13 +3762,21 @@ class RtpGenerator(RtpCommon):
         def listEndpoints(self):
             # Get GET endpoints
             getMappings = self.apiGETEndpoints()
-            getList = f""
-            # Create list
-            for x in getMappings:
-                getList += f"{x} + Optional keys:{x[optKeys]}<br>"
+
+            # Create HTML table
+            def createHTMLTable(title, col_1_title, col_2_title, srcDict, keyCol2, col_3_title=None, keyCol3=None):
+                tableData = f"<table>" \
+                          f"<tr><td>{title}</td></tr>" \
+                          f"<tr><td>{col_1_title}</td><td>{col_2_title}</td></tr>"
+
+                for key in srcDict:
+                    tableData += f'<tr><td>{key}</td><td>{srcDict[key][keyCol2]}</td></tr>'
+                tableData += f"</table>"
+                return tableData
 
             helpText = f"Available RtpGenerator API endpoints:<br>" \
-                       f"{getList}<br>"
+                       f"{createHTMLTable('GET', 'Path', 'Optional keys', self.apiGETEndpoints(), 'optKeys')}<br><br>" \
+                       f"{createHTMLTable('POST', 'Path', 'Optional keys', self.apiPOSTEndpoints(), 'optKeys')}<br><br>"
             return helpText
 
         # Http server methods
@@ -3775,13 +3812,24 @@ class RtpGenerator(RtpCommon):
                     Utils.Message.addMessage(f"GET fn:{fn}, args:{args}, opt:{optionalArgs}")
                     # Execute the specified method, expanding out the parameter list
                     retVal = fn(*args, **optionalArgs)
-                    # Create the response - Encode the dict of as json
-                    response = (json.dumps(retVal, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                    # Test to see if the return value is already encoded as json. If so, leave alone, if not, return it
+                    try:
+                        json_object = json.loads(retVal)
+                        # json decode succeeded, so this must be already be json encoded. Return as-is
+                        response = retVal
+                    except Exception:
+                        try:
+                            # This is not a json object, so we need to encode it
+                            response = (json.dumps(retVal, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                        except Exception as e:
+                            # If we can't encode it, raise an Exception
+                            raise Exception(f"do_GET() {self.path}{e}")
+
                     # Create the headers
                     self._set_response(contentType='application/json')
                 else:
                     # path not recognised
-                    response = Utils.formatHttpResponse(f"Rtpgenerator {syncSourceID}")
+                    response = Utils.formatHttpResponse(f"Rtpgenerator {syncSourceID}<br>{self.listEndpoints()}")
                     # Create the headers
                     self._set_response()
                 # Methods to map
