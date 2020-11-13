@@ -3688,6 +3688,11 @@ class RtpGenerator(RtpCommon):
             # The "args" key contains a lost with the preset values that will be passed to targetMethod() when
             # "optKeys" is a list of keys that  targetMethod will accept as a kwarg
             # that particular URL is requested
+            # "contentType" is an additional key that specifies the type of data returned by targetMethod (if known)
+            # The default behaviour of do_GET() will be to try and encode all targetMethod() return values as json
+            # Some methods (eg getEventsListAsJson()) already return json, so there is no need to re-encode it
+            # Additionally, the /report generation methods return plaintext so the "contentType" key is a means of
+            # signalling to do_GET() how to handle the returned values
             getMappings = {
                 #"/url": {"targetMethod": None, "args": [], "kwargs": []},
                 "/txrate/inc": {"targetMethod": rtpGen.setTxRate, "args": [0, 1], "optKeys": []},
@@ -3701,7 +3706,8 @@ class RtpGenerator(RtpCommon):
                 "/disable": {"targetMethod": rtpGen.disableStream, "args": [], "optKeys": []},
                 "/jitter/on": {"targetMethod": rtpGen.enableJitter, "args": [], "optKeys": []},
                 "/jitter/off": {"targetMethod": rtpGen.disableJitter, "args": [], "optKeys": []},
-                "/txstats": {"targetMethod": rtpGen.getRtpStreamStats, "args": [], "optKeys": []}
+                "/txstats": {"targetMethod": rtpGen.getRtpStreamStats, "args": [], "optKeys": []},
+                "/traceroute": {"targetMethod": rtpGen.getTraceRouteHopsList, "args": [], "optKeys": []},
             }
             # Add additonal endpoints that relate to the RtpStreamResults associated with this RtpGenerator
             # Note, this object (and therefore its methods) will only exist if the Receiver has responded to
@@ -3716,7 +3722,8 @@ class RtpGenerator(RtpCommon):
                 getMappings["/events/json"] = {"targetMethod": self.getEventsListAsJson,
                                          "args": [],
                                          "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end",
-                                                     ]
+                                                     ],
+                                         "contentType": 'application/json' # <<--denotes that this fn returns json
                                          }
                 getMappings["/events/summary"] = {
                     "targetMethod": self.getEventsSummaries,
@@ -3724,6 +3731,17 @@ class RtpGenerator(RtpCommon):
                     "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]+ \
                                 ["includeStreamSyncSourceID", "includeEventNo", "includeType","includeFriendlyName"]
                     }
+                getMappings["/report/summary"] = {"targetMethod": rtpGen.relatedRtpStreamResults.generateReport,
+                                         "args": [],
+                                         "optKeys": ["eventFilterList"],
+                                         "contentType": 'text/plain' # <<--denotes that this fn returns plain text
+                                         }
+                getMappings["/report/traceroute"] = {"targetMethod": rtpGen.relatedRtpStreamResults.generateTracerouteHistoryReport,
+                                                  "args": [],
+                                                  "optKeys": ["historyLength"],
+                                                  "contentType": 'text/plain'
+                                                  # <<--denotes that this fn returns plain text
+                                                  }
             except Exception as e:
                 # Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() {e}")
                 pass
@@ -3820,13 +3838,25 @@ class RtpGenerator(RtpCommon):
                 query = urlDecoded.query
                 # Utils.Message.addMessage(f"path:{path}, Query:{query}")
 
-                if path in getMappings:
+                # If no path specified, return an html page with a list of api endpoints
+                if path =="/":
+                    response = Utils.formatHttpResponse(f"<html>Rtpgenerator {syncSourceID}<br>{self.listEndpoints()}</html>")
+                    # Create the headers
+                    self._set_response()
+
+                # Otherwise, test the path to see if it is recognised
+                elif path in getMappings:
                     # Extract the method to be called
                     fn = getMappings[path]["targetMethod"]
                     # Extract the 'preset' method arguments
                     args = getMappings[path]["args"]
                     # Extract the 'optional' method arguments list (i.e the kwarg keys that targetMethod() would accept)
                     optionalArgKeys = getMappings[path]["optKeys"]
+                    # Test to see if a 'contentType' is specified for this method. If not, set as 'None'
+                    if "contentType" in getMappings[path]:
+                        contentType = getMappings[path]["contentType"]
+                    else:
+                        contentType = None
 
                     # Parse query to create a list of optional parameters to be passed to targetMethod()
                     # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
@@ -3835,26 +3865,29 @@ class RtpGenerator(RtpCommon):
                     Utils.Message.addMessage(f"GET fn:{fn}, args:{args}, opt:{optionalArgs}")
                     # Execute the specified method, expanding out the parameter list
                     retVal = fn(*args, **optionalArgs)
-                    # Test to see if the return value is already encoded as json. If so, leave alone, if not, return it
-                    try:
-                        json_object = json.loads(retVal)
-                        # json decode succeeded, so this must be already be json encoded. Return as-is
-                        response = retVal
-                    except Exception:
-                        try:
-                            # This is not a json object, so we need to encode it
-                            response = (json.dumps(retVal, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
-                        except Exception as e:
-                            # If we can't encode it, raise an Exception
-                            raise Exception(f"do_GET() {self.path}{e}")
 
-                    # Create the headers
-                    self._set_response(contentType='application/json')
+                    # Test the contentType expected to be returned by fn() and set headers/encode as JSON accordingly
+                    Utils.Message.addMessage(f"contentType={contentType}")
+                    if contentType == 'text/plain':
+                        response =retVal.encode('utf-8')
+                        # Create the headers - We're sending plain text, not html
+                        self._set_response(contentType='text/plain')
+                    elif contentType == 'application/json':
+                        # Return value of fn() already encoded as JSON, pass it on as-is
+                        response = retVal
+                        # Set the headers
+                        self._set_response(contentType='application/json')
+                    else:
+                        # We don't know the format, so encode as JSON as a default
+                        response = (json.dumps(retVal, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
+                        # Set the headers
+                        self._set_response(contentType='application/json')
+
+
                 else:
                     # path not recognised
-                    response = Utils.formatHttpResponse(f"Rtpgenerator {syncSourceID}<br>{self.listEndpoints()}")
-                    # Create the headers
-                    self._set_response()
+                    raise Exception(f"Path not recognised {self.path}")
+
                 # Methods to map
                 # Getters
                 #           txStats (RtpGenerator Stats)
@@ -3864,7 +3897,9 @@ class RtpGenerator(RtpCommon):
                 #           disableSTream
                 #           enableJitter
                 #           disableJitter
-                #   getTraceRouteHopsList
+                #           getTraceRouteHopsList
+                #           report
+                #           traceroute history
                 # POST
                 #       setFriendlyName
                 #       setSyncSourceID
@@ -3874,7 +3909,7 @@ class RtpGenerator(RtpCommon):
                 #       enableBurstMode
                 #       simulatePacketLoss
                 # DELETE
-                #   killStream
+                #       killStream
 
                 # response = Utils.formatHttpResponse(f"RtpGenerator:{syncSourceID} {self.path}")
                 # # Set headers
@@ -3893,14 +3928,18 @@ class RtpGenerator(RtpCommon):
             retVal = None # Captures the return value of the mapped method (if there is one)
             try:
                 syncSourceID = rtpGen.syncSourceIdentifier
+                # Split off the URL and query (?key=value suffixes)
+                urlDecoded = urlparse(self.path)
+                path = urlDecoded.path
+                query = urlDecoded.query
                 # Does the URL match any of those in postMappings{}?
-                if self.path in postMappings:
+                if path in postMappings:
                     # Extract the target function
-                    fn = postMappings[self.path]["targetMethod"]
+                    fn = postMappings[path]["targetMethod"]
                     # Extract the mandatory args for the mapped-to method
-                    requiredArgKeys = postMappings[self.path]["reqKeys"]
+                    requiredArgKeys = postMappings[path]["reqKeys"]
                     # Extract optional args (kwargs) for the mapped-to method
-                    optionalArgKeys = postMappings[self.path]["optKeys"]
+                    optionalArgKeys = postMappings[path]["optKeys"]
 
                     # Get POST data
                     # Gets the size of data
@@ -3933,7 +3972,7 @@ class RtpGenerator(RtpCommon):
             retVal = None  # Captures the return value of the mapped method (if there is one)
             try:
                 syncSourceID = rtpGen.syncSourceIdentifier
-                # Split of the URL and query (?key=value suffixes)
+                # Split off the URL and query (?key=value suffixes)
                 urlDecoded = urlparse(self.path)
                 path = urlDecoded.path
                 query = urlDecoded.query
