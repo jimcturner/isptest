@@ -3754,10 +3754,11 @@ class RtpGenerator(RtpCommon):
             }
             return postMappings
 
+        # Acts a repository for the POST endpoints provided by the RtpGenerator HTTP API
         def apiDELETEEndpoints(self):
             # Access parent Rtp Stream object via server attribute
             rtpGen = self.server.parentObject
-            deleteMappings = {}
+            deleteMappings = {"/delete": {"targetMethod": rtpGen.killStream, "reqKeys": [], "optKeys": []}}
             return deleteMappings
 
         # Shortcut method to take raw POST or GET Query data (*as unicode*, of the form key1=value1&key2=value2...
@@ -3787,37 +3788,18 @@ class RtpGenerator(RtpCommon):
 
         # Shows the available endpoints
         def listEndpoints(self):
-            # Get GET endpoints
-            getMappings = self.apiGETEndpoints()
+            # Get HTML rendered tables of all the types of endpoints
+            getEndpoints = Utils.createHTMLTable(self.apiGETEndpoints(), 'GET', ['Path', 'Optional keys'], ['optKeys'])
+            postEndpoints = Utils.createHTMLTable(self.apiPOSTEndpoints(),'POST',
+                        ['Path', 'Required keys' ,'Optional keys'], ['reqKeys', 'optKeys'])
+            deleteEndpoints = Utils.createHTMLTable(self.apiDELETEEndpoints(),'DELETE',
+                        ['Path', 'Required keys', 'Optional keys'], ['reqKeys', 'optKeys'])
 
-            # # Method to take a nested dict of dicts and render an html table
-            # def createHTMLTable(srcDict, title, columnTitles, columnKeys):
-            #     tableData = f"<table>"
-            #     # Create title row
-            #     tableData += f"<tr><td>{title}</tr></td>"
-            #     # Create table column headings
-            #     if len(columnTitles) > 0:
-            #         tableData += f"<tr><td>{'</td><td>'.join(columnTitles)}</td></tr>"
-            #     # Extract values from srcDict to create the data rows
-            #     if len(columnKeys) > 0:
-            #         # Iterate over srcDict to create the rows
-            #         for row in srcDict:
-            #             tableData += f"<tr><td>{row}</td>" # The srcDict key itself should be the first cell data
-            #             if len(columnKeys) > 0:
-            #                 for key in columnKeys:
-            #                     if key in srcDict[row]:
-            #                         cellData = srcDict[row][key]
-            #                     else:
-            #                         cellData = f"key {key} missing"
-            #                     tableData += f'<td>{cellData}</td>'
-            #             tableData += f"</tr>"
-            #     tableData += f"</table>"
-            #     return tableData
-
+            # Create an output string
             helpText = f"Available RtpGenerator API endpoints:<br>" \
-                       f"{Utils.createHTMLTable(self.apiGETEndpoints(), 'GET', ['Path', 'Optional keys'], ['optKeys'])}<br><br>" \
-                       # f"{createHTMLTable2('POST', 'Path', 'Optional keys', self.apiPOSTEndpoints(), 'optKeys')}<br><br>"
-
+                        f"{getEndpoints}<br><br>" \
+                        f"{postEndpoints}<br><br>" \
+                       f"{deleteEndpoints}<br><br>"
             return helpText
 
         # Http server methods
@@ -3877,7 +3859,7 @@ class RtpGenerator(RtpCommon):
                 # Getters
                 #           txStats (RtpGenerator Stats)
                 #           stats (RtpStreamResults Stats)
-                #   getRtpStreamEventsList (RtpStreamResults)
+                #           getRtpStreamEventsList (RtpStreamResults)
                 #           enableStream
                 #           disableSTream
                 #           enableJitter
@@ -3942,7 +3924,22 @@ class RtpGenerator(RtpCommon):
             except Exception as e:
                 self.send_error(404, "RtpGenerator.HttpRequestHandler.do_POST() " + str(syncSourceID) + ", " + str(e))
 
+        def do_DELETE(self):
+            # Access parent Rtp Stream object via server attribute
+            rtpGen = self.server.parentObject
+            # Get the dict of url/method mappings
+            postMappings = self.apiPOSTEndpoints()
+            syncSourceID = None
+            retVal = None  # Captures the return value of the mapped method (if there is one)
+            try:
+                response = Utils.formatHttpResponse(f"RtpGenerator do_DELETE() {self.path}")
+                # Set headers
+                self._set_response()
+                # Write the response back to the client
+                self.wfile.write(response)
 
+            except Exception as e:
+                self.send_error(404, f"RtpGenerator.HttpRequestHandler.do_DELETE() {syncSourceID}, {e}")
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
                  rtpTxStreamsDict, rtpTxStreamsDictMutex,\
