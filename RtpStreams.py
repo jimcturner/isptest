@@ -2128,7 +2128,8 @@ class RtpReceiveStream(RtpReceiveCommon):
             #       "optKeys":[optional arg1, arg2..]    <------the key/value pairs are passed to the function
             #   }
             postMappings = {
-                "/url": {"targetMethod": None, "reqKeys": [], "optKeys": []}
+                # "/url": {"targetMethod": None, "reqKeys": [], "optKeys": []},
+                "/label": {"targetMethod": parent.setFriendlyName, "reqKeys": ["name"], "optKeys": []}
             }
             return postMappings
 
@@ -2136,7 +2137,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         def apiDELETEEndpoints(self):
             # Access parent Rtp Stream object methods via server attribute
             parent = self.server.parentObject
-            deleteMappings = {"/delete": {"targetMethod": None, "reqKeys": [], "optKeys": []}}
+            deleteMappings = {"/delete": {"targetMethod": parent.killStream, "reqKeys": [], "optKeys": []}}
             return deleteMappings
 
         def getEventsListAsJson(self, **kwargs):
