@@ -1859,7 +1859,7 @@ class RtpReceiveStream(RtpReceiveCommon):
     #                 self._set_response()
     #             # Return a list of events encoded as an array of json objects
     #             elif str(self.path).startswith('/events/json'):
-    #                 # Path /events/summary/json
+    #                 # Path /events/json
     #                 # Will test for the presence of other args sent with the GET request. This map directly to
     #                 # existing optional parameters accepted by the getRTPStreamEventList()
     #                 helpText = "\n/events/json/help will return a list of possible arguments\n" + \
@@ -2095,8 +2095,21 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Additionally, the /report generation methods return plaintext so the "contentType" key is a means of
             # signalling to do_GET() how to handle the returned values
             getMappings = {
-                "/url": {"targetMethod": None, "args": [], "optKeys": [], "contentType": 'application/json'}
-
+                "/url": {"targetMethod": None, "args": [], "optKeys": [], "contentType": 'application/json'},
+                "/stats": {"targetMethod": parent.getRtpStreamStats, "args": [],
+                           "optKeys": ["keyIs", "keyContains", "keyStartsWith", "listKeys"]},
+                "/report/traceroute": {"targetMethod": parent.generateTracerouteHistoryReport, "args": [],
+                                       "optKeys": ["historyLength"], "contentType": 'text/plain'},
+                "/report/summary": {"targetMethod": parent.generateReport, "args": [],
+                                       "optKeys": ["eventFilterList"], "contentType": 'text/plain'},
+                "/events/json": {"targetMethod": self.getEventsListAsJson, "args": [],
+                                 "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"],
+                                 "contentType": 'application/json'},
+                "/events/summary": {"targetMethod": self.getEventsSummaries, "args": [],
+                                 "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]+\
+                                    ["includeStreamSyncSourceID", "includeEventNo", "includeType","includeFriendlyName"]
+                                 },
+                "/traceroute": {"targetMethod": parent.getTraceRouteHopsList, "args": [], "optKeys": []}
             }
             return getMappings
 
@@ -2127,10 +2140,44 @@ class RtpReceiveStream(RtpReceiveCommon):
             return deleteMappings
 
         def getEventsListAsJson(self, **kwargs):
-            return ["eventsAsJson"]
+            try:
+                # Get a handle on the RtpReceiveStream object
+                rtpReceiveStream = self.server.parentObject
+                # Get the events list - pass in the kwargs
+                eventsList = rtpReceiveStream.getRTPStreamEventList(**kwargs)
+                # Retrieve the event summaries as json
+                eventsListJSON = [event.getJSON() for event in eventsList]
+
+                # Create response by concatenating all the json events together
+                concatenatedJSONList = "[" + ",".join(eventsListJSON) + "]"
+                # Convert back to ASCII
+                response = concatenatedJSONList.encode('utf-8')
+
+                return response
+            except Exception as e:
+                return [str(e)]
 
         def getEventsSummaries(self, **kwargs):
-            return ["eventsSummaries"]
+            try:
+                # Get a handle on the RtpStreamsResults object
+                # This will fail if the object doesn;t exist yet
+                rtpReceiveStream = self.server.parentObject
+
+                # Prefilter the kwargs to allow only the keys accepted by getRTPStreamEventList()
+                filteredKwargs = Utils.extractWantedKeysFromDict(kwargs,
+                                ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"])
+                # Get the events list - pass in the kwargs
+                eventsList = rtpReceiveStream.getRTPStreamEventList(**filteredKwargs)
+
+                # Prefilter the kwargs to allow only the keys accepted by Event.getSummary()
+                filteredKwargs = Utils.extractWantedKeysFromDict(kwargs,
+                    ["includeStreamSyncSourceID", "includeEventNo", "includeType", "includeFriendlyName"])
+                # Create a list of Events summaries
+                eventsListSummaries = [event.getSummary(**filteredKwargs) for event in eventsList]
+                # Return the list
+                return eventsListSummaries
+            except Exception as e:
+                return [str(e)]
 
     # Getter method for self.resultsTxQueue
     def getResultsTxQueue(self):
