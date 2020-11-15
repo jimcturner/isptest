@@ -2048,7 +2048,8 @@ class UI(object):
                     rtpGenerator = RtpGenerator(destAddr, destPort, txRate_bps, packetLength, syncSourceID, timeToLive, \
                                                 self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
                                                 self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex, uiInstance=self,\
-                                                friendlyName=friendlyName, UDP_SRC_PORT=sourcePort)
+                                                friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
+                                                controllerTCPPort=self.controllerTCPPort)
 
                     Utils.Message.addMessage("[a] Added new " + str(Utils.bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
                 # Force redraw
