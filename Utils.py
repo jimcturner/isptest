@@ -1428,10 +1428,26 @@ class TCPListenPortCreator(object):
 
     # Return the next available TCP port number
     @classmethod
-    def getNext(cls):
-        # Increment the class value
-        cls.tcpPort += 1
-        return cls.tcpPort
+    def getNext(cls, failLimit=10, address='127.0.0.1'):
+        # No of failure attempts (busy ports) before the method gives up
+        while failLimit > 0:
+            # Increment the class value
+            cls.tcpPort += 1
+            # Test to see if the TCP port is free
+            try:
+                # Create a TCP/IP socket
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                # Attempt to bind the socket to the incremented socket value
+                sock.bind((address, cls.tcpPort))
+                sock.close()
+                return cls.tcpPort
+            except Exception as e:
+                # print(f"Can't bind to 127.0.0.1: {cls.tcpPort}, {e}")
+                # Decrement the fail counter
+                failLimit -= 1
+        # If execution reaches the point, the failLimit counter must have decremented to zero
+        # print(f"failLimit exceeded {cls.tcpPort}")
+        return None
 
     # Retrieve the last provided tcpPort value
     @classmethod
