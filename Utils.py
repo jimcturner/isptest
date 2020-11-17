@@ -1734,6 +1734,41 @@ class APIHelper(object):
         except Exception as e:
             raise Exception(f"ERR: APIHelper.removeFromStreamsDirectory() {streamType}/{streamID}, error: {e}")
 
+    # Gets a list of Events as JSON. Kwargs are additional options to filter the returned results
+    def getRTPStreamEventListAsJson(self, **kwargs):
+        url = f"http://{self.addr}:{self.port}/events/json"
+        try:
+            r = requests.get(url, params=kwargs, timeout=self.timeout)
+            # test the response
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+            # Attempt to decode the response as json and return it
+            return r.json()
+        except Exception as e:
+            raise Exception(f"ERR: APIHelper.getRTPStreamEventListAsJson() params: {kwargs}, error: {e}")
+
+
+    # Gets a list of Events as CSV. Kwargs are additional options to filter the returned results
+    def getRTPStreamEventListAsCSV(self, **kwargs):
+        url = f"http://{self.addr}:{self.port}/events/csv"
+
+    # Gets a list of Events summaries. Kwargs are additional options to filter the returned results
+    def getRTPStreamEventListAsSummary(self, **kwargs):
+        url = f"http://{self.addr}:{self.port}/events/summary"
+        try:
+            r = requests.get(url, params=kwargs, timeout=self.timeout)
+            # test the response
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+            # Attempt to decode the response as json and return it
+            return r.json()
+        except Exception as e:
+            raise Exception(f"ERR: APIHelper.getRTPStreamEventListAsSummary() params: {kwargs}, error: {e}")
+
+
+
+
+
+
+
 # Renders a nested dict of dicts as an html table
 # columnTitles is a list of string reprresenting the column titles
 # columnKeys is list of keys to be picked from the nested dict within each key of srcDict
@@ -1777,6 +1812,10 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
     @abstractmethod
     # Returns a list of Event summaries
     def getEventsSummaries(self, **kwargs):
+        pass
+
+    @abstractmethod
+    def getEventsListAsCSV(self, **kwargs):
         pass
 
     @abstractmethod

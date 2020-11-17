@@ -1756,6 +1756,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                                  "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]+\
                                     ["includeStreamSyncSourceID", "includeEventNo", "includeType","includeFriendlyName"]
                                  },
+                "/events/csv": {"targetMethod": self.getEventsListAsCSV,
+                                              "args": [],
+                                              "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
+                                                          "start", "end",]
+                                },
                 "/traceroute": {"targetMethod": parent.getTraceRouteHopsList, "args": [], "optKeys": []}
             }
             return getMappings
@@ -1824,6 +1829,28 @@ class RtpReceiveStream(RtpReceiveCommon):
                 eventsListSummaries = [event.getSummary(**filteredKwargs) for event in eventsList]
                 # Return the list
                 return eventsListSummaries
+            except Exception as e:
+                return [str(e)]
+
+        # Returns a list of Events as a list of csv strings
+        def getEventsListAsCSV(self, **kwargs):
+            try:
+                # Get a handle on the RtpStreamsResults object
+                # This will fail if the object doesn't exist yet
+                rtpStreamResults = self.server.parentObject.relatedRtpStreamResults
+
+                # Prefilter the kwargs to allow only the keys accepted by getRTPStreamEventList()
+                filteredKwargs = Utils.extractWantedKeysFromDict(kwargs,
+                                                                 ["filterList", "reverseOrder",
+                                                                  "requestedEventNo",
+                                                                  "recent", "start", "end"])
+                # Get the events list - pass in the kwargs
+                eventsList = rtpStreamResults.getRTPStreamEventList(**filteredKwargs)
+
+                # Create a list of Events CSV exports
+                eventsListAsCSV = [event.getCSV() for event in eventsList]
+                # Return the list
+                return eventsListAsCSV
             except Exception as e:
                 return [str(e)]
 
@@ -3437,6 +3464,27 @@ class RtpGenerator(RtpCommon):
             except Exception as e:
                 return [str(e)]
 
+        # Returns a list of Events as a list of csv strings
+        def getEventsListAsCSV(self, **kwargs):
+            try:
+                # Get a handle on the RtpStreamsResults object
+                # This will fail if the object doesn't exist yet
+                rtpStreamResults = self.server.parentObject
+
+                # Prefilter the kwargs to allow only the keys accepted by getRTPStreamEventList()
+                filteredKwargs = Utils.extractWantedKeysFromDict(kwargs,
+                                                                 ["filterList", "reverseOrder", "requestedEventNo",
+                                                                  "recent", "start", "end"])
+                # Get the events list - pass in the kwargs
+                eventsList = rtpStreamResults.getRTPStreamEventList(**filteredKwargs)
+
+                # Create a list of Events CSV exports
+                eventsListAsCSV = [event.getCSV() for event in eventsList]
+                # Return the list
+                return eventsListAsCSV
+            except Exception as e:
+                return [str(e)]
+
         # Acts a repository for the GET endpoints provided by the RtpGenerator HTTP API
         def apiGETEndpoints(self):
             # Access parent Rtp Stream object via server attribute
@@ -3483,6 +3531,13 @@ class RtpGenerator(RtpCommon):
                                                      ],
                                          "contentType": 'application/json' # <<--denotes that this fn returns json
                                          }
+                getMappings["/events/csv"] = {"targetMethod": self.getEventsListAsCSV,
+                                               "args": [],
+                                               "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
+                                                           "start", "end",
+                                                           ],
+                                               }
+
                 getMappings["/events/summary"] = {
                     "targetMethod": self.getEventsSummaries,
                     "args": [],
