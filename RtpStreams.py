@@ -31,7 +31,7 @@ import requests
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 # Additonal libraries required (of my own making)
-from validator_collection import is_integer
+from validator_collection import is_integer, is_float
 
 import Utils
 from Registry import Registry
@@ -4204,7 +4204,6 @@ class RtpGenerator(RtpCommon):
         else:
             raise Exception(f"RtpGenerator({self.syncSourceIdentifier}).setTxrate() Invalid newTxRate_bps: {newTxRate_bps}")
 
-
         # Snaps the incoming value to 1024 so that autoIncrements/decrements will settle on a neat value (i.e in
         # steps of 1024bps). See https://stackoverflow.com/questions/2272149/round-to-5-or-other-number-in-python
         # Snap value is overridden by setting base= value
@@ -4254,6 +4253,13 @@ class RtpGenerator(RtpCommon):
         def snapTo(x, base=10):
             return base * round(x / base)
 
+        # Check to see whether payloadLength_bytes is an integer. If not, raise an Exception
+        if is_integer(payloadLength_bytes):
+            pass
+        else:
+            raise Exception(
+                f"RtpGenerator({self.syncSourceIdentifier}).setTxrate() Invalid payloadLength_bytes: {payloadLength_bytes}")
+
         if autoIncrement == 1:
             # override supplied value and just increment existing value
             payloadLength_bytes = self.payloadLength + 10
@@ -4283,6 +4289,13 @@ class RtpGenerator(RtpCommon):
     # If autoIncrement = 1, the method will auto add a certain amount of time to the lifetime
     # If autoIncrement = -1, the method will auto decrement a certain amount of time from the lifepan
     def setTimeToLive(self, newTimeToLive, autoIncrement=None):
+        # Check to see whether newTimeToLive is an integer. If not, raise an Exception
+        if is_integer(newTimeToLive):
+            pass
+        else:
+            raise Exception(
+                f"RtpGenerator({self.syncSourceIdentifier}).setTxrate() Invalid newTimeToLive: {newTimeToLive}")
+
         if autoIncrement is None:
             self.timeToLive = newTimeToLive
         else:
@@ -4387,6 +4400,15 @@ class RtpGenerator(RtpCommon):
     # The tx rate is manipulated by modifying the previously calculated txPeriod value
     # At the transition from burstTimer=1 to burstTimer=0, the original tx period will be recalculated
     def enableBurstMode(self, burstLength_s = 5, burstRatio = 2):
+        # Validate burstLength_s  - should be an integer
+        if not is_integer(burstLength_s):
+            raise Exception(f"RtpGenerator{self.syncSourceIdentifier}.enableBurstMode() invalid burstLength_s {burstLength_s}")
+        # Validate burstRatio  - cannot be 0 otherwise we'll get a div by zero error
+        if not is_float(burstRatio, minimum=0.1): #
+            raise Exception(
+                f"RtpGenerator{self.syncSourceIdentifier}.enableBurstMode() invalid burstRatio {burstRatio}")
+
+
         # Confirm we're not already in burst mode, don't want to apply it twice
         if self.burstTimer == 0:
             # Start the burst timer. This value will be decremented every second by the __samplingThread
@@ -4399,8 +4421,11 @@ class RtpGenerator(RtpCommon):
             Utils.Message.addMessage("Burst mode already active for stream " + str(self.syncSourceIdentifier) +\
                     ". " + str(self.burstTimer) + "s remaining")
 
+    # Used to simulate packet loss by skipping x packets (whilst incrementing the seq no internally)
     def simulatePacketLoss(self, packetsToSkip=0):
-        # Used to simulate packet loss by skipping x packets (whilst incrementing the seq no internally)
+        # validate packetsToSkip, should be an integer > 0
+        if not is_integer(packetsToSkip, minimum=0):
+            raise Exception(f"RtpGenerator{self.syncSourceIdentifier}.simulatePacketLoss() invalid packetsToSkip {packetsToSkip}")
         self.packetsToSkip = packetsToSkip
 
     def enableJitter(self):
