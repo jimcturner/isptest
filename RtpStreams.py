@@ -4400,8 +4400,8 @@ class RtpGenerator(RtpCommon):
     # The tx rate is manipulated by modifying the previously calculated txPeriod value
     # At the transition from burstTimer=1 to burstTimer=0, the original tx period will be recalculated
     def enableBurstMode(self, burstLength_s = 5, burstRatio = 2):
-        # Validate burstLength_s  - should be an integer
-        if not is_integer(burstLength_s):
+        # Validate burstLength_s  - should be a +ve integer
+        if not is_integer(burstLength_s, minimum=0):
             raise Exception(f"RtpGenerator{self.syncSourceIdentifier}.enableBurstMode() invalid burstLength_s {burstLength_s}")
         # Validate burstRatio  - cannot be 0 otherwise we'll get a div by zero error
         if not is_float(burstRatio, minimum=0.1): #
