@@ -31,6 +31,8 @@ import requests
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
 # Additonal libraries required (of my own making)
+from validator_collection import is_integer
+
 import Utils
 from Registry import Registry
 
@@ -4195,7 +4197,15 @@ class RtpGenerator(RtpCommon):
     # and instead, the method will increase/decrease the tx rate by a fixed amount relative to the current rate
     # if autoIncrement = 1, the rate will increase, if autoIncrement = -1, the rate will decrease
     def setTxRate(self, newTxRate_bps, autoIncrement=None):
-        # Snaps the incoming value to 1024 so that autoIncrements/decrements will settle on a nat value (i.e in
+
+        # Check to see whether newTxRate_bps is an integer. If not, raise an Exception
+        if is_integer(newTxRate_bps):
+            pass
+        else:
+            raise Exception(f"RtpGenerator({self.syncSourceIdentifier}).setTxrate() Invalid newTxRate_bps: {newTxRate_bps}")
+
+
+        # Snaps the incoming value to 1024 so that autoIncrements/decrements will settle on a neat value (i.e in
         # steps of 1024bps). See https://stackoverflow.com/questions/2272149/round-to-5-or-other-number-in-python
         # Snap value is overridden by setting base= value
         def snapTo(x, base=1024):
