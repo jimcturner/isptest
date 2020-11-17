@@ -4620,6 +4620,9 @@ class RtpGenerator(RtpCommon):
                         Utils.Message.addMessage("Burst mode ending for stream " + str(self.syncSourceIdentifier) + \
                                       ". Reverting to " + str(Utils.bToMb(self.txRate)) + "bps")
 
+                # Increment elapsed time counter - add a second
+                self.elapsedTime += datetime.timedelta(seconds=1)
+
             ######## 1 second counter end of code ########
 
             # Increment 1 sec loop counter
