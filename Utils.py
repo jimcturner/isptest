@@ -1748,7 +1748,7 @@ def createHTMLTable(srcDict, title, columnTitles, columnKeys):
     if len(columnKeys) > 0:
         # Iterate over srcDict to create the rows
         for row in srcDict:
-            tableData += f"<tr><td>{row}</td>" # The srcDict key itself should be the first cell data
+            tableData += f"<tr><td><a href={row}>{row}</a></td>" # The srcDict key itself should be the first cell data
             if len(columnKeys) > 0:
                 for key in columnKeys:
                     if key in srcDict[row]:
@@ -1869,6 +1869,14 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
 
 
     @abstractmethod
+    # render HTML index page
+    def renderIndexPage(self):
+        # Access parent Rtp Stream object via server attribute
+        parent = self.server.parentObject
+        response = f"<html>Index page for {parent.__class__.__name__}</html>"
+        return response
+
+    @abstractmethod
     # Http server methods
     def do_GET(self):
         # Access parent Rtp Stream object via server attribute
@@ -1887,14 +1895,8 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
             query = urlDecoded.query
             # Utils.Message.addMessage(f"path:{path}, Query:{query}")
 
-            # Special case. If no path specified, return an html page with a list of api endpoints
-            if path == "/":
-                response = formatHttpResponse(f"<html>{parent.__class__.__name__} {syncSourceID}<br>{self.listEndpoints()}</html>")
-                # Create the headers
-                self._set_response()
-
-            # Otherwise, test the path to see if it is recognised
-            elif path in getMappings:
+            # Test the path to see if it is recognised
+            if path in getMappings:
                 # Extract the method to be called
                 fn = getMappings[path]["targetMethod"]
                 # Extract the 'preset' method arguments
@@ -1917,10 +1919,11 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
                 retVal = fn(*args, **optionalArgs)
 
                 # Test the contentType expected to be returned by fn() and set headers/encode as JSON accordingly
-                if contentType == 'text/plain':
-                    response =retVal.encode('utf-8')
-                    # Create the headers - We're sending plain text, not html
-                    self._set_response(contentType='text/plain')
+                if contentType == 'text/html' or contentType == 'text/plain':
+                    response = retVal.encode('utf-8')
+                    # Create the headers useing the content type specified in the getMappings{} dict
+                    self._set_response(contentType=contentType)
+
                 elif contentType == 'application/json':
                     # Return value of fn() already encoded as JSON, pass it on as-is
                     response = retVal

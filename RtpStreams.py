@@ -1740,7 +1740,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Additionally, the /report generation methods return plaintext so the "contentType" key is a means of
             # signalling to do_GET() how to handle the returned values
             getMappings = {
-                "/url": {"targetMethod": None, "args": [], "optKeys": [], "contentType": 'application/json'},
+                "/": {"targetMethod": self.renderIndexPage, "args": [], "optKeys":[], "contentType": 'text/html'},
                 "/stats": {"targetMethod": parent.getRtpStreamStats, "args": [],
                            "optKeys": ["keyIs", "keyContains", "keyStartsWith", "listKeys"]},
                 "/report/traceroute": {"targetMethod": parent.generateTracerouteHistoryReport, "args": [],
@@ -1824,6 +1824,20 @@ class RtpReceiveStream(RtpReceiveCommon):
                 return eventsListSummaries
             except Exception as e:
                 return [str(e)]
+
+        # render HTML index page
+        # Shown a list of available api endpoints
+        def renderIndexPage(self):
+            # Access parent Rtp Stream object via server attribute
+            parent = self.server.parentObject
+            try:
+                syncSourceID = parent.syncSourceIdentifier
+                response = f"<h1>Index page for {parent.__class__.__name__}:{syncSourceID}</h1>" \
+                           f"{self.listEndpoints()}"
+                return response
+            except Exception as e:
+                raise Exception(f"renderIndexPage() {parent.__class__.__name__}, {e}")
+
 
     # Getter method for self.resultsTxQueue
     def getResultsTxQueue(self):
@@ -3436,6 +3450,7 @@ class RtpGenerator(RtpCommon):
             # signalling to do_GET() how to handle the returned values
             getMappings = {
                 #"/url": {"targetMethod": None, "args": [], "optKeys": [], "contentType": 'application/json'},
+                "/": {"targetMethod": self.renderIndexPage, "args": [], "optKeys": [], "contentType": 'text/html'},
                 "/txrate/inc": {"targetMethod": rtpGen.setTxRate, "args": [0, 1], "optKeys": []},
                 "/txrate/dec": {"targetMethod": rtpGen.setTxRate, "args": [0, -1], "optKeys": []},
                 "/length/inc": {"targetMethod": rtpGen.setPayloadLength, "args": [0, 1], "optKeys": []},
@@ -3520,6 +3535,18 @@ class RtpGenerator(RtpCommon):
             deleteMappings = {"/delete": {"targetMethod": rtpGen.killStream, "reqKeys": [], "optKeys": []}}
             return deleteMappings
 
+        # render HTML index page
+        # Shown a list of available api endpoints
+        def renderIndexPage(self):
+            # Access parent Rtp Stream object via server attribute
+            parent = self.server.parentObject
+            try:
+                syncSourceID = parent.syncSourceIdentifier
+                response = f"<h1>Index page for {parent.__class__.__name__}:{syncSourceID}</h1>" \
+                           f"{self.listEndpoints()}"
+                return response
+            except Exception as e:
+                raise Exception(f"renderIndexPage() {parent.__class__.__name__}, {e}")
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
                  rtpTxStreamsDict, rtpTxStreamsDictMutex,\
