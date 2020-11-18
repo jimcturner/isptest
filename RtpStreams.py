@@ -1330,16 +1330,46 @@ class RtpReceiveCommon(RtpCommon):
                 list(filter(lambda event: ((type(event) in filterList) or (event.__class__.__name__ in filterList)),
                             unfilteredEventList))
 
-
         else:
             # If no filter spcified, all take all the events
             filteredEventList = unfilteredEventList
 
-        # # Now, if reverseOrder=True, reverse the order of the filtered list
-        # if reverseOrder:
-        #     filteredEventList.reverse()
+        # 'recent' trumps start and end
+        if recent is not None:
+            # Return the last n events (or else, if kwarg 'recent' is specified'
+            # IF event list not as long as n, return what does exist
+            try:
+                filteredEventList = filteredEventList[(recent * -1):]
+            except:
+                pass
 
-        if start is not None and end is not None:
+        # Start specified but end is not
+        elif start is not None and end is None:
+            try:
+                # Slice the list
+                # Guard against a -ve start value
+                # Inclusive, so start = 1 (or start = 0) and end = 4 will return events 1,2,3 and 4
+                if start < 1:
+                    start = 1
+                filteredEventList = filteredEventList[start - 1:]
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR: RtpStream.getRTPStreamEventList(start={start})"\
+                                            f" index out of range: {e}")
+
+        # end specified but not start
+        elif start is None and end is not None:
+            try:
+                # Slice the list
+                # Guard against a -ve end value
+                # Inclusive, so start = 1 (or start = 0) and end = 4 will return events 1,2,3 and 4
+                if end < 1:
+                    end = 1
+                filteredEventList = filteredEventList[:end]
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR: RtpStream.getRTPStreamEventList(end={end})"\
+                                        f" index out of range: {e}")
+
+        elif start is not None and end is not None:
             # If kwarg 'start' and 'end' are  specified'
             try:
                 # Slice the list
@@ -1352,13 +1382,13 @@ class RtpReceiveCommon(RtpCommon):
                 Utils.Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(start) + ":" +
                                          str(end) + ") requested start and end indexes out of range: " + str(e))
                 filteredEventList = []
-        elif recent is not None:
-            # Return the last n events (or else, if kwarg 'recent' is specified'
-            # IF event list not as long as n, return what does exist
-            try:
-                filteredEventList = filteredEventList[(recent * -1):]
-            except:
-                pass
+        # if recent is not None:
+        #     # Return the last n events (or else, if kwarg 'recent' is specified'
+        #     # IF event list not as long as n, return what does exist
+        #     try:
+        #         filteredEventList = filteredEventList[(recent * -1):]
+        #     except:
+        #         pass
 
         # Finally, if reverseOrder=True, reverse the order of the returned list
         if reverseOrder:
@@ -1837,7 +1867,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             try:
                 # Get a handle on the RtpStreamsResults object
                 # This will fail if the object doesn't exist yet
-                rtpStreamResults = self.server.parentObject.relatedRtpStreamResults
+                rtpStreamResults = self.server.parentObject
 
                 # Prefilter the kwargs to allow only the keys accepted by getRTPStreamEventList()
                 filteredKwargs = Utils.extractWantedKeysFromDict(kwargs,
@@ -3469,7 +3499,7 @@ class RtpGenerator(RtpCommon):
             try:
                 # Get a handle on the RtpStreamsResults object
                 # This will fail if the object doesn't exist yet
-                rtpStreamResults = self.server.parentObject
+                rtpStreamResults = self.server.parentObject.relatedRtpStreamResults
 
                 # Prefilter the kwargs to allow only the keys accepted by getRTPStreamEventList()
                 filteredKwargs = Utils.extractWantedKeysFromDict(kwargs,
