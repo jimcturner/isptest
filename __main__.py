@@ -3460,7 +3460,7 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                             try:
                                 # Write the batch of Json Events to disk
                                 if len(unwrittenEventsJson) > 0:
-                                    Utils.Message.addMessage(f"Writing {len(unwrittenEventsJson)} Json Events")
+                                    # Utils.Message.addMessage(f"Writing {len(unwrittenEventsJson)} Json Events")
                                     # unpack each json-encoded event (basically, a dict) back to a string and put in a list
                                     serialisedJson = [json.dumps(event) for event in unwrittenEventsJson]
                                     Utils.Message.addMessage(f"serialisedJson({len(serialisedJson)}){serialisedJson}")
@@ -3477,11 +3477,11 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
 
                         # Retrieve a list of the most recent Events as CSV
                         unwrittenEventsCSV = streamAPI.getRTPStreamEventListAsCSV(recent=unwrittenEventsCount)
-                        Utils.Message.addMessage(f"unwrittenEventsCount: {unwrittenEventsCount}, lastWrittenEventNo:{lastWrittenEventNo}")
+                        # Utils.Message.addMessage(f"unwrittenEventsCount: {unwrittenEventsCount}, lastWrittenEventNo:{lastWrittenEventNo}")
                         try:
                             # Write the batch of CSV Events to disk
                             if len(unwrittenEventsCSV) > 0:
-                                Utils.Message.addMessage(f"Writing {len(unwrittenEventsCSV)} CSV Events")
+                                # Utils.Message.addMessage(f"Writing {len(unwrittenEventsCSV)} CSV Events")
                                 # Create a string of CSV with the events separated by a newline
                                 eventsCSVString = "\n".join(unwrittenEventsCSV) + "\n"
                                 # Open the file for writing
@@ -3497,28 +3497,16 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
                 except Exception as e:
                     Utils.Message.addMessage(f"ERR: __diskLoggerThread: {e}")
 
+        # Finally, compare the list of streams in lastWrittenEventNoDict with those in rtpStreamsList
+        # If they are present in lastWrittenEventNoDict{} but not in rtpStreamsList[] thi probably means that
+        # they have been unregistered from the streams directory (i.e deleted) therefore we should housekeep
+        # lastWrittenEventNoDict{} and remove them
 
+        # Create list of streamIDs from rtpStreamsList
+        streamIDList = [stream["streamID"] for stream in rtpStreamsList]
+        # Keep only the streamIDs from rtpStreamsList and diccard any other keys that might be in lastWrittenEventNoDict
+        lastWrittenEventNoDict = {wantedKey: lastWrittenEventNoDict[wantedKey] for wantedKey in streamIDList}
 
-        # Finally, iterate over lastWrittenEventNoDict{} to confirm that all the stream objects listed
-        # inside it still exist in rtpStreamsDict{} (in other words, synchronise the deletions within
-        # rtpStreamsDict{} to lastWrittenEventNoDict{}
-        # This will prevent lastWrittenEventNoDict from filling up with orphan streams
-        orphanStreamsToDelete =[]
-        rtpStreamsDictMutex.acquire()
-        for stream in lastWrittenEventNoDict:
-            # Check for existence of key[stream] within rtpStreamsDict
-            if stream in rtpStreamsDict:
-                # If it is, do nothing
-                pass
-            else:
-                # If key no longer exists, add it to the list to be purged from lastWrittenEventNoDict{}
-                orphanStreamsToDelete.append(stream)
-        rtpStreamsDictMutex.release()
-
-        # Now delete all keys listed in orphanStreamsToDelete[] from lastWrittenEventNoDict{}
-        for stream in orphanStreamsToDelete:
-            Utils.Message.addMessage("INFO: _diskLoggerThread: Deleting orphan stream " + str(stream) + " from lastWrittenEventNoDict")
-            del lastWrittenEventNoDict[stream]
         time.sleep(1)
 
     # If execution gets here, the thread is ending....
