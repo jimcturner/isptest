@@ -1974,7 +1974,7 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
                 # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
                 notUsed, optionalArgs = self.convertKeysToMethodArgs(query, [], optionalArgKeys)
 
-                Message.addMessage(f"GET fn:{fn}, args:{args}, opt:{optionalArgs}")
+                # Message.addMessage(f"GET fn:{fn}, args:{args}, opt:{optionalArgs}")
                 # Execute the specified method, expanding out the parameter list
                 retVal = fn(*args, **optionalArgs)
 
