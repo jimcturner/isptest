@@ -1750,6 +1750,15 @@ class APIHelper(object):
     # Gets a list of Events as CSV. Kwargs are additional options to filter the returned results
     def getRTPStreamEventListAsCSV(self, **kwargs):
         url = f"http://{self.addr}:{self.port}/events/csv"
+        try:
+            r = requests.get(url, params=kwargs, timeout=self.timeout)
+            # test the response
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+            # Attempt to decode the response as json and return it
+            return r.json()
+        except Exception as e:
+            raise Exception(f"ERR: APIHelper.getRTPStreamEventListAsCSV() params: {kwargs}, error: {e}")
+
 
     # Gets a list of Events summaries. Kwargs are additional options to filter the returned results
     def getRTPStreamEventListAsSummary(self, **kwargs):
