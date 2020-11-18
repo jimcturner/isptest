@@ -3124,7 +3124,7 @@ class UI(object):
 
         Utils.Message.addMessage("DBUG: UI.__keysPressedThread ended")
 
-def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutdownFlag):
+def __diskLoggerThread_old(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutdownFlag):
     # Autonomous thread to iterate over rtpStreamsDict and poll RtpStream eventLists for new events
     # and write them  to disk
     Utils.Message.addMessage("INFO: diskLoggerThread starting")
@@ -3323,7 +3323,207 @@ def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutd
     except Exception as e:
         Utils.Message.addMessage("ERR: __diskloggerThread. Error closing file " + str(e))
 
+def __diskLoggerThread(operationMode, rtpStreamsDict, rtpStreamsDictMutex, shutdownFlag, controllerTCPPort ):
+    # Autonomous thread to iterate over rtpStreamsDict and poll RtpStream eventLists for new events
+    # and write them  to disk
+    # Create an API helper to allow access to the HTTP API of the Controller
+    ctrlAPI = Utils.APIHelper(controllerTCPPort)
 
+    Utils.Message.addMessage("INFO: diskLoggerThread starting")
+    filename = ""
+    # Create the full filename including path depending upon opersation mode (excluding file extension eg. csv/.json)
+    if operationMode == 'RECEIVE':
+        # prefix = "receiver_report_"
+        filename = sanitize_filepath(Registry.resultsSubfolder + Registry.receiverLogFilename)
+    else:
+        filename = sanitize_filepath(Registry.resultsSubfolder + Registry.transmitterLogFilename)
+
+    lastWrittenEventNo = 0
+    lastWrittenEventNoDict = {}  # Dictionary to hold the last written event no for each stream
+    latestEvents = []
+    # Create versions of filename with the desired extensions
+    filename_csv = filename + ".csv"
+    filename_json = filename + ".json"
+
+    # This function checks tp see if fileToCreate already exists. if it doesn't, it will create the file
+    # along with a header at the top containing the program version and the current time
+    def createLogFile(fileToCreate, headerTextPrefix):
+        if not os.path.isfile(fileToCreate):
+            # File doesn't exist yet, so create it
+            try:
+                # Open the file for writing
+                fh = open(fileToCreate, "w+")
+                fh.write(headerTextPrefix + " created by isptest v" + str(Registry.version) + \
+                               ". Created at: " + datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S") + \
+                               "\r\n-------------------------------------------------------------------------\n")
+                fh.close()
+            except Exception as e:
+                Utils.Message.addMessage("ERR: __diskloggerThread.createLogFile() " + fileToCreate + ", " + str(e))
+
+    # Sit in an infinite loop looking for new events (on all streams) and appending them to the log file(s)
+    # Create file handles for the csv and json files
+    file_csv = None
+    file_json = None
+    while True:
+        # Check status of shutdownFlag
+        if shutdownFlag.is_set():
+            # If down, break out of the endless while loop
+            break
+        # Check to see if the existing log files (if they exist) are below the max size threshold
+        ret = Utils.archiveLogs(filename_csv, Registry.maximumLogFileSize_bytes)
+        if ret == True:
+            Utils.Message.addMessage("__diskloggerThread. " + str(filename_csv) + \
+                               " auto archived")
+        elif ret == None:
+            Utils.Message.addMessage("ERR:__diskloggerThread. " + str(filename_csv) + \
+                               " auto archive error")
+        else:
+            pass
+
+        # Check to see if exporting of Events as JSON is enabled in Registry
+        if Registry.enableJsonEventsLog:
+            # If so, check size of existing JSON log file and archive if necessary
+            ret = Utils.archiveLogs(filename_json, Registry.maximumLogFileSize_bytes)
+            if ret == True:
+                Utils.Message.addMessage("__diskloggerThread. " + str(filename_json) + \
+                                   " auto archived")
+            elif ret == None:
+                Utils.Message.addMessage("ERR:__diskloggerThread. " + str(filename_json) + \
+                                   " auto archive error")
+            else:
+                pass
+
+        # Create a file and write a header (if necessary)
+        # For the CSV file
+        createLogFile(filename_csv, "Event summary")
+        # For the Json file
+        createLogFile(filename_json, "Event Log json file")
+
+        # Get dictionary of available rtpRxStreams as a list
+        # This will return a list of tuples [0]= sync Source id, [1]=the actual RtpStream object
+        availableRtpRxStreamList = []
+        # temp =[]
+        # Iterate over tuples returned by items() to create a list of tuples
+        rtpStreamsDictMutex.acquire()
+        for k,v in rtpStreamsDict.items():
+            temp = [k, v]
+            availableRtpRxStreamList.append(temp)
+        rtpStreamsDictMutex.release()
+
+        # rtpStreamsList = ctrlAPI.
+        if len(availableRtpRxStreamList) > 0:
+            # Iterate over availableRtpRxStreamList looking for new events
+            for currentRtpStream in availableRtpRxStreamList:
+
+                # Attempt to access rtpStream events list
+                # and create a sublist of the just the latest elements
+                try:
+                    allEvents = currentRtpStream[1].getRTPStreamEventList()
+
+                    # Now check to see if there are any previously unwritten events in the allEvents list
+                    # Subtract lastWrittenEventNo from most recent eventNo
+                    if len(allEvents) > 0:
+                        # Determine the new events for this particular stream
+                        # Note, if this stream is 'brand new' the key for that stream won't exist yet, so create it
+                        # and set it to a default value of 0 (because we haven't written any events yet from that RtpStream object)
+                        if not currentRtpStream[0] in lastWrittenEventNoDict:
+                            lastWrittenEventNoDict[currentRtpStream[0]] = 0
+
+                        # Determine the last event no for this stream written to disk
+                        lastWrittenEventNo = lastWrittenEventNoDict[currentRtpStream[0]]
+                        # Determine the latest event no present in the allEvents list
+                        latestEventNo = allEvents[-1].eventNo
+
+                        # Check to see if the eventsList has been reset in the mean time. This could happen if the
+                        # Receiver resets its stats/deletes a receive stream. In which case the event no's would restart
+                        if latestEventNo < lastWrittenEventNo:
+                            Utils.Message.addMessage("DBUG:__diskLoggerThread()Stats/Events for stream " +\
+                                                     str(currentRtpStream[0]) + " reset by Receiver")
+                            # If so, we'll need to re-add all the events from the events list
+                            newEvents = len(allEvents)
+
+                        else:
+                            # This is the default case, where the most recent events in allEvents are likely to have
+                            # not been written to disk yet
+                            # Calculate how many new (i.e not yet written to disk) events there in are in this
+                            # RtpStream object
+                            newEvents = latestEventNo - lastWrittenEventNo
+
+                        if newEvents > 0:
+                            # There are outstanding events to be written
+                            # Slice the latest portion of the allEvents list into a sub list
+                            latestEvents = allEvents[(newEvents * -1):]
+                except Exception as e:
+                    Utils.Message.addMessage("DBUG: __diskLoggerThread - determining new events" + str(e))
+
+                # Confirm to see that there are some events in the list
+                if len(latestEvents) > 0:
+                    # Open the files for writing (a denotes 'append', + denotes read/write
+                    try:
+                        file_csv = open(filename_csv, "a+")
+                        file_json = open(filename_json, "a+")
+                        for event in latestEvents:
+                            # Get the event data in csv format
+                            eventString = event.getCSV()+"\n"
+                            # Write the event(s) to disk
+                            file_csv.write(eventString)
+                            # Check to see if JSON file writing is enabled
+                            # Get a json object from the event (as a string)
+                            if Registry.enableJsonEventsLog:
+                                eventAsJson = event.getJSON() + "\n"
+                                file_json.write(eventAsJson)
+                            lastWrittenEventNo = event.eventNo
+                            # Make a note of the last written event no against this stream id key
+                            lastWrittenEventNoDict[currentRtpStream[0]] = event.eventNo
+                        # Close the files
+                        file_csv.close()
+                        file_json.close()
+                        # Empty the latestEvents list
+                        del latestEvents[:]
+                    except Exception as e:
+                        Utils.Message.addMessage("DBUG: __diskLoggerThread - appending to file" + str(e) +\
+                                                 " len(latestEvents) " + str(len(latestEvents)) +\
+                                                ", lastWrittenEventNo " + str(lastWrittenEventNo) +\
+                                                 ", " + str(latestEvents))
+                        Utils.Message.addMessage("ERR:__diskLoggerThread() Possibly corrupted event. Skipping event " +\
+                                                 str(lastWrittenEventNoDict[currentRtpStream[0]] + 1))
+                        # inncrement lastWrittenEventNoDict for this stream id
+                        lastWrittenEventNoDict[currentRtpStream[0]] += 1
+
+        # Finally, iterate over lastWrittenEventNoDict{} to confirm that all the stream objects listed
+        # inside it still exist in rtpStreamsDict{} (in other words, synchronise the deletions within
+        # rtpStreamsDict{} to lastWrittenEventNoDict{}
+        # This will prevent lastWrittenEventNoDict from filling up with orphan streams
+        orphanStreamsToDelete =[]
+        rtpStreamsDictMutex.acquire()
+        for stream in lastWrittenEventNoDict:
+            # Check for existence of key[stream] within rtpStreamsDict
+            if stream in rtpStreamsDict:
+                # If it is, do nothing
+                pass
+            else:
+                # If key no longer exists, add it to the list to be purged from lastWrittenEventNoDict{}
+                orphanStreamsToDelete.append(stream)
+        rtpStreamsDictMutex.release()
+
+        # Now delete all keys listed in orphanStreamsToDelete[] from lastWrittenEventNoDict{}
+        for stream in orphanStreamsToDelete:
+            Utils.Message.addMessage("INFO: _diskLoggerThread: Deleting orphan stream " + str(stream) + " from lastWrittenEventNoDict")
+            del lastWrittenEventNoDict[stream]
+        time.sleep(1)
+
+    # If execution gets here, the thread is ending....
+    try:
+        # check to see if object file_csv has a close() method (it won't if it hasn't been written to yet)
+        if "close" in dir(file_csv):
+            Utils.Message.addMessage("__diskloggerThread: Closing file " + str(filename_csv))
+            file_csv.close()
+        # check to see if object file_json has a close() method (it won't if it hasn't been written to yet)
+        if "close" in dir(file_json):
+            Utils.Message.addMessage("__diskloggerThread: Closing file " + str(filename_json))
+            file_json.close()
+    except Exception as e:
+        Utils.Message.addMessage("ERR: __diskloggerThread. Error closing file " + str(e))
 # Autonomous object to send UDP messages. It spawns a thread that will permanently monitor the txMessageQueue
 # All other threads that need to send using the udpSocket can do so by putting items on the queue
 # The thread relies upon a UDP socket having been previously created
@@ -4323,6 +4523,29 @@ class ISPTestHTTPServer(object):
         #     except Exception as e:
         #         Utils.Message.addMessage("ERR:ISPTestHTTPServer.HTTPRequestHandler.getStreamtByID() " + str(e))
         #         return []
+            # Shortcut method to take raw POST or GET Query data (*as unicode*, of the form key1=value1&key2=value2...
+            # (TIP use .decode('UTF-8') to convert an ASCII string to unicode)
+            # It will then return two items a list of args and a dict of kwargs that can be passed straight to a function/method.
+            # Required args are contained within a list, and optional args as a dict
+            # The parameters should be passed to the target method as follows reVal = myFunc(*requiredArgs, **optionalArgs)
+            # The '*' and '**' will expand out the requiredArgsList and optionalArgsDict respectively
+            # Additionally, it will check to see that all the keys in rawKeysValuesString have been used.
+            # If not, it will raise an Exception
+        def convertKeysToMethodArgs(self, rawKeysValuesString, requiredArgKeysList, optionalArgKeysList):
+            # parse the rawKeysValuesString and convert to a dict
+            post_data_dict = parse_qs(rawKeysValuesString)
+            # 'Pythonize' post_data_dict to convert it from all strings to ints/bools etc
+            # and reduce values of single length lists to a single value
+            parsedPostDataDict = Utils.mapURLQueryToFnArgs(post_data_dict)
+            # Create list of mandatory args. *This will fail* if not al the keys are present in post_data_dict
+            requiredArgsList = [parsedPostDataDict[key] for key in requiredArgKeysList]
+            # Now create a sub-dict of the just the optional keys
+            optionalArgsDict = Utils.extractWantedKeysFromDict(parsedPostDataDict, optionalArgKeysList)
+            # Finally remove the 'expected' keys from parsedPostDataDict to see if any unexpected keys are left over
+            Utils.removeMultipleDictKeys(parsedPostDataDict, requiredArgKeysList + optionalArgKeysList)
+            if len(parsedPostDataDict) > 0:
+                raise Exception(f"convertKeysToMethodArgs() unexpected keys provided {parsedPostDataDict}")
+            return requiredArgsList, optionalArgsDict
 
         def do_GET(self):
             # Split the path into a list
@@ -4352,11 +4575,22 @@ class ISPTestHTTPServer(object):
                 # Else if there are subfolders in the path
                 while pathIndex < pathLen: # Will execute if pathlen > 0
                     currentStep = pathList[pathIndex]   # Get the current step
-                    if currentStep == "streams":        # Test the path step
+                    if str(currentStep).startswith("streams"):        # Test the path step
                         if pathIndex == pathLen - 1:    # Is this the last step of the path
                             # /streams
+                            # Split of the URL and query (?key=value suffixes)
+                            urlDecoded = urlparse(self.path)
+                            path = urlDecoded.path
+                            query = urlDecoded.query
+                            # Parse query to create a list of optional parameters to be passed to targetMethod()
+                            # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
+                            # This method will raise an exception if any unexcpected query args are present
+                            notUsed, optionalArgs = self.convertKeysToMethodArgs(query, [],
+                                                            ["requestedStreamID", "streamType", "httpPort"])
+
+
                             # Return the entire list of streams without any filtering
-                            response = (json.dumps(self.server.parentObject.getStreamByFilter(),
+                            response = (json.dumps(self.server.parentObject.getStreamByFilter(**optionalArgs),
                                                    sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
                             # Create the headers
                             self._set_response(contentType='application/json')
@@ -5232,7 +5466,7 @@ def main(argv):
         # Create the server object
         isptesttHTTPServer = ISPTestHTTPServer(operationMode=MODE, tcpListenPort=httpListenPort,
                                                externalResourcesDict=sharedObjects)
-        # Get the TCP listener port from the ISPTestHTTPServer object
+        # Get the actual TCP listener port from the ISPTestHTTPServer object itself
         isptesttHTTPServerPort = isptesttHTTPServer.getTCPPort()
     except Exception as e:
         Utils.Message.addMessage("ERR:isptesttHTTPServer = ISPTestHTTPServer() " + str(e))
@@ -5262,7 +5496,8 @@ def main(argv):
             Utils.Message.addMessage("ERR:main() Create RtpGenerator() " + str(e))
 
         # Create a diskLogging Thread - pass rtpStream TX dict to it
-        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, shutdownFlag,))
+        diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
+                                                                             shutdownFlag,isptesttHTTPServerPort,))
         diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
         diskLoggerThread.setName("__diskLoggerThread")
         diskLoggerThread.start()

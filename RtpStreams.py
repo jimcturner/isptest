@@ -1382,13 +1382,6 @@ class RtpReceiveCommon(RtpCommon):
                 Utils.Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(start) + ":" +
                                          str(end) + ") requested start and end indexes out of range: " + str(e))
                 filteredEventList = []
-        # if recent is not None:
-        #     # Return the last n events (or else, if kwarg 'recent' is specified'
-        #     # IF event list not as long as n, return what does exist
-        #     try:
-        #         filteredEventList = filteredEventList[(recent * -1):]
-        #     except:
-        #         pass
 
         # Finally, if reverseOrder=True, reverse the order of the returned list
         if reverseOrder:

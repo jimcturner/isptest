@@ -1763,6 +1763,18 @@ class APIHelper(object):
         except Exception as e:
             raise Exception(f"ERR: APIHelper.getRTPStreamEventListAsSummary() params: {kwargs}, error: {e}")
 
+    # Gets a list of the available streams
+    # This will return a list of dicts (each dict contains a stream definition)
+    def getStreamsList(self, **kwargs):
+        url = f"http://{self.addr}:{self.port}/streams"
+        try:
+            r = requests.get(url, params=kwargs, timeout=self.timeout)
+            # test the response
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+            # Attempt to decode the response as json and return it
+            return r.json()
+        except Exception as e:
+            raise Exception(f"ERR: APIHelper.getStreamsList() params: {kwargs}, error: {e}")
 
 
 
