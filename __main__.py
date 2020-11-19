@@ -3574,10 +3574,13 @@ class UI(object):
         # Calculate the maximum no. of rows that can be displayed in the stream table - determined by the terminal height
         streamTableNoOfRows = int(self.currentTermHeight / 2) - 9
 
+        # Get a list of current RTP Streams
+        streamsList = self.ctrlAPI.getStreamsList()
         # Get a handle on the dataset to be displayed in this particular table
         # The dataset is pointed to by the 3rd element of each view array
         dataSetToDisplay = self.views[self.selectedView][2]
-        streamTableDataSetLength = len(dataSetToDisplay)
+        # streamTableDataSetLength = len(dataSetToDisplay)
+        streamTableDataSetLength = len(streamsList)
 
         if streamTableDataSetLength == 0:
             self.selectedTableRow = 0
@@ -3627,6 +3630,7 @@ class UI(object):
                     streamData = dataSetToDisplay[x]
                     # Retrieve the stats dictionary for that key
                     streamDataStats = streamData[1].getRtpStreamStats()
+                    # streamDataStats = Utils.APIHelper(streamsList[x][httpPort]).
                     # iterate over the keys list for each stream - this will list in a new tableData row per stream
                     tableRow = []  # Create new row to hold the data
                     ###################################### These are the lines that actually populate the table

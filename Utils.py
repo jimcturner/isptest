@@ -1785,9 +1785,29 @@ class APIHelper(object):
         except Exception as e:
             raise Exception(f"ERR: APIHelper.getStreamsList() params: {kwargs}, error: {e}")
 
+    # Queries the GET /stats endpoint
+    def getStats(self, **kwargs):
+        url = f"http://{self.addr}:{self.port}/stats"
+        try:
+            r = requests.get(url, params=kwargs, timeout=self.timeout)
+            # test the response
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+            # Attempt to decode the response as json and return it
+            return r.json()
+        except Exception as e:
+            raise Exception(f"ERR: APIHelper.getStats() params: {kwargs}, error: {e}")
 
-
-
+    # Queries the GET /txstats endpoint (only works on RTPgenerator objects)
+    def getTxStats(self, **kwargs):
+        url = f"http://{self.addr}:{self.port}/txstats"
+        try:
+            r = requests.get(url, params=kwargs, timeout=self.timeout)
+            # test the response
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+            # Attempt to decode the response as json and return it
+            return r.json()
+        except Exception as e:
+            raise Exception(f"ERR: APIHelper.getTxStats() params: {kwargs}, error: {e}")
 
 
 # Renders a nested dict of dicts as an html table
