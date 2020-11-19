@@ -4165,7 +4165,7 @@ class ISPTestHTTPServer(object):
 
     # Threadsafe method to get a filtered version of streamsList
     # If all args are 'None' i.e not set, it will return the whole list
-    def getStreamByFilter(self, requestedStreamID=None, streamType=None, httpPort=None):
+    def getStreamByFilter(self, streamID=None, streamType=None, httpPort=None):
         # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
         self.streamsListMutex.acquire()
         streamsList = list(self.streamsList)
@@ -4173,7 +4173,7 @@ class ISPTestHTTPServer(object):
 
         filteredStreamList = []
         try:
-            # Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) + \
+            # Utils.Message.addMessage("getStreamByID() streamID is" + str(requestedStreamID) + \
             #                          ", streamType is " + str(streamType))
 
             if httpPort is not None:
@@ -4181,24 +4181,24 @@ class ISPTestHTTPServer(object):
                 filteredStreamList = list(
                     filter(lambda stream: stream["httpPort"] == int(httpPort), streamsList))
 
-            elif requestedStreamID is None and streamType is None:
+            elif streamID is None and streamType is None:
                 # No filtering specified, just return the entire list
                 filteredStreamList = streamsList
 
-            elif requestedStreamID is not None and streamType is None:
+            elif streamID is not None and streamType is None:
                 # Filter by streamID
                 # Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
                 filteredStreamList = list(
-                    filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
+                    filter(lambda stream: stream["streamID"] == int(streamID), streamsList))
 
-            elif requestedStreamID is None and streamType is not None:
+            elif streamID is None and streamType is not None:
                 # Filter by streamType
                 filteredStreamList = list(
                     filter(lambda stream: stream["streamType"] == streamType, streamsList))
             else:
                 # filter by streamID and streamType
                 filteredStreamList = list(
-                    filter(lambda stream: stream["streamID"] == int(requestedStreamID) and
+                    filter(lambda stream: stream["streamID"] == int(streamID) and
                                           stream["streamType"] == streamType, streamsList))
 
             return filteredStreamList
@@ -4386,7 +4386,7 @@ class ISPTestHTTPServer(object):
                             # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
                             # This method will raise an exception if any unexcpected query args are present
                             notUsed, optionalArgs = self.convertKeysToMethodArgs(query, [],
-                                                            ["requestedStreamID", "streamType", "httpPort"])
+                                                            ["streamID", "streamType", "httpPort"])
 
                             # Return the entire list of streams without any filtering
                             response = (json.dumps(self.server.parentObject.getStreamByFilter(**optionalArgs),

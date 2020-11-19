@@ -1692,7 +1692,15 @@ class RtpReceiveStream(RtpReceiveCommon):
                 r = requests.get(f"http://127.0.0.1:{self.tcpListenPort}", timeout=1)
                 r.raise_for_status()  # Will raise an Exception if there was a problem
                 Utils.Message.addMessage(f"INFO:RTPReceiveStream({self.syncSourceIdentifier}) http server successfully running on port {self.tcpListenPort}")
-                # Now register the stream with the stream directory service
+
+
+            except Exception as e:
+                Utils.Message.addMessage(f'ERR:RtpReceiveStream.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
+
+            # Now register the stream with the stream directory service
+            # Note: If this fails, __samplingThread performs a 1 sec check to see if registration was successful,
+            # and if not, attempts to re-add the stream
+            try:
                 # Create a dict to define the stream
                 streamDefinition = {
                     "streamID": self.__stats["stream_syncSource"],
@@ -1701,9 +1709,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                 }
                 # Register the stream
                 self.ctrlAPI.addToStreamsDirectory(streamDefinition)
-
             except Exception as e:
-                Utils.Message.addMessage(f'ERR:Couldn\'t create httpServerThread {self.__stats["stream_syncSource"]}, {e}')
+                Utils.Message.addMessage(
+                    f'ERR:RtpReceiveStream.__init__() Initial stream Registration failed {self.syncSourceIdentifier}, {e}')
 
             # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
             self.rtpRxStreamsDictMutex.acquire()
@@ -2682,6 +2690,34 @@ class RtpReceiveStream(RtpReceiveCommon):
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
+
+
+                # Finally verify that this stream has been successfully registered with the directory
+                # This should happen at the point of stream creation (in __init__()) but may fail
+                # if the server is busy
+                try:
+                    streamsList = self.ctrlAPI.getStreamsList(streamID=self.syncSourceIdentifier)
+                    # Test to see if response contains an entry for this stream
+                    if streamsList[0]["streamID"] == self.syncSourceIdentifier and \
+                            streamsList[0]["streamType"] == "RtpReceiveStream":
+                        # Utils.Message.addMessage(f"RtpReceiveStream {self.syncSourceIdentifier} exists in streamsList")
+                        pass
+                except:
+                    # stream doesn't exist, so need to register it
+                    # Create a dict to define the stream
+                    streamDefinition = {
+                        "streamID": self.syncSourceIdentifier,
+                        "httpPort": self.tcpListenPort,
+                        "streamType": "RtpReceiveStream"
+                    }
+                    try:
+                        # Register the stream
+                        self.ctrlAPI.addToStreamsDirectory(streamDefinition)
+                        Utils.Message.addMessage(f"DBUG:RtpReceiveStream.__samplingThread({self.syncSourceIdentifier}) "\
+                                                 f"successful stream registration")
+                    except Exception as e:
+                        Utils.Message.addMessage(f"ERR:RtpReceiveStream.__samplingThread({self.syncSourceIdentifier})"\
+                                                 f" registration fail {e}")
 
                 # Utils.Message.addMessage("Tx pid " + str(self.__stats["stream_transmitter_PID"]) )
 
@@ -3829,17 +3865,25 @@ class RtpGenerator(RtpCommon):
             r.raise_for_status()  # Will raise an Exception if there was a problem
             Utils.Message.addMessage(
                 f"INFO:RTPGenerator({self.syncSourceIdentifier}) http server successfully running on port {self.tcpListenPort}")
-            # Now register the stream with the stream directory service
+
+        except Exception as e:
+            Utils.Message.addMessage(f'ERR:RTPGenerator.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
+
+        # Now register the stream with the stream directory service
+        # Note: If this fails, __samplingThread performs a 1 sec check to see if registration was successful,
+        # and if not, attempts to re-add the stream
+        try:
             # Create a dict to define the stream
             streamDefinition = {
                 "streamID": self.syncSourceIdentifier,
                 "httpPort": self.tcpListenPort,
                 "streamType": "RtpGenerator"
             }
+            # Register the stream
             self.ctrlAPI.addToStreamsDirectory(streamDefinition)
-
         except Exception as e:
-            Utils.Message.addMessage(f'ERR:Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
+            Utils.Message.addMessage(
+                f'ERR:RTPGenerator.__init__() Initial stream Registration failed {self.syncSourceIdentifier}, {e}')
 
     def getRtpStreamStats(self):
         # Returns a dictionary of useful stats
@@ -4700,6 +4744,33 @@ class RtpGenerator(RtpCommon):
 
                 # Increment elapsed time counter - add a second
                 self.elapsedTime += datetime.timedelta(seconds=1)
+
+                # Finally verify that this stream has been successfully registered with the directory
+                # This should happen at the point of stream creation (in __init__()) but may fail
+                # if the server is busy
+                try:
+                    streamsList = self.ctrlAPI.getStreamsList(streamID=self.syncSourceIdentifier)
+                    # Test to see if response contains an entry for this stream
+                    if streamsList[0]["streamID"] == self.syncSourceIdentifier and \
+                            streamsList[0]["streamType"] == "RtpGenerator":
+                        # Utils.Message.addMessage(f"RtpReceiveStream {self.syncSourceIdentifier} exists in streamsList")
+                        pass
+                except:
+                    # stream doesn't exist, so need to register it
+                    # Create a dict to define the stream
+                    streamDefinition = {
+                        "streamID": self.syncSourceIdentifier,
+                        "httpPort": self.tcpListenPort,
+                        "streamType": "RtpGenerator"
+                    }
+                    try:
+                        # Register the stream
+                        self.ctrlAPI.addToStreamsDirectory(streamDefinition)
+                        Utils.Message.addMessage(f"DBUG:RtpGenerator.__samplingThread({self.syncSourceIdentifier}) " \
+                                                 f"successful stream registration")
+                    except Exception as e:
+                        Utils.Message.addMessage(f"ERR:RtpGenerator.__samplingThread({self.syncSourceIdentifier})" \
+                                                 f" registration fail {e}")
 
             ######## 1 second counter end of code ########
 
