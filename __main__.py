@@ -557,7 +557,7 @@ class InvalidTxRateSpecifier(Exception):
     pass
 
 # A class that will be responsible for rendering the display and catching keyboard output
-class UI(object):
+class UIold(object):
     def __init__(self,operationMode, specialFeaturesModeFlag,
                     rtpTxStreamsDict, rtpTxStreamsDictMutex,
                     rtpRxStreamsDict, rtpRxStreamsDictMutex,
@@ -3124,6 +3124,2573 @@ class UI(object):
 
         Utils.Message.addMessage("DBUG: UI.__keysPressedThread ended")
 
+# A class that will be responsible for rendering the display and catching keyboard output
+class UI(object):
+    def __init__(self,operationMode, specialFeaturesModeFlag,
+                    rtpTxStreamsDict, rtpTxStreamsDictMutex,
+                    rtpRxStreamsDict, rtpRxStreamsDictMutex,
+                    rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
+                    receiversAndSendersList, controllerTCPPort=None):
+
+        self.operationMode = operationMode
+        self.specialFeaturesModeFlag = specialFeaturesModeFlag
+        self.rtpTxStreamsDict = rtpTxStreamsDict
+        self.rtpTxStreamsDictMutex = rtpTxStreamsDictMutex
+        self.rtpRxStreamsDict = rtpRxStreamsDict
+        self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
+        self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
+        self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
+
+        self.receiversAndSendersList = receiversAndSendersList # This will contain the UDP_RX_IP and  UDP_RX_PORT(s)
+        self.controllerTCPPort = controllerTCPPort # The TCP listen port for the HTTP server
+        # Create an API helper
+        self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort, addr="127.0.0.1")
+        self.pid = os.getpid() # Stores the processID (pid of this process. Used as a source id in
+        # control messages sent back to the transmitter (so that the source of the message can be identified)
+
+
+        # self.UDP_RX_IP = ""
+        # self.UDP_RX_PORT = 0
+
+        # Create a runtime_s counter to count the elapsed time the program has been running
+        self.startTime = datetime.datetime.now()
+        self.runtime_s = datetime.timedelta()
+
+        # If true, this will cause renderDisplayThread to put up a quit y/n? prompt
+        self.displayQuitDialogueFlag = False
+        # threading.Event object used to intentionally block the showShutDownDialogue() method
+        self.quitDialogueNotActiveFlag = threading.Event()
+        # This will store the result of the user response
+        self.quitConfirmed = False
+
+        # A pointer to the method which will render the popup (if any) to be displayed by __renderDisplayThread()
+        self.displayPopup = None
+        # Used by the Pop-Up tables (Events, Traceroute etc) . Keeps track of the current display page
+        self.tablePageNo = 0
+        # Used to send popup error messages to UI.__renderDisplayThread
+        self.displayFatalErrorDialogue = False
+        self.fatalErrorDialogueMessageText = ""
+        self.fatalErrorDialogueTitle = ""
+        # Used by the EventsTable and CopyToClipboard
+        # Currently, if the list is populated, the events table will only show that type of Event
+        self.filterListForDisplayedEvents = [None,
+                                             [Glitch],
+                                             [Glitch, StreamResumed],
+                                             [StreamStarted, StreamLost, StreamResumed],
+                                             [IPRoutingTracerouteChange, IPRoutingTTLChange]
+                                             ]
+        self.selectedFilterNo = 0    # Specifies which filter option within filterListForDisplayedEvents[] is in use
+
+        self.popupSortDescending = False   # Reverses the order of the results for popup tables
+
+        # A list of the available criteria by which a stream can be compared (and a display friendly name)
+        # These criteria map to stats{} dictionary keys within RtpReceiveStream and RtpStreamresults objects
+        self.criteriaListForCompareStreams = [
+                                                ["glitch_packets_lost_total_percent", "Packet loss %"],
+                                                ["glitch_packets_lost_total_count", "Total packets lost"],
+                                                ["glitch_counter_total_glitches", "Total no of glitches"],
+                                                ["glitch_most_recent_timestamp", "Most recent glitch"],
+                                                ["glitch_mean_time_between_glitches", "Glitch period(how often)"],
+                                                ["glitch_packets_lost_per_glitch_max", "Worst loss (packets)"],
+                                                ["glitch_max_glitch_duration", "Worst glitch (duration)"],
+                                                ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss"],
+                                                ["glitch_mean_glitch_duration", "Mean glitch duration"]
+                                              ]
+        self.selectedCriteriaForCompareStreams = 0 # Specifies which stream compare criteria is in use
+                                                    # (within the criteriaListForCompareStreams[] list)
+
+        # Thread running flags
+        self.keysPressedThreadActive = True
+        self.renderDisplayThreadActive = True
+        self.detectTerminalSizeThreadActive = True
+
+        # Stores the last pressed keystroke
+        self.keyPressed = None
+
+        # Enables keyboard key press detection via __getch()
+        self.enableGetch = threading.Event()
+        # Allows other parts of the program to query the current status of the __keysPressedThread
+        self.getchIsDisabled = threading.Event()
+        self.wakeUpUI = threading.Event()
+
+        # Flag to trigger redrawing of the screen
+        self.redrawScreen = True
+        # Get initial size of terminal
+        self.currentTermWidth, self.currentTermHeight = Term.getTerminalSize()
+
+        # Declare lists to hold list of available rx and tx streams that can be displayed
+
+        # These lists are a list of tuples [x,y,z] where
+        # [x=streamID (as a string), y=the tx/rx object itself, z=an index value]
+        #
+        # The array is populated by the use of the utility function __updateAvailableStreamsList()
+        # Meanwhile, main() is declaring three dictionaries, rtpTxStreamsDict, rtpTxResultsDict and  rtpRxStreamsDict
+        # The issue with these dictionaries is that the order of them can change (when you iterate through them) making them
+        # unsuitable for __displayThread which needs to maintain a chronological order of streams added/removed for display
+        # and control purposes
+        #
+        # Therefore the job of __updateAvailableStreamsList() is to poll the supplied dictionary and synchronise any changes
+        # (additions or deletions) in the dictionaries to the corresponding lists
+
+        self.availableRtpRxStreamList = []
+        self.availableRtpTxStreamList = []
+        self.availableRtpTxResultsList = []
+
+        self.selectedView = 0  # Keeps track of which view is currently being displayed
+        self.selectedTableRow = 0  # Keeps track of the selected row on the stream table
+        self.streamTableFirstRow = 0  # Tracks the current starting row of the stream table data
+        self.streamTableLastRow = 0  # Tracks the current end row of the stream table data
+        self.selectedStream = None  # Tracks the stream currently highlighted in the streams table
+        self.selectedStreamID = 0 # Tracks the sync source ID of the stream currebtly highlighted
+        # Screen label showing the available key commands (depending upon mode)
+        self.keyCommandsString = "[h]elp, [a]bout, [d]elete, [l]abel, [r]eport, [t]raceroute, com[p]are"
+
+        self.txStreamModifierCommandsString = "TX  modifiers: [1/2] packet size, [3/4] tx rate, [5/6] lifetime, [b]urst"
+        # Add "new" command for TX mode
+        if self.operationMode == 'LOOPBACK' or self.operationMode == 'TRANSMIT':
+            self.txStreamModifierCommandsString += ", [n]ew "
+
+        # Extra command strip for 'special features' mode
+        self.extraKeyCommandsString = "[7] enable/disable stream, [8] jitter on/off, [9] minor loss, [0] major  loss"
+
+        # define views, tables headings and keys
+        # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
+        # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
+        # views =[name of view 1, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],
+        #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],dataSet[]]
+        # view [n][0] will be the name of the view (used to generate the navigation bar)
+        # view [n][1] is a tuple containing [column title, the stats dictionary key relating to that parameter]
+        # view [n][2] is a reference to the dataset for this view
+        self.views = []
+
+        if self.operationMode == 'LOOPBACK' or self.operationMode == 'TRANSMIT':
+            self.views.append([Term.FG(Term.RED) + "Tx Streams",
+                          [["#", 0],  # Used as an index[]
+                           ["Name", 'Friendly Name'], # [column title, dictionary key containing that value]
+                           ["Src\nPort", 'Tx Source Port'],
+                           ["Dest\n IP", 'Dest IP'],
+                           ["Dest\nPort", 'Dest Port'],
+                           ["Sync\nsrcID", 'Sync Source ID'],
+                           ["Tx\nbps", 'Tx Rate (actual)'],
+                           ["Size", 'Packet size'],
+                           ["Bytes\n tx'd", 'Bytes transmitted'],
+                           [" Time\nremain", 'Time to live']
+                           ], self.availableRtpTxStreamList]) # data source
+
+        # If actually the receiving end, use availableRtpRxStreamList[] as a source for the stream tables
+        if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
+            self.streamResultsDataSet = self.availableRtpRxStreamList
+
+        # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
+        else:
+            self.streamResultsDataSet = self.availableRtpTxResultsList
+
+        self.views.append(["Summary",
+                      [["#", 0],  # Used as an index
+                       ["Name", "stream_friendly_name"],
+                       ["Src Addr", "stream_srcAddress"],
+                       # ["port", "stream_srcPort"],
+                       ["bps", "packet_data_received_1S_bytes"],
+                       ["Pkts\nlost", "glitch_packets_lost_total_count"],
+                       [" %\nloss", "glitch_packets_lost_total_percent"],
+                       ["Time since\nlast glitch", "glitch_time_elapsed_since_last_glitch"],
+                       ["glitch\nperiod", "glitch_mean_time_between_glitches"],
+                       ["Count", "glitch_counter_total_glitches"]
+                       ], self.streamResultsDataSet])
+
+        self.views.append(["Stream",
+                      [["#", 0],  # Used as an index
+                       ["Name", "stream_friendly_name"],
+                       ["Sync \nSrcID", "stream_syncSource"],
+                       ["Src Addr", "stream_srcAddress"],
+                       ["Src\nport", "stream_srcPort"],
+                       ["Dst Addr", "stream_rxAddress"],
+                       ["Dst\nport", "stream_rxPort"],
+                       ["  Time\nelapsed", "stream_time_elapsed_total"]
+                       ], self.streamResultsDataSet])
+
+        self.views.append(["Packet",
+                      [["#", 0],  # Used as an index[]
+                       ["Name", "stream_friendly_name"],
+                       ["First Seen\npacket", "packet_first_packet_received_timestamp"],
+                       ["Last seen\npacket", "packet_last_seen_received_timestamp"],
+                       ["pack\np/s", "packet_counter_1S"],
+                       ["Length\n(bytes)", "packet_payload_size_mean_1S_bytes"],
+                       ["Recv\nperiod", "packet_mean_receive_period_uS"],
+                       ["Bytes\nRcvd", "packet_data_received_total_bytes"],
+                       ["TTL", "packet_instantaneous_ttl"]
+                       # ["",""],
+                       ], self.streamResultsDataSet])
+
+        self.views.append(["Glitch",
+                      [["#", 0],  # Used as an index[]
+                       ["Name", "stream_friendly_name"],
+                       ["Mean\nloss", "glitch_packets_lost_per_glitch_mean"],
+                       ["Max\nloss", "glitch_packets_lost_per_glitch_max"],
+                       ["Total\nloss", "glitch_packets_lost_total_count"],
+                       ["Mean\nduration", "glitch_mean_glitch_duration"],
+                       ["Max\nduration", "glitch_max_glitch_duration"],
+                       ["Total\nGlitch", "glitch_counter_total_glitches"],
+                       ["Ignored", "glitch_glitches_ignored_counter"],
+                       ["Threshold", "glitch_Event_Trigger_Threshold_packets"]
+                       ], self.streamResultsDataSet])
+
+        self.views.append(["Historic",
+                      [["#", 0],  # Used as an index[],
+                       ["Name\n", "stream_friendly_name"],
+                       ["24Hr\n", "historic_glitch_counter_last_24Hr"],
+                       ["1Hr\n", "historic_glitch_counter_last_1Hr"],
+                       ["10Min\n", "historic_glitch_counter_last_10Min"],
+                       ["1Min\n", "historic_glitch_counter_last_1Min"],
+                       ["10Sec\n", "historic_glitch_counter_last_10Sec"],
+                       [" Time of\nlast glitch", "glitch_most_recent_timestamp"]
+                       # ["", ""],
+                       ], self.streamResultsDataSet])
+
+        self.views.append(["Jitter",
+                      [["#", 0],  # Used as an index[]
+                       ["Name", "stream_friendly_name"],
+                       ["Long term\n  mean", "jitter_long_term_uS"],
+                       ["Min", "jitter_min_uS"],
+                       ["Max", "jitter_max_uS"],
+                       ["Range", "jitter_range_uS"],
+                       ["1S \nmean", "jitter_mean_1S_uS"],
+                       ["10S \nmean", "jitter_mean_10S_uS"]
+                       ], self.streamResultsDataSet])
+
+        self.views.append(["NAT",
+                      [["#", 0],  # Used as an index[]
+                       ["src\nport", "stream_transmitter_local_srcPort"],
+                       ["Tx Local addr", "stream_transmitter_localAddress"],
+                       ["Tx Natted addr", "stream_srcAddress"],
+                       ["src\nport", "stream_srcPort"],
+                       ["Rx Public addr", "stream_transmitter_destAddress"],
+                       ["Rx Local addr", "stream_rxAddress"]
+                       ],self.streamResultsDataSet])
+
+        # Additionally, for RECEIVE mode, add a further table that will show the transmitter parameters
+        if self.operationMode == 'RECEIVE':
+            self.views.append([Term.FG(Term.RED) + "Transmitter",
+                          [["#", 0],  # Used as an index[]
+                           ["Name", "stream_friendly_name"],
+                           ["Target\nTx Bps", 'stream_transmitter_txRate_bps'],
+                           [" Time\nremain", 'stream_transmitter_TimeToLive_sec'],
+                           ["Return\n loss %", "stream_transmitter_return_loss_percent"]
+                           ], self.streamResultsDataSet])
+        # self.views.append(["Misc",
+        #               [["#", 0],  # Used as an index[]
+        #                ["", ""],
+        #                ["", ""],
+        #                ["", ""],
+        #                ["", ""],
+        #                ["", ""],
+        #                ["", ""],
+        #                ],DATASET_TO_DISPLAY])
+
+        # Stores the most recent message - used to determine whether we need to redraw the message table
+        self.lastMessageAdded = ""
+
+        # Get Initial snapshot of current verbosity level
+        self.intialVerbosityLevel = Utils.Message.verbosityLevel
+        # Flag to turn on/off error messages (verbosity level 1)
+        self.showErrorsFlag = False
+
+
+        # Create/start a thread to monitor the size of the terminal window
+        self.detectTerminalSizeThread = threading.Thread(target=self.__detectTerminalSizeThread, args=())
+        self.detectTerminalSizeThread.daemon = False
+        self.detectTerminalSizeThread.setName("__detectTerminalSizeThread")
+        self.detectTerminalSizeThread.start()
+
+
+        # Create/Start the display rendering thread
+        self.renderDisplayThread = threading.Thread(target=self.__renderDisplayThread, args=())
+        self.renderDisplayThread.daemon = False
+        self.renderDisplayThread.setName("__renderDisplayThread")
+        self.renderDisplayThread.start()
+
+        # Create/Start the keyboard thread
+        self.keysPressedThread = threading.Thread(target=self.__keysPressedThread, args=())
+        self.keysPressedThread.daemon = False
+        self.keysPressedThread.setName("__keysPressedThread")
+        self.keysPressedThread.start()
+
+
+        # Reset the keyPressedEvent event
+        self.wakeUpUI.clear()
+        # Arm the getch thread
+        self.enableGetch.set()
+
+
+    # A method to destroy this UI object and all associated threads
+    def kill(self):
+        # Write the current 'uptime' to disk
+        Utils.Message.addMessage("********* isptest ending. Total run time: " +
+                                 str(Utils.dtstrft(self.runtime_s)) + " *********")
+
+        print ("UI.kill() method called\r")
+        # Signal the __keysPressedThread to end
+        if self.keysPressedThread.is_alive():
+            self.keysPressedThreadActive = False
+            # Block until the thread ends
+            print("UI.kill() Waiting for __keysPressedThread to end\r")
+            self.keysPressedThread.join()
+        # else:
+        #     print("UI.kill() keysPressedThread.is_alive() didn't return True\r")
+
+        if self.renderDisplayThread.is_alive():
+            # End the __renderDisplayThread
+            self.renderDisplayThreadActive = False
+            # Block until the thread ends
+            print("UI.kill() Waiting for renderDisplayThread to end\r")
+            self.renderDisplayThread.join()
+        if self.detectTerminalSizeThread.is_alive():
+            # End the __detectTerminalSizeThread
+            self.detectTerminalSizeThreadActive = False
+            # Block until the thread ends
+            print("UI.kill() Waiting for detectTerminalSizeThread to end\r")
+            self.detectTerminalSizeThread.join()
+
+
+    # This method will cause an error message to be shown by the main __renderDisplayThread
+    # it will wait for a key press, and then cause the app to shut down (without user confirmation) via a SIGTERM
+    def showErrorDialogue(self, errorTitle, errorMessageText):
+        Utils.Message.addMessage("DBUG: UI.showFatalErrorDialogue() called")
+        self.fatalErrorDialogueTitle = errorTitle
+        self.fatalErrorDialogueMessageText = errorMessageText
+        self.displayFatalErrorDialogue = True
+
+
+    # This method will pause the normal screen rendering/key catching and cause a
+    # 'do you want to quit? dialogue to be displayed
+    # It is designed to be a blocking method. It will return True/False depending upon whether
+    # the user confirms the shutdown request
+    def showShutDownDialogue(self):
+        Utils.Message.addMessage("DBUG: UI.showShutDownDialogue() called")
+        # Cause the UI render thread to put up a Quit Y/N prompt
+        self.displayQuitDialogueFlag = True
+        # Clear the threading.Event signal for self.quitDialogueActiveFlag
+        self.quitDialogueNotActiveFlag.clear()
+        # Wake up the UI
+        self.wakeUpUI.set()
+        # Now wait for the __renderDisplayThread to signal that the prompt has been answered (blocking call)
+        # by 'setting' self.quitDialogueNotActiveFlag
+        Utils.Message.addMessage("DBUG: UI.showShutDownDialogue() waiting for self.quitDialogueNotActiveFlag to clear")
+        self.quitDialogueNotActiveFlag.wait()
+        # Return the response to the caller
+        return self.quitConfirmed
+        # return True
+
+
+
+    # A cross-platform method to catch keypresses (and not echo them to the screen)
+    def __getch(self):
+        # Define a getch() function to catch keystrokes (for control of the RTP Generator thread)
+        # This code has been lifted from https://gist.github.com/jfktrey/8928865
+        # It implements a 1sec timeout (on Linux) or 0.2secs (Windows). If no key was detected in the mean time,
+        # it will return None
+        if platform.system() == "Windows":
+            import msvcrt
+            time.sleep(0.2)  # 0.2sec timeout
+            if msvcrt.kbhit():
+                    # return ord(msvcrt.getch())
+                ch = msvcrt.getch()
+                    # Trap Escape sequences prefix codes (only interested in the final digit - Windows esc seq start with 224,x)
+                while ord(ch) == 224:
+                    ch = msvcrt.getch()
+                return ord(ch)
+            else:
+                # print("Getch timeout\r")
+                return None
+
+        else:
+            import tty, termios, sys
+            from select import select  # For timeout functionality
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(sys.stdin.fileno())
+                # Add additional lines for a 1 sec timeout
+                [i, o, e] = select([sys.stdin.fileno()], [], [], 1)
+                # ch = sys.stdin.read(1)
+                if i:
+                    ch = sys.stdin.read(1)
+                    # Trap Escape sequences prefix codes (only interested in the final digit - Linux esc seq start with 27,91,x)
+                    while ord(ch) == 27 or ord(ch) == 91:
+                        ch = sys.stdin.read(1)
+
+                else:
+                    ch = ""
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            # Return the ascii value of the key pressed
+            try:
+                # print ("getch() " + str (ord(ch)) + "\r")
+                return ord(ch)
+            except:
+                # print("Getch timeout\r")
+                return None
+
+    ######### Print Navigation bar (shows the available views)
+    def __drawNavigationBar(self):
+        navigationBar = ""  # Clear navigation bar for next time
+        # Iterate over the views definition extracting the name of the view (view[0])
+        # and create a printable string with colour coding
+        # If the view is currently selected, black on white, otherwise black on cyan
+        for view in self.views:
+            if view[0] == self.views[self.selectedView][0]:
+                # If this is the 'current' view, create black on white
+                navigationBar += Term.BlaWh + " " + view[0] + " " + Term.WhiBlu + " "
+            else:
+                # Otherwise create as dimmed white on cyan
+                navigationBar += Term.BlaCy + " " + view[0] + " " + Term.WhiBlu + " "
+        # To avoid stale characters appearing on the second line, do a periodic clear of line 2
+        Term.setBackgroundColourSingleLine(1, 2, Term.BLUE)
+        # Print the rendered nav bar
+        Term.printAt(navigationBar, 2, 3)
+
+    ######### Print Navigation bar (shows the available views)
+    def __drawStreamsTable(self):
+        # Step 1) Establish the titles, data source and row selector (key list) for the table
+
+        # Create a title row
+        titleRow = []
+        # Create a list of keys that will be accessed for this view
+        keyList = []
+        # Extract the column titles and stats keys for the current view
+        for view in self.views:
+            # Is this view the currently selected view?
+            if view[0] == self.views[self.selectedView][0]:
+                # view[1] represents a tuple containing a column title and a key pair
+                columns = view[1]
+                for column in columns:
+                    titleRow.append(column[0])
+                    keyList.append(column[1])
+
+        # Create a table data list with the title row at the head
+        tableData = [titleRow]
+
+        # Step 2) Populate the remaining table rows with data
+        # Calculate the maximum no. of rows that can be displayed in the stream table - determined by the terminal height
+        streamTableNoOfRows = int(self.currentTermHeight / 2) - 9
+
+        # Get a handle on the dataset to be displayed in this particular table
+        # The dataset is pointed to by the 3rd element of each view array
+        dataSetToDisplay = self.views[self.selectedView][2]
+        streamTableDataSetLength = len(dataSetToDisplay)
+
+        if streamTableDataSetLength == 0:
+            self.selectedTableRow = 0
+
+        # Attempt to create the table data
+        if streamTableDataSetLength > 0:
+            if self.selectedTableRow == 0:
+                self.streamTableFirstRow = 0
+
+            # Is the last selected row outside the range of data (this could happen if the
+            # data gets modified whilst the table is not being displayed
+            if self.selectedTableRow > (streamTableDataSetLength - 1):
+                # If so, point the selector to the last item on the list
+                self.selectedTableRow = (streamTableDataSetLength - 1)
+
+            # Are we about to scroll off the end of the currenty displayed rows?
+            if self.selectedTableRow > self.streamTableLastRow:
+                # If so, increment the index of the first row
+                self.streamTableFirstRow = self.selectedTableRow - streamTableNoOfRows + 1
+
+            # Are we about to scroll off the top of the currently displayed rows?
+            if self.selectedTableRow < self.streamTableFirstRow:
+                # If so, decrement the index of the first row
+                self.streamTableFirstRow = self.selectedTableRow
+
+            # Calculate the last row to display based on the starting row and the height of the table
+            self.streamTableLastRow = self.streamTableFirstRow + streamTableNoOfRows - 1
+
+            # Will the last row be outside the actual range of available stream?
+            if self.streamTableLastRow > (streamTableDataSetLength - 1):
+                # If so, set streamTableLastRow to point to the last line of the available data array
+                self.streamTableLastRow = streamTableDataSetLength - 1
+                # And add appropriate padding if required
+                streamTableBlankRowsToAdd = streamTableNoOfRows - (self.streamTableLastRow - self.streamTableFirstRow) - 1
+            else:
+                streamTableBlankRowsToAdd = 0
+
+        else:
+            # No data to display, so padding out the table instead
+            streamTableBlankRowsToAdd = streamTableNoOfRows
+        try:
+            # Confirm that there are some available streams
+            if streamTableDataSetLength > 0:
+                # Iterate over a specified portion of the dataSetToDisplay[]
+                for x in range(self.streamTableFirstRow, self.streamTableLastRow + 1):
+                    # Isolate the stream from the dataSetToDisplay[]
+                    streamData = dataSetToDisplay[x]
+                    # Retrieve the stats dictionary for that key
+                    streamDataStats = streamData[1].getRtpStreamStats()
+                    # iterate over the keys list for each stream - this will list in a new tableData row per stream
+                    tableRow = []  # Create new row to hold the data
+                    ###################################### These are the lines that actually populate the table
+                    for key in keyList:
+                        # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
+                        # which is stored as the third element of a streamData tuple in the dataSetToDisplay[]
+                        if key == 0:
+                            # Grab the index number and assign to table cell
+                            # The index stored in the array is zero indexed, but for useability, start the
+                            # displayed no starting from 1
+                            tableCell = str(streamData[2] + 1)
+
+                        else:
+                            # This is a normal cell with a lookup key specified in the view definition
+                            try:
+                                # Retrieve the data from the rtpStream object by looking up it's key
+                                # Attempt to humanise the data based on object type or clues given by the key name
+                                tableCell = str(RtpReceiveCommon.humanise(key, streamDataStats[key]))
+
+                                try:
+                                    # is it a receive stream?
+                                    # If so, test the stream stats
+                                    if type(streamData[1]) == RtpReceiveStream or type(
+                                            streamData[1]) == RtpStreamResults:
+                                        # Is the source of this stream an instance of an isptest transmitter?
+                                        # If not (eg. from an NTT) mask the 'Transmitter' pane values as these would
+                                        # be carried in the isptestheader, and will therefore be missing
+                                        if streamDataStats["stream_transmitterVersion"] > 0:
+                                            # If these are isptest-generated packets, leave alone
+                                            pass
+                                        else:
+                                            # Otherwise overwrite the tablecell value for certain keys where the
+                                            # data is not available
+                                            if key == 'stream_transmitter_txRate_bps' or \
+                                                key == 'stream_transmitter_TimeToLive_sec':
+                                                tableCell = "-"
+
+                                        # Colour code the table based on some received bitrate
+                                        if streamDataStats["packet_data_received_1S_bytes"] == 0:
+                                            # If so, make the row red
+                                            tableCell = Term.FG(Term.RED) + tableCell
+
+                                        if type(streamData[1]) == RtpStreamResults:
+                                            # If so, check to see that the data is fresh by looking at the
+                                            # timestamp inside RtpStreamResults
+                                            # If no fresh data received after 5 seconds, assume there's a problem
+                                            # and colour code the stream red
+                                            if (datetime.datetime.now() - streamData[1].lastUpdatedTimestamp) > \
+                                                    datetime.timedelta(seconds=5):
+                                                tableCell = Term.FG(Term.RED) + tableCell
+
+                                    # is it a transmit stream?
+                                    if type(streamData[1]) == RtpGenerator:
+                                        if streamDataStats["Time to live"] == 0:
+                                            # If tx stream has 'died', dim
+                                            tableCell = Term.DIM + tableCell
+
+                                except Exception as e:
+                                    Utils.Message.addMessage(
+                                        "ERR: __displayThread: (colour coding of stream tables) " + str(e) + "**")
+
+                            except Exception as e:
+                                # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
+                                tableCell = "keyErr"
+                                Utils.Message.addMessage("ERR: __displayThread (for key in keyList): " + str(e))
+
+                        # Check to see if this is the currently selected stream
+                        # If so, highlight the row on the table
+                        if streamData[2] == self.selectedTableRow:
+                            # prefix tableCell with White-on-black ASCII code
+                            tableCell = Term.WhBla + str(tableCell)
+                        else:
+                            # Normal text: prefix tableCell with Black-on-White ASCII code
+                            tableCell = Term.BlaWh + str(tableCell)
+                        # Append the formatted table cell data to the tableRow list
+                        tableRow.append(tableCell)
+                    # Now append this complete row to the tableData list (of lists)
+                    tableData.append(tableRow)
+                    del tableRow
+            ###################################### End of lines that actually add data
+            # If the table isn't large enough yet, pad it out with blanks to the length set by streamTableNoOfRows
+            if streamTableBlankRowsToAdd > 0:
+                for x in range(0, streamTableBlankRowsToAdd):
+                    # Create a blank list with the same no. of blanks as there are table columns
+                    tableRow = [] * len(titleRow)
+                    tableData.append(tableRow)
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR: __displayThread. streamTable. selected row (" + str(self.selectedTableRow) + \
+                               ") doesn't exist. (streamTableDataSetLength:" + str(
+                streamTableDataSetLength) + "), " + str(e))
+
+        # Step 3) Render the table
+        table = SingleTable(tableData)
+        # Remove all padding to save space on the screen
+        table.padding_left = 0
+        table.padding_right = 0
+        if streamTableDataSetLength > 0:
+            table.title = str(self.selectedTableRow + 1) + "/" + str(streamTableDataSetLength)
+        else:
+            table.title = "0/0"
+        tableWidth = table.table_width
+        tableRowsRendered = table.table.splitlines()
+        xPos = 2
+        yPos = 4
+        tableHeight = len(tableRowsRendered)
+        # To stop the screen getting corrupted (by tables of different widths), clear the lines behind
+        # the table, just in case
+        for x in range(yPos, yPos + tableHeight + 2):
+            Term.setBackgroundColourSingleLine(1, x, Term.BLUE)
+        Term.printTable(tableRowsRendered, xPos, yPos, tableWidth, Term.BLACK, Term.WHITE)
+
+    ##################### Create table showing messages - only redraws if there are new messages
+    def __drawMessageTable(self):
+        ##################### Create table showing messages - only redraws if there are new messages
+        redrawMessageTable = False
+        # Message table should fill lower half of window
+        yPos = int(self.currentTermHeight / 2) + 2
+        # Every toolbar at the bottom of the screen will allow less room for messages
+        maxNoOfMessagesThatWillFitScreen = int(self.currentTermHeight / 2) - 9
+
+        # Get last x messages. Make a deep copy as we're going to add blankspace padding
+        messages = deepcopy(Utils.Message.getMessages(maxNoOfMessagesThatWillFitScreen))
+        if len(messages) > 0:
+            if self.lastMessageAdded != messages[-1][1]:
+                # New messages have been added, so set the redraw flag
+                redrawMessageTable = True
+            # Take a copy of the most recent message for next time around the loop
+            lastMessageAdded = messages[-1][1]
+
+        if redrawMessageTable or self.redrawScreen:
+            redrawMessageTable = False  # Clear flag
+            # Now iterate over actual messages to make sure they're not too long for display
+            # If they are, truncate them. (Terminal width - 12 chars) seems to work
+            # If they're too short, make them longer (to fill the space)
+            maxMessageDisplayLength = self.currentTermWidth - 12
+            for message in messages:
+                # If message to long to fit the screen, truncate it
+                if len(message[1]) > maxMessageDisplayLength:
+                    message[1] = message[1][:maxMessageDisplayLength - 2]
+                else:
+                    # Otherwise pad the message out with spaces
+                    paddingLength = (maxMessageDisplayLength - 2) - len(message[1])
+                    if paddingLength > 0:
+                        paddingString = " " * paddingLength
+                        try:
+                            message[1] += paddingString
+                        except Exception as e:
+                            Utils.Message.addMessage("__displayThread: Invalid message")
+                # Convert message timestamp column from a datetime object to a string so it can be displayed
+                message[0] = message[0].strftime("%H:%M:%S")
+
+
+            if len(messages) > 0:
+                width, height, tableData = Term.createTable(messages, "Messages")
+                # Overwrite previous messages table
+                for y in range(yPos, yPos + (maxNoOfMessagesThatWillFitScreen + 3)):
+                    Term.setBackgroundColourSingleLine(1, y, Term.BLUE)
+                Term.printTable(tableData, 2, yPos, width, Term.BLACK, Term.WHITE)
+        del messages[:]
+
+    def __renderTopToolbar(self):
+        Term.printTitleBar("IBEOO ISP Analyser v" + Registry.version, 1, Term.BLACK, Term.WHITE)
+        # Print operation mode (plus receive IP:Port if in Receive mode)
+        if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
+            Term.printAt(self.operationMode + " MODE", 1, 1, Term.BLACK, Term.WHITE)
+        elif self.operationMode == 'RECEIVE':
+            UDP_RX_IP = ""
+            UDP_RX_PORTS = ""
+            try:
+                # Extract the receive IP and receive port(s) (if in RECEIVE mode - these are displayed on the top toolbar)
+                if len(self.receiversAndSendersList) > 0:
+                    # Take the Rx IP address from the first RtpPacketReceiver in the list (we assume that we will only be
+                    # listening on a single IP address, but might be listening to multiple ports on that interface)
+                    UDP_RX_IP = self.receiversAndSendersList[0][0].UDP_RX_IP
+                    # Get a list of Rx UDP ports from the RtpPacketReceiver objects and create a string
+                    UDP_RX_PORTS = ""
+                    for n in range(0,len(self.receiversAndSendersList)):
+                        # Extract the port no for the current RtpPacketReceiver object
+                        UDP_RX_PORTS += str(self.receiversAndSendersList[n][0].UDP_RX_PORT)
+                        # For all but the last port, append a "," to divide the port no.s
+                        if n == (len(self.receiversAndSendersList) - 1):
+                            # We're at the last item in the list, don't append a ','
+                            pass
+                        else:
+                            # If we're still in the middle of the list, append a ','
+                            UDP_RX_PORTS += ","
+
+
+            except Exception as e:
+                Utils.Message.addMessage(
+                    "ERR:UI.__init() Couldn't extract UDP_RX_IP and UDP_RX_PORT(s) from receiversAndSendersList " + \
+                    str(e))
+            Term.printAt(self.operationMode + " " + str(UDP_RX_IP) + ":" + \
+                         str(UDP_RX_PORTS), 1, 1, Term.BLACK, Term.WHITE)
+
+    def __updateClock(self):
+        # Update clock and CPU mon on top RHS of screen
+        # clockString = datetime.datetime.now().strftime("%H:%M:%S") + " " + str(round(Utils.CPU.getUsage())) + "%"
+        clockString = datetime.datetime.now().strftime("%H:%M:%S")
+        Term.printRightJustified(clockString, 1, Term.BLACK, Term.WHITE)
+
+    def __renderBottomToolbar(self):
+        Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 1), Term.WHITE)
+        # Print list of key commands
+        Term.printAt(self.keyCommandsString, 1, (self.currentTermHeight - 1), Term.BLACK, Term.WHITE)
+        Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 2), Term.WHITE)
+        Term.printAt(self.txStreamModifierCommandsString, 1, (self.currentTermHeight - 2), Term.BLACK, Term.WHITE)
+
+        # For tx mode special features, add an extra row of commands
+        if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
+            # Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 2), Term.WHITE)
+            # Term.printAt(self.txStreamModifierCommandsString, 1, (self.currentTermHeight - 2), Term.BLACK, Term.WHITE)
+
+            # For special features mode, add yet another row of commands
+            if self.specialFeaturesModeFlag == True:
+                Term.setBackgroundColourSingleLine(1, (self.currentTermHeight - 3), Term.WHITE)
+                Term.printAt(self.extraKeyCommandsString, 1, (self.currentTermHeight - 3), Term.BLACK, Term.WHITE)
+
+    # Draws a popup table list - auto sizes to fit the terminal
+    def __renderPagedList(self, pageNo, title, titleRow, tableData, footerRow = None, pageNoDisplayInFooterRow = False,
+                          reverseList = False, marginOffset = 0):
+        # Get Terminal size so we can centre the table
+        termW, termH = Term.getTerminalSize()
+        # Calculate the maximum no. of lines that will fit within the table, given the terminal height
+        maxLines = termH - 20
+
+        # Count how many newlines there are in the table data
+        noOfNewlinesInTableData = 0
+        # Iterate over the rows
+        for row in tableData:
+            # Iterate over the cells within each row
+            # Each cell might have different no of lines, so have to find the cell with the most no of newline char
+            maxLinesCurrentRow = 0
+            for cell in row:
+                # Count the no of lines in this cell
+                linesInCurrentCell = len(str(cell).split('\n'))
+                # See if the no of lines in this cell exceeds those of the previous cells in this row
+                if linesInCurrentCell > maxLinesCurrentRow:
+                    maxLinesCurrentRow = linesInCurrentCell
+            # Update the tableData line count
+            noOfNewlinesInTableData += maxLinesCurrentRow
+        # Utils.Message.addMessage("Current table has " + str(maxLinesCurrentRow) + " lines")
+
+        # Calculate the no of pages required to show all the items (given the terminal size and no of lines of data)
+        noOfPages = int(math.ceil(len(tableData) / maxLines))
+        # noOfPages = int(math.ceil(noOfNewlinesInTableData / maxLines))
+        # Check that we're not trying to display a non-existent page
+        # if pageNo > (noOfPages - 1):
+        #     pageNo = (noOfPages - 1)
+
+        # Take the modulo of the supplied pageNo
+        # This will mean that the pages loop around and around
+        if noOfPages > 0: # guard against divide by zero
+            pageNo = pageNo % noOfPages
+
+        if pageNo < 0:
+            pageNo =0
+
+        # Create the table contents
+        tableContents = []
+        # Append the title row to the table contents
+        tableContents.append(titleRow)
+        tableRow = []
+
+        if len(tableData) > 0:
+            if reverseList == True:
+                # Display the table in reverse order (last element of tableData first)
+                # Calculate first event of list (given current page no)
+                indexOfFirstItem = len(tableData) - 1 - (pageNo * maxLines)
+                # Calculate last event to list (given current page no and maximum no of lines allowed in the table)
+                indexOfLastItem = indexOfFirstItem - maxLines
+
+                # Confirm that we haven't run off the end of tableContents[]
+                if indexOfFirstItem >= len(tableData):
+                    indexOfFirstItem = len(tableData) -1
+                if indexOfFirstItem < 0:
+                    indexOfFirstItem = 0
+                if indexOfLastItem < 0:
+                    indexOfLastItem = 0
+
+
+                # The list will be created in reverse order - newest entry first
+                for row in range(int(indexOfFirstItem), int(indexOfLastItem) -1, -1):
+                    # Iterate over row, to extract the individual columns and create a tuple containing a row of data
+                    for column in tableData[row]:
+                        tableRow.append(column)
+                    # Now append the complete row to tableContents[]
+                    tableContents.append(tableRow)
+                    # Clear the tableRow list ready for next time around the loop
+                    tableRow = []
+
+            else:
+                # display the info in the original order of the supplied list
+                # Calculate first item of list to be displayed (given current page no)
+                indexOfFirstItem = pageNo * maxLines
+                # Calculate last item of list to be displayed (given current page no)
+                indexOfLastItem = indexOfFirstItem + maxLines -1
+                # Confirm that we haven't run of the end of the list
+                if indexOfFirstItem < 0:
+                    indexOfFirstItem =0
+                if indexOfFirstItem > (len(tableData) -1):
+                    indexOfFirstItem = (len(tableData) -1)
+                if indexOfLastItem > (len(tableData) -1):
+                    indexOfLastItem = len(tableData) -1
+
+                # Iterate over the rows of data in tableData to create the table contents
+                for row in range(int(indexOfFirstItem), int(indexOfLastItem) + 1):
+                    # Iterate over row, to extract the individual columns and create a tuple containing a row of data
+                    for column in tableData[row]:
+                        tableRow.append(column)
+                    # Now append the complete row to tableContents[]
+                    tableContents.append(tableRow)
+                    # Clear the tableRow list ready for next time around the loop
+                    tableRow = []
+
+        # Finally, add the footer row (if supplied)
+        if footerRow is not None:
+            # If pageNoDisplayInFooterRow = True, overwrite the first column of the footer with a 'Page x of Y' label
+            if pageNoDisplayInFooterRow is True:
+                footerRow[0] = "Page\n" + str(pageNo + 1) + "/" + str(noOfPages)
+            # Append the footer row to the table data
+            tableContents.append(footerRow)
+        # Create a SingleTable to tabulate the data
+        pagedTable = SingleTable(tableContents)
+        # Set the title
+        pagedTable.title = title
+        pagedTable.padding_left = 0
+        pagedTable.padding_right = 0
+        # If a footer row specified, add a seperator for the bottom row
+        if footerRow is not None:
+            pagedTable.inner_footing_row_border = True
+        pagedTable.inner_column_border = False
+        width = pagedTable.table_width
+        height = len(tableContents) + 2
+
+        # Centre the table vertically
+        yPos = int((termH - height) / 2)
+
+        Term.printTable(pagedTable.table.splitlines(), marginOffset, yPos, width, Term.BLACK, Term.CYAN)
+
+
+    # Cycles through the filtering of displayed Events on the events table created by UI.__renderEventsListTable()
+    def __onfilterEventsTable(self):
+        # Increment selected display filter no (by cycling around filterListForDisplayedEvents)
+        self.selectedFilterNo = (self.selectedFilterNo + 1) % len(self.filterListForDisplayedEvents)
+
+
+    # Overlays on the screen a paged list of recent events relating to this stream
+    def __renderEventsListTable(self):
+
+        # Get Terminal size so we can centre the table
+        termW, termH = Term.getTerminalSize()
+        # Calculate the maximum no. of lines that will fit within the table, given the terminal height
+        maxLines = termH - 20
+
+        # Get the last n events from the list (either the rtpRxStreamsDict or rtpTxStreamResultsDict
+        # depending upon whether we're in RECEIVE or TRANSMIT mode
+        # The amount of events diaplayed will adjust to the terminal height
+        # Get a handle on the selected RxRtpStream or TxResults
+        # Note, if we are in TRANSMIT mode, the selected stream could be an RtpGenerator. This is no good,
+        # hence we have to manually retrieve the appropriate stream object by using the self.selectedStreamID
+        # and looking in the appropriate streams dictionary
+        selectedRxOrResultsStream = None
+
+        if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+            try:
+                selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
+            except:
+                pass
+        elif self.operationMode == 'TRANSMIT':
+            try:
+                selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
+            except:
+                pass
+
+        eventsList = []
+        friendlyName = ""
+        syncSourceID = 0
+        if selectedRxOrResultsStream is not None:
+            try:
+                # Get eventlist of the selected Rx or TxResults stream
+                eventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList = self.filterListForDisplayedEvents[self.selectedFilterNo])
+                # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
+                friendlyName = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
+                syncSourceID = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_syncSource"))
+
+            except Exception as e:
+                Utils.Message.addMessage("ERR. UI.__renderEventsListTable. getRTPStreamEventList()")
+
+        # Create a list of tuples containing the timestamp and the summary
+        tableContents =[]
+        if len(eventsList) > 0:
+            tableRow = []
+            for event in eventsList:
+                # Get event details (in the form of a dictionary)
+                try:
+                    # Retrieve each Event summary, ommiting the syncSourceID and the friendlyName (for display purposes)
+                    eventDetails = event.getSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
+                    # Create a complete row of the table
+                    tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
+                    tableRow.append(" " + str(eventDetails['summary']).ljust(50))
+                except Exception as e:
+                    Utils.Message.addMessage("UI.__renderEventsListTable: " + str(e))
+                #Append the complate table row to tableContents[]
+                tableContents.append(tableRow)
+                # Clear the tableRow list ready for next time around the loop
+                tableRow = []
+        else:
+            tableContents.append(["","No events to display"])
+
+        # # Set the title/footer for the Eventslist table
+        # title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+
+
+        # Additional check to see if the event filtering has been enabled and modify the title/footer labels accordingly
+        if self.filterListForDisplayedEvents[self.selectedFilterNo] is not None:
+                # Create a list of string containing the Class names of the selected filterListForDisplayedEvents
+                filterListAsString = [eventType.__name__ for eventType in self.filterListForDisplayedEvents[self.selectedFilterNo]]
+
+                title = "Filtered events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+                footer = ["","[<][>]page, [^][v]select stream, [r]exit\n"+\
+                          "[c]opy to clipboard, [f]ilter, [s]ave file \n" +\
+                          "Showing: " + str(filterListAsString)]
+        else:
+            title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
+            footer = ["", "[<][>]page, [^][v] select stream, [r]exit \n" + \
+                      "[c]opy to clipboard, [f]ilter, [s]ave file"]
+
+        # Now actually display the paged table list
+        self.__renderPagedList(self.tablePageNo, title, ["Timestamp".ljust(15), "Event".ljust(50)], tableContents,
+                               footerRow=footer,
+                               pageNoDisplayInFooterRow= True, reverseList= True, marginOffset= 7)
+
+    # Displays a pop-up message box
+    def __renderMessageBox(self, messageText, title, textColour=Term.BLACK, bgColour=Term.CYAN):
+        # Create a single-celled table
+        aboutDialogue = SingleTable([[messageText]])
+        aboutDialogue.title = title
+        width = aboutDialogue.table_width
+        height = messageText.count('\n') + 2
+
+        # Get Terminal size so we can centre the table
+        termW, termH = Term.getTerminalSize()
+        xPos = int((termW - width) / 2)
+        yPos = int((termH - height) / 2)
+
+        Term.printTable(aboutDialogue.table.splitlines(), xPos, yPos, width, textColour, bgColour)
+        # Disable existing getch thread
+        self.enableGetch.clear()
+        # Check to see that  getch to have been disabled
+        self.getchIsDisabled.wait()
+        # Wait for a key press
+        ch = None
+        # Endless loop until either a key is pressed or the self.renderDisplayThreadActive flag is cleared
+        while ch == None or self.renderDisplayThreadActive == False:
+            # Blocking call to self.__getch() with timeout
+            ch = self.__getch()
+
+
+    # If the Event Lists Table is currently displayed, this method will copy the events to the local clipboard
+    # Alternatively, if the traceroute table is displayed, it will attempt to render a list of the prevous
+    # traceroute hop lists and copy that to the clipboard
+
+    # If that is not possible (if for instance, you are connected to a remote instance of isptext via SSH)
+    # it will attempt to use linux 'less' as a viewer launched as a seperate process
+    # Historically it would attempt to export the data to pastebin.com (a website that allows you to share text via a webpage)
+    # but this was not dependable, so has been discontinued
+    def __onCopyReportToClipboard(self):
+        selectedRxOrResultsStream = None # Points to the actual Rtp object
+        streamResultsDict = None # Points to the dict containing selectedRxOrResultsStream
+        # Get a handle on the selected stream and dictionary of streams
+        if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+            try:
+                selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
+                streamResultsDict = self.rtpRxStreamsDict
+            except:
+                pass
+        elif self.operationMode == 'TRANSMIT':
+            try:
+                selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
+                streamResultsDict = self.rtpTxStreamResultsDict
+            except:
+                pass
+
+        streamReport = None
+        # Confirm that a valid stream exists
+        if selectedRxOrResultsStream is not None and streamResultsDict is not None:
+            # Render a stream performance summary report
+            if self.displayPopup == self.__renderEventsListTable:
+                # Get a textual, formatted report for this stream
+                streamReport = \
+                    selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
+                # Utils.Message.addMessage("filterList:" + str(self.filterListForDisplayedEvents[self.selectedFilterNo]))
+            elif self.displayPopup == self.__renderTracerouteTable:
+                # Get a traceroute history report
+                streamReport = selectedRxOrResultsStream.generateTracerouteHistoryReport()
+            elif self.displayPopup == self.__renderCompareStreamsTable:
+                # Create a RtpStreamComparer object. Pass the list of available streams to it
+                rtpStreamComparer = RtpStreamComparer(streamResultsDict)
+                # Generate a streams comparison report - use the existing criteria list and currently set sort order
+                streamReport = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams,
+                                                                listOrder=self.popupSortDescending)
+
+            # Check that a textual report has been rendered
+            if streamReport is not None:
+                # Attempt to copy the report to the local clipboard
+                try:
+                    # Utils.displayTextUsingMore(streamReport)
+                    pyperclip.copy(streamReport)
+                    self.__renderMessageBox("Success!".center(30) + "\n\n" +\
+                            "<Press a key to continue>".center(30),\
+                            "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
+
+                except Exception as e:
+                    # pyperclip error messages typically have newline chars in them. This will mess up my message
+                    # table! So need to strip them - reaplce \n chars with ,
+                    modifiedErrorString = str(e).replace("\n", ", ")
+                    Utils.Message.addMessage("DBUG: UI.__onCopyReportToClipboard (using less) " + modifiedErrorString)
+
+                    # # Copy to clipboard failed. Paste to pastebin.com instead
+                    # url = ""
+                    # try:
+                    #     url = Utils.pasteBin(streamReport, "isptest stream report for stream " +\
+                    #                 str(self.selectedStreamID)).decode('utf-8')
+                    # except Exception as e:
+                    #     url = "Error pasting to pastebin:- \n" + str(e)
+                    #
+                    #
+                    # # Display a message box with a URL or an error message
+                    # self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" +\
+                    #         "\nThis is mostly likely because you are connected to a text-only\n" +\
+                    #         "terminal (e.g via an SSH session?)\n" +\
+                    #         "\nSending the report to pastebin.com instead. Please follow this URL:-\n" +\
+                    #         "\n " + str(url).center(70) + "\n\n" +\
+                    #         "<Press a key to continue>".center(70), \
+                    #         "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
+
+                    # Copy to clipboard failed, attempt to launch 'less' viewer instead - only works on Linux/OSX
+                    # Display a message box
+                    os = Utils.getOperatingSystem()
+                    if  os != "Windows":
+                        # Only attempt to launch 'less' oif we're not running Windows
+                        self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" + \
+                                                "\nThis is mostly likely because you are connected to a text-only\n" + \
+                                                "terminal (e.g via an SSH session?)\n" + \
+                                                "\nAttempting to open the report in 'less' instead.\n" + \
+                                                 "\nWhen done, press 'q' to return to isptest\n" +\
+                                                "TIP: When in less, press 'h' for help\n\n" +\
+                                                "<Press a key to continue>".center(70), \
+                                                "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
+                        try:
+                            # Clear the screen
+                            Term.clearScreen()
+                            # Open 'less' as a subprocess (blocking)
+                            Utils.displayTextUsingLess(streamReport)
+                        except Exception as e:
+                            Utils.Message.addMessage("ERR: UI.__onCopyReportToClipboard (using less) " + str(e))
+                    else:
+                        Utils.Message.addMessage("ERR: UI.__onCopyReportToClipboard (using less) . Wrong OS " + str(os))
+
+
+
+    # This method will call the Utils.writeReportToDisk() function
+    # causing a report of the current popup to be saved to disk
+    # Note, this option is only available if the popup is currently being displayed
+    def __onSaveReportToDisk(self):
+        # if self.displayPopup == self.__renderEventsListTable:
+        if self.displayPopup is not None:
+
+            selectedRxOrResultsStream = None
+            selectedRxOrResultsDict = None
+            # Get a handle on the selected stream and dictionary of results
+            # Depending upon the mode, we'll have to retrieve it from the correct dictionary
+            if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+                try:
+                    selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
+                    selectedRxOrResultsDict = self.rtpRxStreamsDict
+                except:
+                    pass
+            elif self.operationMode == 'TRANSMIT':
+                try:
+                    selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
+                    selectedRxOrResultsDict = self.rtpTxStreamResultsDict
+                except:
+                    pass
+
+            report = None
+            try:
+                if self.displayPopup == self.__renderEventsListTable:
+                    dialogueTitle = 'Export stream report to file (stream ' + str(self.selectedStreamID) + ')'
+                    # Get a default filename (excluding the path)
+                    defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport(includePath=False)
+                    # Generate the actual report
+                    # Use the current display filter for events to determine which events are exported to the file
+                    report = selectedRxOrResultsStream.generateReport(
+                        eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
+
+                elif self.displayPopup == self.__renderTracerouteTable:
+                    dialogueTitle = 'Export traceroute history to file (stream ' + str(self.selectedStreamID) + ')'
+                    # Get a default filename (excluding the path)
+                    defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport(includePath=False,
+                                                                            overrideFileNamePrefix="Traceroute_history_")
+                    report = selectedRxOrResultsStream.generateTracerouteHistoryReport()
+
+                elif self.displayPopup == self.__renderCompareStreamsTable and selectedRxOrResultsDict is not None:
+                    dialogueTitle = 'Stream comparison report'
+                    defaultFilename = "Stream_comparison_" + str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S"))
+                    # Create an RtpStreamComparer object
+                    rtpStreamComparer = RtpStreamComparer(selectedRxOrResultsDict)
+                    report = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams,
+                                                                    listOrder=self.popupSortDescending)
+            except Exception as e:
+                Utils.Message.addMessage("ERR:UI.__onSaveReportToDisk() render reports " + str(e))
+                report = None
+
+            # Confirm that a report has been generated
+            if report is not None:
+                # # Get a default filename (excluding the path)
+                # defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport(includePath=False)
+
+                # Now create an input box prefilling with the initial filename created by createFilenameForReportExport()
+                styleDefinition = Style.from_dict({
+                    'dialog': 'bg:ansiblue',  # Screen background
+                    'dialog frame.label': 'bg:ansiwhite ansired ',
+                    'dialog.body': 'bg:ansiwhite ansiblack',
+                    'dialog shadow': 'bg:ansiblack'})
+
+
+                # Create a multi_input_dialog (i.e my modified version of prompt_toolkit.input_dialog()
+                # This is because my version allows you to specify the default text in the user field
+                # Keep displaying the dialog until the filename is validated/cancel
+
+                filenameValidated = False
+                # dialogueTitle = 'Export stream report to file (stream ' + str(self.selectedStreamID) + ')'
+                # Create a footer label containing the full os path of the save location
+                footerText = "Current save folder:\n" + str(os.path.abspath(Registry.resultsSubfolder))
+                while filenameValidated is False:
+                    try:
+                        enteredText = multi_input_dialog(
+                        [['Please enter a filename', defaultFilename]],\
+                                title=dialogueTitle,\
+                                style=styleDefinition,
+                                optionalFooterText=footerText).run()
+                        if enteredText is None:
+                            # If 'cancel' selected
+                            break
+                        else:
+                            # Attempt to validate the filename. If it fails, an Exception will be raised
+                            validate_filename(enteredText['Please enter a filename'])
+
+                            # filename has been validated
+                            filenameValidated = True
+                            # Extract the filename from the dictionary
+                            filename = enteredText['Please enter a filename']
+
+                            # Create the path for the saved file
+                            fullSavePath = Registry.resultsSubfolder + filename
+                            # # Generate the actual report
+                            # # Use the current display filter for events to determine which events are exported to the file
+                            # report = selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
+                            # Invoke the Utils.writeReportToDisk method
+                            fileSavedStatus = Utils.writeReportToDisk(report, fileName=fullSavePath)
+                            maxWidth = 70
+                            if fileSavedStatus == True:
+                                # Display a message box showing the successful save path + filname
+                                # Query the OS for the the absolute file path (this will be displayed)
+
+                                absoluteSavePath = textwrap.fill(str(os.path.abspath(fullSavePath)), width=maxWidth)
+                                self.__renderMessageBox("File saved to:-".center(maxWidth + 3) + "\n" +\
+                                                        str(absoluteSavePath).center(maxWidth + 3)+ "\n\n" + \
+                                                        "<Press a key to continue>".center(maxWidth + 3), \
+                                                        "File save Successful", textColour=Term.WHITE, bgColour=Term.GREEN)
+                            else:
+                                # Save failed, so show an error
+                                errorMessage = textwrap.fill(str(fileSavedStatus), width=maxWidth)
+                                self.__renderMessageBox("Error: Unable to save file:-".center(maxWidth + 3) + "\n" + \
+                                                        str(errorMessage).center(maxWidth + 3) + "\n\n" + \
+                                                        "<Press a key to continue>".center(maxWidth + 3), \
+                                                        "File save error", textColour=Term.WHITE,
+                                                        bgColour=Term.RED)
+
+                    except ValidationError as e:
+                        # Modify the dialogue table to show the erroneous chars
+                        dialogueTitle = str(e)
+            else:
+                Utils.Message.addMessage("ERR: UI.__onSaveReportToDisk() no report generated. Nothing to write")
+
+
+
+
+
+
+    # Cursor right
+    def __onNavigateRight(self):
+        # if self.displayEventsTable is False and self.displayTraceRouteTable is False and self.displayHelpTable is False:
+        if self.displayPopup is None:
+            # Inhibit, if a popup is currently being displayed
+            self.selectedView += 1
+            # Prevent an 'out of range' view being selected
+            if self.selectedView > (len(self.views) - 1):
+                self.selectedView = len(self.views) - 1
+        else:
+            # Used to decrement to the display page of the popup (if there is one)
+            # Note, this has to be bounds-checked in the table display code
+            self.tablePageNo += 1
+
+    # Cursor left
+    def __onNavigateLeft(self):
+        # Inhibit, if a popup is currently being displayed
+        # if self.displayEventsTable is False and self.displayTraceRouteTable is False and self.displayHelpTable is False:
+        if self.displayPopup is None:
+            self.selectedView -= 1
+            # Prevent an 'out of range' view being selected
+            if self.selectedView < 0:
+                self.selectedView = 0
+
+        else:
+            # Used to decrement to the display page of the popup (if there is one)
+            self.tablePageNo -= 1
+            if self.tablePageNo < 0:
+                self.tablePageNo = 0
+
+    # Cursor up
+    def __onNavigateUp(self):
+        # Decrement the row selector associated with this view
+        self.selectedTableRow -= 1
+        # Bounds check
+        if self.selectedTableRow < 0:
+            self.selectedTableRow = 0
+
+    # Cursor down
+    def __onNavigateDown(self):
+        # Increment the row selector associated with this view
+        self.selectedTableRow += 1
+        # Bounds check the data set associated with this view
+        if self.selectedTableRow > (len(self.views[self.selectedView][2]) - 1):
+            self.selectedTableRow = len(self.views[self.selectedView][2]) - 1
+
+    # 'l' pressed
+    def __onEnterFriendlyName(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
+        elif type(self.selectedStream) == RtpGenerator or type(self.selectedStream) == RtpReceiveStream:
+            # We're either in TRANSIT mode vieing the TX Stream pane, or in RECEIVE mode
+            styleDefinition = Style.from_dict({
+                'dialog': 'bg:ansiblue',        # Screen background
+                'dialog frame.label': 'bg:ansiwhite ansired ',
+                'dialog.body': 'bg:ansiwhite ansiblack',
+                'dialog shadow': 'bg:ansiblack'})
+            # Now wait for confirtmation that __keysPressedThread is definitely disabled
+            self.getchIsDisabled.wait()
+            text = input_dialog(
+                title='Enter friendly name',
+                text='Please enter friendly name for stream ' + str(self.selectedStreamID) + ':',
+                style=styleDefinition).run()
+            if text is not None:
+                # Now pass the new name to the correct method (based on the currently selected stream type)
+                if type(self.selectedStream) == RtpReceiveStream:
+                    # We must be in RECEIVER mode,
+                    # If this stream originates from an instance of isptest, transmit the name change request back to
+                    # transmitter and this will be picked up by the Receiver via the isptestheader
+                    # Or else, if the stream is originating from another source (eg an NTT), directly modify the
+                    # friendly name field in the RtpReceiveStream object
+                    if self.selectedStream.getRtpStreamStatsByKey("stream_transmitterVersion") > 0:
+                        # This stream originated from an isptest transmitter so need to remotely set it via a control msg
+                        self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txname",
+                                                                "name": text})
+                    else:
+                        # This stream is from an unknown source, set it directly using the object setter method
+                        self.selectedStream.setFriendlyName(text)
+
+                elif type(self.selectedStream) == RtpGenerator:
+                    # We must be in TRANSMIT mode, currently viewing the transmit pane
+                    # Send a local control message
+                    self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Transmitter" + str(self.pid),
+                                                                 "type": "txname",
+                                                                "name": text})
+
+    # 'a' pressed (only when in Tx or Loopback mode)
+    def __onAddTxStream(self):
+        # Attempt to add a new tx stream (if we're in loopback or transmit mode)
+        # If a tx stream already exists, the new stream will be created with an incremented
+        # source UDP port and an incremented sync source id.
+        # If there are no current streams, the new stream will be created with a random
+        # UDP source port and a random sync source id
+        if self.operationMode == 'LOOPBACK' or self.operationMode == 'TRANSMIT':
+
+            # Grab the stats of the most recent added tx stream, and make a copy derived from it's settings
+            # Check that there are actually some stream settings to copy
+            if len(self.latestTxStreamStats) > 0:
+
+                # Use stats of existing tx stream to derive setup parameters for new stream
+                syncSourceID = self.latestTxStreamStats['Sync Source ID'] + 1
+                sourcePort = self.latestTxStreamStats['Tx Source Port'] + 1
+                destPort = self.latestTxStreamStats['Dest Port']
+                destAddr = self.latestTxStreamStats['Dest IP']
+                packetLength = self.latestTxStreamStats['Packet size']
+                friendlyName = str(syncSourceID)
+
+                # As a default, set time to live to be 1hr
+                timeToLive = Registry.defaultTxStreamTimeToLive_sec
+                # As a default, set tx rate to be 1 Mbps
+                # txRate = 1048576
+                txRate = "1M"
+
+                # Now generate a multi_input_dialog to allow modification of defaults
+                # Define the user fields and default values
+                # Query RtpGenerator to find out the max length of the friendly name field
+                maxFriendlyNameLength = RtpGenerator.getMaxFriendlyNameLength()
+                # Dynamically create the user field text label
+                friendlyNameLabelText = "Friendly name (" + str(maxFriendlyNameLength) + " chars max)"
+                # 'Packet Size' minimum is dependant upon the size the isptest header (determined in RtpGenerator)
+                packetSizeLabelText = "Packet size (bytes, min:" + str(RtpGenerator.getIsptestHeaderSize()) +", max:1488)"
+
+                dialogUserFieldsList = [["Destination address", six.text_type(destAddr)],
+                                        ["UDP destination port (1024-65535)", six.text_type(destPort)],
+                                        ["UDP source port (1024-65535)", six.text_type(sourcePort)],
+                                        ["Transmit bitrate (append K for Kbps or M for Mbps (minimum: " +\
+                                            six.text_type(Utils.bToMb(Registry.minimumPermittedTXRate_bps)) + "bps)",\
+                                            six.text_type(txRate)],
+                                        [packetSizeLabelText, six.text_type(packetLength)],
+                                        ["Sync Source identifier (1-4294967295", six.text_type(syncSourceID)],
+                                        ["Time to live (seconds)", six.text_type(timeToLive)],
+                                        [friendlyNameLabelText, six.text_type(friendlyName)]]
+
+                # Define the dialogue colours
+                styleDefinition = Style.from_dict({
+                    'dialog': 'bg:ansiblue',  # Screen background
+                    'dialog frame.label': 'bg:ansiwhite ansired ',
+                    'dialog.body': 'bg:ansiwhite ansiblack',
+                    'dialog shadow': 'bg:ansiblack'})
+
+                # Create the dialogue
+                # dialogUserFieldsList = [["dest addr", six.text_type(destAddr)], ["port", six.text_type(destPort)]]
+
+                allFieldsValidatedFlag = False  # Flag to indicate that all user-entered tx stream parameters have been validated
+                # Nested Exception to indicate a bad user-entered parameter
+                class InvalidUserresponse(Exception):
+                    pass
+
+                # Simple fucntion to parse a number-letter suffix (k or m) and return the actual value
+                def parseSuffix(input):
+                    try:
+                        # Use regex to split -b argument into numerical and string parts
+                        splitArg = re.split(r'(\d+)', input)
+                        # Extract numerical part
+                        x = int(splitArg[1])
+                        # Extract string part
+                        multiplier = splitArg[2]
+
+                        if multiplier == 'k' or multiplier == 'K':
+                            return x * 1024
+                        elif multiplier == 'm' or multiplier == 'M':
+                            return x * 1024 * 1024
+                        else:
+                            # Unknown suffix
+                            return None
+                    except Exception as e:
+                        return None
+
+                # newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList, title='Enter parameters for new transmit stream', style=styleDefinition)
+
+                # Default title for the user dialogue
+                title = 'Enter parameters for new transmit stream'
+
+                # Keep displaying the dialogue until either ALL the input fields have been validated OR
+                # 'Cancel' was selected
+                while allFieldsValidatedFlag is False:
+                    try:
+                        # Now wait for confirtmation that __keysPressedThread is definitely disabled
+                        # (otherwise my getch() would interfere with prompt_toolkits' getch())
+                        self.getchIsDisabled.wait()
+                        # Display the user dialogue
+                        Utils.Message.addMessage("DBUG:UI.__onAddTxStream() Display multi_input_dialog")
+                        newTxStreamParametersDict = multi_input_dialog(dialogUserFieldsList,
+                                                                   title=title,
+                                                                   style=styleDefinition).run()
+                        # Break out of endless while loop if 'Cancel' selected
+                        if newTxStreamParametersDict is None:
+                            break
+                        # Now validate all user responses. If validation fails, an InvalidUserresponse
+                        # Exception will be raised and the loop will re-run causing the
+                        # dialogue to be redisplayed (until either all values are validated, or 'Cancel'
+                        # selected
+
+                        # Capture the (new) friendly name and truncate if necessary
+                        friendlyName = str(newTxStreamParametersDict[friendlyNameLabelText])
+                        if len(friendlyName) > maxFriendlyNameLength:
+                            friendlyName = friendlyName[:maxFriendlyNameLength] # Slice the bottom n chars
+
+                        # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                        dialogUserFieldsList[7][1] = six.text_type(friendlyName)
+
+                        try:
+                            # Validate dest address
+                            destAddr = validators.ip_address(newTxStreamParametersDict["Destination address"])
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[0][1] = six.text_type(destAddr)
+                        except (errors.EmptyValueError, errors.InvalidIPAddressError):
+                            title = 'ERROR: INVALID DESTINATION ADDRESS'
+                            raise InvalidUserresponse
+
+
+                        # Validate destination port
+                        try:
+                            destPort = validators.integer(int(newTxStreamParametersDict["UDP destination port (1024-65535)"]),
+                                                          minimum=1024, maximum=65535)
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[1][1] = six.text_type(destPort)
+                        except Exception as e:
+                            title = 'ERROR: INVALID DESTINATION PORT'
+                            raise InvalidUserresponse
+
+                        # Validate UDP source port
+                        try:
+                            sourcePort = validators.integer(int(newTxStreamParametersDict["UDP source port (1024-65535)"]),
+                                                          minimum=1024, maximum=65535)
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[2][1] = six.text_type(sourcePort)
+                        except:
+                            title = 'ERROR: INVALID SOURCE PORT'
+                            raise InvalidUserresponse
+
+                        # Validate transmit bitrate
+                        try:
+                            # Get the minimum allowed value from Registry
+                            txRate_bps = validators.integer(parseSuffix(
+                                newTxStreamParametersDict["Transmit bitrate (append K for Kbps or M for Mbps (minimum: " +\
+                                            six.text_type(Utils.bToMb(Registry.minimumPermittedTXRate_bps)) + "bps)"]),
+                                minimum=Registry.minimumPermittedTXRate_bps)
+
+                        except Exception as e:
+                            title = 'ERROR: TRANSMIT BITRATE SPECIFIER - Use "m" for mbps or "k" for kbps ' + str(e)
+                            raise InvalidUserresponse
+
+                        # Validate packet size
+                        try:
+                            packetLength = validators.integer(int(newTxStreamParametersDict[packetSizeLabelText]),
+                                                          minimum=RtpGenerator.getIsptestHeaderSize(), maximum=1488)
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[4][1] = six.text_type(packetLength)
+                        except:
+                            # Redisplay the dialogue indicating the error
+                            title = 'ERROR: INVALID PACKET LENGTH'
+                            raise InvalidUserresponse
+
+                        # Validate the Sync Source ID
+                        try:
+                            syncSourceID = validators.integer(int(newTxStreamParametersDict["Sync Source identifier (1-4294967295"]),
+                                                          minimum=1, maximum=4294967295)
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[5][1] = six.text_type(syncSourceID)
+                        except:
+                            # Redisplay the dialogue indicating the error
+                            title = 'ERROR: INVALID SYNC SOURCE IDENTIFIER'
+                            raise InvalidUserresponse
+
+                        # Validate the time to live
+                        try:
+                            timeToLive = validators.integer(int(newTxStreamParametersDict["Time to live (seconds)"]),
+                                                          minimum=1, maximum=4294967295)
+                            # Update dialogUserFieldsList with validated value (so this (new?) value is not lost
+                            dialogUserFieldsList[6][1] = six.text_type(timeToLive)
+
+                            # If execution gets this far, all parameters must have been validated
+                            # Last field validated so we can set clear the flag
+                            allFieldsValidatedFlag = True
+                        except:
+                            # Redisplay the dialogue indicating the error
+                            title = 'ERROR: INVALID TIME TO LIVE'
+                            raise InvalidUserresponse
+
+                    # Catch any invalid user responses
+                    except InvalidUserresponse:
+                        pass
+
+
+                if allFieldsValidatedFlag:
+
+                    # All tx stream parameters validated so create the new RtpGenerator object
+                    rtpGenerator = RtpGenerator(destAddr, destPort, txRate_bps, packetLength, syncSourceID, timeToLive, \
+                                                self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
+                                                self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex, uiInstance=self,\
+                                                friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
+                                                controllerTCPPort=self.controllerTCPPort)
+
+                    Utils.Message.addMessage("[a] Added new " + str(Utils.bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
+                # Force redraw
+                redrawScreen = True
+            else:
+                # Note. This code should never be reachable because it shouldn't be possible to start in TRANSMIT mode
+                # without ever having specified an initial stream
+                Utils.Message.addMessage("ERR: No previous Tx stream stats to copy from. New stream not added")
+
+    # 'd' -  Delete selected stream
+    def __onDeleteStream(self):
+        # Delete selected stream (selected table row)
+
+        # Confirm that the dataset associated with this view actually has some data in it
+        if self.selectedStream != None:
+            try:
+
+                Utils.Message.addMessage(
+                    "INFO: streamToDelete: " + str(self.selectedStreamID) + " of type " + str(type(self.selectedStream)))
+
+                # Confirm that this operation is allowed on  the current stream type
+                if type(self.selectedStream) == RtpStreamResults:
+                    # We must be in TRANSMIT mode, currently viewing one of the results panes
+                    #  - you can't Put up an info message
+                    Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
+                # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
+                elif type(self.selectedStream) == RtpGenerator:
+                    # It is a generator object
+                    Utils.Message.addMessage("[d] Deleting Tx Stream: " + str(self.selectedStreamID))
+                    # Instruct the RtpGenerator object to die (and it's associated corrseponding RtpStreamResults, if it exists)
+                    self.selectedStream.killStream()
+
+
+
+                elif type(self.selectedStream) == RtpReceiveStream:
+                    # It is an RtpReceiveStream (receiver) object
+                    Utils.Message.addMessage("[d] Deleting Rx Stream: " + str(self.selectedStreamID))
+                    # Safely shutdown the RtpStream object itself
+                    self.selectedStream.killStream()
+
+            except Exception as e:
+                Utils.Message.addMessage(
+                    "ERR: __displayThread. [d] Delete Stream request failed: " + str(self.selectedStreamID) +
+                    ", " + str(e))
+
+
+    # '4' pressed
+    def __onIncreaseTxRate(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
+        # Construct the control message:-
+        # Confirm that the selected stream is a generator object
+        elif type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Transmitter" + str(self.pid),
+                                                                 "type": "txbps_inc"})
+
+        # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txbps_inc"})
+
+    # '3' pressed
+    def __onDecreaseTxRate(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
+        # Confirm that the selected stream is a generator object
+        elif type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Transmitter" + str(self.pid),
+                                                                 "type": "txbps_dec"})
+        # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txbps_dec"})
+
+    # '6'
+    def __onIncreaseTimeToLive(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
+        # Confirm that the selected stream is a generator object
+        elif type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                             "source": "Transmitter" + str(self.pid),
+                                                             "type": "txttl_inc"})
+            # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                             "source": "Receiver" + str(self.pid),
+                                                             "type": "txttl_inc"})
+
+    # '5'
+    def __onDecreaseTimeToLive(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
+        # Confirm that the selected stream is a generator object
+        elif type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Transmitter" + str(self.pid),
+                                                                 "type": "txttl_dec"})
+            # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txttl_dec"})
+
+    # 'b'
+    def __onEnableBurstMode(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
+        # Confirm that the selected stream is a generator object
+        elif type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                   "source": "Transmitter" + str(self.pid),
+                                                   "type": "txburst"})
+            # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txburst"})
+
+
+    # '2'
+    def __onIncreasePayloadSize(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
+        # Confirm that the selected stream is a generator object
+        elif type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                   "source": "Transmitter" + str(self.pid),
+                                                   "type": "txpayload_inc"})
+            # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txpayload_inc"})
+
+    # '1'
+    def __onDecreasePayloadSize(self):
+        # Confirm that this operation is allowed on  the current stream type
+        if type(self.selectedStream) == RtpStreamResults:
+            # We must be in TRANSMIT mode, currently viewing one of the results panes
+            #  - you can't Put up an info message
+            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
+
+        # Confirm that the selected stream is a generator object
+        elif type(self.selectedStream) == RtpGenerator:
+            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
+                                                   "source": "Transmitter" + str(self.pid),
+                                                   "type": "txpayload_dec"})
+            # Otherwise send a message to the remote end
+        elif type(self.selectedStream) == RtpReceiveStream:
+            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
+                                                                 "source": "Receiver" + str(self.pid),
+                                                                 "type": "txpayload_dec"})
+
+    # Deprecated
+    def __onIncrementSyncSourceID(self):
+        self.__modifySyncSourceID(1)
+
+    # Deprecated
+    def __onDecrementSyncSourceID(self):
+        self.__modifySyncSourceID(-1)
+
+    # Called from __onIncrementSyncSourceID() and __onDecrementSyncSourceID(). Increments/decrements according to dir flag
+    def __modifySyncSourceID(self, direction):
+        # bounds limit the input
+        if direction < 0:
+            # For all negative values, set direction to -1
+            direction = -1
+        else:
+            # For all other values, set direction to '1'
+            direction = 1
+        # Confirm that the selected stream is a generator object
+        if type(self.selectedStream) == RtpGenerator:
+            # Get current Sync source ID
+            currentSyncSourceID = int(self.selectedStream.getRtpStreamStatsByKey('Sync Source ID'))
+            # Increment/decrement  sync source by 1
+            self.selectedStream.setSyncSourceIdentifier(currentSyncSourceID + (1 * direction))
+            # Verify new sync source id
+            currentSyncSourceID = int(self.selectedStream.getRtpStreamStatsByKey('Sync Source ID'))
+            Utils.Message.addMessage(
+                " Stream " + str(self.selectedStreamID) + " sync source id changed to " + str(currentSyncSourceID))
+
+
+
+    # 'e'
+    def __onToggleErrorMessages(self):
+        if self.showErrorsFlag == False:
+            # Set flag to true
+            self.showErrorsFlag = True
+            # Force a change of Message verbosity level to show errors
+            Utils.Message.setVerbosity(3)
+            Utils.Message.addMessage("[e] Error messages on")
+        else:
+            # Set flag to false
+            self.showErrorsFlag = False
+            # Force a change of Message verbosity back to intial setting
+            Utils.Message.setVerbosity(self.intialVerbosityLevel)
+            Utils.Message.addMessage("[e] Reverting to initial verbosity level")
+
+    # 'z'
+    def __onTogglePacketGenerationOnOff(self):
+        # Confirm special features enabled and selected stream is an RtpGenerator
+        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
+            # Get current transit status and toggle accordingly
+            if self.selectedStream.getEnableStreamStatus():
+                # If currently enabled, disable it
+                self.selectedStream.disableStream()
+                Utils.Message.addMessage("[z] Stream " + str(self.selectedStreamID) + " packet generation disabled")
+            else:
+                # otherwise, enable it
+                self.selectedStream.enableStream()
+                Utils.Message.addMessage("[z] Stream " + str(self.selectedStreamID) + " packet generation enabled")
+
+
+    # 'x'
+    def __onToggleJitterSimulationOnOff(self):
+        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
+            if self.selectedStream.getJitterStatus():
+                # if jitter simulation currently enabled, disable it
+                self.selectedStream.disableJitter()
+                Utils.Message.addMessage("[x] Stream " + str(self.selectedStreamID) + " jitter simulation disabled")
+            else:
+                self.selectedStream.enableJitter()
+                Utils.Message.addMessage("[x] Stream " + str(self.selectedStreamID) + " jitter simulation enabled")
+
+    # 'c'
+    def __onInsertMinorPacketLoss(self):
+        # Insert minor packet loss for the selected stream (< glitch threshold)
+        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
+            # As a default, set an arbitrarily low no of packets to lose
+            packetsToLose = 1
+            # Otherwise, get current glitch threshold from first available Stream Results objects (if available)
+            if (len(self.availableRtpTxResultsList) > 0):
+                receiverGlitchThreshold = \
+                    int(self.availableRtpTxResultsList[0][1].getRtpStreamStatsByKey(
+                        "glitch_Event_Trigger_Threshold_packets"))
+                packetsToLose = receiverGlitchThreshold - 1
+
+            # Simulate packet loss
+            self.selectedStream.simulatePacketLoss(packetsToLose)
+            Utils.Message.addMessage(
+                "[c] Stream " + str(self.selectedStreamID) + " simulate minor packet loss (" + str(packetsToLose) + \
+                " packets)")
+
+    # 'v'
+    def __onInsertMajorPacketloss(self):
+        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
+            # As a default, set an arbitrarily high no of packets to lose
+            packetsToLose =20
+            # Otherwise, get current glitch threshold from first available Stream Results objects (if available)
+            if (len(self.availableRtpTxResultsList) > 0):
+                receiverGlitchThreshold = \
+                    int(self.availableRtpTxResultsList[0][1].getRtpStreamStatsByKey("glitch_Event_Trigger_Threshold_packets"))
+                packetsToLose = receiverGlitchThreshold + 1
+
+            # Simulate packet loss
+            self.selectedStream.simulatePacketLoss(packetsToLose)
+            Utils.Message.addMessage("[v] Stream " + str(self.selectedStreamID) + " simulate major packet loss (" + str(packetsToLose) +\
+                               " packets)")
+
+    def __onAboutDialogue(self):
+        # Toggle display of About  dialogue
+        # If already, selected, disable it
+        if self.displayPopup == self.__renderAboutDialogue:
+            self.displayPopup = None
+        # Otherwise activate it
+        else:
+            # Point self.displayPopup to the correct renderer
+            self.displayPopup = self.__renderAboutDialogue
+
+    # 'a' - render the About dialogue
+    def __renderAboutDialogue(self):
+        # NOTE: This is a blocking method
+        maxWidth = 55
+        tableContents = ("BBC IBEOO Team ISP Analyser v" + Registry.version).center(maxWidth, " ") + \
+                        "\n\n" + "(c) James Turner 2020".center(maxWidth, " ") + \
+                        "\n" + "With special thanks to Gary Podmore".center(maxWidth, " ") +\
+                        "\n\n" + "<tl;dr> A UDP based packet loss and jitter".center(maxWidth, " ") + \
+                        "\n" + " measurement tool supporting multiple tx/rx streams".center(maxWidth, " ") + \
+                        "\n" + "  and event logging".center(maxWidth, " ") + \
+                        "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth, " ") + \
+                        "\n See https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
+                        "\n\n\nlast merge: compressPickles 9/10/20 17:05\n\n" + \
+                        "Press the [any] key to continue".center(maxWidth, " ")
+
+        # Render the message in a pop-up box
+        self.__renderMessageBox(tableContents, "About")
+        # Clear the self.displayPopup function pointer now that the popup has been displayed
+        self.displayPopup = None
+
+
+
+    # Show a help page
+    def __onShowHelpTable(self):
+        # Toggle the display of the help pages
+        # If already, selected, disable it
+        if self.displayPopup == self.__renderHelpTable:
+            self.displayPopup = None
+        # Otherwise activate it
+        else:
+            # Point self.displayPopup to the correct renderer
+            self.displayPopup = self.__renderHelpTable
+            # Reset display page to 0 when initially displaying the table
+            self.tablePageNo = 0
+            # Turn off filtering of displayed events when initially displaying the table
+            self.selectedFilterNo = 0
+
+
+        # maxWidth = 55
+        # tableContents = ("This will show help... ") + \
+        #                 "\n\n...but in the mean time.." +\
+        #                 "\n see https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
+        #                 "\n\n\n\n" + \
+        #                 "Press the [any] key to continue".center(maxWidth, " ")
+        #
+        # # Render the message in a pop-up box
+        # self.__renderMessageBox(tableContents, "Help")
+
+    # Renders the Help page table
+    def __renderHelpTable(self):
+        termW, termH = Term.getTerminalSize()
+        # Calculate the maximum no. of lines that will fit within the table, given the terminal height
+        maxLines = termH - 20
+        # Calculate max width of the second table column given the current screen size
+        maxWidth = 80 - 18
+        if termW > 80:
+            maxWidth = maxWidth + (termW - 80)
+
+        # Display filenames of log files in the help table
+        outputFileNames = [["",""],["Filenames",""]]
+        outputFileNames.append(["results path ",
+                                textwrap.fill(str(os.path.abspath((Registry.resultsSubfolder))), width=maxWidth)])
+        if self.operationMode == "RECEIVE":
+            outputFileNames.append(["event list ", Registry.receiverLogFilename + ".csv"])
+            outputFileNames.append(["logfile ", Registry.messageLogFilenameRx])
+        elif self.operationMode == "TRANSMIT":
+            outputFileNames.append(["events ", Registry.transmitterLogFilename + ".csv"])
+            outputFileNames.append(["logfile ", Registry.messageLogFilenameTx])
+
+        # Create some debug information to append to the end of the help list
+        debugInfo = [["",""],["Debug info",""]]
+        debugInfo.append(["Process ID ", str(os.getpid())])
+        debugInfo.append(["Run time ", str(Utils.dtstrft(self.runtime_s))])
+        if self.operationMode == "RECEIVE":
+            # Display aggregate socket receive stats
+            try:
+                # # NOTE: These are all global vars declared in __receiveRtpThread NOW DEPRECATED.
+                # SEE RtpPacketReceiver and UDPMessageSender objects for these counters instead
+                # debugInfo.append(["\nReceiver ", ""])
+                # debugInfo.append(["raw Rx'd ", str(rawPacketsReceivedByRxThreadCount)])   # Total Rx'd Raw packets
+                # debugInfo.append(["raw ignored ", str(rawPacketsDiscardedByRxThreadCount)]) # Raw packets ignored
+                # debugInfo.append(["raw decoded ", str(rawPacketsDecodedByRxThreadCount)])   # Raw packets with an rtp header
+                # debugInfo.append(["udp Rx'd ", str(udpPacketsReceivedByRxThreadCount)])   # Total Rx'd UDP packets
+                # debugInfo.append(["udp ignored ", str(udpPacketsDiscardedByRxThreadCount)])   # UDP packets ignored
+                # debugInfo.append(["udp decoded ", str(udpPacketsDecodedByRxThreadCount)]) # UDP packets with an rtp header
+                # # Note: These are global vars declared in __sendUDPThread
+                # debugInfo.append(["udp tx ", str(sendUDPThreadTxPacketCounter)])
+                # debugInfo.append(["udp Q ", str(sendUDPThreadMessageQueueSize)])
+                pass
+            except:
+                pass
+
+        if self.selectedStream is not None:
+            # Determine what type of stream this is, and display stats accordingly
+            if type(self.selectedStream) == RtpGenerator or type(self.selectedStream) == RtpStreamResults:
+                # We must be in transmit mode, either on the Tx Streams pane, or on one of the results pages
+                try:
+                    selectedStream = None # Will store a reference to the selected stream
+                    if type(self.selectedStream) == RtpGenerator:
+                        selectedStream = self.selectedStream
+                    elif type(self.selectedStream) == RtpStreamResults:
+                        # If we are on a Results page, we need to get a handle on the RtpGenerator associated
+                        # with this RtpStreamResults object in order to get access to the RtpGenerator vars
+                        selectedStream = self.rtpTxStreamsDict[self.selectedStreamID]
+
+                    if selectedStream is not None:
+                        # This will only work if selectedStream stream type is an RtpGenerator object
+                        # Get copy of latest stats
+                        stats = selectedStream.getRtpStreamStats()
+
+                        debugInfo.append(["\nTransmitter ", ""])
+                        debugInfo.append(["sleep time ", str("%0.20f" %stats['Sleep Time mean']) + "S"])
+                        debugInfo.append(["Tx period ", str("%0.10f" %stats['Tx period']) + "S"])
+                        debugInfo.append(["Tx'd packets ", str(selectedStream.txCounter_packets)])
+                        debugInfo.append(["Tx err ", str(selectedStream.txErrorCounter)])
+                        debugInfo.append(["Rx dec err ",    # Results/Events Pickles that couldn't be unpickled
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveDecodeErrorCounter)])
+                        debugInfo.append(["Rx frag err ",  # Results/Events fragments that were missing
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveResultsFragmentErrorCounter)])
+                        debugInfo.append(["Ret loss % ",  # An estimate of return packet loss from receiver to transmitter
+                                          str("%0.2f" % selectedStream.rtpStreamResultsReceiver.returnPacketLoss_pc)])
+                        debugInfo.append(["Rx actual ",
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveResultsActualReceivedPacketsCounter)])
+                        debugInfo.append(["Rx exptd ",
+                                          str(selectedStream.rtpStreamResultsReceiver.receiveResultsExpectedPacketsCounter)])
+                        debugInfo.append(["traceroute\n function ", str(selectedStream.tracerouteFunctionInUse)])
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:UI.__renderHelpTable() add RtpGenerator debug information " + str(e))
+
+            if type(self.selectedStream) == RtpReceiveStream:
+                try:
+                    # Get copy of latest stats
+                    stats = self.selectedStream.getRtpStreamStats()
+
+                    # This will only work if the selected stream type is an RtpreceiveStream object
+                    # Query the RtpReceiveStream receive Queue. If this no > 1 then it suggests that
+                    # the receiver is struggling to empty the queue fast enough
+                    debugInfo.append(["Tx'd packets ", str(stats["packet_counter_transmitted_total"])])
+                    debugInfo.append(["Tx bps ", str(Utils.bToMb(stats["stream_transmitter_txRate_bps"]))])
+                    debugInfo.append(["Rx Q size ", str(self.selectedStream.rtpStreamQueueCurrentSize)])
+                    debugInfo.append(["Rx max Q  ", str(self.selectedStream.rtpStreamQueueMaxSize)])
+                    debugInfo.append(["Rx Q in ", str(self.selectedStream.packetsAddedToRxQueueCount)])
+                    debugInfo.append(["Rx Q out ", str(self.selectedStream.packetCounterReceivedTotal)])
+                except:
+                    pass
+        try:
+            # Get list of running threads
+            runningThreads = Utils.listCurrentThreads(asList=True)
+            # runningThreads = ["cake"]
+            # Now format the running threads list (by adding a column to each list event, in order to fit the help table)
+            if len(runningThreads) > 0:
+                debugInfo.append(["Threads..", str(len(runningThreads))])
+                for thread in runningThreads:
+                     debugInfo.append(["",thread])
+        except Exception as e:
+            Utils.Message.addMessage("ERR:UI.__renderHelpTable() add debug information " + str(e))
+
+        # Get help table contents from Registry
+        # append the two lists to create a single list
+        tableContents = Registry.helpTableContents + outputFileNames + debugInfo
+        # Now actually display the paged table list
+        title = "Help"
+        footer = ["", "[<][>]page, [h]exit"]
+        self.__renderPagedList(self.tablePageNo, title, ["Key".ljust(5), "Function".ljust(50)], tableContents,
+                               footerRow=footer,
+                               pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
+
+    # Controls the display of the Traceroute dialogue
+    def __onDisplayTraceroute(self):
+        # Toggle the display of the traceroute table
+
+        # If already, selected, disable it
+        if self.displayPopup == self.__renderTracerouteTable:
+            self.displayPopup = None
+        # Otherwise activate it
+        else:
+            # Point self.displayPopup to the correct renderer
+            self.displayPopup = self.__renderTracerouteTable
+            # Reset display page to 0 when initially displaying the table
+            self.tablePageNo = 0
+            # Turn off filtering of displayed events when initially displaying the table
+            self.selectedFilterNo = 0
+
+    # Renders the Traceroute dialogue
+    def __renderTracerouteTable(self):
+        termW, termH = Term.getTerminalSize()
+        # Calculate the maximum no. of lines that will fit within the table, given the terminal height
+        # maxLines = termH - 20
+        maxWidth = 40 + (termW - 80) # Used to automatically truncate the whois table column data
+        if maxWidth < 10:
+            maxWidth = 10
+
+        # Get the traceroute hops list
+        # depending upon whether we're in RECEIVE or TRANSMIT mode
+        # The amount of lines displayed will adjust to the terminal height
+        # Get a handle on the selected RxRtpStream or TxResults
+        # Note, if we are in TRANSMIT mode, the selected stream should be the RtpGenerator dict.
+        # hence we have to manually retrieve the appropriate stream object by using the self.selectedStreamID
+        # and looking in the appropriate streams dictionary
+        selectedStream = None
+
+        if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+            try:
+                selectedStream = self.rtpRxStreamsDict[self.selectedStreamID]
+            except:
+                pass
+        elif self.operationMode == 'TRANSMIT':
+            try:
+                selectedStream = self.rtpTxStreamsDict[self.selectedStreamID]
+            except:
+                pass
+        tracerouteHopsList = []
+
+        friendlyName = ""
+        syncSourceID = 0
+        lastUpdated = None
+        if selectedStream is not None:
+            try:
+                # Get latest stable tracerouteHopsList from selected stream
+                lastUpdated, tracerouteHopsList = selectedStream.getTraceRouteHopsList()
+                # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
+                friendlyName = str(selectedStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
+                syncSourceID = str(selectedStream.getRtpStreamStatsByKey("stream_syncSource"))
+            except Exception as e:
+                Utils.Message.addMessage("ERR: UI.__onShowTracerouteDialogue(). getTraceRouteHopsList() " + str(e))
+            # Create a list of tuples containing the index no and the IP address and whois name
+            tableContents = []
+            if len(tracerouteHopsList) > 0:
+                apiResponse = None
+                try:
+                    # Use the API helper to query the WhoisResolver. This will yield a list of lists [[addr, whois_name],...]
+                    apiResponse = self.ctrlAPI.whoisLookup(tracerouteHopsList)
+                    # Now create the table contents to be displayed
+                    for hopNo in range(len(apiResponse)):
+                        # Create each table row as [hopNo, ip address, whois name]
+                        addr = apiResponse[hopNo][0]
+                        whoisName = apiResponse[hopNo][1]
+                        tableContents.append([hopNo+1, addr, whoisName])
+
+                except Exception as e:
+                    Utils.Message.addMessage(f"ERR:UI.__renderTracerouteTable() GET /whois {apiResponse}, {e}")
+
+
+            else:
+                tableContents.append(["", "", "No traceroute data to display yet. Please wait".ljust(maxWidth)])
+            # Now actually display the paged table list
+            # Create a title for the table
+            title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ") " +\
+                    str(len(tracerouteHopsList)) + " hops"
+            # Append the last-updated timestamp of the tracsroute data
+            if lastUpdated is not None:
+                title += ", updated " + lastUpdated.strftime("%H:%M:%S")
+
+            footer = ["", "", "[<][>]page, [^][v] select stream, [t]exit\n[c]opy history to clipboard, [s]ave"]
+            self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15), "Whois".ljust(maxWidth)], tableContents,
+                                   footerRow=footer,
+                                   pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
+
+    def __onDisplayEvents(self):
+        # Toggle display of Events list dialogue
+
+        # If already, selected, disable it
+        if self.displayPopup == self.__renderEventsListTable:
+            self.displayPopup = None
+        # Otherwise activate it
+        else:
+            # Point self.displayPopup to the correct renderer
+            self.displayPopup = self.__renderEventsListTable
+            # Reset display page to 0 when initially displaying the table
+            self.tablePageNo = 0
+            # Turn off filtering of displayed events when initially displaying the table
+            self.selectedFilterNo = 0
+
+
+    # Toggles the pop-up table sort order (ascending/descending) (if applicable)
+    def __setSortOrder(self):
+        if self.popupSortDescending is False:
+            self.popupSortDescending = True
+        else:
+            self.popupSortDescending = False
+
+    # Cycles through the available list of stream comparison criteria
+    def __setStreamCompareCriteria(self):
+        # Increment selectedCriteriaForCompareStreams. Bounds limit according to the length of
+        # self.criteriaListForCompareStreams[] using modulo (%) operator
+        self.selectedCriteriaForCompareStreams = (self.selectedCriteriaForCompareStreams + 1) %\
+                                                    len(self.criteriaListForCompareStreams)
+
+    def __onCompareStreams(self):
+        # Toggle display of the 'compare streams' table
+        # If already, selected, disable it
+        if self.displayPopup == self.__renderCompareStreamsTable:
+            self.displayPopup = None
+        # Otherwise activate it
+        else:
+            # Point self.displayPopup to the correct renderer
+            self.displayPopup = self.__renderCompareStreamsTable
+
+
+    # Puts up a table that allows the stream performance to be compared (ans a report generated)
+    def __renderCompareStreamsTable(self):
+
+        # maxWidth = 55
+        # tableContents = ("This will show compare streams type stuff ") + \
+        #                 "\n\n...but in the mean time.." +\
+        #                 "\n see https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
+        #                 "\n\n\n\n" + \
+        #                 "Press the [any] key to continue".center(maxWidth, " ")
+        #
+        # # Render the message in a pop-up box
+        # self.__renderMessageBox(tableContents, "Help")
+        # # Clear the self.displayPopup function pointer now that the popup has been displayed
+        # self.displayPopup = None
+        try:
+            if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
+                # self.streamResultsDataSet = self.availableRtpRxStreamList
+                self.streamResultsDataSet = self.rtpRxStreamsDict
+            # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
+            else:
+                # self.streamResultsDataSet = self.availableRtpTxResultsList
+                self.streamResultsDataSet = self.rtpTxStreamResultsDict
+
+            # Create a RtpStreamComparer object. Pass the list of available streams to it
+            rtpStreamComparer = RtpStreamComparer(self.streamResultsDataSet)
+            # Extract the key stats key by which to compare the streams by
+            keyTosortBy = self.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams][0]
+            displayfriendlyKey = self.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams][1]
+            # Get a list of streams ordered by a particular stats[] key
+            sortedStreamsList = rtpStreamComparer.compareByKey(keyTosortBy, reverseOrder=self.popupSortDescending)
+
+            # Now create the table contents from sortedStreamsList
+            # Note: RtpStreamComparer.compareByKey returns a list of dicts
+            tableContents = []  # Holds the table rows
+            if sortedStreamsList is not None and len(sortedStreamsList) > 0:
+                for index in range(len(sortedStreamsList)):
+                    # 'humanise' the value depending based on the keyTosortBy
+                    value = RtpReceiveCommon.humanise(keyTosortBy, sortedStreamsList[index]["value"], appendUnit=True)
+                    # If the relatedEvent key has been populated, we can attempt to retrieve that event from the eventsList
+                    # to add some more detail to the comparison table
+                    eventSummary = ""
+                    eventCreated = ""
+                    if sortedStreamsList[index]["relatedEvent"] is not None:
+                        try:
+                            # Get an eventSummary
+                            relatedEvent = sortedStreamsList[index]["relatedEvent"].getSummary(includeStreamSyncSourceID=False,
+                                                                   includeEventNo=False,
+                                                                    includeType=False,
+                                                                    includeFriendlyName=False)
+
+                            eventCreated = relatedEvent["timeCreated"].strftime("%d/%m %H:%M:%S")
+                            eventSummary = relatedEvent["summary"]      # Summary in the form of a text string
+                        except Exception as e:
+                            Utils.Message.addMessage("ERR: ERR:UI.__renderCompareStreamsTable - lookup event " + str(e))
+                    tableContents.append([index + 1, str(sortedStreamsList[index]["friendlyName"]).strip() + "  ", str(value).strip(),
+                                          eventCreated, eventSummary])
+            else:
+                tableContents.append(["", "", "No data to display", "", ""])
+
+            # Now actually display the paged table list
+            title = "Comparison of streams (" + displayfriendlyKey
+            # Append 'ascending' or 'descending' to table title depending upon value of self.popupSortDescending
+            if self.popupSortDescending:
+                title += ", descending)"
+            else:
+                title += ", ascending)"
+
+            footer = ["", " [<][>]page\n [p]exit", " [^][v] select stream\n [c]opy to clipboard", "", "[s]ave, [o]rder\n [m]etric to compare"]
+            # .ljust(50)
+            self.__renderPagedList(self.tablePageNo, title, ["", "Name ", str(displayfriendlyKey), "", ""], tableContents,
+                                   footerRow=footer,
+                                   pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
+        except Exception as e:
+            Utils.Message.addMessage("ERR:UI.__renderCompareStreamsTable() " + str(e))
+            # Deactivate this popup
+            self.displayPopup = None
+
+    # Tests the key pressed, and calls the appropriate method
+    def __parseKeyPressed(self):
+        # Parse keyboard commands
+        # print ("__renderDisplayThread() " + str(self.keyPressed)+"\r")
+        if self.keyPressed == None:
+            pass
+        else:
+            # 'Ctrl-C' - request shutdown
+            if self.keyPressed == 3:
+                Utils.Message.addMessage("DBUG: Ctrl-C Pressed")
+
+                # For Linux/OSX - Kill self (Windows will detect the SIGINT in the signalHandler itself
+                os.kill(os.getpid(), signal.SIGINT)
+                self.wakeUpUI.set()
+            # Cursor Right
+            elif self.keyPressed == 67 or self.keyPressed == 77:
+                self.__onNavigateRight()
+            # Cursor left
+            elif self.keyPressed == 68 or self.keyPressed == 75:
+                self.__onNavigateLeft()
+            # Cursor up
+            elif self.keyPressed == 65 or self.keyPressed == 72:
+                self.__onNavigateUp()
+            # Cursor down
+            elif self.keyPressed == 66 or self.keyPressed == 80:
+                self.__onNavigateDown()
+            # 'l' Set friendly name (label)
+            elif self.keyPressed == ord('l'):
+                self.__onEnterFriendlyName()
+            # 'n' Add TX stream
+            elif self.keyPressed == ord('n'):
+                self.__onAddTxStream()
+            # 'd' Delete stream
+            elif self.keyPressed == ord('d'):
+                self.__onDeleteStream()
+            # 'a' About dialogue
+            elif self.keyPressed == ord('a'):
+                self.__onAboutDialogue()
+            # '4' Increase tx rate of selected stream
+            elif self.keyPressed == ord('4'):
+                self.__onIncreaseTxRate()
+            # '3' Decrease tx rate of selected stream
+            elif self.keyPressed == ord('3'):
+                self.__onDecreaseTxRate()
+            # '6' Increase Tx Stream Time to Live
+            elif self.keyPressed == ord('6'):
+                self.__onIncreaseTimeToLive()
+            # '5' Decrease Tx Stream Time to Live
+            elif self.keyPressed == ord('5'):
+                self.__onDecreaseTimeToLive()
+            # '2' Increase payload size
+            elif self.keyPressed == ord('2'):
+                self.__onIncreasePayloadSize()
+            # '1' Decrease payload size
+            elif self.keyPressed == ord('1'):
+                self.__onDecreasePayloadSize()
+            # # 'p' Increment sync source ID of stream
+            # elif self.keyPressed == ord('p'):
+            #     self.__onIncrementSyncSourceID()
+            # # 'o' Decrement sync source ID of stream
+            # elif self.keyPressed == ord('o'):
+            #     self.__onDecrementSyncSourceID()
+            # 'b' enable Burst Mode for the current tx stream
+            elif self.keyPressed == ord('b'):
+                self.__onEnableBurstMode()
+            # 'e' Toggle error messages on/off
+            elif self.keyPressed == ord('e'):
+                self.__onToggleErrorMessages()
+            # 'r' Display events list for selected stream (report)
+            elif self.keyPressed == ord('r'):
+                self.__onDisplayEvents()
+            # 'f' Cycle through Event display filtering options
+            elif self.keyPressed == ord('f'):
+                self.__onfilterEventsTable()
+            # 'c' Copy report to clipboard
+            elif self.keyPressed == ord('c'):
+                self.__onCopyReportToClipboard()
+            # 's' Save stream report to disk
+            elif self.keyPressed == ord('s'):
+                self.__onSaveReportToDisk()
+            # 'h' Show help page
+            elif self.keyPressed == ord('h'):
+                self.__onShowHelpTable()
+            # 't' Show traceroute
+            elif self.keyPressed == ord('t'):
+                self.__onDisplayTraceroute()
+            # 'p' compare streams
+            elif self.keyPressed == ord('p'):
+                self.__onCompareStreams()
+            # 'o' compare streams set sort order (ascending/descending)
+            elif self.keyPressed == ord('o'):
+                self.__setSortOrder()
+            # 'm' set criteria to compare streams by
+            elif self.keyPressed == ord('m'):
+                self.__setStreamCompareCriteria()
+
+            # Special features
+            # 'z' Toggle packet generation on/off for selected stream
+            elif self.keyPressed == ord('7'):
+                self.__onTogglePacketGenerationOnOff()
+            # 'x' Toggle jitter simulation for selected stream
+            elif self.keyPressed == ord('8'):
+                self.__onToggleJitterSimulationOnOff()
+            # 'c' Insert minor packet loss for selected stream
+            elif self.keyPressed == ord('9'):
+                self.__onInsertMinorPacketLoss()
+            # 'v' Insert major packet loss for selected stream
+            elif self.keyPressed == ord('0'):
+                self.__onInsertMajorPacketloss()
+            else:
+                # print ("UI: key pressed not known: " + str(self.keyPressed))
+                pass
+            # # Clear key buffer
+            self.keyPressed = None
+            # Trigger a screen redraw
+            self.redrawScreen = True
+
+    # Utility method to create create an up to date list, from a dictionary (taking additions and deletions into account)
+    def __updateAvailableStreamsList(self, rtpStreamList, rtpStreamDict, rtpStreamDictMutex):
+        # This is a utility function for UI.__renderDisplayThread
+        # It's job is to compare the current working list in use by __displayThread (currentStreamList[])
+        # with the rtpStreamDict{} dictionary of active rtpRxStreams or rtpTxStreams (maintained by main())
+        # It will replicate any additions/deletions to objects in rtpStreamDict{} to currentStreamList[]
+        # Crucially, the order of currentStreamList[] will be maintained so that it will represent a
+        # chronological record of the order in which streams were added. This is very useful for display purposes
+        # because __displayThread relies upon the index no of the entries in currentStreamList[]
+
+        # It's a bit like a C function in that it doesn't return anything. Instead, the arguments supplied
+        # (a list and a dictionary) are mutable, and therefore act like pointers. Therefore this function
+        # can manipulate them directly.
+
+        # 1) Iterate over keys of rtpStreamDict{} to get latest list of streams
+        rtpStreamDictMutex.acquire()
+        newStreamsList = []
+        for k, v in rtpStreamDict.items():
+            newStreamsList.append(k)
+        rtpStreamDictMutex.release()
+
+        # 2) Create sublist of current known rtpStreamList
+        currentStreamsList = []
+        for k in rtpStreamList:
+            currentStreamsList.append(k[0])
+
+        # 3) Do set(new)^set(current) to get difference between the two lists (as another list)
+        diff = set(currentStreamsList) ^ set(newStreamsList)
+        # 4) do set(new)&set(diff) to get add list
+        addList = set(newStreamsList) & set(diff)
+        # 5) do set (current)&set(diff) to get del list
+        deleteList = set(currentStreamsList) & set(diff)
+
+        # 6) Add new streams to rtpStreamList
+        for streamID in addList:
+            # Create tuple containing the stream id, the stream object itself and an index
+            x = [streamID, rtpStreamDict[streamID], 0]
+            # Append the new tuple to rtpStreamList[]
+            rtpStreamList.append(x)
+            Utils.Message.addMessage(
+                "INFO: __updateAvailableStreamsList() Added stream: " + str(x[0]) + ", " + str(type(x[1])))
+        for streamID in deleteList:
+            # Iterate over tuples in rtpStreamList[] searching for a match
+            for index, stream in enumerate(rtpStreamList):
+                if stream[0] == streamID:
+                    # If stream found, delete that tuple from the list
+                    Utils.Message.addMessage(
+                        "INFO: __updateAvailableStreamsList() Removing stream " + str(stream[0]) + ", " + str(
+                            type(stream[1])))
+                    try:
+                        rtpStreamList.pop(index)
+                    except Exception as e:
+                        Utils.Message.addMessage("ERR: __updateAvailableStreamsList: " + str(e))
+                    break
+
+        # 8) Check that rtpStreamList and rtpStreamDict are actually looking at the same objects in memory
+        # It's possible that duplicate streams with the same stream ID can lead to orphan streams remaining
+        # in rtpStreamList.
+        # To check, we actually need to compare the objects in both lists of objects. Using the 'is' keyword
+        # confirms that they are the same object (as opposed to the same type of object)
+        rtpStreamDictMutex.acquire()
+        for stream in rtpStreamList:
+            try:
+                if stream[1] is not rtpStreamDict[stream[0]]:
+                    Utils.Message.addMessage("ERR:__updateAvailableStreamsList() Object mismatch for streamID " + str(
+                        stream[0]) + ". Repointing to correct object")
+                    # Now re-point rtpStreamList to the correct version of that object
+                    # by assigning the correct object to the entry in rtpStreamList[]
+                    stream[1] = rtpStreamDict[stream[0]]
+            except Exception as e:
+                Utils.Message.addMessage("ERR:__updateAvailableStreamsList(), rtpStreamDictkey error for stream " + str(
+                    stream[0]) + ", " + str(e))
+        rtpStreamDictMutex.release()
+        # 9) delete newStreamsList, currentStreamsList, diff, addList and deleteList
+        del newStreamsList
+        del currentStreamsList
+        del diff
+        del addList
+        del deleteList
+
+        # 10) Optionally recalculate rtpStreamList indices - Note these shouldn't change unless a stream has been deleted
+        for index, stream in enumerate(rtpStreamList):
+            # Write the list index value to the third element of the stream tuple
+            stream[2] = index
+
+    # Autonomous thread to render the screen and parse keyboard presses
+    def __renderDisplayThread(self):
+        # Set up display window
+        # Initialise Colorama module (which transcodes ascii escape sequences for Windows)
+        init(autoreset=True)
+        Term.enterAlternateScreen()
+        Term.clearTerminalScrollbackBuffer()
+
+        if self.operationMode == 'RECEIVE':
+            Utils.Message.addMessage("Waiting for incoming RTP streams....")
+        elif self.operationMode == 'TRANSMIT':
+            Utils.Message.addMessage("Waiting for receiving end to make contact..... ")
+
+
+        # Endless 'state-driven' loop to render the screen
+        while self.renderDisplayThreadActive == True:
+            # Blocking Wait for the wakeUpUi Event (or a 1 sec timeout, whichever first)
+            self.wakeUpUI.wait(timeout=1)
+            # Now clear the 'wakeupUI event' flag (because we've processed this key press)
+            self.wakeUpUI.clear()
+            # Recalculate the run-time of the UI thread
+            self.runtime_s = datetime.datetime.now() - self.startTime
+
+            # Check status of self.displayQuitDialogueFlag. If so, display the Quit Y/N prompt
+            if self.displayQuitDialogueFlag:
+                # Clear the flag
+                self.displayQuitDialogueFlag = False
+                # disable _getch() key capture (it will interfere with the Prompt_Toolkit code
+                Utils.Message.addMessage("DBUG: UI.__renderDisplayThread self.enableGetch.clear()")
+                self.enableGetch.clear()
+                # Now wait for UI.__keysPressedThreasd() to acknowledge the self.enableGetch.clear() signal
+                Utils.Message.addMessage("DBUG: UI.__renderDisplayThread: Waiting for UI.__keysPressedThread to acknowledge self.enableGetch.clear()")
+                self.getchIsDisabled.wait()
+                Utils.Message.addMessage("DBUG: UI.__renderDisplayThread:  self.getchIsDisabled acknowledged")
+
+                # Put up the user prompt (blocking call)
+                styleDefinition = Style.from_dict({
+                    'dialog': 'bg:ansiblue',  # Screen background
+                    'dialog frame.label': 'bg:ansiwhite ansired ',
+                    'dialog.body': 'bg:ansiwhite ansiblack',
+                    'dialog shadow': 'bg:ansiblack'})
+                Term.clearScreen()
+                self.quitConfirmed = yes_no_dialog(title='Quit Isptest', text='Do you want to quit?',
+                                                   style=styleDefinition).run()
+                # Re-enter alternate screen buffer
+                Term.enterAlternateScreen()
+                Term.clearTerminalScrollbackBuffer()
+                self.redrawScreen = True
+
+                # Now we have a response, update the Threading.Event flag (to unblock UI.showShutDownDialogue())
+                self.quitDialogueNotActiveFlag.set()
+
+
+            # Update available streams lists
+            if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
+                self.__updateAvailableStreamsList(self.availableRtpTxStreamList, self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex)
+                self.__updateAvailableStreamsList(self.availableRtpTxResultsList, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
+            elif self.operationMode == 'RECEIVE':
+                self.__updateAvailableStreamsList(self.availableRtpRxStreamList, self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
+
+
+            # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
+            if len(self.availableRtpTxStreamList) > 0:
+                latestTxStream = self.availableRtpTxStreamList[-1][1]
+                # Take a deep copy so that we're not dependent upon this stream existing
+                self.latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
+
+            # Get a handle on the currently highlighted stream and corresponding sync source ID
+            # Confirm that the streamList associated with this view actual has data in it
+            lengthOfDataSetToDisplay = len(self.views[self.selectedView][2])
+            # Local function to confirm that the 'selected stream' pointed to by the streams table actually exists
+            # (it might not still, if the user deleted the stream via the UI
+            # If the stream has been deleted, the selction moves to the last stream added, or None
+            # if there are no streams at all
+            # This will make sure that self.self.selectedStream and self.selectedStreamID are up to date
+            def validateSelectedStream():
+                if lengthOfDataSetToDisplay > 0:
+                    # Now confirm that we're not off the end of the list of streams (possible if the last stream
+                    # in the list was deleted)
+                    if self.selectedTableRow > (lengthOfDataSetToDisplay - 1):
+                        # If so, point the selector to the last item on the list
+                        self.selectedTableRow = (lengthOfDataSetToDisplay - 1)
+
+                    self.selectedStream = self.views[self.selectedView][2][self.selectedTableRow][1]
+                    self.selectedStreamID = self.views[self.selectedView][2][self.selectedTableRow][0]
+                else:
+                # Otherwise, if there are no streams available, set the instance variables accordingly
+                    self.selectedStream = None
+                    self.selectedStreamID = 0
+            validateSelectedStream()
+
+            # Determine which key pressed, and call the appropriate method
+            self.__parseKeyPressed()
+
+            ########## Start rendering the screen
+            if self.redrawScreen:
+                Term.setBackgroundColour(Term.BLUE)
+                self.__renderTopToolbar()
+                self.__renderBottomToolbar()
+                self.__drawNavigationBar()
+            # Term.printAt(str(datetime.datetime.now()) + ", " + str(self.selectedView), 1, 10, Fore.BLACK)
+
+            # Update the clock on the top toolbar
+            self.__updateClock()
+            # draw the stream table
+            self.__drawStreamsTable()
+
+            # draw the messages table
+            self.__drawMessageTable() # Should only take effect if there are any new messages/or self.redrawScreen is True
+
+            # Now check to see of any pop-up display has been activated
+            if self.displayPopup is not None:
+                try:
+                    # invoke the popup method pointed to by self.displayPopup
+                    self.displayPopup()
+                except Exception as e:
+                    Utils.Message.addMessage("ERR:__renderDisplayThread() displayPopup " + str(e))
+
+            # Clear flag
+            self.redrawScreen = False
+
+            # Finally, Check to see if Fatal Error Message is to be displayed
+            if self.displayFatalErrorDialogue:
+                # clear flag
+                self.displayFatalErrorDialogue = False
+
+                # Put up error message (this is a blocking call)
+                self.__renderMessageBox(self.fatalErrorDialogueMessageText, self.fatalErrorDialogueTitle, \
+                                        textColour=Term.WHITE, bgColour=Term.RED)
+                Utils.Message.addMessage("DBUG: __renderDisplayThread() displayFatalErrorDialogue..key pressed")
+
+
+
+            # Now re-arm the getch thread
+            self.enableGetch.set()
+
+        Utils.Message.addMessage("UI.__renderDisplayThread ending *****")
+        # Exit alternate screen
+        Term.exitAlternateScreen()
+        Term.clearScreen()
+        print(Term.FG(Term.BLACK) + "UI.__renderDisplayThread ended")
+
+
+            # Autonomous thread to monitor the size of the terminal window
+    def __detectTerminalSizeThread(self):
+        while self.detectTerminalSizeThreadActive == True:
+            # Check to see if terminal has been resized
+            # NOTE: Safe max print area height seems to be currentTermHeight -1
+            w, h = Term.getTerminalSize()
+            if (w != self.currentTermWidth) or (h != self.currentTermHeight):
+                # If it has, set a flag
+                self.redrawScreen = True
+                # And store the new values
+                self.currentTermWidth = w
+                self.currentTermHeight = h
+                Utils.Message.addMessage(
+                    "INFO: Terminal size has changed to " + str(self.currentTermWidth) + "," + str(self.currentTermHeight))
+            time.sleep(0.2)
+        print ("UI.__detectTerminalSizeThread ended\r")
+        print ("Running threads: " + Utils.listCurrentThreads())
+
+
+    # Autonomous thread to monitor key presses
+    def __keysPressedThread(self):
+        while self.keysPressedThreadActive == True:
+            # Wait for getch to be enabled (with a timeout)
+            self.enableGetch.wait(timeout = 0.2)
+            # Confirm that enableGetch was actually set (or was it just a timeout)
+            if self.enableGetch.is_set():
+                # Set a revertive to show that getch is enabled
+                self.getchIsDisabled.clear()
+                # Capture keyboard presses via the getch method (with a 1 second timeout)
+                self.keyPressed = None  #clear the keyboard buffer
+                ch = self.__getch()
+                # Term.printAt("getch() : " + str(ch), 1, 7)
+                # Check to see if a genuine key has been pressed
+
+                if ch != None:
+                    # If a key has been pressed, store it
+                    self.keyPressed = ch
+                    # Signal that a key has been pressed
+                    self.wakeUpUI.set()
+                    # Now disarm key checking (until it is re-enabled elsewhere)
+                    self.enableGetch.clear()
+                    # Set a revertive to show that ____keysPressedThread (i.e getch) has been disabled
+                    # Utils.Message.addMessage("DBUG: UI.__keysPressedThread: getchIsDisabled.set() ")
+                    self.getchIsDisabled.set()
+            # If getch has been disabled, set a revertive to show other parts of the program it has been acknowledged
+            if self.enableGetch.is_set() is False:
+                # Set a revertive to show that ____keysPressedThread (i.e getch) has been disabled
+                # Utils.Message.addMessage("DBUG: UI.__keysPressedThread: getchIsDisabled.set() ")
+                self.getchIsDisabled.set()
+
+        Utils.Message.addMessage("DBUG: UI.__keysPressedThread ended")
 
 def __diskLoggerThread(operationMode, shutdownFlag, controllerTCPPort):
     # Autonomous thread to iterate over rtpStreamsDict and poll RtpStream eventLists for new events
@@ -3225,7 +5792,7 @@ def __diskLoggerThread(operationMode, shutdownFlag, controllerTCPPort):
                     streamAPI = Utils.APIHelper(port=streamDefinition["httpPort"])
                     # Get the most recent event no for the current stream
                     # If in TRANSMIT mode, this will fail if the RtpStreamResults object doesn't exist yet (because this
-                    # api endpiont is only created once the TRANSMIT end has started receiving data back from the RECEIVE end
+                    # api endpoint is only created once the TRANSMIT end has started receiving data back from the RECEIVE end
                     # Therefore, if this fails, fail silently
                     try:
                         latestEventNo = streamAPI.getRTPStreamEventListAsJson(recent=1)[0]["eventNo"]
@@ -4706,7 +7273,7 @@ class ISPTestHTTPServer(object):
                         # Have to ensure that filterType has been specified, otherwise we could delete the wrong Rtp Stream
                         # (if it shares the same id no)
                         if filterType is not None:
-                            filteredList = self.server.parentObject.getStreamByFilter(requestedStreamID=currentStep,
+                            filteredList = self.server.parentObject.getStreamByFilter(streamID=currentStep,
                                                                                       streamType=filterType)
                         else:
                             raise Exception("do_DELETE()/streams/delete/" + str(filterType) + "/" + str(currentStep) +\

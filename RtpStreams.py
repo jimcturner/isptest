@@ -4496,6 +4496,7 @@ class RtpGenerator(RtpCommon):
         except Exception as e:
             Utils.Message.addMessage(
                 "ERR:Closing http server for RtpGenerator " + str(self.syncSourceIdentifier) + str(e))
+
         # Now attempt to remove the stream from the streams directory
         try:
             self.ctrlAPI.removeFromStreamsDirectory("RtpGenerator", self.syncSourceIdentifier)
