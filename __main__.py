@@ -3575,7 +3575,11 @@ class UI(object):
         streamTableNoOfRows = int(self.currentTermHeight / 2) - 9
 
         # Get a list of current RTP Streams
-        streamsList = self.ctrlAPI.getStreamsList()
+        try:
+            streamsList = self.ctrlAPI.getStreamsList()
+        except Exception as e:
+            Utils.Message.addMessage(f"ERR:UI.__drawStreamsTable()ctrlAPI.getStreamsList() {e}")
+            streamsList = []
         # Get a handle on the dataset to be displayed in this particular table
         # The dataset is pointed to by the 3rd element of each view array
         dataSetToDisplay = self.views[self.selectedView][2]
@@ -3629,8 +3633,8 @@ class UI(object):
                     # Isolate the stream from the dataSetToDisplay[]
                     streamData = dataSetToDisplay[x]
                     # Retrieve the stats dictionary for that key
-                    streamDataStats = streamData[1].getRtpStreamStats()
-                    # streamDataStats = Utils.APIHelper(streamsList[x][httpPort]).
+                    # streamDataStats = streamData[1].getRtpStreamStats()
+                    streamDataStats = Utils.APIHelper(streamsList[x]["httpPort"]).getStats()
                     # iterate over the keys list for each stream - this will list in a new tableData row per stream
                     tableRow = []  # Create new row to hold the data
                     ###################################### These are the lines that actually populate the table
