@@ -3636,82 +3636,93 @@ class UI(object):
                     # Retrieve the stats dict for the current stream
                     try:
                         streamDataStats = Utils.APIHelper(httpPort).getByURL(dataUrl)
-                    except Exception as e:
-                        Utils.Message.addMessage(f"ERR:UI.__drawStreamsTable() GET {httpPort}:{dataUrl}")
-                        streamDataStats = {}
-                    # iterate over the keys list for each stream - this will list in a new tableData row per stream
-                    tableRow = []  # Create new row to hold the data
-                    ###################################### These are the lines that actually populate the table
-                    for key in keyList:
-                        # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
-                        # which is stored as the third element of a streamData tuple in the dataSetToDisplay[]
-                        if key == 0:
-                            # Grab the index number and assign to table cell
-                            # For useability, start the, displayed no starting from 1
-                            tableCell = str(streamIndex + 1)
-                        else:
-                            # This is a normal cell with a lookup key specified in the view definition
-                            try:
-                                # Retrieve the data from the rtpStream object by looking up it's key
-                                # Attempt to humanise the data based on object type or clues given by the key name
-                                tableCell = str(RtpReceiveCommon.humanise(key, streamDataStats[key]))
+
+                        # iterate over the keys list for each stream - this will create a new tableData row per stream
+                        tableRow = []  # Create new row to hold the data
+                        ###################################### These are the lines that actually populate the table
+                        for key in keyList:
+                            # Check to see if the key value= 0. If it does, this is a special case, it's an index no.
+                            # which is stored as the third element of a streamData tuple in the dataSetToDisplay[]
+                            if key == 0:
+                                # Grab the index number and assign to table cell
+                                # For useability, start the, displayed no starting from 1
+                                tableCell = str(streamIndex + 1)
+                            else:
+                                # This is a normal cell with a lookup key specified in the view definition
                                 try:
-                                    # is it a receive stream?
-                                    # If so, test the stream stats
-                                    if self.availableRtpStreamList[streamIndex]["streamType"] == "RtpReceiveStream":
-                                        # Is the source of this stream an instance of an isptest transmitter?
-                                        # If not (eg. from an NTT) mask the 'Transmitter' pane values as these would
-                                        # be carried in the isptestheader, and will therefore be missing
-                                        if streamDataStats["stream_transmitterVersion"] > 0:
-                                            # If these are isptest-generated packets, leave alone
-                                            pass
-                                        else:
-                                            # Otherwise overwrite the tablecell value for certain keys where the
-                                            # data is not available
-                                            if key == 'stream_transmitter_txRate_bps' or \
-                                                key == 'stream_transmitter_TimeToLive_sec':
-                                                tableCell = "-"
+                                    # Retrieve the data from the rtpStream object by looking up it's key
+                                    # Attempt to humanise the data based on object type or clues given by the key name
+                                    tableCell = str(RtpReceiveCommon.humanise(key, streamDataStats[key]))
+                                    try:
+                                        # is it a receive stream?
+                                        # If so, test the stream stats
+                                        if self.availableRtpStreamList[streamIndex]["streamType"] == "RtpReceiveStream":
+                                            # Is the source of this stream an instance of an isptest transmitter?
+                                            # If not (eg. from an NTT) mask the 'Transmitter' pane values as these would
+                                            # be carried in the isptestheader, and will therefore be missing
+                                            if streamDataStats["stream_transmitterVersion"] > 0:
+                                                # If these are isptest-generated packets, leave alone
+                                                pass
+                                            else:
+                                                # Otherwise overwrite the tablecell value for certain keys where the
+                                                # data is not available
+                                                if key == 'stream_transmitter_txRate_bps' or \
+                                                        key == 'stream_transmitter_TimeToLive_sec':
+                                                    tableCell = "-"
 
-                                        # Colour code the table based on some received bitrate
-                                        if streamDataStats["packet_data_received_1S_bytes"] == 0:
-                                            # If so, make the row red
-                                            tableCell = Term.FG(Term.RED) + tableCell
-##### GOT HERE '.lastUpdatedTimestamp' can't exist? But could I use stats[packet_last_seen_received_timestamp]?
-                                    if self.availableRtpStreamList[streamIndex]["streamType"] == "RtpGenerator":
-                                        # If so, check to see that the data is fresh by looking at the
-                                        # timestamp inside RtpStreamResults
-                                        # If no fresh data received after 5 seconds, assume there's a problem
-                                        # and colour code the stream red
-                                        # if (datetime.datetime.now() - streamData[1].lastUpdatedTimestamp) > \
-                                        #         datetime.timedelta(seconds=5):
-                                        tableCell = Term.FG(Term.BLUE) + tableCell
+                                            # Colour code the table based on some received bitrate
+                                            if streamDataStats["packet_data_received_1S_bytes"] == 0:
+                                                # If so, make the row red
+                                                tableCell = Term.FG(Term.RED) + tableCell
 
+                                        if self.availableRtpStreamList[streamIndex]["streamType"] == "RtpGenerator":
+                                            # If so, check to see that the data is fresh by looking at
+                                            # stats["lastUpdatedTimestamp"] inside the stats dict
+                                            # If no fresh data received after 5 seconds, assume there's a problem
+                                            # and colour code the stream red
+                                            noUpdateAlertThreshold = 5
+                                            if "lastUpdatedTimestamp" in streamDataStats:
+                                                # Convert streamDataStats["lastUpdatedTimestamp"] key from str to datetime.datetime format
+                                                lastUpdatedTimestamp = datetime.datetime.strptime(streamDataStats["lastUpdatedTimestamp"],
+                                                                                                  '%Y-%m-%d %H:%M:%S.%f')
+                                                # Has noUpdateAlertThreshold been exceeded
+                                                if (datetime.datetime.now() - lastUpdatedTimestamp) > \
+                                                        datetime.timedelta(seconds=noUpdateAlertThreshold):
+                                                    tableCell = Term.FG(Term.RED) + tableCell
 
-                                        if streamDataStats["Time to live"] == 0:
-                                            # If tx stream has 'died', dim
-                                            tableCell = Term.DIM + tableCell
+                                            # If the RtpGenerator TTL has expired, dim the table row
+                                            if "Time to live" in streamDataStats and\
+                                                streamDataStats["Time to live"]  == 1: # TTL=1 denotes expired
+                                                    # If tx stream has 'expired', dim the table row
+                                                    tableCell = Term.DIM + tableCell
+
+                                    except Exception as e:
+                                        Utils.Message.addMessage(
+                                            "ERR: __displayThread: (colour coding of stream tables) " + str(e))
 
                                 except Exception as e:
-                                    Utils.Message.addMessage(
-                                        "ERR: __displayThread: (colour coding of stream tables) " + str(e) + "**")
+                                    # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
+                                    tableCell = "keyErr"
+                                    Utils.Message.addMessage("ERR: __displayThread (for key in keyList): " + str(e))
 
-                            except Exception as e:
-                                # If the key doesn't exist within the rtpStream stats dict, copy in an error code instead
-                                tableCell = "keyErr"
-                                Utils.Message.addMessage("ERR: __displayThread (for key in keyList): " + str(e))
+                            # Check to see if this is the currently selected stream, if so, highlight the row on the table
+                            if streamIndex == self.selectedTableRow:
+                                # prefix tableCell with White-on-black ASCII code
+                                tableCell = Term.WhBla + str(tableCell)
+                            else:
+                                # Normal text: prefix tableCell with Black-on-White ASCII code
+                                tableCell = Term.BlaWh + str(tableCell)
+                            # Append the formatted table cell data to the tableRow list
+                            tableRow.append(tableCell)
+                        # Now append this complete row to the tableData list (of lists)
+                        tableData.append(tableRow)
+                        del tableRow
+                    except Exception as e:
+                        # api didn't respond. No data to display
+                        pass
+                        # Utils.Message.addMessage(
+                        #     f"ERR:UI.__drawStreamsTable() streamIndex {streamIndex}, GET HTTP:{httpPort}:{dataUrl}")
 
-                        # Check to see if this is the currently selected stream, if so, highlight the row on the table
-                        if streamIndex == self.selectedTableRow:
-                            # prefix tableCell with White-on-black ASCII code
-                            tableCell = Term.WhBla + str(tableCell)
-                        else:
-                            # Normal text: prefix tableCell with Black-on-White ASCII code
-                            tableCell = Term.BlaWh + str(tableCell)
-                        # Append the formatted table cell data to the tableRow list
-                        tableRow.append(tableCell)
-                    # Now append this complete row to the tableData list (of lists)
-                    tableData.append(tableRow)
-                    del tableRow
             ###################################### End of lines that actually add data
             # If the table isn't large enough yet, pad it out with blanks to the length set by streamTableNoOfRows
             if streamTableBlankRowsToAdd > 0:
@@ -5873,7 +5884,9 @@ def __diskLoggerThread(operationMode, shutdownFlag, controllerTCPPort):
                                 Utils.Message.addMessage(f"ERR:Corrupted CSV EventsList? : unwrittenEventsCount:{unwrittenEventsCount}, "\
                                                 f"latestEventNo:{latestEventNo},  err: {e}")
                     except Exception as e:
-                        Utils.Message.addMessage(f"DBUG:EventsList unavailable (no response from RECEIVER? {e}", logToDisk=False)
+                        # No response from API
+                        # Utils.Message.addMessage(f"DBUG:EventsList unavailable (no response from RECEIVER? {e}", logToDisk=False)
+                        pass
 
                 except Exception as e:
                     Utils.Message.addMessage(f"ERR: __diskLoggerThread: {e}")

@@ -1480,6 +1480,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["lossOfStreamFlag"] = False
         self.__stats["streamIsDeadFlag"] = False
         self.__stats["lossOfStreamEventTimestamp"] = datetime.timedelta()
+        self.__stats["lastUpdatedTimestamp"] = datetime.timedelta() # Timestamp of when the stats[] dict was last updated
 
         # Create private empty list to hold Events for this RtpReceiveStream object. Accessible via a getter method
         self.__eventList = deque(maxlen=Registry.rtpReceiveStreamHistoricEventsLimit)
@@ -2340,6 +2341,8 @@ class RtpReceiveStream(RtpReceiveCommon):
 
             if loopCounter % 5 == 0:
                 ######## 1 second counter
+                # Update the 'last updated' timestamp
+                self.__stats["lastUpdatedTimestamp"] = datetime.datetime.now()
 
                 try:
                     ########### Calculate 10sec jitter mean -- self.__stats["jitter_mean_10S_uS"] = 0
