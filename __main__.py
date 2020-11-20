@@ -3218,28 +3218,9 @@ class UI(object):
         # Get initial size of terminal
         self.currentTermWidth, self.currentTermHeight = Term.getTerminalSize()
 
-        # Declare lists to hold list of available rx and tx streams that can be displayed
-
-        # These lists are a list of tuples [x,y,z] where
-        # [x=streamID (as a string), y=the tx/rx object itself, z=an index value]
-        #
-        # The array is populated by the use of the utility function __updateAvailableStreamsList()
-        # Meanwhile, main() is declaring three dictionaries, rtpTxStreamsDict, rtpTxResultsDict and  rtpRxStreamsDict
-        # The issue with these dictionaries is that the order of them can change (when you iterate through them) making them
-        # unsuitable for __displayThread which needs to maintain a chronological order of streams added/removed for display
-        # and control purposes
-        #
-        # Therefore the job of __updateAvailableStreamsList() is to poll the supplied dictionary and synchronise any changes
-        # (additions or deletions) in the dictionaries to the corresponding lists
-
-        # self.availableRtpRxStreamList = []
-        # self.availableRtpTxStreamList = []
-        # self.availableRtpTxResultsList = []
-
-        # Declare lists to hold list of available rx and tx streams that can be displayed
-        # This is a list of tuples [x,y,z] where
-        # [x=streamID (as a string), y=The TCP port of the HTTP api, z=an index value]
-        self.availableRtpStreamList = [] # Supercedes availableRtpRxStreamList, availableRtpTxStreamList and availableRtpTxResultsList
+        # Declare list to hold list of available RtpGenerator/RtpReceiveStream streams that can be displayed
+        # This is a list of stream definitions in the form of dicts {"streamID", "streamType", "httpPort", "timeCreated"}
+        self.availableRtpStreamList = []
 
         self.selectedView = 0  # Keeps track of which view is currently being displayed
         self.selectedTableRow = 0  # Keeps track of the selected row on the stream table
@@ -3248,7 +3229,6 @@ class UI(object):
 
         self.selectedStream = None  # Points to the self.availableRtpStreamList item (a dict containing a stream definition)
                                     # currently highlighted in the streams table
-        # self.selectedStreamID = 0 # Tracks the sync source ID of the stream currently highlighted
 
         # Screen label showing the available key commands (depending upon mode)
         self.keyCommandsString = "[h]elp, [a]bout, [d]elete, [l]abel, [r]eport, [t]raceroute, com[p]are"
@@ -3285,13 +3265,6 @@ class UI(object):
                            [" Time\nremain", 'Time to live']
                            ], "/txstats"]) # data source
 
-        # # If actually the receiving end, use availableRtpRxStreamList[] as a source for the stream tables
-        # if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
-        #     self.streamResultsDataSet = self.availableRtpRxStreamList
-        #
-        # # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
-        # else:
-        #     self.streamResultsDataSet = self.availableRtpTxResultsList
 
         self.views.append(["Summary",
                       [["#", 0],  # Used as an index
@@ -4007,32 +3980,51 @@ class UI(object):
         # Note, if we are in TRANSMIT mode, the selected stream could be an RtpGenerator. This is no good,
         # hence we have to manually retrieve the appropriate stream object by using the self.selectedStreamID
         # and looking in the appropriate streams dictionary
-        selectedRxOrResultsStream = None
-
-        if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
-            try:
-                selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
-            except:
-                pass
-        elif self.operationMode == 'TRANSMIT':
-            try:
-                selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
-            except:
-                pass
+        # selectedRxOrResultsStream = None
+        #
+        # if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+        #     try:
+        #         selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
+        #     except:
+        #         pass
+        # elif self.operationMode == 'TRANSMIT':
+        #     try:
+        #         selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
+        #     except:
+        #         pass
 
         eventsList = []
         friendlyName = ""
         syncSourceID = 0
-        if selectedRxOrResultsStream is not None:
+        # if selectedRxOrResultsStream is not None:
+        #     try:
+        #         # Get eventlist of the selected Rx or TxResults stream
+        #         eventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList = self.filterListForDisplayedEvents[self.selectedFilterNo])
+        #         # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
+        #         friendlyName = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
+        #         syncSourceID = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_syncSource"))
+        #
+        #     except Exception as e:
+        #         Utils.Message.addMessage("ERR. UI.__renderEventsListTable. getRTPStreamEventList()")
+
+        # Get a list of events (via the API) for the selected stream
+        if self.selectedStream is not None:
             try:
-                # Get eventlist of the selected Rx or TxResults stream
-                eventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList = self.filterListForDisplayedEvents[self.selectedFilterNo])
+                # Get the HTTP Server port no of the currently selected stream
+                httpPort = self.selectedStream["httpPort"]
+                # Create an APIHelper
+                api = Utils.APIHelper(httpPort)
+                # Get the (complete) events list
+                eventsList = api.getRTPStreamEventListAsSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
+                # Get the stats dict
+                stats = api.getStats(keyStartsWith="stream")
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
-                friendlyName = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
-                syncSourceID = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_syncSource"))
+                friendlyName = str(stats["stream_friendly_name"]).rstrip()
+                syncSourceID = str(stats["stream_syncSource"])
 
             except Exception as e:
-                Utils.Message.addMessage("ERR. UI.__renderEventsListTable. getRTPStreamEventList()")
+                Utils.Message.addMessage(f"ERR. UI.__renderEventsListTable. getRTPStreamEventList() {self.selectedStream}, {e}")
+                eventsList = []
 
         # Create a list of tuples containing the timestamp and the summary
         tableContents =[]
@@ -4041,11 +4033,14 @@ class UI(object):
             for event in eventsList:
                 # Get event details (in the form of a dictionary)
                 try:
-                    # Retrieve each Event summary, ommiting the syncSourceID and the friendlyName (for display purposes)
-                    eventDetails = event.getSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
-                    # Create a complete row of the table
-                    tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
-                    tableRow.append(" " + str(eventDetails['summary']).ljust(50))
+                    # # Retrieve each Event summary, ommiting the syncSourceID and the friendlyName (for display purposes)
+                    # eventDetails = event.getSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
+                    # # Create a complete row of the table
+                    # tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
+                    # tableRow.append(" " + str(eventDetails['summary']).ljust(50))
+                    tableRow.append(str(event['timeCreated']))
+                    tableRow.append(" " + str(event['summary']).ljust(50))
+
                 except Exception as e:
                     Utils.Message.addMessage("UI.__renderEventsListTable: " + str(e))
                 #Append the complate table row to tableContents[]
