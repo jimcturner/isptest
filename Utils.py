@@ -1809,6 +1809,20 @@ class APIHelper(object):
         except Exception as e:
             raise Exception(f"ERR: APIHelper.getTxStats() params: {kwargs}, error: {e}")
 
+    # This is a generic function that will take anyurl path, and attempt to do an HTTP get using that path
+    # It will also pass in **kwargs
+    # If the api has a matching endpoint, the response will be returned
+    def getByURL(self, path, **kwargs):
+        url = f"http://{self.addr}:{self.port}{path}"
+        try:
+            r = requests.get(url, params=kwargs, timeout=self.timeout)
+            # test the response
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+            # Attempt to decode the response as json and return it
+            return r.json()
+        except Exception as e:
+            raise Exception(f"ERR: APIHelper.getByURL() path: {path}, params: {kwargs}, error: {e}")
+
 
 # Renders a nested dict of dicts as an html table
 # columnTitles is a list of string reprresenting the column titles

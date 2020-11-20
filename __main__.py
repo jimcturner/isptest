@@ -3232,16 +3232,24 @@ class UI(object):
         # Therefore the job of __updateAvailableStreamsList() is to poll the supplied dictionary and synchronise any changes
         # (additions or deletions) in the dictionaries to the corresponding lists
 
-        self.availableRtpRxStreamList = []
-        self.availableRtpTxStreamList = []
-        self.availableRtpTxResultsList = []
+        # self.availableRtpRxStreamList = []
+        # self.availableRtpTxStreamList = []
+        # self.availableRtpTxResultsList = []
+
+        # Declare lists to hold list of available rx and tx streams that can be displayed
+        # This is a list of tuples [x,y,z] where
+        # [x=streamID (as a string), y=The TCP port of the HTTP api, z=an index value]
+        self.availableRtpStreamList = [] # Supercedes availableRtpRxStreamList, availableRtpTxStreamList and availableRtpTxResultsList
 
         self.selectedView = 0  # Keeps track of which view is currently being displayed
         self.selectedTableRow = 0  # Keeps track of the selected row on the stream table
         self.streamTableFirstRow = 0  # Tracks the current starting row of the stream table data
         self.streamTableLastRow = 0  # Tracks the current end row of the stream table data
-        self.selectedStream = None  # Tracks the stream currently highlighted in the streams table
-        self.selectedStreamID = 0 # Tracks the sync source ID of the stream currebtly highlighted
+
+        self.selectedStream = None  # Points to the self.availableRtpStreamList item (a dict containing a stream definition)
+                                    # currently highlighted in the streams table
+        # self.selectedStreamID = 0 # Tracks the sync source ID of the stream currently highlighted
+
         # Screen label showing the available key commands (depending upon mode)
         self.keyCommandsString = "[h]elp, [a]bout, [d]elete, [l]abel, [r]eport, [t]raceroute, com[p]are"
 
@@ -3257,10 +3265,10 @@ class UI(object):
         # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
         # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
         # views =[name of view 1, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],
-        #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],dataSet[]]
+        #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]] ,data_source_url]
         # view [n][0] will be the name of the view (used to generate the navigation bar)
         # view [n][1] is a tuple containing [column title, the stats dictionary key relating to that parameter]
-        # view [n][2] is a reference to the dataset for this view
+        # view [n][2] is a reference to the URL endpoint that will serve the required data
         self.views = []
 
         if self.operationMode == 'LOOPBACK' or self.operationMode == 'TRANSMIT':
@@ -3275,15 +3283,15 @@ class UI(object):
                            ["Size", 'Packet size'],
                            ["Bytes\n tx'd", 'Bytes transmitted'],
                            [" Time\nremain", 'Time to live']
-                           ], self.availableRtpTxStreamList]) # data source
+                           ], "/txstats"]) # data source
 
-        # If actually the receiving end, use availableRtpRxStreamList[] as a source for the stream tables
-        if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
-            self.streamResultsDataSet = self.availableRtpRxStreamList
-
-        # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
-        else:
-            self.streamResultsDataSet = self.availableRtpTxResultsList
+        # # If actually the receiving end, use availableRtpRxStreamList[] as a source for the stream tables
+        # if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
+        #     self.streamResultsDataSet = self.availableRtpRxStreamList
+        #
+        # # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
+        # else:
+        #     self.streamResultsDataSet = self.availableRtpTxResultsList
 
         self.views.append(["Summary",
                       [["#", 0],  # Used as an index
@@ -3296,7 +3304,7 @@ class UI(object):
                        ["Time since\nlast glitch", "glitch_time_elapsed_since_last_glitch"],
                        ["glitch\nperiod", "glitch_mean_time_between_glitches"],
                        ["Count", "glitch_counter_total_glitches"]
-                       ], self.streamResultsDataSet])
+                       ], "/stats"])
 
         self.views.append(["Stream",
                       [["#", 0],  # Used as an index
@@ -3307,7 +3315,7 @@ class UI(object):
                        ["Dst Addr", "stream_rxAddress"],
                        ["Dst\nport", "stream_rxPort"],
                        ["  Time\nelapsed", "stream_time_elapsed_total"]
-                       ], self.streamResultsDataSet])
+                       ], "/stats"])
 
         self.views.append(["Packet",
                       [["#", 0],  # Used as an index[]
@@ -3320,7 +3328,7 @@ class UI(object):
                        ["Bytes\nRcvd", "packet_data_received_total_bytes"],
                        ["TTL", "packet_instantaneous_ttl"]
                        # ["",""],
-                       ], self.streamResultsDataSet])
+                       ], "/stats"])
 
         self.views.append(["Glitch",
                       [["#", 0],  # Used as an index[]
@@ -3333,7 +3341,7 @@ class UI(object):
                        ["Total\nGlitch", "glitch_counter_total_glitches"],
                        ["Ignored", "glitch_glitches_ignored_counter"],
                        ["Threshold", "glitch_Event_Trigger_Threshold_packets"]
-                       ], self.streamResultsDataSet])
+                       ], "/stats"])
 
         self.views.append(["Historic",
                       [["#", 0],  # Used as an index[],
@@ -3345,7 +3353,7 @@ class UI(object):
                        ["10Sec\n", "historic_glitch_counter_last_10Sec"],
                        [" Time of\nlast glitch", "glitch_most_recent_timestamp"]
                        # ["", ""],
-                       ], self.streamResultsDataSet])
+                       ], "/stats"])
 
         self.views.append(["Jitter",
                       [["#", 0],  # Used as an index[]
@@ -3356,7 +3364,7 @@ class UI(object):
                        ["Range", "jitter_range_uS"],
                        ["1S \nmean", "jitter_mean_1S_uS"],
                        ["10S \nmean", "jitter_mean_10S_uS"]
-                       ], self.streamResultsDataSet])
+                       ], "/stats"])
 
         self.views.append(["NAT",
                       [["#", 0],  # Used as an index[]
@@ -3366,7 +3374,7 @@ class UI(object):
                        ["src\nport", "stream_srcPort"],
                        ["Rx Public addr", "stream_transmitter_destAddress"],
                        ["Rx Local addr", "stream_rxAddress"]
-                       ],self.streamResultsDataSet])
+                       ],"/stats"])
 
         # Additionally, for RECEIVE mode, add a further table that will show the transmitter parameters
         if self.operationMode == 'RECEIVE':
@@ -3376,7 +3384,7 @@ class UI(object):
                            ["Target\nTx Bps", 'stream_transmitter_txRate_bps'],
                            [" Time\nremain", 'stream_transmitter_TimeToLive_sec'],
                            ["Return\n loss %", "stream_transmitter_return_loss_percent"]
-                           ], self.streamResultsDataSet])
+                           ], "/stats"])
         # self.views.append(["Misc",
         #               [["#", 0],  # Used as an index[]
         #                ["", ""],
@@ -3385,7 +3393,7 @@ class UI(object):
         #                ["", ""],
         #                ["", ""],
         #                ["", ""],
-        #                ],DATASET_TO_DISPLAY])
+        #                ], URL_OF_DATASET_TO_DISPLAY])
 
         # Stores the most recent message - used to determine whether we need to redraw the message table
         self.lastMessageAdded = ""
@@ -3552,7 +3560,6 @@ class UI(object):
     ######### Print Navigation bar (shows the available views)
     def __drawStreamsTable(self):
         # Step 1) Establish the titles, data source and row selector (key list) for the table
-
         # Create a title row
         titleRow = []
         # Create a list of keys that will be accessed for this view
@@ -3574,17 +3581,8 @@ class UI(object):
         # Calculate the maximum no. of rows that can be displayed in the stream table - determined by the terminal height
         streamTableNoOfRows = int(self.currentTermHeight / 2) - 9
 
-        # Get a list of current RTP Streams
-        try:
-            streamsList = self.ctrlAPI.getStreamsList()
-        except Exception as e:
-            Utils.Message.addMessage(f"ERR:UI.__drawStreamsTable()ctrlAPI.getStreamsList() {e}")
-            streamsList = []
-        # Get a handle on the dataset to be displayed in this particular table
-        # The dataset is pointed to by the 3rd element of each view array
-        dataSetToDisplay = self.views[self.selectedView][2]
-        # streamTableDataSetLength = len(dataSetToDisplay)
-        streamTableDataSetLength = len(streamsList)
+        # Get the no of items within availableRtpStreamList
+        streamTableDataSetLength = len(self.availableRtpStreamList)
 
         if streamTableDataSetLength == 0:
             self.selectedTableRow = 0
@@ -3629,12 +3627,18 @@ class UI(object):
             # Confirm that there are some available streams
             if streamTableDataSetLength > 0:
                 # Iterate over a specified portion of the dataSetToDisplay[]
-                for x in range(self.streamTableFirstRow, self.streamTableLastRow + 1):
-                    # Isolate the stream from the dataSetToDisplay[]
-                    streamData = dataSetToDisplay[x]
-                    # Retrieve the stats dictionary for that key
-                    # streamDataStats = streamData[1].getRtpStreamStats()
-                    streamDataStats = Utils.APIHelper(streamsList[x]["httpPort"]).getStats()
+                for streamIndex in range(self.streamTableFirstRow, self.streamTableLastRow + 1):
+                    # Get the HTTP Server port no of the current stream
+                    httpPort = self.availableRtpStreamList[streamIndex]["httpPort"]
+                    # Get the api URL that will supply the data for this table
+                    # (The url is contained within the 3rd element of each view array)
+                    dataUrl = self.views[self.selectedView][2]
+                    # Retrieve the stats dict for the current stream
+                    try:
+                        streamDataStats = Utils.APIHelper(httpPort).getByURL(dataUrl)
+                    except Exception as e:
+                        Utils.Message.addMessage(f"ERR:UI.__drawStreamsTable() GET {httpPort}:{dataUrl}")
+                        streamDataStats = {}
                     # iterate over the keys list for each stream - this will list in a new tableData row per stream
                     tableRow = []  # Create new row to hold the data
                     ###################################### These are the lines that actually populate the table
@@ -3643,22 +3647,18 @@ class UI(object):
                         # which is stored as the third element of a streamData tuple in the dataSetToDisplay[]
                         if key == 0:
                             # Grab the index number and assign to table cell
-                            # The index stored in the array is zero indexed, but for useability, start the
-                            # displayed no starting from 1
-                            tableCell = str(streamData[2] + 1)
-
+                            # For useability, start the, displayed no starting from 1
+                            tableCell = str(streamIndex + 1)
                         else:
                             # This is a normal cell with a lookup key specified in the view definition
                             try:
                                 # Retrieve the data from the rtpStream object by looking up it's key
                                 # Attempt to humanise the data based on object type or clues given by the key name
                                 tableCell = str(RtpReceiveCommon.humanise(key, streamDataStats[key]))
-
                                 try:
                                     # is it a receive stream?
                                     # If so, test the stream stats
-                                    if type(streamData[1]) == RtpReceiveStream or type(
-                                            streamData[1]) == RtpStreamResults:
+                                    if self.availableRtpStreamList[streamIndex]["streamType"] == "RtpReceiveStream":
                                         # Is the source of this stream an instance of an isptest transmitter?
                                         # If not (eg. from an NTT) mask the 'Transmitter' pane values as these would
                                         # be carried in the isptestheader, and will therefore be missing
@@ -3676,18 +3676,17 @@ class UI(object):
                                         if streamDataStats["packet_data_received_1S_bytes"] == 0:
                                             # If so, make the row red
                                             tableCell = Term.FG(Term.RED) + tableCell
+##### GOT HERE '.lastUpdatedTimestamp' can't exist? But could I use stats[packet_last_seen_received_timestamp]?
+                                    if self.availableRtpStreamList[streamIndex]["streamType"] == "RtpGenerator":
+                                        # If so, check to see that the data is fresh by looking at the
+                                        # timestamp inside RtpStreamResults
+                                        # If no fresh data received after 5 seconds, assume there's a problem
+                                        # and colour code the stream red
+                                        # if (datetime.datetime.now() - streamData[1].lastUpdatedTimestamp) > \
+                                        #         datetime.timedelta(seconds=5):
+                                        tableCell = Term.FG(Term.BLUE) + tableCell
 
-                                        if type(streamData[1]) == RtpStreamResults:
-                                            # If so, check to see that the data is fresh by looking at the
-                                            # timestamp inside RtpStreamResults
-                                            # If no fresh data received after 5 seconds, assume there's a problem
-                                            # and colour code the stream red
-                                            if (datetime.datetime.now() - streamData[1].lastUpdatedTimestamp) > \
-                                                    datetime.timedelta(seconds=5):
-                                                tableCell = Term.FG(Term.RED) + tableCell
 
-                                    # is it a transmit stream?
-                                    if type(streamData[1]) == RtpGenerator:
                                         if streamDataStats["Time to live"] == 0:
                                             # If tx stream has 'died', dim
                                             tableCell = Term.DIM + tableCell
@@ -3701,9 +3700,8 @@ class UI(object):
                                 tableCell = "keyErr"
                                 Utils.Message.addMessage("ERR: __displayThread (for key in keyList): " + str(e))
 
-                        # Check to see if this is the currently selected stream
-                        # If so, highlight the row on the table
-                        if streamData[2] == self.selectedTableRow:
+                        # Check to see if this is the currently selected stream, if so, highlight the row on the table
+                        if streamIndex == self.selectedTableRow:
                             # prefix tableCell with White-on-black ASCII code
                             tableCell = Term.WhBla + str(tableCell)
                         else:
@@ -5558,43 +5556,52 @@ class UI(object):
                 self.quitDialogueNotActiveFlag.set()
 
 
-            # Update available streams lists
-            if self.operationMode == 'TRANSMIT' or self.operationMode == 'LOOPBACK':
-                self.__updateAvailableStreamsList(self.availableRtpTxStreamList, self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex)
-                self.__updateAvailableStreamsList(self.availableRtpTxResultsList, self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex)
-            elif self.operationMode == 'RECEIVE':
-                self.__updateAvailableStreamsList(self.availableRtpRxStreamList, self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex)
+            # Update available streams list
+            try:
+                # Get a list of streams from the api (these are a list of dicts containing "streamID", "httpPort", "streamType" keys
+                self.availableRtpStreamList = self.ctrlAPI.getStreamsList()
 
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:UI.__renderDisplayThread.ctrlAPI.getStreamsList() {e}")
+                self.availableRtpStreamList = []
 
-            # Grab the stats of the latest added tx stream - this info is used for the 'add stream with defaults' option
-            if len(self.availableRtpTxStreamList) > 0:
-                latestTxStream = self.availableRtpTxStreamList[-1][1]
-                # Take a deep copy so that we're not dependent upon this stream existing
-                self.latestTxStreamStats = deepcopy(latestTxStream.getRtpStreamStats())
+            # Grab the stats of the latest added tx stream (if present) - this info is used for the 'add stream with defaults' option
+            try:
+                if len(self.availableRtpStreamList) > 0 and self.availableRtpStreamList[-1]["streamType"] == "RtpGenerator":
+                    # Grab the stats of the latest added RtpGenerator object
+                    latestTxStream = self.availableRtpStreamList[-1]
+                    self.latestTxStreamStats = Utils.APIHelper(latestTxStream["httpPort"]).getTxStats()
+
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:UI.__renderDisplayThread get latestTxStreamStats: {e}")
+
 
             # Get a handle on the currently highlighted stream and corresponding sync source ID
             # Confirm that the streamList associated with this view actual has data in it
-            lengthOfDataSetToDisplay = len(self.views[self.selectedView][2])
+            # lengthOfDataSetToDisplay = len(self.availableRtpStreamList)
+
             # Local function to confirm that the 'selected stream' pointed to by the streams table actually exists
             # (it might not still, if the user deleted the stream via the UI
-            # If the stream has been deleted, the selction moves to the last stream added, or None
+            # If the stream has been deleted, the selection moves to the last stream added, or None
             # if there are no streams at all
-            # This will make sure that self.self.selectedStream and self.selectedStreamID are up to date
-            def validateSelectedStream():
+            # This will make sure that self.selectedStream is within the range of availableRtpStreamList[]
+            def checkSelectedStreamIsWithinRange(ui):
+                # Confirm that the streamList actually has data in it
+                lengthOfDataSetToDisplay = len(ui.availableRtpStreamList)
                 if lengthOfDataSetToDisplay > 0:
                     # Now confirm that we're not off the end of the list of streams (possible if the last stream
                     # in the list was deleted)
-                    if self.selectedTableRow > (lengthOfDataSetToDisplay - 1):
+                    if ui.selectedTableRow > (lengthOfDataSetToDisplay - 1):
                         # If so, point the selector to the last item on the list
-                        self.selectedTableRow = (lengthOfDataSetToDisplay - 1)
-
-                    self.selectedStream = self.views[self.selectedView][2][self.selectedTableRow][1]
-                    self.selectedStreamID = self.views[self.selectedView][2][self.selectedTableRow][0]
+                        ui.selectedTableRow = (lengthOfDataSetToDisplay - 1)
+                    # Create a pointer to the stream definition of the currently selected stream
+                    ui.selectedStream = ui.availableRtpStreamList[ui.selectedTableRow]
                 else:
                 # Otherwise, if there are no streams available, set the instance variables accordingly
-                    self.selectedStream = None
-                    self.selectedStreamID = 0
-            validateSelectedStream()
+                    ui.selectedStream = None
+
+            # Check to see that the table selection hasn't overshot the list of items in availableRtpStreamList
+            checkSelectedStreamIsWithinRange(self)
 
             # Determine which key pressed, and call the appropriate method
             self.__parseKeyPressed()
@@ -5636,8 +5643,6 @@ class UI(object):
                                         textColour=Term.WHITE, bgColour=Term.RED)
                 Utils.Message.addMessage("DBUG: __renderDisplayThread() displayFatalErrorDialogue..key pressed")
 
-
-
             # Now re-arm the getch thread
             self.enableGetch.set()
 
@@ -5648,7 +5653,7 @@ class UI(object):
         print(Term.FG(Term.BLACK) + "UI.__renderDisplayThread ended")
 
 
-            # Autonomous thread to monitor the size of the terminal window
+    # Autonomous thread to monitor the size of the terminal window
     def __detectTerminalSizeThread(self):
         while self.detectTerminalSizeThreadActive == True:
             # Check to see if terminal has been resized
