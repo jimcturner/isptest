@@ -1213,7 +1213,7 @@ class RtpReceiveCommon(RtpCommon):
             except:
                 # If this fails, test to see if the object is a datetime.timedelta object encoded as a string
                 try:
-                    value = Utils.(value)
+                    value = Utils.convertStringToTimeDelta(value)
                 except:
                     # Otherwise ignore the value
                     pass
