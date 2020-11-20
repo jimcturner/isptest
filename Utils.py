@@ -5,6 +5,7 @@ import json
 import os
 import pickle
 import random
+import re
 import struct
 import array
 import subprocess
@@ -2117,3 +2118,19 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
 
         except Exception as e:
             self.send_error(404, f"{parent.__class__.__name__}.HttpRequestHandler.do_DELETE() {syncSourceID}, {e}")
+
+# String parser to convert a string reprersentation of a timedelta object (obtained via the api) back into a timedelta
+# Copied from https://stackoverflow.com/a/21074460
+def convertStringToTimeDelta(s):
+    try:
+        if 'day' in s:
+            m = re.match(r'(?P<days>[-\d]+) day[s]*, (?P<hours>\d+):(?P<minutes>\d+):(?P<seconds>\d[\.\d+]*)', s)
+        else:
+            m = re.match(r'(?P<hours>\d+):(?P<minutes>\d+):(?P<seconds>\d[\.\d+]*)', s)
+        # Constuct a dict that will for the args for a new timedelta object
+        timeDeltaDict = {key: float(val) for key, val in m.groupdict().items()}
+        # Create a timedelta object
+        return datetime.timedelta(**timeDeltaDict)
+    except Exception as e:
+        # Parsing failed, so just return the source object as-is
+        return s

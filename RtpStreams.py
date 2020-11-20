@@ -1206,6 +1206,18 @@ class RtpReceiveCommon(RtpCommon):
         try:
             # This function tests the supplied key against some specified key values, and formats the corresponding value
             # to make it more readable
+            # Test to see if the value is datetime object encoded in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)
+            # If co, convert it back to a python Datetime object
+            try:
+                value = datetime.datetime.strptime(value, '%Y-%m-%d %H:%M:%S.%f')
+            except:
+                # If this fails, test to see if the object is a datetime.timedelta object encoded as a string
+                try:
+                    value = Utils.(value)
+                except:
+                    # Otherwise ignore the value
+                    pass
+
             if value == None:
                 value = " - "
             if key == "packet_data_received_1S_bytes":
@@ -1222,6 +1234,7 @@ class RtpReceiveCommon(RtpCommon):
             if type(value) == datetime.datetime:
                 value = value.strftime("%d/%m %H:%M:%S")
                 return value
+
 
             if type(value) == datetime.timedelta:
                 # Pass to (my) dtstrft() function to create a much shorter string
