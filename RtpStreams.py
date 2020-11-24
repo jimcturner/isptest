@@ -6452,7 +6452,7 @@ class ResultsReceiver(object):
         Utils.Message.addMessage("INFO: ResultsReceiver:__resultsReceiverThread ended")
 
 # This class provides a means of comparing the performance stats of multiple Rtp receive streams
-class RtpStreamComparer(object):
+class RtpStreamComparer_old(object):
 
     # Takes a pointer to the dictionary containing all the RTP Stream objects to be compared
     # These are expected to be RtpReceiveCommon objects (or their subclasses)
@@ -6665,6 +6665,235 @@ class RtpStreamComparer(object):
             Utils.Message.addMessage("ERR:RtpStreamComparer " + str(e))
             return None
 
+# This class provides a means of comparing the performance stats of multiple Rtp streams
+# It takes a list of stream definitions of the available streams
+# For certain comparisons it will look up the relevant Event by querying the api of the stream where the event occurred
+class RtpStreamComparer(object):
+
+    # Takes a pointer to the list containing all the currently available stream definitions
+    def __init__(self, availableStreamsList) -> None:
+        super().__init__()
+        # Take local shallow copy of incoming list (just in case it changes size mid-iteration)
+        self.availableStreamsList = list(availableStreamsList)
+        # A list of dicts to contain a list of the stats dicts of all available streams
+        self.statsForAllStreams = []
+        # Iterate over availableStreamsList to build a list of dicts containing the stats for each stream
+        for stream in self.availableStreamsList:
+            try:
+                # Create an API helper for each stream
+                api = Utils.APIHelper(stream["httpPort"])
+                # Retrieve the stats dict for the current stream
+                self.statsForAllStreams.append(api.getStats())
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:RtpStreamComparer.__init__(): get stream stats {e}")
+
+    # This method iterates over rtpStreamsStatsList and examines the stats[statsKeyToCompare] parameter.
+    # It will then return an ordered list of dictionaries containing [{friendlyName, syncSourceID, statsKeyToCompare, value}]
+    # It is expected that these results will be displayed somewhere
+    # If reverseOrder==True, the returned list will be in descending order of value
+    def compareByKey(self, statsKeyToCompare, reverseOrder = False):
+        unsortedList = []  # Holds the list of streams that are being compared
+        try:
+            # # Take shallow copy of rtpStreamsStatsList (just case it changes size mid-iteration)
+            # rtpStreamsStatsList = list(self.rtpStreamsStatsList)
+            # # Iterate over the Rtp stream object keys
+
+            for stats in self.statsForAllStreams:
+                # # Get stats object for the current stream
+                # stats = self.rtpStreamsDict[rtpStream].getRtpStreamStats()
+                # Create a small dict containing the specified stats key and value
+                streamStatsToBeCompared = {
+                                            "syncSourceID": stats["stream_syncSource"],
+                                            "friendlyName": stats["stream_friendly_name"],
+                                            "statsKeyToCompare": statsKeyToCompare,
+                                            "value": stats[statsKeyToCompare],
+                                            "relatedEvent": None # If appropriate, this will hold a reference to the event
+                                                            # relevant to the current comparison measure
+                                            }
+                # Now populate the streamStatsToBeCompared["eventNo"] if relevant to the current stats key being compared
+                if statsKeyToCompare == "glitch_most_recent_timestamp" or\
+                        statsKeyToCompare == "glitch_packets_lost_per_glitch_max" or\
+                        statsKeyToCompare == "glitch_max_glitch_duration":
+                    # Request the specific event that relates to this measure using
+                    # relatedEventList = \
+                    #     self.rtpStreamsDict[rtpStream].getRTPStreamEventList(requestedEventNo=stats["glitch_most_recent_eventNo"])
+                    relatedEventList = []
+
+                    # If the event has been located, add it to the streamStatsToBeCompared[] dict
+                    if len(relatedEventList) > 0:
+                        streamStatsToBeCompared["relatedEvent"] = relatedEventList[0]
+
+                # Test for special cases of values that cannot be sorted (zero or None values/exceptions)
+                if statsKeyToCompare == "glitch_most_recent_timestamp" and \
+                        type(streamStatsToBeCompared["value"]) == datetime.timedelta:
+                    # NOTE: stats[glitch_most_recent_timestamp] is initialised as a datetime.timedelta object
+                    # If not glitches are recorded it'll stay that way.
+                    # Once a glitch occurs it will be set as a datetime.datetime object and these two types
+                    # cannot be sorted using sorted() (raises an Exception) therefore it's easiest just to
+                    # exclude from the list of items to be sorted
+                    pass
+                elif streamStatsToBeCompared["value"] == None or \
+                        streamStatsToBeCompared["value"] == datetime.timedelta(seconds=0): # Ignores time values of '00:00:00'
+                    # Catch-all for any values that might be None
+                    pass
+                else:
+                    # Otherwise append the dict to the unsorted list
+                    unsortedList.append(streamStatsToBeCompared)
+
+            # Now sort the list by the value of statsKeyToCompare
+            # Based on code here: https://www.kite.com/python/answers/how-to-sort-a-list-of-lists-by-an-index-of-each-inner-list-in-python
+            sorted_list = sorted(unsortedList, key=lambda x: x["value"], reverse=reverseOrder)
+            return sorted_list
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR:RtpStreamComparer.compareByKey (" + str(statsKeyToCompare) + ", " + str(e))
+            # Return None
+            return None
+
+    # Provides a comparison of all streams by generating some mean averages
+    # Returns a dict of stats
+    def compareAll(self):
+        # Define the mean stats to be calculated
+        # Each calculation defined by a tuple [Rtp Stream stats key to be used, friendly name of the key, the defauly value]
+        # The friendly name and value fields will then be used to construct a dictionary that will be returned to the caller
+        statsKeysToCompare = [["glitch_packets_lost_total_percent", "Mean packet loss %", 0],
+                              ["glitch_mean_time_between_glitches", "Mean glitch period (how often)", datetime.timedelta()],
+                              ["glitch_mean_glitch_duration", "Mean glitch duration", datetime.timedelta()],
+                              ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss", 0]
+                            ]
+
+        # allStreamsStatsDict = {} # The dictionary that will be returned
+        resultsDict = {}    # The dictionary that will be returned
+        # # Take shallow copy of rtpStreamsDict (just case it changes size mid-iteration)
+        # rtpStreamsDict = dict(self.rtpStreamsDict)
+
+        # Iterate over keys to assemble an an array containing all the individual stats dicts for all streams
+        # statsForAllStreams = []
+        try:
+            # for stream in rtpStreamsDict:
+            #     statsForAllStreams.append(rtpStreamsDict[stream].getRtpStreamStats())
+
+            # Now calculate the mean values across all streams for each of the keys listed in statsKeysToCompare
+            for stat in statsKeysToCompare:
+                # Collect all values of the key stat in statsForAllStreams
+                currentKeyValueToExtract = stat[0]
+                # Explanation of this line (or see https://stackoverflow.com/a/11093436):-
+                # This is 'list comprehension'
+                #   'for x in statsForAllStreams' # iterates over the statsForAllStreams list yielding 'x'
+                # 'x[currentKeyValueToExtract]' # since each 'x' is a RtpStream stats dictionary, we want
+                # to extract only the value corresponding to the key specified by currentKeyValueToExtract
+                # '[ ]' # Put the extracted value in a new list
+                values = []
+                values = [x[currentKeyValueToExtract] for x in self.statsForAllStreams]
+
+                # Now we need to calculate the mean value of the values in values[]
+                if len(values) > 0:
+                    # Check the type of the values in the list. If they are timedelta objects, the mean will
+                    # have to be calculated differently. See https://stackoverflow.com/a/3617540
+                    start = 0 # The start value for sum(). This will be overwritten in the list contains datetime objects
+                    if type(values[0]) == datetime.timedelta:
+                        start = datetime.timedelta(0)
+                    # Calculate the mean and assign back to the value in the current statsKeysToCompare[] list
+                    stat[2] = sum(values, start) / len(values)
+
+            # Dynamically create dict to be returned by compareAll()
+            # Note: The function will return a 'humanised' value
+            for item in statsKeysToCompare:
+                key = item[1]
+                # extract and humanise the value
+                value = RtpReceiveCommon.humanise(item[0], item[2], appendUnit=True)
+                resultsDict[key] = value
+
+        except Exception as e:
+            Utils.Message.addMessage("RtpStreamComparer.compareAll() " + str(e))
+
+        return resultsDict
+
+    # Generates a formatted report ranking the streams in order of the comparison
+    # criteria (stats[] keys) specified in the statsKeysToCompare list
+    # This is a list of string tuples [stats key, friendly name]
+    # listOrder specifies sort ascending or descending
+    def generateReport(self, statsKeysToCompare, listOrder=False):
+        # Simple local function to determine the current operation mode based on the type of object instances
+        # present in self.rtpStreamsDict. Returns a string
+        def getOperationMode(_rtpStreamsDict):
+            # Iterate over rtpStreamsDict to determine what objects are present
+            if len(self.rtpStreamsDict) > 0:
+                # Take shallow copy of rtpStreamsDict (just case it changes size mid-iteration)
+                rtpStreamsDict = dict(_rtpStreamsDict)
+                # Assume that all the objects in the list are of the same type (therefore loop only needs to run once)
+                for key in rtpStreamsDict:
+                    if type(rtpStreamsDict[key]) == RtpStreamResults:
+                        return "TRANSMIT"
+                    elif type(rtpStreamsDict[key]) == RtpReceiveStream:
+                        return "RECEIVE"
+                    else:
+                        return "UNKNOWN"
+
+        try:
+            labelWidth = 33
+            friendlyNameLength = RtpGenerator.getMaxFriendlyNameLength()
+            separator = ("-" * 63) + "\r\n"
+            streamReport = "Rtp stream performance comparison " + "\r\n"
+            streamReport += "Generated by isptest v" + str(Registry.version) + \
+                       " running in " + str(getOperationMode(self.rtpStreamsDict)) + " mode at " + \
+                       datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
+
+            streamReport += separator
+
+            # Retrieve overall stream stats
+            overallStats = self.compareAll()
+            streamReport += "Overall stream stats:-\r\n"
+            for key, value in overallStats.items():
+                streamReport += str(key).rjust(labelWidth) + ": " + str(value) + "\r\n"
+            streamReport += separator
+
+            # Generate stream comparisons for all the keys listed in statsKeysToCompare
+            # Each stream comparison will get its own tabulated table
+            if len(statsKeysToCompare) > 0:
+                for key in statsKeysToCompare:
+                    comparisonCriteria = key[0]
+                    comparisonCriteriaFriendlyName = key[1]
+                    # retrieve the comparison results for each criteria in turn
+                    sortedStreamsList = self.compareByKey(comparisonCriteria, reverseOrder=listOrder)
+                    if sortedStreamsList is not None and len(sortedStreamsList) > 0:
+                        # Column titles
+                        streamReport += comparisonCriteriaFriendlyName + "\r\n"
+                        # Construct a tabulated table
+                        # streamReport += "\t" + "Name".ljust(friendlyNameLength) + "\r\n"
+                        for index in range(len(sortedStreamsList)):
+                            streamName = sortedStreamsList[index]["friendlyName"]
+                            # humanise the value
+                            value = RtpReceiveCommon.humanise(sortedStreamsList[index]["statsKeyToCompare"], \
+                                                                sortedStreamsList[index]["value"], appendUnit=True)
+                            # If the relatedEvent key has been populated, we can attempt to retrieve that event from the eventsList
+                            # to add some more detail to the comparison table
+                            eventSummaryFormattedText = ""
+                            if sortedStreamsList[index]["relatedEvent"] is not None:
+                                try:
+                                    # Get an eventSummary
+                                    relatedEvent = sortedStreamsList[index]["relatedEvent"].getSummary(
+                                        includeStreamSyncSourceID=False,
+                                        includeEventNo=False,
+                                        includeType=False,
+                                        includeFriendlyName=False)
+
+                                    eventCreated = relatedEvent["timeCreated"].strftime("%d/%m %H:%M:%S")
+                                    eventSummary = relatedEvent["summary"]  # Summary in the form of a text string
+                                    eventSummaryFormattedText = eventCreated + ", " + eventSummary
+                                except Exception as e:
+                                    Utils.Message.addMessage(
+                                        "ERR: ERR:RtpStreamComparer.generateReport() - lookup event " + str(e))
+
+                            # Create the table row
+                            streamReport += str(index + 1) + "\t" + \
+                                str(streamName).rjust(friendlyNameLength) + " " + str(value) + "\t" + eventSummaryFormattedText + "\r\n"
+                        streamReport += separator
+
+            return streamReport
+        except Exception as e:
+            Utils.Message.addMessage("ERR:RtpStreamComparer " + str(e))
+            return None
 # # Define a custom HTTPServer. This will allow access to the associated RtpReceiveStream object that created it
 # class RtpStreamHTTPServer(HTTPServer):
 #     def __init__(self, *args, **kwargs):

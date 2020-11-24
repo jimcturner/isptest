@@ -4106,7 +4106,7 @@ class UI(object):
                 apiURL = "/report/traceroute"
 
             elif self.displayPopup == self.__renderCompareStreamsTable:
-                Utils.Message.addMessage(f"copy CompareStreamsTable report....not implementted yet")
+                Utils.Message.addMessage(f"copy CompareStreamsTable report....not implemented yet")
                 streamReport = None
 
             # Query the api with specified url/kwargs
@@ -4307,7 +4307,6 @@ class UI(object):
 
                 except Exception as e:
                     Utils.Message.addMessage(f"ERR:UI.__onSaveReportToDisk() save to disk {e}")
-
             else:
                 Utils.Message.addMessage("ERR: UI.__onSaveReportToDisk() no report generated. Nothing to write")
 
@@ -5211,16 +5210,30 @@ class UI(object):
         # # Clear the self.displayPopup function pointer now that the popup has been displayed
         # self.displayPopup = None
         try:
-            if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
-                # self.streamResultsDataSet = self.availableRtpRxStreamList
-                self.streamResultsDataSet = self.rtpRxStreamsDict
-            # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
-            else:
-                # self.streamResultsDataSet = self.availableRtpTxResultsList
-                self.streamResultsDataSet = self.rtpTxStreamResultsDict
+            # if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
+            #     # self.streamResultsDataSet = self.availableRtpRxStreamList
+            #     self.streamResultsDataSet = self.rtpRxStreamsDict
+            # # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
+            # else:
+            #     # self.streamResultsDataSet = self.availableRtpTxResultsList
+            #     self.streamResultsDataSet = self.rtpTxStreamResultsDict
+
+            # A list of dicts to contain a list of the stats dicts of all available streams
+            streamStatsDictList = []
+            # # Retrieve a stats dict from all of the available streams
+            # for stream in self.availableRtpStreamList:
+            #     try:
+            #         # Create an API helper for each stream
+            #         api = Utils.APIHelper(stream["httpPort"])
+            #         # Retrieve the stats dict for the current stream
+            #         streamStatsDictList.append(api.getStats())
+            #     except Exception as e:
+            #         Utils.Message.addMessage(f"ERR: UI._renderCompareStreamsTable(): get stream stats {e}")
+
+            # if len(streamStatsDictList) > 0:
 
             # Create a RtpStreamComparer object. Pass the list of available streams to it
-            rtpStreamComparer = RtpStreamComparer(self.streamResultsDataSet)
+            rtpStreamComparer = RtpStreamComparer(self.availableRtpStreamList)
             # Extract the key stats key by which to compare the streams by
             keyTosortBy = self.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams][0]
             displayfriendlyKey = self.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams][1]
