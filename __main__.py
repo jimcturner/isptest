@@ -3174,10 +3174,10 @@ class UI(object):
         # Used by the EventsTable and CopyToClipboard
         # Currently, if the list is populated, the events table will only show that type of Event
         self.filterListForDisplayedEvents = [None,
-                                             [Glitch],
-                                             [Glitch, StreamResumed],
-                                             [StreamStarted, StreamLost, StreamResumed],
-                                             [IPRoutingTracerouteChange, IPRoutingTTLChange]
+                                             ["Glitch"],
+                                             ["Glitch", "StreamResumed"],
+                                             ["StreamStarted", "StreamLost", "StreamResumed"],
+                                             ["IPRoutingTracerouteChange", "IPRoutingTTLChange"]
                                              ]
         self.selectedFilterNo = 0    # Specifies which filter option within filterListForDisplayedEvents[] is in use
 
@@ -3995,39 +3995,9 @@ class UI(object):
         # Calculate the maximum no. of lines that will fit within the table, given the terminal height
         maxLines = termH - 20
 
-        # Get the last n events from the list (either the rtpRxStreamsDict or rtpTxStreamResultsDict
-        # depending upon whether we're in RECEIVE or TRANSMIT mode
-        # The amount of events diaplayed will adjust to the terminal height
-        # Get a handle on the selected RxRtpStream or TxResults
-        # Note, if we are in TRANSMIT mode, the selected stream could be an RtpGenerator. This is no good,
-        # hence we have to manually retrieve the appropriate stream object by using the self.selectedStreamID
-        # and looking in the appropriate streams dictionary
-        # selectedRxOrResultsStream = None
-        #
-        # if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
-        #     try:
-        #         selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
-        #     except:
-        #         pass
-        # elif self.operationMode == 'TRANSMIT':
-        #     try:
-        #         selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
-        #     except:
-        #         pass
-
         eventsList = []
         friendlyName = ""
         syncSourceID = 0
-        # if selectedRxOrResultsStream is not None:
-        #     try:
-        #         # Get eventlist of the selected Rx or TxResults stream
-        #         eventsList = selectedRxOrResultsStream.getRTPStreamEventList(filterList = self.filterListForDisplayedEvents[self.selectedFilterNo])
-        #         # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
-        #         friendlyName = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
-        #         syncSourceID = str(selectedRxOrResultsStream.getRtpStreamStatsByKey("stream_syncSource"))
-        #
-        #     except Exception as e:
-        #         Utils.Message.addMessage("ERR. UI.__renderEventsListTable. getRTPStreamEventList()")
 
         # Get a list of events (via the API) for the selected stream
         if self.selectedStream is not None:
@@ -4037,7 +4007,8 @@ class UI(object):
                 # Create an APIHelper
                 api = Utils.APIHelper(httpPort)
                 # Get the (complete) events list
-                eventsList = api.getRTPStreamEventListAsSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
+                eventsList = api.getRTPStreamEventListAsSummary(includeStreamSyncSourceID=False, includeFriendlyName=False,
+                                                                filterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
                 # Get the stats dict
                 stats = api.getStats(keyStartsWith="stream")
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
@@ -4055,11 +4026,8 @@ class UI(object):
             for event in eventsList:
                 # Get event details (in the form of a dictionary)
                 try:
-                    # # Retrieve each Event summary, ommiting the syncSourceID and the friendlyName (for display purposes)
-                    # eventDetails = event.getSummary(includeStreamSyncSourceID=False, includeFriendlyName=False)
-                    # # Create a complete row of the table
-                    # tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
-                    # tableRow.append(" " + str(eventDetails['summary']).ljust(50))
+                    # Retrieve each Event summary, ommiting the syncSourceID and the friendlyName (for display purposes)
+                    # and create a table row
                     tableRow.append(str(RtpReceiveCommon.humanise("", event['timeCreated'])))
                     tableRow.append(" " + str(event['summary']).ljust(50))
 
@@ -4072,19 +4040,12 @@ class UI(object):
         else:
             tableContents.append(["","No events to display"])
 
-        # # Set the title/footer for the Eventslist table
-        # title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
-
-
         # Additional check to see if the event filtering has been enabled and modify the title/footer labels accordingly
         if self.filterListForDisplayedEvents[self.selectedFilterNo] is not None:
-                # Create a list of string containing the Class names of the selected filterListForDisplayedEvents
-                filterListAsString = [eventType.__name__ for eventType in self.filterListForDisplayedEvents[self.selectedFilterNo]]
-
                 title = "Filtered events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
                 footer = ["","[<][>]page, [^][v]select stream, [r]exit\n"+\
                           "[c]opy to clipboard, [f]ilter, [s]ave file \n" +\
-                          "Showing: " + str(filterListAsString)]
+                          "Showing: " + str(self.filterListForDisplayedEvents[self.selectedFilterNo])]
         else:
             title = "All events for stream " + str(syncSourceID) + " (" + str(friendlyName) + ")"
             footer = ["", "[<][>]page, [^][v] select stream, [r]exit \n" + \
