@@ -4038,7 +4038,7 @@ class UI(object):
                     # # Create a complete row of the table
                     # tableRow.append(str(eventDetails['timeCreated'].strftime("%d/%m %H:%M:%S")))
                     # tableRow.append(" " + str(eventDetails['summary']).ljust(50))
-                    tableRow.append(str(event['timeCreated']))
+                    tableRow.append(str(RtpReceiveCommon.humanise("", event['timeCreated'])))
                     tableRow.append(" " + str(event['summary']).ljust(50))
 
                 except Exception as e:
