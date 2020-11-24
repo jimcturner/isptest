@@ -4083,48 +4083,47 @@ class UI(object):
 
 
     # If the Event Lists Table is currently displayed, this method will copy the events to the local clipboard
-    # Alternatively, if the traceroute table is displayed, it will attempt to render a list of the prevous
+    # Alternatively, if the traceroute table is displayed, it will attempt to render a list of the previous
     # traceroute hop lists and copy that to the clipboard
 
     # If that is not possible (if for instance, you are connected to a remote instance of isptext via SSH)
     # it will attempt to use linux 'less' as a viewer launched as a seperate process
-    # Historically it would attempt to export the data to pastebin.com (a website that allows you to share text via a webpage)
-    # but this was not dependable, so has been discontinued
     def __onCopyReportToClipboard(self):
-        selectedRxOrResultsStream = None # Points to the actual Rtp object
-        streamResultsDict = None # Points to the dict containing selectedRxOrResultsStream
-        # Get a handle on the selected stream and dictionary of streams
-        if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
-            try:
-                selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
-                streamResultsDict = self.rtpRxStreamsDict
-            except:
-                pass
-        elif self.operationMode == 'TRANSMIT':
-            try:
-                selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
-                streamResultsDict = self.rtpTxStreamResultsDict
-            except:
-                pass
-
         streamReport = None
+        apiURL = None
+        apiQueryArgs = {}
         # Confirm that a valid stream exists
-        if selectedRxOrResultsStream is not None and streamResultsDict is not None:
-            # Render a stream performance summary report
+        if self.selectedStream is not None:
+            # Query the api for a report based on the current displayPopup
             if self.displayPopup == self.__renderEventsListTable:
-                # Get a textual, formatted report for this stream
-                streamReport = \
-                    selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
-                # Utils.Message.addMessage("filterList:" + str(self.filterListForDisplayedEvents[self.selectedFilterNo]))
+                # Get a textual, formatted stream performance summary report for this stream via the API
+                # Set the URL that will satisfy the request
+                apiURL = "/report/summary"
+                # Specify any additional kwargs
+                apiQueryArgs = {"eventFilterList": self.filterListForDisplayedEvents[self.selectedFilterNo]}
             elif self.displayPopup == self.__renderTracerouteTable:
-                # Get a traceroute history report
-                streamReport = selectedRxOrResultsStream.generateTracerouteHistoryReport()
+                # Get a textual, formatted traceroute report for this stream via the API
+                apiURL = "/report/traceroute"
+
             elif self.displayPopup == self.__renderCompareStreamsTable:
-                # Create a RtpStreamComparer object. Pass the list of available streams to it
-                rtpStreamComparer = RtpStreamComparer(streamResultsDict)
-                # Generate a streams comparison report - use the existing criteria list and currently set sort order
-                streamReport = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams,
-                                                                listOrder=self.popupSortDescending)
+                Utils.Message.addMessage(f"copy CompareStreamsTable report....not implementted yet")
+                streamReport = None
+
+            # Query the api with specified url/kwargs
+            if apiURL is not None:
+                try:
+                    streamReport = Utils.APIHelper(self.selectedStream["httpPort"]).getByURL(apiURL, **apiQueryArgs)
+                except Exception as e:
+                    streamReport = None
+                    Utils.Message.addMessage(f"ERR:UI.onCopyReportToClipboard {self.displayPopup}, {e}")
+
+
+            # elif self.displayPopup == self.__renderCompareStreamsTable:
+            #     # Create a RtpStreamComparer object. Pass the list of available streams to it
+            #     rtpStreamComparer = RtpStreamComparer(streamResultsDict)
+            #     # Generate a streams comparison report - use the existing criteria list and currently set sort order
+            #     streamReport = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams,
+            #                                                     listOrder=self.popupSortDescending)
 
             # Check that a textual report has been rendered
             if streamReport is not None:
@@ -4189,130 +4188,128 @@ class UI(object):
     # causing a report of the current popup to be saved to disk
     # Note, this option is only available if the popup is currently being displayed
     def __onSaveReportToDisk(self):
-        # if self.displayPopup == self.__renderEventsListTable:
-        if self.displayPopup is not None:
+        # Utility function to generate a filename string containing a timestamp
+        def generateFilename(prefix, syncSourceID, srcAddr, friendlyName):
+            return f"{prefix}{syncSourceID}_{str(friendlyName).rstrip()}_{srcAddr}_{datetime.datetime.now().strftime('%d-%m-%y_%H-%M-%S')}.txt"
 
-            selectedRxOrResultsStream = None
-            selectedRxOrResultsDict = None
-            # Get a handle on the selected stream and dictionary of results
-            # Depending upon the mode, we'll have to retrieve it from the correct dictionary
-            if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
+        # Confirm that a stream is selected
+        if self.selectedStream is not None:
+            streamReport = None
+            streamStats = None
+            apiURL = None
+            apiQueryArgs = {}
+            filenamePrefix = ""
+            # Generate a report to be saved (via the API) based on the current displayed pop-up
+            # Query the api for a report based on the current displayPopup
+            if self.displayPopup == self.__renderEventsListTable:
+                # Get a textual, formatted stream performance summary report for this stream via the API
+                # Set the URL that will satisfy the request
+                apiURL = "/report/summary"
+                # Specify any additional kwargs
+                apiQueryArgs = {"eventFilterList": self.filterListForDisplayedEvents[self.selectedFilterNo]}
+                # Specify filename prefix
+                filenamePrefix = Registry.streamReportFilename
+            elif self.displayPopup == self.__renderTracerouteTable:
+                # Get a textual, formatted traceroute report for this stream via the API
+                apiURL = "/report/traceroute"
+                # Specify filename prefix
+                filenamePrefix = "traceroute_history_"
+
+            elif self.displayPopup == self.__renderCompareStreamsTable:
+                Utils.Message.addMessage(f"save CompareStreamsTable report....not implemented yet")
+                # Specify filename prefix
+                filenamePrefix = "stream_comparison"
+
+            # Query the api with specified url/kwargs to retrieve the selected report
+            if apiURL is not None:
                 try:
-                    selectedRxOrResultsStream = self.rtpRxStreamsDict[self.selectedStreamID]
-                    selectedRxOrResultsDict = self.rtpRxStreamsDict
-                except:
-                    pass
-            elif self.operationMode == 'TRANSMIT':
+                    api = Utils.APIHelper(self.selectedStream["httpPort"])
+                    streamReport = api.getByURL(apiURL, **apiQueryArgs)
+                    # Get sub-set of stats dict
+                    streamStats = api.getStats(keyStartsWith="stream")
+                except Exception as e:
+                    streamReport = None
+                    streamStats = None
+                    Utils.Message.addMessage(f"ERR:UI.onSaveReportToDisk query API {self.displayPopup}, {e}")
+
+            # If a report was successfully created, attempt to save it to disk using either an auto generated or
+            # manually entered filename
+            if streamReport is not None and streamStats is not None:
+                # A report was successfully generated
                 try:
-                    selectedRxOrResultsStream = self.rtpTxStreamResultsDict[self.selectedStreamID]
-                    selectedRxOrResultsDict = self.rtpTxStreamResultsDict
-                except:
-                    pass
+                    # Auto-generate a filename (this can be overridden in the UI)
+                    defaultFilename = generateFilename(filenamePrefix,
+                                                       streamStats["stream_syncSource"],
+                                                       streamStats["stream_srcAddress"],
+                                                       streamStats["stream_friendly_name"])
 
-            report = None
-            try:
-                if self.displayPopup == self.__renderEventsListTable:
-                    dialogueTitle = 'Export stream report to file (stream ' + str(self.selectedStreamID) + ')'
-                    # Get a default filename (excluding the path)
-                    defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport(includePath=False)
-                    # Generate the actual report
-                    # Use the current display filter for events to determine which events are exported to the file
-                    report = selectedRxOrResultsStream.generateReport(
-                        eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
+                    # Now create an input box prefilling with the initial filename created by createFilenameForReportExport()
+                    styleDefinition = Style.from_dict({
+                        'dialog': 'bg:ansiblue',  # Screen background
+                        'dialog frame.label': 'bg:ansiwhite ansired ',
+                        'dialog.body': 'bg:ansiwhite ansiblack',
+                        'dialog shadow': 'bg:ansiblack'})
 
-                elif self.displayPopup == self.__renderTracerouteTable:
-                    dialogueTitle = 'Export traceroute history to file (stream ' + str(self.selectedStreamID) + ')'
-                    # Get a default filename (excluding the path)
-                    defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport(includePath=False,
-                                                                            overrideFileNamePrefix="Traceroute_history_")
-                    report = selectedRxOrResultsStream.generateTracerouteHistoryReport()
-
-                elif self.displayPopup == self.__renderCompareStreamsTable and selectedRxOrResultsDict is not None:
-                    dialogueTitle = 'Stream comparison report'
-                    defaultFilename = "Stream_comparison_" + str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S"))
-                    # Create an RtpStreamComparer object
-                    rtpStreamComparer = RtpStreamComparer(selectedRxOrResultsDict)
-                    report = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams,
-                                                                    listOrder=self.popupSortDescending)
-            except Exception as e:
-                Utils.Message.addMessage("ERR:UI.__onSaveReportToDisk() render reports " + str(e))
-                report = None
-
-            # Confirm that a report has been generated
-            if report is not None:
-                # # Get a default filename (excluding the path)
-                # defaultFilename = selectedRxOrResultsStream.createFilenameForReportExport(includePath=False)
-
-                # Now create an input box prefilling with the initial filename created by createFilenameForReportExport()
-                styleDefinition = Style.from_dict({
-                    'dialog': 'bg:ansiblue',  # Screen background
-                    'dialog frame.label': 'bg:ansiwhite ansired ',
-                    'dialog.body': 'bg:ansiwhite ansiblack',
-                    'dialog shadow': 'bg:ansiblack'})
-
-
-                # Create a multi_input_dialog (i.e my modified version of prompt_toolkit.input_dialog()
-                # This is because my version allows you to specify the default text in the user field
-                # Keep displaying the dialog until the filename is validated/cancel
-
-                filenameValidated = False
-                # dialogueTitle = 'Export stream report to file (stream ' + str(self.selectedStreamID) + ')'
-                # Create a footer label containing the full os path of the save location
-                footerText = "Current save folder:\n" + str(os.path.abspath(Registry.resultsSubfolder))
-                while filenameValidated is False:
-                    try:
-                        enteredText = multi_input_dialog(
-                        [['Please enter a filename', defaultFilename]],\
-                                title=dialogueTitle,\
-                                style=styleDefinition,
-                                optionalFooterText=footerText).run()
-                        if enteredText is None:
-                            # If 'cancel' selected
-                            break
-                        else:
-                            # Attempt to validate the filename. If it fails, an Exception will be raised
-                            validate_filename(enteredText['Please enter a filename'])
-
-                            # filename has been validated
-                            filenameValidated = True
-                            # Extract the filename from the dictionary
-                            filename = enteredText['Please enter a filename']
-
-                            # Create the path for the saved file
-                            fullSavePath = Registry.resultsSubfolder + filename
-                            # # Generate the actual report
-                            # # Use the current display filter for events to determine which events are exported to the file
-                            # report = selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
-                            # Invoke the Utils.writeReportToDisk method
-                            fileSavedStatus = Utils.writeReportToDisk(report, fileName=fullSavePath)
-                            maxWidth = 70
-                            if fileSavedStatus == True:
-                                # Display a message box showing the successful save path + filname
-                                # Query the OS for the the absolute file path (this will be displayed)
-
-                                absoluteSavePath = textwrap.fill(str(os.path.abspath(fullSavePath)), width=maxWidth)
-                                self.__renderMessageBox("File saved to:-".center(maxWidth + 3) + "\n" +\
-                                                        str(absoluteSavePath).center(maxWidth + 3)+ "\n\n" + \
-                                                        "<Press a key to continue>".center(maxWidth + 3), \
-                                                        "File save Successful", textColour=Term.WHITE, bgColour=Term.GREEN)
+                    # Create a multi_input_dialog (i.e my modified version of prompt_toolkit.input_dialog()
+                    # This is because my version allows you to specify the default text in the user field
+                    # Keep displaying the dialog until the filename is validated/cancel
+                    filenameValidated = False
+                    dialogueTitle = f'Export stream report to file (stream {streamStats["stream_syncSource"]})'
+                    # Create a footer label containing the full os path of the save location
+                    footerText = "Current save folder:\n" + str(os.path.abspath(Registry.resultsSubfolder))
+                    while filenameValidated is False:
+                        try:
+                            enteredText = multi_input_dialog(
+                            [['Please enter a filename', defaultFilename]],\
+                                    title=dialogueTitle,\
+                                    style=styleDefinition,
+                                    optionalFooterText=footerText).run()
+                            if enteredText is None:
+                                # If 'cancel' selected
+                                break
                             else:
-                                # Save failed, so show an error
-                                errorMessage = textwrap.fill(str(fileSavedStatus), width=maxWidth)
-                                self.__renderMessageBox("Error: Unable to save file:-".center(maxWidth + 3) + "\n" + \
-                                                        str(errorMessage).center(maxWidth + 3) + "\n\n" + \
-                                                        "<Press a key to continue>".center(maxWidth + 3), \
-                                                        "File save error", textColour=Term.WHITE,
-                                                        bgColour=Term.RED)
+                                # Attempt to validate the filename. If it fails, an Exception will be raised
+                                validate_filename(enteredText['Please enter a filename'])
 
-                    except ValidationError as e:
-                        # Modify the dialogue table to show the erroneous chars
-                        dialogueTitle = str(e)
+                                # filename has been validated
+                                filenameValidated = True
+                                # Extract the filename from the dictionary
+                                filename = enteredText['Please enter a filename']
+
+                                # Create the path for the saved file
+                                fullSavePath = Registry.resultsSubfolder + filename
+                                # # Generate the actual report
+                                # # Use the current display filter for events to determine which events are exported to the file
+                                # report = selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
+                                # Invoke the Utils.writeReportToDisk method
+                                fileSavedStatus = Utils.writeReportToDisk(streamReport, fileName=fullSavePath)
+                                maxWidth = 70
+                                if fileSavedStatus == True:
+                                    # Display a message box showing the successful save path + filname
+                                    # Query the OS for the the absolute file path (this will be displayed)
+
+                                    absoluteSavePath = textwrap.fill(str(os.path.abspath(fullSavePath)), width=maxWidth)
+                                    self.__renderMessageBox("File saved to:-".center(maxWidth + 3) + "\n" +\
+                                                            str(absoluteSavePath).center(maxWidth + 3)+ "\n\n" + \
+                                                            "<Press a key to continue>".center(maxWidth + 3), \
+                                                            "File save Successful", textColour=Term.WHITE, bgColour=Term.GREEN)
+                                else:
+                                    # Save failed, so show an error
+                                    errorMessage = textwrap.fill(str(fileSavedStatus), width=maxWidth)
+                                    self.__renderMessageBox("Error: Unable to save file:-".center(maxWidth + 3) + "\n" + \
+                                                            str(errorMessage).center(maxWidth + 3) + "\n\n" + \
+                                                            "<Press a key to continue>".center(maxWidth + 3), \
+                                                            "File save error", textColour=Term.WHITE,
+                                                            bgColour=Term.RED)
+                        except ValidationError as e:
+                            # Modify the dialogue table to show the erroneous chars
+                            dialogueTitle = str(e)
+
+                except Exception as e:
+                    Utils.Message.addMessage(f"ERR:UI.__onSaveReportToDisk() save to disk {e}")
+
             else:
                 Utils.Message.addMessage("ERR: UI.__onSaveReportToDisk() no report generated. Nothing to write")
-
-
-
-
 
 
     # Cursor right
@@ -5106,39 +5103,25 @@ class UI(object):
         if maxWidth < 10:
             maxWidth = 10
 
-        # Get the traceroute hops list
-        # depending upon whether we're in RECEIVE or TRANSMIT mode
-        # The amount of lines displayed will adjust to the terminal height
-        # Get a handle on the selected RxRtpStream or TxResults
-        # Note, if we are in TRANSMIT mode, the selected stream should be the RtpGenerator dict.
-        # hence we have to manually retrieve the appropriate stream object by using the self.selectedStreamID
-        # and looking in the appropriate streams dictionary
-        selectedStream = None
-
-        if self.operationMode == 'RECEIVE' or self.operationMode == 'LOOPBACK':
-            try:
-                selectedStream = self.rtpRxStreamsDict[self.selectedStreamID]
-            except:
-                pass
-        elif self.operationMode == 'TRANSMIT':
-            try:
-                selectedStream = self.rtpTxStreamsDict[self.selectedStreamID]
-            except:
-                pass
         tracerouteHopsList = []
 
         friendlyName = ""
         syncSourceID = 0
         lastUpdated = None
-        if selectedStream is not None:
+        if self.selectedStream is not None:
             try:
-                # Get latest stable tracerouteHopsList from selected stream
-                lastUpdated, tracerouteHopsList = selectedStream.getTraceRouteHopsList()
+                # Create an APIHelper for the selected stream
+                api = Utils.APIHelper(self.selectedStream["httpPort"])
+                # Get latest stable tracerouteHopsList from selected stream from the api
+                lastUpdated, tracerouteHopsList = api.getByURL("/traceroute")
+                # Get the stats dict
+                stats = api.getStats(keyStartsWith="stream")
                 # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
-                friendlyName = str(selectedStream.getRtpStreamStatsByKey("stream_friendly_name")).rstrip()
-                syncSourceID = str(selectedStream.getRtpStreamStatsByKey("stream_syncSource"))
+                friendlyName = str(stats["stream_friendly_name"]).rstrip()
+                syncSourceID = str(stats["stream_syncSource"])
             except Exception as e:
                 Utils.Message.addMessage("ERR: UI.__onShowTracerouteDialogue(). getTraceRouteHopsList() " + str(e))
+
             # Create a list of tuples containing the index no and the IP address and whois name
             tableContents = []
             if len(tracerouteHopsList) > 0:
@@ -5165,7 +5148,7 @@ class UI(object):
                     str(len(tracerouteHopsList)) + " hops"
             # Append the last-updated timestamp of the tracsroute data
             if lastUpdated is not None:
-                title += ", updated " + lastUpdated.strftime("%H:%M:%S")
+                title += ", updated " + str(RtpReceiveCommon.humanise("", lastUpdated))
 
             footer = ["", "", "[<][>]page, [^][v] select stream, [t]exit\n[c]opy history to clipboard, [s]ave"]
             self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15), "Whois".ljust(maxWidth)], tableContents,

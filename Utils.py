@@ -1813,6 +1813,8 @@ class APIHelper(object):
     # This is a generic function that will take anyurl path, and attempt to do an HTTP get using that path
     # It will also pass in **kwargs
     # If the api has a matching endpoint, the response will be returned
+    # By default it assumes a JSON encoded response and will attempt to parse it as such
+    # If this fails, it will just return the api response as text
     def getByURL(self, path, **kwargs):
         url = f"http://{self.addr}:{self.port}{path}"
         try:
@@ -1820,7 +1822,12 @@ class APIHelper(object):
             # test the response
             r.raise_for_status()  # Will raise an Exception if there was a problem
             # Attempt to decode the response as json and return it
-            return r.json()
+            try:
+                # Try parsing the response as json first (this will recreate any lists or dicts)
+                return r.json()
+            except:
+                # Otherwise just return the response as-is
+                return r.text
         except Exception as e:
             raise Exception(f"ERR: APIHelper.getByURL() path: {path}, params: {kwargs}, error: {e}")
 

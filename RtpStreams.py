@@ -1102,6 +1102,36 @@ class RtpReceiveCommon(RtpCommon):
             # This will just return a filename
             return sanitize_filepath(fileName + ".txt")
 
+    # This utility class method will generate a filename based on the stream parameters.
+    # The optional includePath will create a filename with a complete path
+    # By default, the filename prefix will be pulled from Registry.streamReportFilename but can be overridden
+    # by setting overrideFileNamePrefix
+    @classmethod
+    def createFilenameForReportExportClassMethod(cls, syncSourceID, includePath=True, overrideFileNamePrefix=None):
+        # Get info about the stream (to be used in the title)
+        syncSourceID, srcAddr, srcPort, friendlyName = self.getRTPStreamID()
+        fileName = ""
+        # Filename prefix not specified, so pull from the Registry
+        if overrideFileNamePrefix is None:
+            fileName += Registry.streamReportFilename
+        else:
+            # Use supplied filename prefix
+            fileName += str(overrideFileNamePrefix).strip()
+
+        fileName += str(syncSourceID) + "_" + \
+                    str(friendlyName).rstrip() + "_" + \
+                    str(srcAddr) + "_" + \
+                    str(datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S"))
+        # Return a sanitised filename including the full path (as specified in Registry.resultsPath
+        # Note the use of sanitize_filepath will automatically orientate the 'slash' for Windows or Mac/Linux
+        if includePath:
+            # This will return a filname incuding the path retrieved from Registry.resultsSubfolder
+            return sanitize_filepath(Registry.resultsSubfolder + fileName + ".txt")
+        else:
+            # This will just return a filename
+            return sanitize_filepath(fileName + ".txt")
+
+
     # Simple local function to determine the current operation mode based on the type of 'this' object instance
     # and return a string
     def getOperationMode(self):
