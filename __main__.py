@@ -3244,130 +3244,152 @@ class UI(object):
         # define views, tables headings and keys
         # view definition as follows. It pulls together the list of available tables (views of the available data), the table headings
         # and the relevant stats keys all within a single data structure. This should make adding over new views in the future straightforward
-        # views =[name of view 1, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]],
-        #           name of view n, [[column 1 title, column 1 key], [column 2 title, column 2 key], [column n title, column n key]] ,data_source_url]
-        # view [n][0] will be the name of the view (used to generate the navigation bar)
-        # view [n][1] is a tuple containing [column title, the stats dictionary key relating to that parameter]
-        # view [n][2] is a reference to the URL endpoint that will serve the required data
+        # view [n]["title"] will be the name of the view (used to generate the navigation bar)
+        # view [n]["keys/values"] is a tuple containing [column title, the stats dictionary key relating to that parameter]
+        # view [n]["apiURL"] is a reference to the URL endpoint that will serve the required data
         self.views = []
 
         if self.operationMode == 'LOOPBACK' or self.operationMode == 'TRANSMIT':
-            self.views.append([Term.FG(Term.RED) + "Tx Streams",
-                          [["#", 0],  # Used as an index[]
-                           ["Name", 'Friendly Name'], # [column title, dictionary key containing that value]
-                           ["Src\nPort", 'Tx Source Port'],
-                           ["Dest\n IP", 'Dest IP'],
-                           ["Dest\nPort", 'Dest Port'],
-                           ["Sync\nsrcID", 'Sync Source ID'],
-                           ["Tx\nbps", 'Tx Rate (actual)'],
-                           ["Size", 'Packet size'],
-                           ["Bytes\n tx'd", 'Bytes transmitted'],
-                           [" Time\nremain", 'Time to live']
-                           ], "/txstats"]) # data source
+            self.views.append({"title": Term.FG(Term.RED) + "Tx Streams",
+                               "keys/values":
+                                   [
+                                       ["#", 0],  # Used as an index[]
+                                        ["Name", 'Friendly Name'],  # [column title, dictionary key containing that value]
+                                        ["Src\nPort", 'Tx Source Port'],
+                                        ["Dest\n IP", 'Dest IP'],
+                                        ["Dest\nPort", 'Dest Port'],
+                                        ["Sync\nsrcID", 'Sync Source ID'],
+                                        ["Tx\nbps", 'Tx Rate (actual)'],
+                                        ["Size", 'Packet size'],
+                                        ["Bytes\n tx'd", 'Bytes transmitted'],
+                                        [" Time\nremain", 'Time to live']
+                                    ],
+                               "apiURL": "/txstats"  # data source
+                               })
 
+        self.views.append({"title": "Summary",
+                      "keys/values":
+                          [
+                              ["#", 0],  # Used as an index
+                                ["Name", "stream_friendly_name"],
+                                ["Src Addr", "stream_srcAddress"],
+                                 # ["port", "stream_srcPort"],
+                                ["bps", "packet_data_received_1S_bytes"],
+                                ["Pkts\nlost", "glitch_packets_lost_total_count"],
+                                [" %\nloss", "glitch_packets_lost_total_percent"],
+                                ["Time since\nlast glitch", "glitch_time_elapsed_since_last_glitch"],
+                                ["glitch\nperiod", "glitch_mean_time_between_glitches"],
+                                ["Count", "glitch_counter_total_glitches"]
+                            ],
+                       "apiURL": "/stats"
+                           })
 
-        self.views.append(["Summary",
-                      [["#", 0],  # Used as an index
-                       ["Name", "stream_friendly_name"],
-                       ["Src Addr", "stream_srcAddress"],
-                       # ["port", "stream_srcPort"],
-                       ["bps", "packet_data_received_1S_bytes"],
-                       ["Pkts\nlost", "glitch_packets_lost_total_count"],
-                       [" %\nloss", "glitch_packets_lost_total_percent"],
-                       ["Time since\nlast glitch", "glitch_time_elapsed_since_last_glitch"],
-                       ["glitch\nperiod", "glitch_mean_time_between_glitches"],
-                       ["Count", "glitch_counter_total_glitches"]
-                       ], "/stats"])
+        self.views.append({"title": "Stream",
+                           "keys/values":
+                                [
+                                    ["#", 0],  # Used as an index
+                                    ["Name", "stream_friendly_name"],
+                                    ["Sync \nSrcID", "stream_syncSource"],
+                                    ["Src Addr", "stream_srcAddress"],
+                                    ["Src\nport", "stream_srcPort"],
+                                    ["Dst Addr", "stream_rxAddress"],
+                                    ["Dst\nport", "stream_rxPort"],
+                                    ["  Time\nelapsed", "stream_time_elapsed_total"]
+                                ],
+                           "apiURL": "/stats"
+                            })
 
-        self.views.append(["Stream",
-                      [["#", 0],  # Used as an index
-                       ["Name", "stream_friendly_name"],
-                       ["Sync \nSrcID", "stream_syncSource"],
-                       ["Src Addr", "stream_srcAddress"],
-                       ["Src\nport", "stream_srcPort"],
-                       ["Dst Addr", "stream_rxAddress"],
-                       ["Dst\nport", "stream_rxPort"],
-                       ["  Time\nelapsed", "stream_time_elapsed_total"]
-                       ], "/stats"])
+        self.views.append({"title": "Packet",
+                           "keys/values":
+                                [
+                                    ["#", 0],  # Used as an index[]
+                                    ["Name", "stream_friendly_name"],
+                                    ["First Seen\npacket", "packet_first_packet_received_timestamp"],
+                                    ["Last seen\npacket", "packet_last_seen_received_timestamp"],
+                                    ["pack\np/s", "packet_counter_1S"],
+                                    ["Length\n(bytes)", "packet_payload_size_mean_1S_bytes"],
+                                    ["Recv\nperiod", "packet_mean_receive_period_uS"],
+                                    ["Bytes\nRcvd", "packet_data_received_total_bytes"],
+                                    ["TTL", "packet_instantaneous_ttl"]
+                                    # ["",""],
+                                ],
+                           "apiURL": "/stats"
+                           })
 
-        self.views.append(["Packet",
-                      [["#", 0],  # Used as an index[]
-                       ["Name", "stream_friendly_name"],
-                       ["First Seen\npacket", "packet_first_packet_received_timestamp"],
-                       ["Last seen\npacket", "packet_last_seen_received_timestamp"],
-                       ["pack\np/s", "packet_counter_1S"],
-                       ["Length\n(bytes)", "packet_payload_size_mean_1S_bytes"],
-                       ["Recv\nperiod", "packet_mean_receive_period_uS"],
-                       ["Bytes\nRcvd", "packet_data_received_total_bytes"],
-                       ["TTL", "packet_instantaneous_ttl"]
-                       # ["",""],
-                       ], "/stats"])
+        self.views.append({"title": "Glitch",
+                           "keys/values":
+                                [
+                                    ["#", 0],  # Used as an index[]
+                                    ["Name", "stream_friendly_name"],
+                                    ["Mean\nloss", "glitch_packets_lost_per_glitch_mean"],
+                                    ["Max\nloss", "glitch_packets_lost_per_glitch_max"],
+                                    ["Total\nloss", "glitch_packets_lost_total_count"],
+                                   ["Mean\nduration", "glitch_mean_glitch_duration"],
+                                   ["Max\nduration", "glitch_max_glitch_duration"],
+                                   ["Total\nGlitch", "glitch_counter_total_glitches"],
+                                   ["Ignored", "glitch_glitches_ignored_counter"],
+                                   ["Threshold", "glitch_Event_Trigger_Threshold_packets"]
+                                ],
+                           "apiURL": "/stats"
+                           })
 
-        self.views.append(["Glitch",
-                      [["#", 0],  # Used as an index[]
-                       ["Name", "stream_friendly_name"],
-                       ["Mean\nloss", "glitch_packets_lost_per_glitch_mean"],
-                       ["Max\nloss", "glitch_packets_lost_per_glitch_max"],
-                       ["Total\nloss", "glitch_packets_lost_total_count"],
-                       ["Mean\nduration", "glitch_mean_glitch_duration"],
-                       ["Max\nduration", "glitch_max_glitch_duration"],
-                       ["Total\nGlitch", "glitch_counter_total_glitches"],
-                       ["Ignored", "glitch_glitches_ignored_counter"],
-                       ["Threshold", "glitch_Event_Trigger_Threshold_packets"]
-                       ], "/stats"])
+        self.views.append({"title": "Historic",
+                           "keys/values":
+                                [
+                                    ["#", 0],  # Used as an index[],
+                                    ["Name\n", "stream_friendly_name"],
+                                    ["24Hr\n", "historic_glitch_counter_last_24Hr"],
+                                    ["1Hr\n", "historic_glitch_counter_last_1Hr"],
+                                    ["10Min\n", "historic_glitch_counter_last_10Min"],
+                                    ["1Min\n", "historic_glitch_counter_last_1Min"],
+                                    ["10Sec\n", "historic_glitch_counter_last_10Sec"],
+                                    [" Time of\nlast glitch", "glitch_most_recent_timestamp"]
+                                    # ["", ""],
+                                ],
+                           "apiURL": "/stats"})
 
-        self.views.append(["Historic",
-                      [["#", 0],  # Used as an index[],
-                       ["Name\n", "stream_friendly_name"],
-                       ["24Hr\n", "historic_glitch_counter_last_24Hr"],
-                       ["1Hr\n", "historic_glitch_counter_last_1Hr"],
-                       ["10Min\n", "historic_glitch_counter_last_10Min"],
-                       ["1Min\n", "historic_glitch_counter_last_1Min"],
-                       ["10Sec\n", "historic_glitch_counter_last_10Sec"],
-                       [" Time of\nlast glitch", "glitch_most_recent_timestamp"]
-                       # ["", ""],
-                       ], "/stats"])
+        self.views.append({"title": "Jitter",
+                           "keys/values":
+                                [
+                                    ["#", 0],  # Used as an index[]
+                                    ["Name", "stream_friendly_name"],
+                                    ["Long term\n  mean", "jitter_long_term_uS"],
+                                    ["Min", "jitter_min_uS"],
+                                    ["Max", "jitter_max_uS"],
+                                    ["Range", "jitter_range_uS"],
+                                    ["1S \nmean", "jitter_mean_1S_uS"],
+                                    ["10S \nmean", "jitter_mean_10S_uS"]
+                                ],
+                           "apiURL": "/stats"
+                           })
 
-        self.views.append(["Jitter",
-                      [["#", 0],  # Used as an index[]
-                       ["Name", "stream_friendly_name"],
-                       ["Long term\n  mean", "jitter_long_term_uS"],
-                       ["Min", "jitter_min_uS"],
-                       ["Max", "jitter_max_uS"],
-                       ["Range", "jitter_range_uS"],
-                       ["1S \nmean", "jitter_mean_1S_uS"],
-                       ["10S \nmean", "jitter_mean_10S_uS"]
-                       ], "/stats"])
-
-        self.views.append(["NAT",
-                      [["#", 0],  # Used as an index[]
-                       ["src\nport", "stream_transmitter_local_srcPort"],
-                       ["Tx Local addr", "stream_transmitter_localAddress"],
-                       ["Tx Natted addr", "stream_srcAddress"],
-                       ["src\nport", "stream_srcPort"],
-                       ["Rx Public addr", "stream_transmitter_destAddress"],
-                       ["Rx Local addr", "stream_rxAddress"]
-                       ],"/stats"])
+        self.views.append({"title": "NAT",
+                           "keys/values":
+                                [
+                                    ["#", 0],  # Used as an index[]
+                                    ["src\nport", "stream_transmitter_local_srcPort"],
+                                    ["Tx Local addr", "stream_transmitter_localAddress"],
+                                    ["Tx Natted addr", "stream_srcAddress"],
+                                    ["src\nport", "stream_srcPort"],
+                                    ["Rx Public addr", "stream_transmitter_destAddress"],
+                                    ["Rx Local addr", "stream_rxAddress"]
+                                ],
+                            "apiURL": "/stats"
+                            })
 
         # Additionally, for RECEIVE mode, add a further table that will show the transmitter parameters
         if self.operationMode == 'RECEIVE':
-            self.views.append([Term.FG(Term.RED) + "Transmitter",
-                          [["#", 0],  # Used as an index[]
-                           ["Name", "stream_friendly_name"],
-                           ["Target\nTx Bps", 'stream_transmitter_txRate_bps'],
-                           [" Time\nremain", 'stream_transmitter_TimeToLive_sec'],
-                           ["Return\n loss %", "stream_transmitter_return_loss_percent"]
-                           ], "/stats"])
-        # self.views.append(["Misc",
-        #               [["#", 0],  # Used as an index[]
-        #                ["", ""],
-        #                ["", ""],
-        #                ["", ""],
-        #                ["", ""],
-        #                ["", ""],
-        #                ["", ""],
-        #                ], URL_OF_DATASET_TO_DISPLAY])
-
+            self.views.append({"title": Term.FG(Term.RED) + "Transmitter",
+                               "keys/values":
+                                    [
+                                        ["#", 0],  # Used as an index[]
+                                        ["Name", "stream_friendly_name"],
+                                        ["Target\nTx Bps", 'stream_transmitter_txRate_bps'],
+                                        [" Time\nremain", 'stream_transmitter_TimeToLive_sec'],
+                                        ["Return\n loss %", "stream_transmitter_return_loss_percent"]
+                                    ],
+                               "apiURL": "/stats"
+                               })
         # Stores the most recent message - used to determine whether we need to redraw the message table
         self.lastMessageAdded = ""
 
@@ -3519,12 +3541,12 @@ class UI(object):
         # and create a printable string with colour coding
         # If the view is currently selected, black on white, otherwise black on cyan
         for view in self.views:
-            if view[0] == self.views[self.selectedView][0]:
+            if view["title"] == self.views[self.selectedView]["title"]:
                 # If this is the 'current' view, create black on white
-                navigationBar += Term.BlaWh + " " + view[0] + " " + Term.WhiBlu + " "
+                navigationBar += Term.BlaWh + " " + view["title"] + " " + Term.WhiBlu + " "
             else:
                 # Otherwise create as dimmed white on cyan
-                navigationBar += Term.BlaCy + " " + view[0] + " " + Term.WhiBlu + " "
+                navigationBar += Term.BlaCy + " " + view["title"] + " " + Term.WhiBlu + " "
         # To avoid stale characters appearing on the second line, do a periodic clear of line 2
         Term.setBackgroundColourSingleLine(1, 2, Term.BLUE)
         # Print the rendered nav bar
@@ -3540,9 +3562,9 @@ class UI(object):
         # Extract the column titles and stats keys for the current view
         for view in self.views:
             # Is this view the currently selected view?
-            if view[0] == self.views[self.selectedView][0]:
-                # view[1] represents a tuple containing a column title and a key pair
-                columns = view[1]
+            if view["title"] == self.views[self.selectedView]["title"]:
+                # Get a list od tuples containing a column title and a key pair
+                columns = view["keys/values"]
                 for column in columns:
                     titleRow.append(column[0])
                     keyList.append(column[1])
@@ -3605,7 +3627,7 @@ class UI(object):
                     httpPort = self.availableRtpStreamList[streamIndex]["httpPort"]
                     # Get the api URL that will supply the data for this table
                     # (The url is contained within the 3rd element of each view array)
-                    dataUrl = self.views[self.selectedView][2]
+                    dataUrl = self.views[self.selectedView]["apiURL"]
                     # Retrieve the stats dict for the current stream
                     try:
                         streamDataStats = Utils.APIHelper(httpPort).getByURL(dataUrl)
