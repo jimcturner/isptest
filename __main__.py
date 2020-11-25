@@ -4238,6 +4238,7 @@ class UI(object):
                     # Keep displaying the dialog until the filename is validated/cancel
                     filenameValidated = False
                     try:
+                        # Attempt to create a customised title
                         dialogueTitle = f'Export stream report to file (stream {streamStats["stream_syncSource"]})'
                     except:
                         dialogueTitle = f'Export stream report to file'

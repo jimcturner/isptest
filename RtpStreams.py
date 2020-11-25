@@ -6828,7 +6828,7 @@ class RtpStreamComparer(object):
     # listOrder specifies sort ascending or descending
     # By default each key comparison will yield a table with three columns [index, friendlyName, value]
     # If includeSyncSourceID is true, the SyncSourceID column will also be added
-    def generateReport(self, statsKeysToCompare, listOrder=False, includeSyncSourceID=False):
+    def generateReport(self, statsKeysToCompare, listOrder=False, includeSyncSourceID=True):
         # Simple local function to determine the current operation mode based on the type of object instances
         # present in self.rtpStreamsDict. Returns a string
         def deduceOperationMode(streamsList):
@@ -6877,6 +6877,7 @@ class RtpStreamComparer(object):
                         # streamReport += "\t" + "Name".ljust(friendlyNameLength) + "\r\n"
                         for index in range(len(sortedStreamsList)):
                             streamName = sortedStreamsList[index]["friendlyName"]
+                            streamSyncSourceID = sortedStreamsList[index]["syncSourceID"]
                             # humanise the value
                             value = RtpReceiveCommon.humanise(sortedStreamsList[index]["statsKeyToCompare"], \
                                                                 sortedStreamsList[index]["value"], appendUnit=True)
@@ -6896,9 +6897,17 @@ class RtpStreamComparer(object):
                                     Utils.Message.addMessage(
                                         "ERR:RtpStreamComparer.generateReport() - lookup event " + str(e))
 
-                            # Create the table row
-                            streamReport += str(index + 1) + "\t" + \
-                                str(streamName).rjust(friendlyNameLength) + " " + str(value) + "\t" + eventSummaryFormattedText + "\r\n"
+                            if includeSyncSourceID:
+                                # Create the table row (including the syncSourceID)
+                                # streamReport += str(index + 1) + "\t" + \
+                                #                 str(streamName).rjust(friendlyNameLength) + " " + str(
+                                #     value) + "\t" + eventSummaryFormattedText + "\r\n"
+                                streamReport += f"{index+1}\t[{streamSyncSourceID}]{str(streamName).rjust(friendlyNameLength)} "\
+                                                f"{value}\t{eventSummaryFormattedText}\r\n"
+                            else:
+                                # Otherwise create a table row without the syncSourceID
+                                streamReport += str(index + 1) + "\t" + \
+                                    str(streamName).rjust(friendlyNameLength) + " " + str(value) + "\t" + eventSummaryFormattedText + "\r\n"
                         streamReport += separator
 
             return streamReport
