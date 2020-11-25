@@ -6787,8 +6787,11 @@ class RtpStreamComparer(object):
                 #   'for x in statsForAllStreams' # iterates over the statsForAllStreams list yielding 'x'
                 # 'x[currentKeyValueToExtract]' # since each 'x' is a RtpStream stats dictionary, we want
                 # to extract only the value corresponding to the key specified by currentKeyValueToExtract
+                # Additionally, we preemptively convert values from a string to a python datetime or timedelta object
+                # using Utils.convertStringToTimeDelta(). If it is not a timedelta or datetime object
+                # it will remain unchanged
                 # '[ ]' # Put the extracted value in a new list
-                values = [x[currentKeyValueToExtract] for x in self.statsForAllStreams]
+                values = [Utils.convertStringToTimeDelta(x[currentKeyValueToExtract]) for x in self.statsForAllStreams]
 
                 # Now we need to calculate the mean value of the values in values[]
                 if len(values) > 0:
@@ -6798,18 +6801,24 @@ class RtpStreamComparer(object):
                     if type(values[0]) == datetime.timedelta:
                         start = datetime.timedelta(0)
                     # Calculate the mean and assign back to the value in the current statsKeysToCompare[] list
-                    stat[2] = sum(values, start) / len(values)
+                    try:
+                        stat[2] = sum(values, start) / len(values)
+                    except Exception as e:
+                        raise Exception(f"sum(values, start) values:{values}, start:{start}, {e}")
 
             # Dynamically create dict to be returned by compareAll()
             # Note: The function will return a 'humanised' value
             for item in statsKeysToCompare:
                 key = item[1]
                 # extract and humanise the value
-                value = RtpReceiveCommon.humanise(item[0], item[2], appendUnit=True)
-                resultsDict[key] = value
+                try:
+                    value = RtpReceiveCommon.humanise(item[0], item[2], appendUnit=True)
+                    resultsDict[key] = value
+                except:
+                    raise Exception("humanise()")
 
         except Exception as e:
-            Utils.Message.addMessage("RtpStreamComparer.compareAll() " + str(e))
+            Utils.Message.addMessage("ERR:RtpStreamComparer.compareAll() " + str(e))
 
         return resultsDict
 
@@ -6883,7 +6892,7 @@ class RtpStreamComparer(object):
                                     eventSummaryFormattedText = eventCreated + ", " + eventSummary
                                 except Exception as e:
                                     Utils.Message.addMessage(
-                                        "ERR: ERR:RtpStreamComparer.generateReport() - lookup event " + str(e))
+                                        "ERR:RtpStreamComparer.generateReport() - lookup event " + str(e))
 
                             # Create the table row
                             streamReport += str(index + 1) + "\t" + \

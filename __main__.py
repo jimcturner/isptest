@@ -6898,7 +6898,7 @@ class ISPTestHTTPServer(object):
                             query = urlDecoded.query
                             # Parse query to create a list of optional parameters to be passed to targetMethod()
                             # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
-                            # This method will raise an exception if any unexcpected query args are present
+                            # This method will raise an exception if any unexpected query args are present
                             notUsed, optionalArgs = self.convertKeysToMethodArgs(query, [],
                                                             ["streamID", "streamType", "httpPort"])
 
