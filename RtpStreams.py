@@ -6717,8 +6717,20 @@ class RtpStreamComparer(object):
                     # Request the specific event that relates to this measure using
                     # relatedEventList = \
                     #     self.rtpStreamsDict[rtpStream].getRTPStreamEventList(requestedEventNo=stats["glitch_most_recent_eventNo"])
-                    relatedEventList = []
-
+                    # Do a reverse lookup to get the httpPort for the stream for which we want to retrieve the event details
+                    # To do this, we filter self.availableStreamsList to isolate the stream definition with a matching
+                    # sync source ID. This should yield a list containing a single element
+                    # We then extract the api HTTP port for that stream
+                    apiHTTPPort = list(filter(lambda stream: stream["streamID"] == int(stats["stream_syncSource"]),
+                                              self.availableStreamsList))[0]["httpPort"]
+                    # Get the specific related event via the streams' api
+                    relatedEventList = \
+                        Utils.APIHelper(apiHTTPPort).getRTPStreamEventListAsSummary(requestedEventNo=stats["glitch_most_recent_eventNo"],
+                                                                                    includeStreamSyncSourceID=False,
+                                                                                    includeEventNo=False,
+                                                                                    includeType=False,
+                                                                                    includeFriendlyName=False
+                                                                                    )
                     # If the event has been located, add it to the streamStatsToBeCompared[] dict
                     if len(relatedEventList) > 0:
                         streamStatsToBeCompared["relatedEvent"] = relatedEventList[0]
@@ -6762,17 +6774,10 @@ class RtpStreamComparer(object):
                               ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss", 0]
                             ]
 
-        # allStreamsStatsDict = {} # The dictionary that will be returned
         resultsDict = {}    # The dictionary that will be returned
-        # # Take shallow copy of rtpStreamsDict (just case it changes size mid-iteration)
-        # rtpStreamsDict = dict(self.rtpStreamsDict)
-
         # Iterate over keys to assemble an an array containing all the individual stats dicts for all streams
         # statsForAllStreams = []
         try:
-            # for stream in rtpStreamsDict:
-            #     statsForAllStreams.append(rtpStreamsDict[stream].getRtpStreamStats())
-
             # Now calculate the mean values across all streams for each of the keys listed in statsKeysToCompare
             for stat in statsKeysToCompare:
                 # Collect all values of the key stat in statsForAllStreams
@@ -6783,7 +6788,6 @@ class RtpStreamComparer(object):
                 # 'x[currentKeyValueToExtract]' # since each 'x' is a RtpStream stats dictionary, we want
                 # to extract only the value corresponding to the key specified by currentKeyValueToExtract
                 # '[ ]' # Put the extracted value in a new list
-                values = []
                 values = [x[currentKeyValueToExtract] for x in self.statsForAllStreams]
 
                 # Now we need to calculate the mean value of the values in values[]
@@ -6816,27 +6820,26 @@ class RtpStreamComparer(object):
     def generateReport(self, statsKeysToCompare, listOrder=False):
         # Simple local function to determine the current operation mode based on the type of object instances
         # present in self.rtpStreamsDict. Returns a string
-        def getOperationMode(_rtpStreamsDict):
+        def getOperationMode(_rtpStreamsList):
             # Iterate over rtpStreamsDict to determine what objects are present
-            if len(self.rtpStreamsDict) > 0:
-                # Take shallow copy of rtpStreamsDict (just case it changes size mid-iteration)
-                rtpStreamsDict = dict(_rtpStreamsDict)
+            if len(self.availableStreamsList) > 0:
+                # Take shallow copy of self.availableStreamsList (just case it changes size mid-iteration)
+                rtpStreamsList = list(self.availableStreamsList)
                 # Assume that all the objects in the list are of the same type (therefore loop only needs to run once)
-                for key in rtpStreamsDict:
-                    if type(rtpStreamsDict[key]) == RtpStreamResults:
-                        return "TRANSMIT"
-                    elif type(rtpStreamsDict[key]) == RtpReceiveStream:
+                for stream in rtpStreamsList:
+                    if stream["streamType"] == "RtpReceiveStream":
                         return "RECEIVE"
+                    elif stream["streamType"] == "RtpGenerator":
+                        return "TRANSMIT"
                     else:
                         return "UNKNOWN"
-
         try:
             labelWidth = 33
             friendlyNameLength = RtpGenerator.getMaxFriendlyNameLength()
             separator = ("-" * 63) + "\r\n"
             streamReport = "Rtp stream performance comparison " + "\r\n"
             streamReport += "Generated by isptest v" + str(Registry.version) + \
-                       " running in " + str(getOperationMode(self.rtpStreamsDict)) + " mode at " + \
+                       " running in " + str(getOperationMode(self.availableStreamsList)) + " mode at " + \
                        datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
 
             streamReport += separator
@@ -6871,15 +6874,12 @@ class RtpStreamComparer(object):
                             eventSummaryFormattedText = ""
                             if sortedStreamsList[index]["relatedEvent"] is not None:
                                 try:
-                                    # Get an eventSummary
-                                    relatedEvent = sortedStreamsList[index]["relatedEvent"].getSummary(
-                                        includeStreamSyncSourceID=False,
-                                        includeEventNo=False,
-                                        includeType=False,
-                                        includeFriendlyName=False)
-
-                                    eventCreated = relatedEvent["timeCreated"].strftime("%d/%m %H:%M:%S")
-                                    eventSummary = relatedEvent["summary"]  # Summary in the form of a text string
+                                    # Get an eventSummary/time created for the Event relating to this stat
+                                    # Get the time created and humanise
+                                    eventCreated = RtpReceiveCommon.humanise("",
+                                                            sortedStreamsList[index]["relatedEvent"]["timeCreated"])
+                                    # Get the Event summary as a text string
+                                    eventSummary = sortedStreamsList[index]["relatedEvent"]["summary"]
                                     eventSummaryFormattedText = eventCreated + ", " + eventSummary
                                 except Exception as e:
                                     Utils.Message.addMessage(

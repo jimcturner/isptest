@@ -3185,17 +3185,7 @@ class UI(object):
 
         # A list of the available criteria by which a stream can be compared (and a display friendly name)
         # These criteria map to stats{} dictionary keys within RtpReceiveStream and RtpStreamresults objects
-        self.criteriaListForCompareStreams = [
-                                                ["glitch_packets_lost_total_percent", "Packet loss %"],
-                                                ["glitch_packets_lost_total_count", "Total packets lost"],
-                                                ["glitch_counter_total_glitches", "Total no of glitches"],
-                                                ["glitch_most_recent_timestamp", "Most recent glitch"],
-                                                ["glitch_mean_time_between_glitches", "Glitch period(how often)"],
-                                                ["glitch_packets_lost_per_glitch_max", "Worst loss (packets)"],
-                                                ["glitch_max_glitch_duration", "Worst glitch (duration)"],
-                                                ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss"],
-                                                ["glitch_mean_glitch_duration", "Mean glitch duration"]
-                                              ]
+        self.criteriaListForCompareStreams = Registry.criteriaListForCompareStreams
         self.selectedCriteriaForCompareStreams = 0 # Specifies which stream compare criteria is in use
                                                     # (within the criteriaListForCompareStreams[] list)
 
@@ -4106,9 +4096,11 @@ class UI(object):
                 apiURL = "/report/traceroute"
 
             elif self.displayPopup == self.__renderCompareStreamsTable:
-                Utils.Message.addMessage(f"copy CompareStreamsTable report....not implemented yet")
-                streamReport = None
-
+                # Create a RtpStreamComparer object. Pass the list of available streams to it
+                rtpStreamComparer = RtpStreamComparer(self.availableRtpStreamList)
+                # Generate a streams comparison report - use the existing criteria list and currently set sort order
+                streamReport = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams,
+                                                                listOrder=self.popupSortDescending)
             # Query the api with specified url/kwargs
             if apiURL is not None:
                 try:
@@ -4116,14 +4108,6 @@ class UI(object):
                 except Exception as e:
                     streamReport = None
                     Utils.Message.addMessage(f"ERR:UI.onCopyReportToClipboard {self.displayPopup}, {e}")
-
-
-            # elif self.displayPopup == self.__renderCompareStreamsTable:
-            #     # Create a RtpStreamComparer object. Pass the list of available streams to it
-            #     rtpStreamComparer = RtpStreamComparer(streamResultsDict)
-            #     # Generate a streams comparison report - use the existing criteria list and currently set sort order
-            #     streamReport = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams,
-            #                                                     listOrder=self.popupSortDescending)
 
             # Check that a textual report has been rendered
             if streamReport is not None:
@@ -4354,8 +4338,8 @@ class UI(object):
         # Increment the row selector associated with this view
         self.selectedTableRow += 1
         # Bounds check the data set associated with this view
-        if self.selectedTableRow > (len(self.views[self.selectedView][2]) - 1):
-            self.selectedTableRow = len(self.views[self.selectedView][2]) - 1
+        if self.selectedTableRow > (len(self.availableRtpStreamList) - 1):
+            self.selectedTableRow = len(self.availableRtpStreamList) - 1
 
     # 'l' pressed
     def __onEnterFriendlyName(self):
@@ -5197,41 +5181,7 @@ class UI(object):
 
     # Puts up a table that allows the stream performance to be compared (ans a report generated)
     def __renderCompareStreamsTable(self):
-
-        # maxWidth = 55
-        # tableContents = ("This will show compare streams type stuff ") + \
-        #                 "\n\n...but in the mean time.." +\
-        #                 "\n see https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
-        #                 "\n\n\n\n" + \
-        #                 "Press the [any] key to continue".center(maxWidth, " ")
-        #
-        # # Render the message in a pop-up box
-        # self.__renderMessageBox(tableContents, "Help")
-        # # Clear the self.displayPopup function pointer now that the popup has been displayed
-        # self.displayPopup = None
         try:
-            # if self.operationMode == 'RECEIVE':  # or operationMode == 'LOOPBACK':
-            #     # self.streamResultsDataSet = self.availableRtpRxStreamList
-            #     self.streamResultsDataSet = self.rtpRxStreamsDict
-            # # Otherwise, assume this a tx end, and it's relying on results sent from the receiving end
-            # else:
-            #     # self.streamResultsDataSet = self.availableRtpTxResultsList
-            #     self.streamResultsDataSet = self.rtpTxStreamResultsDict
-
-            # A list of dicts to contain a list of the stats dicts of all available streams
-            streamStatsDictList = []
-            # # Retrieve a stats dict from all of the available streams
-            # for stream in self.availableRtpStreamList:
-            #     try:
-            #         # Create an API helper for each stream
-            #         api = Utils.APIHelper(stream["httpPort"])
-            #         # Retrieve the stats dict for the current stream
-            #         streamStatsDictList.append(api.getStats())
-            #     except Exception as e:
-            #         Utils.Message.addMessage(f"ERR: UI._renderCompareStreamsTable(): get stream stats {e}")
-
-            # if len(streamStatsDictList) > 0:
-
             # Create a RtpStreamComparer object. Pass the list of available streams to it
             rtpStreamComparer = RtpStreamComparer(self.availableRtpStreamList)
             # Extract the key stats key by which to compare the streams by
@@ -5253,14 +5203,11 @@ class UI(object):
                     eventCreated = ""
                     if sortedStreamsList[index]["relatedEvent"] is not None:
                         try:
-                            # Get an eventSummary
-                            relatedEvent = sortedStreamsList[index]["relatedEvent"].getSummary(includeStreamSyncSourceID=False,
-                                                                   includeEventNo=False,
-                                                                    includeType=False,
-                                                                    includeFriendlyName=False)
-
-                            eventCreated = relatedEvent["timeCreated"].strftime("%d/%m %H:%M:%S")
-                            eventSummary = relatedEvent["summary"]      # Summary in the form of a text string
+                            # Get an eventSummary/timecreated for the Event relating to this stat
+                            # Get the time created and humanise
+                            eventCreated = RtpReceiveCommon.humanise("",
+                                                            sortedStreamsList[index]["relatedEvent"]["timeCreated"])
+                            eventSummary = sortedStreamsList[index]["relatedEvent"]["summary"]
                         except Exception as e:
                             Utils.Message.addMessage("ERR: ERR:UI.__renderCompareStreamsTable - lookup event " + str(e))
                     tableContents.append([index + 1, str(sortedStreamsList[index]["friendlyName"]).strip() + "  ", str(value).strip(),
@@ -6982,6 +6929,27 @@ class ISPTestHTTPServer(object):
                         response = Utils.formatHttpResponse(messageTable)
                         # Create the headers
                         self._set_response()
+
+                    # Compare streams
+                    elif str(currentStep).startswith("compare"):
+                        try:
+                            if pathIndex == pathLen - 1:  # Is this the last step of the path
+                                # Create a RtpStreamComparer object. Pass the list of available streams to it
+                                rtpStreamComparer = \
+                                    RtpStreamComparer(self.server.parentObject.getStreamByFilter())
+
+                                # Specify the default list of stats keys that will be compared with each other
+                                statsKeysToBeCompared = Registry.criteriaListForCompareStreams
+                                # Generate a 'stream comparison' report
+                                response = rtpStreamComparer.generateReport(statsKeysToBeCompared).encode('utf-8')
+                                # Create the headers
+                                self._set_response(contentType='text/plain')
+                                break  # Break out of while loop
+                            else:
+                                # More steps yet to be parsed, let the loop continue
+                                pass
+                        except Exception as e:
+                            raise Exception(f"do__GET() /compare err {str(e)}")
 
                     elif str(currentStep).startswith("whois"):
                         # GET /whois?0=1.2.3.4&2=2.3.4.
