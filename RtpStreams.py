@@ -6766,12 +6766,12 @@ class RtpStreamComparer(object):
     # Returns a dict of stats
     def compareAll(self):
         # Define the mean stats to be calculated
-        # Each calculation defined by a tuple [Rtp Stream stats key to be used, friendly name of the key, the defauly value]
-        # The friendly name and value fields will then be used to construct a dictionary that will be returned to the caller
-        statsKeysToCompare = [["glitch_packets_lost_total_percent", "Mean packet loss %", 0],
-                              ["glitch_mean_time_between_glitches", "Mean glitch period (how often)", datetime.timedelta()],
-                              ["glitch_mean_glitch_duration", "Mean glitch duration", datetime.timedelta()],
-                              ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss", 0]
+        # Each calculation defined by a dict {Rtp Stream stats key to be used, friendly name of the key, the defauly value}
+        # The friendly title and value fields will then be used to construct a dictionary that will be returned to the caller
+        statsKeysToCompare = [{"keyToCompare": "glitch_packets_lost_total_percent", "friendlyTitle": "Mean packet loss %", "result": 0},
+                              {"keyToCompare": "glitch_mean_time_between_glitches", "friendlyTitle": "Mean glitch period (how often)", "result": datetime.timedelta()},
+                              {"keyToCompare": "glitch_mean_glitch_duration", "friendlyTitle": "Mean glitch duration", "result": datetime.timedelta()},
+                              {"keyToCompare": "glitch_packets_lost_per_glitch_mean", "friendlyTitle": "Mean glitch packet loss", "result": 0}
                             ]
 
         resultsDict = {}    # The dictionary that will be returned
@@ -6781,7 +6781,7 @@ class RtpStreamComparer(object):
             # Now calculate the mean values across all streams for each of the keys listed in statsKeysToCompare
             for stat in statsKeysToCompare:
                 # Collect all values of the key stat in statsForAllStreams
-                currentKeyValueToExtract = stat[0]
+                currentKeyValueToExtract = stat["keyToCompare"]
                 # Explanation of this line (or see https://stackoverflow.com/a/11093436):-
                 # This is 'list comprehension'
                 #   'for x in statsForAllStreams' # iterates over the statsForAllStreams list yielding 'x'
@@ -6800,20 +6800,20 @@ class RtpStreamComparer(object):
                     start = 0 # The start value for sum(). This will be overwritten in the list contains datetime objects
                     if type(values[0]) == datetime.timedelta:
                         start = datetime.timedelta(0)
-                    # Calculate the mean and assign back to the value in the current statsKeysToCompare[] list
+                    # Calculate the mean and assign back to the value in the current statsKeysToCompare[] dict
                     try:
-                        stat[2] = sum(values, start) / len(values)
+                        stat["result"] = sum(values, start) / len(values)
                     except Exception as e:
                         raise Exception(f"sum(values, start) values:{values}, start:{start}, {e}")
 
             # Dynamically create dict to be returned by compareAll()
             # Note: The function will return a 'humanised' value
             for item in statsKeysToCompare:
-                key = item[1]
+                friendlyTitle = item["friendlyTitle"]
                 # extract and humanise the value
                 try:
-                    value = RtpReceiveCommon.humanise(item[0], item[2], appendUnit=True)
-                    resultsDict[key] = value
+                    value = RtpReceiveCommon.humanise(item["keyToCompare"], item["result"], appendUnit=True)
+                    resultsDict[friendlyTitle] = value
                 except:
                     raise Exception("humanise()")
 
@@ -6826,14 +6826,16 @@ class RtpStreamComparer(object):
     # criteria (stats[] keys) specified in the statsKeysToCompare list
     # This is a list of string tuples [stats key, friendly name]
     # listOrder specifies sort ascending or descending
-    def generateReport(self, statsKeysToCompare, listOrder=False):
+    # By default each key comparison will yield a table with three columns [index, friendlyName, value]
+    # If includeSyncSourceID is true, the SyncSourceID column will also be added
+    def generateReport(self, statsKeysToCompare, listOrder=False, includeSyncSourceID=False):
         # Simple local function to determine the current operation mode based on the type of object instances
         # present in self.rtpStreamsDict. Returns a string
-        def getOperationMode(_rtpStreamsList):
+        def deduceOperationMode(streamsList):
             # Iterate over rtpStreamsDict to determine what objects are present
-            if len(self.availableStreamsList) > 0:
+            if len(streamsList) > 0:
                 # Take shallow copy of self.availableStreamsList (just case it changes size mid-iteration)
-                rtpStreamsList = list(self.availableStreamsList)
+                rtpStreamsList = list(streamsList)
                 # Assume that all the objects in the list are of the same type (therefore loop only needs to run once)
                 for stream in rtpStreamsList:
                     if stream["streamType"] == "RtpReceiveStream":
@@ -6848,7 +6850,7 @@ class RtpStreamComparer(object):
             separator = ("-" * 63) + "\r\n"
             streamReport = "Rtp stream performance comparison " + "\r\n"
             streamReport += "Generated by isptest v" + str(Registry.version) + \
-                       " running in " + str(getOperationMode(self.availableStreamsList)) + " mode at " + \
+                       " running in " + str(deduceOperationMode(self.availableStreamsList)) + " mode at " + \
                        datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
 
             streamReport += separator
