@@ -6823,8 +6823,8 @@ class RtpStreamComparer(object):
         return resultsDict
 
     # Generates a formatted report ranking the streams in order of the comparison
-    # criteria (stats[] keys) specified in the statsKeysToCompare list
-    # This is a list of string tuples [stats key, friendly name]
+    # criteria (stats[] keys) specified in the statsKeysToCompare dict
+    # This is a list of string dicts {stats key, friendly name}
     # listOrder specifies sort ascending or descending
     # By default each key comparison will yield a table with three columns [index, friendlyName, value]
     # If includeSyncSourceID is true, the SyncSourceID column will also be added
@@ -6866,13 +6866,13 @@ class RtpStreamComparer(object):
             # Each stream comparison will get its own tabulated table
             if len(statsKeysToCompare) > 0:
                 for key in statsKeysToCompare:
-                    comparisonCriteria = key[0]
-                    comparisonCriteriaFriendlyName = key[1]
+                    comparisonCriteria = key["keyToCompare"]
+                    comparisonCriteriaFriendlyTitle = key["friendlyTitle"]
                     # retrieve the comparison results for each criteria in turn
                     sortedStreamsList = self.compareByKey(comparisonCriteria, reverseOrder=listOrder)
                     if sortedStreamsList is not None and len(sortedStreamsList) > 0:
                         # Column titles
-                        streamReport += comparisonCriteriaFriendlyName + "\r\n"
+                        streamReport += comparisonCriteriaFriendlyTitle + "\r\n"
                         # Construct a tabulated table
                         # streamReport += "\t" + "Name".ljust(friendlyNameLength) + "\r\n"
                         for index in range(len(sortedStreamsList)):

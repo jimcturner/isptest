@@ -615,17 +615,7 @@ class UIold(object):
 
         # A list of the available criteria by which a stream can be compared (and a display friendly name)
         # These criteria map to stats{} dictionary keys within RtpReceiveStream and RtpStreamresults objects
-        self.criteriaListForCompareStreams = [
-                                                ["glitch_packets_lost_total_percent", "Packet loss %"],
-                                                ["glitch_packets_lost_total_count", "Total packets lost"],
-                                                ["glitch_counter_total_glitches", "Total no of glitches"],
-                                                ["glitch_most_recent_timestamp", "Most recent glitch"],
-                                                ["glitch_mean_time_between_glitches", "Glitch period(how often)"],
-                                                ["glitch_packets_lost_per_glitch_max", "Worst loss (packets)"],
-                                                ["glitch_max_glitch_duration", "Worst glitch (duration)"],
-                                                ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss"],
-                                                ["glitch_mean_glitch_duration", "Mean glitch duration"]
-                                              ]
+        self.criteriaListForCompareStreams = Registry.criteriaListForCompareStreams
         self.selectedCriteriaForCompareStreams = 0 # Specifies which stream compare criteria is in use
                                                     # (within the criteriaListForCompareStreams[] list)
 
@@ -3183,11 +3173,8 @@ class UI(object):
 
         self.popupSortDescending = False   # Reverses the order of the results for popup tables
 
-        # A list of the available criteria by which a stream can be compared (and a display friendly name)
-        # These criteria map to stats{} dictionary keys within RtpReceiveStream and RtpStreamresults objects
-        self.criteriaListForCompareStreams = Registry.criteriaListForCompareStreams
         self.selectedCriteriaForCompareStreams = 0 # Specifies which stream compare criteria is in use
-                                                    # (within the criteriaListForCompareStreams[] list)
+                                                    # (within the Registry.criteriaListForCompareStreams{} dict)
 
         # Thread running flags
         self.keysPressedThreadActive = True
@@ -4099,7 +4086,7 @@ class UI(object):
                 # Create a RtpStreamComparer object. Pass the list of available streams to it
                 rtpStreamComparer = RtpStreamComparer(self.availableRtpStreamList)
                 # Generate a streams comparison report - use the existing criteria list and currently set sort order
-                streamReport = rtpStreamComparer.generateReport(self.criteriaListForCompareStreams,
+                streamReport = rtpStreamComparer.generateReport(Registry.criteriaListForCompareStreams,
                                                                 listOrder=self.popupSortDescending)
             # Query the api with specified url/kwargs
             if apiURL is not None:
@@ -4203,8 +4190,14 @@ class UI(object):
                 Utils.Message.addMessage(f"save CompareStreamsTable report....not implemented yet")
                 # Specify filename prefix
                 filenamePrefix = "stream_comparison"
+                apiURL = None # API not used for this, we'll invoke the RtpStreamComparer object directly
+                # Create a RtpStreamComparer object. Pass the list of available streams to it
+                rtpStreamComparer = RtpStreamComparer(self.availableRtpStreamList)
+                # Generate a streams comparison report - use the existing criteria list and currently set sort order
+                streamReport = rtpStreamComparer.generateReport(Registry.criteriaListForCompareStreams,
+                                                                listOrder=self.popupSortDescending)
 
-            # Query the api with specified url/kwargs to retrieve the selected report
+            # If required, query the api with specified url/kwargs to retrieve the selected report
             if apiURL is not None:
                 try:
                     api = Utils.APIHelper(self.selectedStream["httpPort"])
@@ -4218,14 +4211,20 @@ class UI(object):
 
             # If a report was successfully created, attempt to save it to disk using either an auto generated or
             # manually entered filename
-            if streamReport is not None and streamStats is not None:
+            if streamReport is not None:
                 # A report was successfully generated
                 try:
-                    # Auto-generate a filename (this can be overridden in the UI)
-                    defaultFilename = generateFilename(filenamePrefix,
-                                                       streamStats["stream_syncSource"],
-                                                       streamStats["stream_srcAddress"],
-                                                       streamStats["stream_friendly_name"])
+                    try:
+                        # Auto-generate a filename (this can be overridden in the UI)
+                        # Attempt to use the stream-specific stats values
+                        defaultFilename = generateFilename(filenamePrefix,
+                                                           streamStats["stream_syncSource"],
+                                                           streamStats["stream_srcAddress"],
+                                                           streamStats["stream_friendly_name"])
+                    except:
+                        # If stream stats aren't available (e.g for the compare streams report)
+                        # simply generate a simple filename with the prefix and creation dater
+                        defaultFilename = generateFilename(filenamePrefix, "", "", "")
 
                     # Now create an input box prefilling with the initial filename created by createFilenameForReportExport()
                     styleDefinition = Style.from_dict({
@@ -4238,7 +4237,10 @@ class UI(object):
                     # This is because my version allows you to specify the default text in the user field
                     # Keep displaying the dialog until the filename is validated/cancel
                     filenameValidated = False
-                    dialogueTitle = f'Export stream report to file (stream {streamStats["stream_syncSource"]})'
+                    try:
+                        dialogueTitle = f'Export stream report to file (stream {streamStats["stream_syncSource"]})'
+                    except:
+                        dialogueTitle = f'Export stream report to file'
                     # Create a footer label containing the full os path of the save location
                     footerText = "Current save folder:\n" + str(os.path.abspath(Registry.resultsSubfolder))
                     while filenameValidated is False:
@@ -5164,9 +5166,9 @@ class UI(object):
     # Cycles through the available list of stream comparison criteria
     def __setStreamCompareCriteria(self):
         # Increment selectedCriteriaForCompareStreams. Bounds limit according to the length of
-        # self.criteriaListForCompareStreams[] using modulo (%) operator
+        # Registry.criteriaListForCompareStreams[] using modulo (%) operator
         self.selectedCriteriaForCompareStreams = (self.selectedCriteriaForCompareStreams + 1) %\
-                                                    len(self.criteriaListForCompareStreams)
+                                                    len(Registry.criteriaListForCompareStreams)
 
     def __onCompareStreams(self):
         # Toggle display of the 'compare streams' table
@@ -5185,8 +5187,8 @@ class UI(object):
             # Create a RtpStreamComparer object. Pass the list of available streams to it
             rtpStreamComparer = RtpStreamComparer(self.availableRtpStreamList)
             # Extract the key stats key by which to compare the streams by
-            keyTosortBy = self.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams][0]
-            displayfriendlyKey = self.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams][1]
+            keyTosortBy = Registry.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams]["keyToCompare"]
+            displayfriendlyKey = Registry.criteriaListForCompareStreams[self.selectedCriteriaForCompareStreams]["friendlyTitle"]
             # Get a list of streams ordered by a particular stats[] key
             sortedStreamsList = rtpStreamComparer.compareByKey(keyTosortBy, reverseOrder=self.popupSortDescending)
 

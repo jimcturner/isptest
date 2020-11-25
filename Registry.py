@@ -53,15 +53,15 @@ class Registry(object):
     # A list of the available criteria by which a stream can be compared (and a display friendly name)
     # These criteria map to stats{} dictionary keys within RtpReceiveStream and RtpStreamresults objects
     criteriaListForCompareStreams = [
-        ["glitch_packets_lost_total_percent", "Packet loss %"],
-        ["glitch_packets_lost_total_count", "Total packets lost"],
-        ["glitch_counter_total_glitches", "Total no of glitches"],
-        ["glitch_most_recent_timestamp", "Most recent glitch"],
-        ["glitch_mean_time_between_glitches", "Glitch period(how often)"],
-        ["glitch_packets_lost_per_glitch_max", "Worst loss (packets)"],
-        ["glitch_max_glitch_duration", "Worst glitch (duration)"],
-        ["glitch_packets_lost_per_glitch_mean", "Mean glitch packet loss"],
-        ["glitch_mean_glitch_duration", "Mean glitch duration"]
+        {"keyToCompare": "glitch_packets_lost_total_percent", "friendlyTitle": "Packet loss %"},
+        {"keyToCompare": "glitch_packets_lost_total_count", "friendlyTitle": "Total packets lost"},
+        {"keyToCompare": "glitch_counter_total_glitches", "friendlyTitle": "Total no of glitches"},
+        {"keyToCompare": "glitch_most_recent_timestamp", "friendlyTitle": "Most recent glitch"},
+        {"keyToCompare": "glitch_mean_time_between_glitches", "friendlyTitle": "Glitch period(how often)"},
+        {"keyToCompare": "glitch_packets_lost_per_glitch_max", "friendlyTitle": "Worst loss (packets)"},
+        {"keyToCompare": "glitch_max_glitch_duration", "friendlyTitle": "Worst glitch (duration)"},
+        {"keyToCompare": "glitch_packets_lost_per_glitch_mean", "friendlyTitle": "Mean glitch packet loss"},
+        {"keyToCompare": "glitch_mean_glitch_duration", "friendlyTitle": "Mean glitch duration"}
     ]
 
     ######### RtpReceiveStream
