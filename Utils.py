@@ -1949,7 +1949,9 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
         # Finally remove the 'expected' keys from parsedPostDataDict to see if any unexpected keys are left over
         removeMultipleDictKeys(parsedPostDataDict, requiredArgKeysList + optionalArgKeysList)
         if len(parsedPostDataDict) > 0:
-            raise Exception(f"convertKeysToMethodArgs() unexpected keys provided {parsedPostDataDict}")
+            raise Exception(f"convertKeysToMethodArgs() unexpected keys provided {parsedPostDataDict}."\
+                            f" Permitted optional keys are: {optionalArgKeysList},"\
+                            f"mandatory keys are: {requiredArgKeysList}")
         return requiredArgsList, optionalArgsDict
 
     # Shows the available endpoints
@@ -2141,3 +2143,31 @@ def convertStringToTimeDelta(s):
     except Exception as e:
         # Parsing failed, so just return the source object as-is
         return s
+
+def doubleToPatval(inputVal):
+    multiplier = [1,10,100,1000]
+    scaledValue = 0
+    # Calculator multiplier selector no based on the size of the incoming no
+    if inputVal >= 102.3:
+        selector = 0        # Scale by '1'
+    elif inputVal >= 10.23:
+        selector = 1        # Scale by '10'
+    elif inputVal >= 1.023:
+        selector = 2        # Scale by '100'
+    else:
+        selector = 3        # Scale by '1000'
+
+    scaledValue = int(inputVal * multiplier[selector]) # Multiplies inputVal by 1,10,100 or 1000 depending upon it's magnitude and casts as an int
+
+    # The most logical next step is to then do
+    msb = selector<<14 # Shift selector (a 2 bit value) 14 steps the left to make it the highest two bits of the 16bit value
+    lsb = 0x3fff & scaledValue # Mask with '10 zeroes' so that only the bottom 10 bits get through
+    # Create aggrgate value
+    msblsb = msb | lsb
+
+    # But, a patval is in the order LSB.MSB therefore
+    patval = selector | (scaledValue << 6) # This should mean that two selector bits will occupy the two rightmost bit values
+                                        # and the
+
+    lsbmsb = ( lsb<<8 ) | (msb >> 8)
+    return str(hex(msblsb)), str(hex(lsbmsb))

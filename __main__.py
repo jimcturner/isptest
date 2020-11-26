@@ -6861,7 +6861,9 @@ class ISPTestHTTPServer(object):
             # Finally remove the 'expected' keys from parsedPostDataDict to see if any unexpected keys are left over
             Utils.removeMultipleDictKeys(parsedPostDataDict, requiredArgKeysList + optionalArgKeysList)
             if len(parsedPostDataDict) > 0:
-                raise Exception(f"convertKeysToMethodArgs() unexpected keys provided {parsedPostDataDict}")
+                raise Exception(f"convertKeysToMethodArgs() unexpected keys provided {parsedPostDataDict}"\
+                            f" Permitted optional keys are: {optionalArgKeysList},"\
+                            f"mandatory keys are: {requiredArgKeysList}")
             return requiredArgsList, optionalArgsDict
 
         def do_GET(self):
@@ -6935,8 +6937,18 @@ class ISPTestHTTPServer(object):
 
                     # Compare streams
                     elif str(currentStep).startswith("compare"):
+                        # GET /compare Optional args: ?listOrder=True&includeSyncSourceID=True
                         try:
                             if pathIndex == pathLen - 1:  # Is this the last step of the path
+                                # Split of the URL and query (?key=value suffixes)
+                                urlDecoded = urlparse(self.path)
+                                path = urlDecoded.path
+                                query = urlDecoded.query
+                                # Parse query to create a list of optional parameters to be passed to targetMethod()
+                                # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
+                                # This method will raise an exception if any unexpected query args are present
+                                optionalArgsList = ["listOrder", "includeSyncSourceID"]
+                                unexpectedArgs, kwargs = self.convertKeysToMethodArgs(query, [], optionalArgsList)
                                 # Create a RtpStreamComparer object. Pass the list of available streams to it
                                 rtpStreamComparer = \
                                     RtpStreamComparer(self.server.parentObject.getStreamByFilter())
@@ -6944,7 +6956,7 @@ class ISPTestHTTPServer(object):
                                 # Specify the default list of stats keys that will be compared with each other
                                 statsKeysToBeCompared = Registry.criteriaListForCompareStreams
                                 # Generate a 'stream comparison' report
-                                response = rtpStreamComparer.generateReport(statsKeysToBeCompared).encode('utf-8')
+                                response = rtpStreamComparer.generateReport(statsKeysToBeCompared, **kwargs).encode('utf-8')
                                 # Create the headers
                                 self._set_response(contentType='text/plain')
                                 break  # Break out of while loop
