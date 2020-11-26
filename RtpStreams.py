@@ -4658,6 +4658,7 @@ class RtpGenerator(RtpCommon):
         self.__controlMessageQueue.put(controlMessage)
 
     # Takes a control message (as stored in self.__controlMessageQueue) and parses it
+    # Each control message is a dict of keys containing at least {syncSourceID, source and type fields}
     def parseControlMessage(self, controlMessage):
         # Messages are a dict of the form
         # {syncSourceID: int, source: String, type: String}
@@ -4683,9 +4684,11 @@ class RtpGenerator(RtpCommon):
                     self.setPayloadLength(0, autoIncrement=-1)
                 elif messageType == "/burst":
                     self.enableBurstMode()
-                # Set friendly name
-                elif messageType == "txname" and "name" in controlMessage:
+                # Set friendly name - confirm that the 'name' key is present in the controlMessage dict
+                elif messageType == "/label" and "name" in controlMessage:
                     self.setFriendlyName(controlMessage["name"])
+                else:
+                    Utils.Message.addMessage(f"RtpGenerator({self.syncSourceIdentifier}).parseControlMessage() unrecognised message {controlMessage}")
 
             else:
                 Utils.Message.addMessage("Misrouted RTPGenerator control message. Dest:" + \
