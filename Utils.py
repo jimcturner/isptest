@@ -1723,7 +1723,7 @@ class APIHelper(object):
         except Exception as e:
             raise Exception(f"ERR: APIHelper.addToStreamsDirectory() {streamDefinition}, error: {e}")
 
-    # Adds the stream to the streams directory service
+    # Removes the stream from the streams directory service
     # HTTP DELETE to /streams/delete/[streamType]/[streamID]
     # The streamID is the RTP sync source ID
     def removeFromStreamsDirectory(self, streamType, streamID):
@@ -1848,6 +1848,17 @@ class APIHelper(object):
                 return r.text
         except Exception as e:
             raise Exception(f"ERR: APIHelper.postByURL() path: {path}, params: {kwargs}, error: {e}")
+
+    # This is a generic function that will take any url path, and attempt to do an HTTP DELETE using that path
+    def deleteByURL(self, path):
+        url = f"http://{self.addr}:{self.port}{path}"
+        try:
+            r = requests.delete(url, timeout=self.timeout)
+            # test the response
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+        except Exception as e:
+            raise Exception(f"ERR: APIHelper.deleteByURL() path: {path}, error: {e}")
+
 
 
 

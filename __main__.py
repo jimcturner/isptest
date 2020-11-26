@@ -4586,38 +4586,17 @@ class UI(object):
         # Delete selected stream (selected table row)
 
         # Confirm that the dataset associated with this view actually has some data in it
-        if self.selectedStream != None:
+        if self.selectedStream is not None:
             try:
-
                 Utils.Message.addMessage(
-                    "INFO: streamToDelete: " + str(self.selectedStreamID) + " of type " + str(type(self.selectedStream)))
+                    f"INFO: streamToDelete: {self.selectedStream['streamID']} of type {self.selectedStream['streamType']}")
 
-                # Confirm that this operation is allowed on  the current stream type
-                if type(self.selectedStream) == RtpStreamResults:
-                    # We must be in TRANSMIT mode, currently viewing one of the results panes
-                    #  - you can't Put up an info message
-                    Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
-
-                # Now determine the type of stream (RtpGenerator (tx) or RtpStream (rx) )
-                elif type(self.selectedStream) == RtpGenerator:
-                    # It is a generator object
-                    Utils.Message.addMessage("[d] Deleting Tx Stream: " + str(self.selectedStreamID))
-                    # Instruct the RtpGenerator object to die (and it's associated corrseponding RtpStreamResults, if it exists)
-                    self.selectedStream.killStream()
-
-
-
-                elif type(self.selectedStream) == RtpReceiveStream:
-                    # It is an RtpReceiveStream (receiver) object
-                    Utils.Message.addMessage("[d] Deleting Rx Stream: " + str(self.selectedStreamID))
-                    # Safely shutdown the RtpStream object itself
-                    self.selectedStream.killStream()
+                # Send an HTTP DELETE to the selected stream using the /delete path
+                Utils.APIHelper(self.selectedStream["httpPort"]).deleteByURL("/delete")
 
             except Exception as e:
-                Utils.Message.addMessage(
-                    "ERR: __displayThread. [d] Delete Stream request failed: " + str(self.selectedStreamID) +
-                    ", " + str(e))
-
+                Utils.Message.addMessage(f"ERR:UI.__onDeleteStream(). Delete Stream request failed: "
+                                         f"({self.selectedStream['streamID']}), err: {e}")
 
     # '4' pressed
     def __onIncreaseTxRate(self):
