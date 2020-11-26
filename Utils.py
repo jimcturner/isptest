@@ -1810,7 +1810,7 @@ class APIHelper(object):
         except Exception as e:
             raise Exception(f"ERR: APIHelper.getTxStats() params: {kwargs}, error: {e}")
 
-    # This is a generic function that will take anyurl path, and attempt to do an HTTP get using that path
+    # This is a generic function that will take any url path, and attempt to do an HTTP GET using that path
     # It will also pass in **kwargs
     # If the api has a matching endpoint, the response will be returned
     # By default it assumes a JSON encoded response and will attempt to parse it as such
@@ -1830,6 +1830,25 @@ class APIHelper(object):
                 return r.text
         except Exception as e:
             raise Exception(f"ERR: APIHelper.getByURL() path: {path}, params: {kwargs}, error: {e}")
+
+    # This is a generic function that will take any url path, and attempt to do an HTTP POST using that path
+    # It will also pass in kwargs (a dict of keys/values)
+    def postByURL(self, path, **kwargs):
+        url = f"http://{self.addr}:{self.port}{path}"
+        try:
+            r = requests.post(url, data=kwargs, timeout=self.timeout)
+            # test the response
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+            # Attempt to decode the response as json and return it
+            try:
+                # Try parsing the response as json first (this will recreate any lists or dicts)
+                return r.json()
+            except:
+                # Otherwise just return the response as-is
+                return r.text
+        except Exception as e:
+            raise Exception(f"ERR: APIHelper.postByURL() path: {path}, params: {kwargs}, error: {e}")
+
 
 
 # Renders a nested dict of dicts as an html table
@@ -2159,15 +2178,21 @@ def doubleToPatval(inputVal):
 
     scaledValue = int(inputVal * multiplier[selector]) # Multiplies inputVal by 1,10,100 or 1000 depending upon it's magnitude and casts as an int
 
-    # The most logical next step is to then do
-    msb = selector<<14 # Shift selector (a 2 bit value) 14 steps the left to make it the highest two bits of the 16bit value
-    lsb = 0x3fff & scaledValue # Mask with '10 zeroes' so that only the bottom 10 bits get through
-    # Create aggrgate value
+    # The most logical next step is to then do.....
+    msb = selector << 14 # Shift selector (a 2 bit value) 14 steps the left to make it the highest two bits of the 16bit value
+    lsb = 0x3fff & scaledValue # Mask with '6 zeros and 10 ones' so that only the bottom 10 bits get through
+    # Create aggregate value by 'OR'ing msb and lsb together
     msblsb = msb | lsb
 
-    # But, a patval is in the order LSB.MSB therefore
-    patval = selector | (scaledValue << 6) # This should mean that two selector bits will occupy the two rightmost bit values
-                                        # and the
+    # selector value = 11000000
+    # 'info' value   = 00000011
 
-    lsbmsb = ( lsb<<8 ) | (msb >> 8)
+    # 11000011
+    # x y =
+    # 0 0 0
+    # 0 1 1
+    # 1 0 1
+    # 1 1 1
+
+    lsbmsb = (lsb<<8 ) | (msb >> 8)
     return str(hex(msblsb)), str(hex(lsbmsb))
