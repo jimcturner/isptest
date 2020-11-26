@@ -1836,7 +1836,15 @@ class RtpReceiveStream(RtpReceiveCommon):
                                               "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
                                                           "start", "end",]
                                 },
-                "/traceroute": {"targetMethod": parent.getTraceRouteHopsList, "args": [], "optKeys": []}
+                "/traceroute": {"targetMethod": parent.getTraceRouteHopsList, "args": [], "optKeys": []},
+
+                "/txrate/inc": {"targetMethod": self.remotelyControlTxStream, "args": ["/txrate/inc"], "optKeys": []},
+                "/txrate/dec": {"targetMethod": self.remotelyControlTxStream, "args": ["/txrate/dec"], "optKeys": []},
+                "/length/inc": {"targetMethod": self.remotelyControlTxStream, "args": ["/length/inc"], "optKeys": []},
+                "/length/dec": {"targetMethod": self.remotelyControlTxStream, "args": ["/length/dec"], "optKeys": []},
+                "/ttl/inc": {"targetMethod": self.remotelyControlTxStream, "args": ["/ttl/inc"], "optKeys": []},
+                "/ttl/dec": {"targetMethod": self.remotelyControlTxStream, "args": ["/ttl/dec"], "optKeys": []},
+                "/burst": {"targetMethod": self.remotelyControlTxStream, "args": ["/burst"], "optKeys": []},
             }
             return getMappings
 
@@ -1942,7 +1950,20 @@ class RtpReceiveStream(RtpReceiveCommon):
             except Exception as e:
                 raise Exception(f"renderIndexPage() {parent.__class__.__name__}, {e}")
 
-
+        # Sends a remote control message to an associated RtpGenerator
+        def remotelyControlTxStream(self, controlMessage):
+            # Access parent Rtp Stream object via server attribute
+            rtpStream = self.server.parentObject
+            syncSourceID = None
+            try:
+                syncSourceID = rtpStream.syncSourceIdentifier
+                rtpStream.sendControlMessageToTransmitter({"syncSourceID": syncSourceID,
+                                                                  "source": "Receiver",
+                                                                  "type": controlMessage})
+                Utils.Message.addMessage(f"DBUG:remotelyControlTxStream:{syncSourceID},  controlMessage: {controlMessage},")
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:RtpReceiveStream.HTTPRequestHandler.remotelyControlTxStream ({syncSourceID}),"\
+                                         f" controlMessage{controlMessage}")
     # Getter method for self.resultsTxQueue
     def getResultsTxQueue(self):
         return self.resultsTxQueue
@@ -4629,19 +4650,19 @@ class RtpGenerator(RtpCommon):
             messageType = controlMessage["type"]
             # Confirm that this is a message destined for this RtpGenerator Object
             if messageSyncSourceID == self.syncSourceIdentifier:
-                if messageType == "txbps_inc":
+                if messageType == "/txrate/inc":
                     self.setTxRate(0, autoIncrement=1)
-                elif messageType == "txbps_dec":
+                elif messageType == "/txrate/dec":
                     self.setTxRate(0, autoIncrement=-1)
-                elif messageType == "txttl_inc":
+                elif messageType == "/ttl/inc":
                     self.setTimeToLive(0, autoIncrement=1)
-                elif messageType == "txttl_dec":
+                elif messageType == "/ttl/dec":
                     self.setTimeToLive(0, autoIncrement=-1)
-                elif messageType == "txpayload_inc":
+                elif messageType == "/length/inc":
                     self.setPayloadLength(0, autoIncrement=1)
-                elif messageType == "txpayload_dec":
+                elif messageType == "/length/dec":
                     self.setPayloadLength(0, autoIncrement=-1)
-                elif messageType == "txburst":
+                elif messageType == "/burst":
                     self.enableBurstMode()
                 # Set friendly name
                 elif messageType == "txname" and "name" in controlMessage:
@@ -6669,7 +6690,6 @@ class RtpStreamComparer_old(object):
 # It takes a list of stream definitions of the available streams
 # For certain comparisons it will look up the relevant Event by querying the api of the stream where the event occurred
 class RtpStreamComparer(object):
-
     # Takes a pointer to the list containing all the currently available stream definitions
     def __init__(self, availableStreamsList) -> None:
         super().__init__()

@@ -4647,43 +4647,19 @@ class UI(object):
 
     # '4' pressed
     def __onIncreaseTxRate(self):
-        # Confirm that this operation is allowed on  the current stream type
-        if type(self.selectedStream) == RtpStreamResults:
-            # We must be in TRANSMIT mode, currently viewing one of the results panes
-            #  - you can't Put up an info message
-            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
-
-        # Construct the control message:-
-        # Confirm that the selected stream is a generator object
-        elif type(self.selectedStream) == RtpGenerator:
-            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
-                                                                 "source": "Transmitter" + str(self.pid),
-                                                                 "type": "txbps_inc"})
-
-        # Otherwise send a message to the remote end
-        elif type(self.selectedStream) == RtpReceiveStream:
-            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
-                                                                 "source": "Receiver" + str(self.pid),
-                                                                 "type": "txbps_inc"})
+        apiUrl = "/txrate/inc"
+        try:
+            Utils.APIHelper(self.selectedStream["httpPort"]).getByURL(apiUrl)
+        except Exception as e:
+            Utils.Message.addMessage(f"ERR:UI.__onIncreaseTxRate() {e}")
 
     # '3' pressed
     def __onDecreaseTxRate(self):
-        # Confirm that this operation is allowed on  the current stream type
-        if type(self.selectedStream) == RtpStreamResults:
-            # We must be in TRANSMIT mode, currently viewing one of the results panes
-            #  - you can't Put up an info message
-            Utils.Message.addMessage("**HINT: Use 'TX Streams' pane to modify transmit parameters **")
-
-        # Confirm that the selected stream is a generator object
-        elif type(self.selectedStream) == RtpGenerator:
-            self.selectedStream.addControlMessage({"syncSourceID": self.selectedStreamID,
-                                                                 "source": "Transmitter" + str(self.pid),
-                                                                 "type": "txbps_dec"})
-        # Otherwise send a message to the remote end
-        elif type(self.selectedStream) == RtpReceiveStream:
-            self.selectedStream.sendControlMessageToTransmitter({"syncSourceID": self.selectedStreamID,
-                                                                 "source": "Receiver" + str(self.pid),
-                                                                 "type": "txbps_dec"})
+        apiUrl = "/txrate/dec"
+        try:
+            Utils.APIHelper(self.selectedStream["httpPort"]).getByURL(apiUrl)
+        except Exception as e:
+            Utils.Message.addMessage(f"ERR:UI.__onDecreaseTxRate() {e}")
 
     # '6'
     def __onIncreaseTimeToLive(self):

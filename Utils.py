@@ -1887,7 +1887,7 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
         # Access parent Rtp Stream object methods via server attribute
         parent = self.server.parentObject
         # A dictionary to map incoming GET URLs to an existing RtpGenerator method
-        # The "args" key contains a lost with the preset values that will be passed to targetMethod() when
+        # The "args" key contains a list with the preset values that will be passed to targetMethod()
         # "optKeys" is a list of keys that  targetMethod will accept as a kwarg
         # that particular URL is requested
         # "contentType" is an additional key that specifies the type of data returned by targetMethod (if known)
