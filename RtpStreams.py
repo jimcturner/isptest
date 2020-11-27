@@ -3948,12 +3948,8 @@ class RtpGenerator(RtpCommon):
             except Exception as e:
                 raise Exception(f"renderDebugPage() {rtpGen.__class__.__name__}, {e}")
 
-
-
-
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
-                 rtpTxStreamsDict, rtpTxStreamsDictMutex,\
-                 rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance = None,
+                 uiInstance=None,
                  controllerTCPPort=None, **kwargs):
         # The last arguments (**kwargs) are optional. it allows you to specify a source port or friendly name on creation
         # kwargs are "friendlyName" and "UDP_SRC_PORT"
@@ -4058,11 +4054,6 @@ class RtpGenerator(RtpCommon):
         self.jitterGenerationFlag = False
         self.udpTxSocket = 0 # This is pointer to the socket created by __rtpGeneratorThread
 
-        self.rtpTxStreamsDict = rtpTxStreamsDict
-        self.rtpTxStreamsDictMutex = rtpTxStreamsDictMutex
-        self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
-        self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
-
         self.burstTimer = 0 # Used to count seconds when Generator is in Burst mode
         # Slowstart variables - This creates a logarithmic increase in the  tx rate at the start of the stream.
         # Its purpose is to allow the network hardware/CPUs to ramp up resources gradually when using high bitrates
@@ -4121,11 +4112,6 @@ class RtpGenerator(RtpCommon):
         # This will be updated by rtpStreamResultsReceiver once it has successfullly created the RtpStreamResults object
         # (but only if the reply packets from the Receiver have been received)
         self.relatedRtpStreamResults = None
-
-        # Add the object to the specified dictionary with using rtpStreamID as the key
-        self.rtpTxStreamsDictMutex.acquire()
-        self.rtpTxStreamsDict[self.syncSourceIdentifier] = self
-        self.rtpTxStreamsDictMutex.release()
 
         # start the 1 second sampling thread
         self.samplingThread = threading.Thread(target=self.__samplingThread, args=())
@@ -4765,10 +4751,10 @@ class RtpGenerator(RtpCommon):
             Utils.Message.addMessage("ERR:RtpGenerator.killStream() kill rtpStreamResultsReceiver " + str(e))
 
         # Finally, remove this RtpGenerator object from rtpTxStreamsDict
-        self.rtpTxStreamsDictMutex.acquire()
-        Utils.Message.addMessage("INFO: Deleting RtpGenerator entry in rtpTxStreamsDict for stream: " + str(self.syncSourceIdentifier))
-        del self.rtpTxStreamsDict[self.syncSourceIdentifier]
-        self.rtpTxStreamsDictMutex.release()
+        # self.rtpTxStreamsDictMutex.acquire()
+        # Utils.Message.addMessage("INFO: Deleting RtpGenerator entry in rtpTxStreamsDict for stream: " + str(self.syncSourceIdentifier))
+        # del self.rtpTxStreamsDict[self.syncSourceIdentifier]
+        # self.rtpTxStreamsDictMutex.release()
 
         # Now kill UDP socket
         try:
@@ -5019,23 +5005,16 @@ class RtpGenerator(RtpCommon):
                 # At this point, automatically generate/save a stream report
                 if self.timeToLive == 2:
                     # Now check to see if there is a corresponding RtpStreamResults object for this Tx stream
-                    rtpTxStreamResults = None
-                    self.rtpTxStreamResultsDictMutex.acquire()
-                    if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
-                        # Get a handle on the RtpStreamResults object
-                        rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                    self.rtpTxStreamResultsDictMutex.release()
-
-                    if rtpTxStreamResults is not None:
+                    if self.relatedRtpStreamResults is not None:
                         # Generate and save a report
                         try:
                             # Generate the actual report
-                            report = rtpTxStreamResults.generateReport()
+                            report = self.relatedRtpStreamResults.generateReport()
 
                             # Retrieve the auto-generated filename
-                            _filename = rtpTxStreamResults.createFilenameForReportExport()
+                            _filename = self.relatedRtpStreamResults.createFilenameForReportExport()
                             Utils.Message.addMessage(
-                                "Stream " + str(self.syncSourceIdentifier) + " object is expiring. Autosaving report")
+                                "Stream " + str(self.syncSourceIdentifier) + " object is expiring. Autosaving report (__samplingThread)")
                             # Write a report to disk
                             Utils.writeReportToDisk(report, fileName=_filename)
                             Utils.Message.addMessage("Autosaved " + str(_filename + " to disk"))
@@ -5514,23 +5493,15 @@ class RtpGenerator(RtpCommon):
             txScheduler(self)
 
             # If timeToLive has decremented to zero, the scheduler will end and execution will reach this point
-            # Now check to see if there is a corresponding RtpStreamResults object for this Tx stream
-            rtpTxStreamResults = None
-            self.rtpTxStreamResultsDictMutex.acquire()
-            if self.syncSourceIdentifier in self.rtpTxStreamResultsDict:
-                # Get a handle on the RtpStreamResults object
-                rtpTxStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-            self.rtpTxStreamResultsDictMutex.release()
-
-            if rtpTxStreamResults is not None:
+            if self.relatedRtpStreamResults is not None:
                 # Generate and save a report
                 try:
                     # Generate the actual report
-                    report = rtpTxStreamResults.generateReport()
+                    report = self.relatedRtpStreamResults.generateReport()
 
                     # Retrieve the auto-generated filename
-                    _filename = rtpTxStreamResults.createFilenameForReportExport()
-                    Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + " object is ending. Autosaving report")
+                    _filename = self.relatedRtpStreamResults.createFilenameForReportExport()
+                    Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + " object is ending. Autosaving report (__rtpGeneratorThread)")
                     # Write a report to disk
                     Utils.writeReportToDisk(report, fileName=_filename)
                     Utils.Message.addMessage("Written " + str(_filename + " to disk"))
@@ -6386,9 +6357,6 @@ class ResultsReceiver(object):
         self.relatedRtpGenerator = rtpGeneratorObject
         self.udpSocket = 0
 
-        self.rtpTxStreamResultsDict = rtpGeneratorObject.rtpTxStreamResultsDict
-        self.rtpTxStreamResultsDictMutex = rtpGeneratorObject.rtpTxStreamResultsDictMutex
-
         # This counts the receive errors reported by the unpickler routine in __resultsReceiverThread()
         # (normally caused by UDP transmission errors. Better than generating an error message and clogging
         # up the log file)
@@ -6575,7 +6543,6 @@ class ResultsReceiver(object):
                                         Utils.Message.addMessage(
                                             "ERR: __resultsReceiverThread. Last fragment received but wrong length. Expt'd: " +\
                                             str(fragment[2]) + ", got " + str(len(rxMssage)) + " bytes")
-
 
                         # Check to see if this fragment is part of a new set by comparing lastKnownUniqueID
                         if fragment[4] == lastKnownUniqueID:

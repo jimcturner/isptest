@@ -7653,8 +7653,7 @@ def main(argv):
         try:
             rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
                                     payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
-                                    rtpTxStreamsDict, rtpTxStreamsDictMutex,
-                                    rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, uiInstance=ui,
+                                    uiInstance=ui,
                                     UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME,
                                         controllerTCPPort=isptesttHTTPServerPort)
 
