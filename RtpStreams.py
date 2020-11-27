@@ -1966,7 +1966,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     "Rx current queue size": rtpRxStream.rtpStreamQueueCurrentSize,
                     "Rx max queue size": rtpRxStream.rtpStreamQueueMaxSize,
                     "Rx Q packets added": rtpRxStream.packetsAddedToRxQueueCount,
-                    "Rx Q packets removed": rtpRxStream.packetCounterReceivedTotal
+                    "Rx Q packets removed": rtpRxStream.packetCounterReceivedTotal,
+                    "Active Threads": Utils.listCurrentThreads(asList=True)
                 }
                 return debugInfoDict
             except Exception as e:
@@ -3790,7 +3791,8 @@ class RtpGenerator(RtpCommon):
                     "Tx period": rtpGen.txPeriod,
                     "Total transmitted packets": rtpGen.txCounter_packets,
                     "Transmit error count": rtpGen.txErrorCounter,
-                    "Traceroute function in use": str(rtpGen.tracerouteFunctionInUse)
+                    "Traceroute function in use": str(rtpGen.tracerouteFunctionInUse),
+                    "Active Threads": Utils.listCurrentThreads(asList=True)
                 }
                 # Add further info relating to the rtpStreamResultsReceiver
                 if rtpGen.rtpStreamResultsReceiver is not None:
