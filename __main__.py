@@ -4654,34 +4654,35 @@ class UI(object):
         except Exception as e:
             Utils.Message.addMessage(f"ERR:UI.__onDecreasePayloadSize() {e}")
 
-    # Deprecated
-    def __onIncrementSyncSourceID(self):
-        self.__modifySyncSourceID(1)
-
-    # Deprecated
-    def __onDecrementSyncSourceID(self):
-        self.__modifySyncSourceID(-1)
-
-    # Called from __onIncrementSyncSourceID() and __onDecrementSyncSourceID(). Increments/decrements according to dir flag
-    def __modifySyncSourceID(self, direction):
-        # bounds limit the input
-        if direction < 0:
-            # For all negative values, set direction to -1
-            direction = -1
-        else:
-            # For all other values, set direction to '1'
-            direction = 1
-        # Confirm that the selected stream is a generator object
-        if type(self.selectedStream) == RtpGenerator:
-            # Get current Sync source ID
-            currentSyncSourceID = int(self.selectedStream.getRtpStreamStatsByKey('Sync Source ID'))
-            # Increment/decrement  sync source by 1
-            self.selectedStream.setSyncSourceIdentifier(currentSyncSourceID + (1 * direction))
-            # Verify new sync source id
-            currentSyncSourceID = int(self.selectedStream.getRtpStreamStatsByKey('Sync Source ID'))
-            Utils.Message.addMessage(
-                " Stream " + str(self.selectedStreamID) + " sync source id changed to " + str(currentSyncSourceID))
-
+    # # Deprecated 27-11-20 OLD CODE to MODIFY the sync source id of an existing stream. I can't imagine why this would be useful
+    # def __onIncrementSyncSourceID(self):
+    #     self.__modifySyncSourceID(1)
+    #
+    # # Deprecated
+    # def __onDecrementSyncSourceID(self):
+    #     self.__modifySyncSourceID(-1)
+    #
+    # # Called from __onIncrementSyncSourceID() and __onDecrementSyncSourceID(). Increments/decrements according to dir flag
+    # def __modifySyncSourceID(self, direction):
+    #     # bounds limit the input
+    #     if direction < 0:
+    #         # For all negative values, set direction to -1
+    #         direction = -1
+    #     else:
+    #         # For all other values, set direction to '1'
+    #         direction = 1
+    #     try:
+    #         # Confirm that the selected stream is a generator object
+    #         if self.selectedStream["streamType"] == "RtpGenerator":
+    #             # Get current Sync source ID
+    #             currentSyncSourceID = int(self.selectedStream.getRtpStreamStatsByKey('Sync Source ID'))
+    #             # Increment/decrement  sync source by 1
+    #             self.selectedStream.setSyncSourceIdentifier(currentSyncSourceID + (1 * direction))
+    #             # Verify new sync source id
+    #             currentSyncSourceID = int(self.selectedStream.getRtpStreamStatsByKey('Sync Source ID'))
+    #             Utils.Message.addMessage(
+    #                 " Stream " + str(self.selectedStreamID) + " sync source id changed to " + str(currentSyncSourceID))
+    #     except Exception as e:
 
 
     # 'e'

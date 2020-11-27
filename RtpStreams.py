@@ -1818,6 +1818,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             # signalling to do_GET() how to handle the returned values
             getMappings = {
                 "/": {"targetMethod": self.renderIndexPage, "args": [], "optKeys":[], "contentType": 'text/html'},
+                "/debug": {"targetMethod": self.renderDebugPage, "args": [], "optKeys": []},
                 "/stats": {"targetMethod": parent.getRtpStreamStats, "args": [],
                            "optKeys": ["keyIs", "keyContains", "keyStartsWith", "listKeys"]},
                 "/report/traceroute": {"targetMethod": parent.generateTracerouteHistoryReport, "args": [],
@@ -1949,6 +1950,31 @@ class RtpReceiveStream(RtpReceiveCommon):
                 return response
             except Exception as e:
                 raise Exception(f"renderIndexPage() {parent.__class__.__name__}, {e}")
+
+        # Display debug information
+        def renderDebugPage(self):
+            # Access parent RtpReceiveStream object via server attribute
+            rtpRxStream = self.server.parentObject
+            try:
+                syncSourceID = rtpRxStream.syncSourceIdentifier
+                stats = rtpRxStream.getRtpStreamStats()
+                debugInfoDict = {
+                    "syncSourceID": syncSourceID,
+                    "type": rtpRxStream.__class__.__name__,
+                    "packet_counter_transmitted_total": stats["packet_counter_transmitted_total"],
+                    "stream_transmitter_txRate_bps": stats["stream_transmitter_txRate_bps"],
+                    "Rx current queue size": rtpRxStream.rtpStreamQueueCurrentSize,
+                    "Rx max queue size": rtpRxStream.rtpStreamQueueMaxSize,
+                    "Rx Q packets added": rtpRxStream.packetsAddedToRxQueueCount,
+                    "Rx Q packets removed": rtpRxStream.packetCounterReceivedTotal
+                }
+                return debugInfoDict
+            except Exception as e:
+                raise Exception(f"renderDebugPage() {rtpRxStream.__class__.__name__}, {e}")
+
+
+
+
 
         # Sends a remote control message to an associated RtpGenerator
         def remotelyControlTxStream(self, controlMessage):
@@ -3646,6 +3672,7 @@ class RtpGenerator(RtpCommon):
             getMappings = {
                 #"/url": {"targetMethod": None, "args": [], "optKeys": [], "contentType": 'application/json'},
                 "/": {"targetMethod": self.renderIndexPage, "args": [], "optKeys": [], "contentType": 'text/html'},
+                "/debug": {"targetMethod": self.renderDebugPage, "args": [], "optKeys": []},
                 "/txrate/inc": {"targetMethod": rtpGen.setTxRate, "args": [0, 1], "optKeys": []},
                 "/txrate/dec": {"targetMethod": rtpGen.setTxRate, "args": [0, -1], "optKeys": []},
                 "/length/inc": {"targetMethod": rtpGen.setPayloadLength, "args": [0, 1], "optKeys": []},
@@ -3658,7 +3685,7 @@ class RtpGenerator(RtpCommon):
                 "/jitter/on": {"targetMethod": rtpGen.enableJitter, "args": [], "optKeys": []},
                 "/jitter/off": {"targetMethod": rtpGen.disableJitter, "args": [], "optKeys": []},
                 "/txstats": {"targetMethod": rtpGen.getRtpStreamStats, "args": [], "optKeys": []},
-                "/traceroute": {"targetMethod": rtpGen.getTraceRouteHopsList, "args": [], "optKeys": []},
+                "/traceroute": {"targetMethod": rtpGen.getTraceRouteHopsList, "args": [], "optKeys": []}
             }
             # Add additonal endpoints that relate to the RtpStreamResults associated with this RtpGenerator
             # Note, this object (and therefore its methods) will only exist if the Receiver has responded to
@@ -3749,6 +3776,37 @@ class RtpGenerator(RtpCommon):
                 return response
             except Exception as e:
                 raise Exception(f"renderIndexPage() {parent.__class__.__name__}, {e}")
+
+        # Display debug information
+        def renderDebugPage(self):
+            # Access parent RtpGenerator object via server attribute
+            rtpGen = self.server.parentObject
+            try:
+                syncSourceID = rtpGen.syncSourceIdentifier
+                debugInfoDict = {
+                    "syncSourceID": syncSourceID,
+                    "type": rtpGen.__class__.__name__,
+                    "Sleep Time mean": rtpGen.meanSleepTime,
+                    "Tx period": rtpGen.txPeriod,
+                    "Total transmitted packets": rtpGen.txCounter_packets,
+                    "Transmit error count": rtpGen.txErrorCounter,
+                    "Traceroute function in use": str(rtpGen.tracerouteFunctionInUse)
+                }
+                # Add further info relating to the rtpStreamResultsReceiver
+                if rtpGen.rtpStreamResultsReceiver is not None:
+                    debugInfoDict["Rx unpickled error count"] = rtpGen.rtpStreamResultsReceiver.receiveDecodeErrorCounter
+                    debugInfoDict["Rx fragment error count"] = rtpGen.rtpStreamResultsReceiver.receiveResultsFragmentErrorCounter
+                    debugInfoDict["Return loss %"] = rtpGen.rtpStreamResultsReceiver.returnPacketLoss_pc
+                    debugInfoDict["Rx packet count"] = rtpGen.rtpStreamResultsReceiver.receiveResultsActualReceivedPacketsCounter
+                    debugInfoDict["Rx expected count"] = rtpGen.rtpStreamResultsReceiver.receiveResultsExpectedPacketsCounter
+
+                return debugInfoDict
+
+            except Exception as e:
+                raise Exception(f"renderDebugPage() {rtpGen.__class__.__name__}, {e}")
+
+
+
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
                  rtpTxStreamsDict, rtpTxStreamsDictMutex,\
