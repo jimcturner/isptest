@@ -3538,12 +3538,10 @@ class RtpStreamResults_OLD(RtpReceiveCommon):
 # It does't perform any calculations itself (unlike RtpReceiveStream) but it does have similar getter methods for results,
 # which should allow displayThread to treat this like an RtpStream object without any additional code alteration
 class RtpStreamResults(RtpReceiveCommon):
-    def __init__(self, syncSourceID, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, controllerTCPPort=None):
+    def __init__(self, syncSourceID, controllerTCPPort=None):
 
         super().__init__()
         self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
-        # self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
-        # self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
         self.syncSourceID = syncSourceID
         # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
         self.__stats = {}
@@ -3559,11 +3557,6 @@ class RtpStreamResults(RtpReceiveCommon):
 
         # Used to record when this object last received updated stats
         self.lastUpdatedTimestamp = datetime.timedelta()
-
-        # #Add this new RtpStreamResults object to the rtpTxStreamResultsDict
-        # self.rtpTxStreamResultsDictMutex.acquire()
-        # self.rtpTxStreamResultsDict[self.syncSourceID] = self
-        # self.rtpTxStreamResultsDictMutex.release()
 
 
     def updateStats(self, statsDict):
@@ -3607,10 +3600,6 @@ class RtpStreamResults(RtpReceiveCommon):
 
     # This method will remove this stream object from the rtpTxStreamResultsDict dictionary
     def killStream(self):
-        # self.rtpTxStreamResultsDictMutex.acquire()
-        # Utils.Message.addMessage("Deleting RtpStreamResults object for stream: " + str(self.syncSourceID))
-        # del self.rtpTxStreamResultsDict[self.syncSourceID]
-        # self.rtpTxStreamResultsDictMutex.release()
         pass
 
     # Define getter methods
@@ -6622,11 +6611,6 @@ class ResultsReceiver(object):
 
                         if statsValidated:
                             try:
-                                # # Firstly check to see a stream object with this id exists in self.rtpTxStreamResultsDict
-                                # if stats["stream_syncSource"] in self.rtpTxStreamResultsDict:
-                                #     # If it does, add the new data
-                                #     self.rtpTxStreamResultsDict[stats["stream_syncSource"]].updateStats(stats)
-
                                 # Firstly check to see if the RtpStreamResults object already exists for this stream
                                 if self.relatedRtpGenerator.relatedRtpStreamResults is not None:
                                     # It does exist, so get a handle on it
@@ -6639,8 +6623,6 @@ class ResultsReceiver(object):
                                                        + str(stats["stream_syncSource"]))
                                     # Create new RtpStreamResults object
                                     rtpStreamResults = RtpStreamResults(stats["stream_syncSource"],
-                                                                        self.rtpTxStreamResultsDict,
-                                                                        self.rtpTxStreamResultsDictMutex,
                                                                         controllerTCPPort=self.relatedRtpGenerator.controllerTCPPort)
 
 
