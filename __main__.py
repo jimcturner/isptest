@@ -4112,24 +4112,6 @@ class UI(object):
                     modifiedErrorString = str(e).replace("\n", ", ")
                     Utils.Message.addMessage("DBUG: UI.__onCopyReportToClipboard (using less) " + modifiedErrorString)
 
-                    # # Copy to clipboard failed. Paste to pastebin.com instead
-                    # url = ""
-                    # try:
-                    #     url = Utils.pasteBin(streamReport, "isptest stream report for stream " +\
-                    #                 str(self.selectedStreamID)).decode('utf-8')
-                    # except Exception as e:
-                    #     url = "Error pasting to pastebin:- \n" + str(e)
-                    #
-                    #
-                    # # Display a message box with a URL or an error message
-                    # self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" +\
-                    #         "\nThis is mostly likely because you are connected to a text-only\n" +\
-                    #         "terminal (e.g via an SSH session?)\n" +\
-                    #         "\nSending the report to pastebin.com instead. Please follow this URL:-\n" +\
-                    #         "\n " + str(url).center(70) + "\n\n" +\
-                    #         "<Press a key to continue>".center(70), \
-                    #         "Copy to Clipboard Failed", textColour=Term.WHITE, bgColour=Term.RED)
-
                     # Copy to clipboard failed, attempt to launch 'less' viewer instead - only works on Linux/OSX
                     # Display a message box
                     os = Utils.getOperatingSystem()
