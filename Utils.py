@@ -1429,7 +1429,7 @@ class TCPListenPortCreator(object):
 
     # Return the next available TCP port number
     @classmethod
-    def getNext(cls, failLimit=10, address='127.0.0.1'):
+    def getNext(cls, failLimit=1000, address='127.0.0.1'):
         # No of failure attempts (busy ports) before the method gives up
         while failLimit > 0:
             # Increment the class value
@@ -1448,7 +1448,7 @@ class TCPListenPortCreator(object):
                 failLimit -= 1
         # If execution reaches the point, the failLimit counter must have decremented to zero
         # print(f"failLimit exceeded {cls.tcpPort}")
-        return None
+        raise Exception(f"Utils.TCPListenPortCreator failLimit exceeded. Last provided port no: {cls.getLastProvided()}")
 
     # Retrieve the last provided tcpPort value
     @classmethod

@@ -4119,12 +4119,11 @@ class RtpGenerator(RtpCommon):
         self.samplingThread.setName(str(self.syncSourceIdentifier) + ":samplingThread")
         self.samplingThread.start()
 
-        # Request an unused TCP port for the HTTP server to listen on
-        self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
-
         # Create an HTTP server thread. If successful, register the stream
         try:
-            Utils.Message.addMessage(f"DBUG: Creating httpServerThread for RtpGenerator:{self.syncSourceIdentifier}")
+            # Request an unused TCP port for the HTTP server to listen on
+            self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
+            Utils.Message.addMessage(f"DBUG: Creating httpServerThread for RtpGenerator:{self.syncSourceIdentifier}, TCP port:{self.tcpListenPort}")
             self.httpServerThread = threading.Thread(target=self.httpServerThreadCommon,
                                                      args=(self.tcpListenPort,
                                                            self.syncSourceIdentifier,

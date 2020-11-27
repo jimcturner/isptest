@@ -45,7 +45,7 @@ class Registry(object):
     # TCP listen ports for the embedded HTTP servers
     httpServerRtpReceiverTCPPort = 10000
     httpServerRtpTransmitterTCPPort = 10001
-    httpServerRtpResultsTCPPort = 10002
+    # httpServerRtpResultsTCPPort = 10002
 
     httpServerStartingTCPPort = 10010 # The starting tcp http server port no for adhoc server creation
 
