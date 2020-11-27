@@ -4702,44 +4702,72 @@ class UI(object):
     # 'z'
     def __onTogglePacketGenerationOnOff(self):
         # Confirm special features enabled and selected stream is an RtpGenerator
-        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
-            # Get current transit status and toggle accordingly
-            if self.selectedStream.getEnableStreamStatus():
-                # If currently enabled, disable it
-                self.selectedStream.disableStream()
-                Utils.Message.addMessage("[z] Stream " + str(self.selectedStreamID) + " packet generation disabled")
-            else:
-                # otherwise, enable it
-                self.selectedStream.enableStream()
-                Utils.Message.addMessage("[z] Stream " + str(self.selectedStreamID) + " packet generation enabled")
-
+        if self.specialFeaturesModeFlag == True and self.selectedStream is not None and \
+                self.selectedStream["streamType"] == "RtpGenerator":
+            try:
+                # Create API helper
+                api = Utils.APIHelper(self.selectedStream["httpPort"])
+                # Get current enabled/disabled stats
+                txStats = api.getByURL('/txstats')
+                currentStatus = txStats["streamEnabledStatus"]
+                if currentStatus:
+                    # If currentStatus is True, set it to false
+                    api.getByURL('/disable')
+                else:
+                    # Otherwise set it to true
+                    api.getByURL('/enable')
+                # Get current enabled/disabled stats once more to verify the change
+                txStats = api.getByURL('/txstats')
+                currentStatus = txStats["streamEnabledStatus"]
+                Utils.Message.addMessage(f"UI.__onTogglePacketGenerationOnOff() stream:{self.selectedStream['streamID']},"
+                                         f" status: {currentStatus}")
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:UI.__onTogglePacketGenerationOnOff() {self.selectedStream['streamID']}, {e}")
 
     # 'x'
     def __onToggleJitterSimulationOnOff(self):
-        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
-            if self.selectedStream.getJitterStatus():
-                # if jitter simulation currently enabled, disable it
-                self.selectedStream.disableJitter()
-                Utils.Message.addMessage("[x] Stream " + str(self.selectedStreamID) + " jitter simulation disabled")
-            else:
-                self.selectedStream.enableJitter()
-                Utils.Message.addMessage("[x] Stream " + str(self.selectedStreamID) + " jitter simulation enabled")
+        # Confirm special features enabled and selected stream is an RtpGenerator
+        if self.specialFeaturesModeFlag == True and self.selectedStream is not None and\
+                self.selectedStream["streamType"] == "RtpGenerator":
+            try:
+                # Create API helper
+                api = Utils.APIHelper(self.selectedStream["httpPort"])
+                # Get current enabled/disabled stats
+                txStats = api.getByURL('/txstats')
+                currentStatus = txStats["simulateJitterStatus"]
+                if currentStatus:
+                    # If currentStatus is True, set it to false
+                    api.getByURL('/jitter/off')
+                else:
+                    # Otherwise set it to true
+                    api.getByURL('/jitter/on')
+                # Get current enabled/disabled stats once more to verify the change
+                txStats = api.getByURL('/txstats')
+                currentStatus = txStats["simulateJitterStatus"]
+                Utils.Message.addMessage(f"UI.__onToggleJitterSimulationOnOff() stream:{self.selectedStream['streamID']},"
+                                         f" status: {currentStatus}")
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:UI.__onToggleJitterSimulationOnOff() {self.selectedStream['streamID']}, {e}")
 
     # 'c'
     def __onInsertMinorPacketLoss(self):
-        try:
-            # Passing 'packetsToSkip=-1' is shorthand for auto generating minor packet loss (i.e < glitch threshold)
-            Utils.APIHelper(self.selectedStream["httpPort"]).postByURL("/simulateloss", packetsToSkip=-1)
-        except Exception as e:
-            Utils.Message.addMessage(f"ERR:UI.__onInsertMinorPacketLoss() {e}")
+        if self.specialFeaturesModeFlag == True and self.selectedStream is not None and\
+                self.selectedStream["streamType"] == "RtpGenerator":
+            try:
+                # Passing 'packetsToSkip=-1' is shorthand for auto generating minor packet loss (i.e < glitch threshold)
+                Utils.APIHelper(self.selectedStream["httpPort"]).postByURL("/simulateloss", packetsToSkip=-1)
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:UI.__onInsertMinorPacketLoss() {e}")
 
     # 'v'
     def __onInsertMajorPacketloss(self):
-        try:
-            # Passing 'packetsToSkip=-2' is shorthand for auto generating major packet loss  (i.e > glitch threshold)
-            Utils.APIHelper(self.selectedStream["httpPort"]).postByURL("/simulateloss", packetsToSkip=-2)
-        except Exception as e:
-            Utils.Message.addMessage(f"ERR:UI.__onInsertMajorPacketloss() {e}")
+        if self.specialFeaturesModeFlag == True and self.selectedStream is not None and\
+                self.selectedStream["streamType"] == "RtpGenerator":
+            try:
+                # Passing 'packetsToSkip=-2' is shorthand for auto generating major packet loss  (i.e > glitch threshold)
+                Utils.APIHelper(self.selectedStream["httpPort"]).postByURL("/simulateloss", packetsToSkip=-2)
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:UI.__onInsertMajorPacketloss() {e}")
 
     def __onAboutDialogue(self):
         # Toggle display of About  dialogue
