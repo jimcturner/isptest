@@ -4633,10 +4633,38 @@ class RtpGenerator(RtpCommon):
                     ". " + str(self.burstTimer) + "s remaining")
 
     # Used to simulate packet loss by skipping x packets (whilst incrementing the seq no internally)
+    # Setting packetsToSkip to -1 will auto generate a minor loss (stats["glitch_Event_Trigger_Threshold_packets"] -1 )
+    # Setting packetsToSkip to -2 will auto generate a minor loss (stats["glitch_Event_Trigger_Threshold_packets"] + 1)
     def simulatePacketLoss(self, packetsToSkip=0):
         # validate packetsToSkip, should be an integer > 0
-        if not is_integer(packetsToSkip, minimum=0):
-            raise Exception(f"RtpGenerator{self.syncSourceIdentifier}.simulatePacketLoss() invalid packetsToSkip {packetsToSkip}")
+        if not is_integer(packetsToSkip, minimum=-2):
+            raise Exception(f"RtpGenerator{self.syncSourceIdentifier}.simulatePacketLoss() invalid packetsToSkip {packetsToSkip}."
+                            f"Use 'packetsToSkip=-2' for auto major loss, and 'packetsToSkip=-1' for auto minor loss")
+        if packetsToSkip < 0:
+            # Auto generate minor/major loss loss
+            # In the first instance, query the associated RtpStreamResults.stats["glitch_Event_Trigger_Threshold_packets"] threshold
+            if self.relatedRtpStreamResults is not None:
+                try:
+                    # Attempt to retrieve the "glitch_Event_Trigger_Threshold_packets" threshold
+                    statsDict = self.relatedRtpStreamResults.getRtpStreamStats(keyIs="glitch_Event_Trigger_Threshold_packets")
+                    glitchThreshold = statsDict["glitch_Event_Trigger_Threshold_packets"]
+                    if packetsToSkip == -2:
+                        # Auto generate major loss
+                        packetsToSkip = glitchThreshold + 1
+                    else:
+                        # Auto generate minor loss
+                        packetsToSkip = glitchThreshold - 1
+                except Exception as e:
+                    raise Exception(f"ERR:RtpGenerator({self.syncSourceIdentifier}).simulatePacketLoss() {e}")
+            else:
+                # Associated RtpStreamResults does not exist, so 'guess' how many packets to skip
+                if packetsToSkip == -2:
+                    # Auto generate major loss
+                    packetsToSkip = 20
+                else:
+                    # Auto generate minor loss
+                    packetsToSkip = 3
+        Utils.Message.addMessage(f"DBUG:RtpGenerator({self.syncSourceIdentifier}).simulatePacketLoss() packetsToSkip: {packetsToSkip}")
         self.packetsToSkip = packetsToSkip
 
     def enableJitter(self):

@@ -4727,38 +4727,19 @@ class UI(object):
 
     # 'c'
     def __onInsertMinorPacketLoss(self):
-        # Insert minor packet loss for the selected stream (< glitch threshold)
-        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
-            # As a default, set an arbitrarily low no of packets to lose
-            packetsToLose = 1
-            # Otherwise, get current glitch threshold from first available Stream Results objects (if available)
-            if (len(self.availableRtpTxResultsList) > 0):
-                receiverGlitchThreshold = \
-                    int(self.availableRtpTxResultsList[0][1].getRtpStreamStatsByKey(
-                        "glitch_Event_Trigger_Threshold_packets"))
-                packetsToLose = receiverGlitchThreshold - 1
-
-            # Simulate packet loss
-            self.selectedStream.simulatePacketLoss(packetsToLose)
-            Utils.Message.addMessage(
-                "[c] Stream " + str(self.selectedStreamID) + " simulate minor packet loss (" + str(packetsToLose) + \
-                " packets)")
+        try:
+            # Passing 'packetsToSkip=-1' is shorthand for auto generating minor packet loss (i.e < glitch threshold)
+            Utils.APIHelper(self.selectedStream["httpPort"]).postByURL("/simulateloss", packetsToSkip=-1)
+        except Exception as e:
+            Utils.Message.addMessage(f"ERR:UI.__onInsertMinorPacketLoss() {e}")
 
     # 'v'
     def __onInsertMajorPacketloss(self):
-        if self.specialFeaturesModeFlag == True and type(self.selectedStream) == RtpGenerator:
-            # As a default, set an arbitrarily high no of packets to lose
-            packetsToLose =20
-            # Otherwise, get current glitch threshold from first available Stream Results objects (if available)
-            if (len(self.availableRtpTxResultsList) > 0):
-                receiverGlitchThreshold = \
-                    int(self.availableRtpTxResultsList[0][1].getRtpStreamStatsByKey("glitch_Event_Trigger_Threshold_packets"))
-                packetsToLose = receiverGlitchThreshold + 1
-
-            # Simulate packet loss
-            self.selectedStream.simulatePacketLoss(packetsToLose)
-            Utils.Message.addMessage("[v] Stream " + str(self.selectedStreamID) + " simulate major packet loss (" + str(packetsToLose) +\
-                               " packets)")
+        try:
+            # Passing 'packetsToSkip=-2' is shorthand for auto generating major packet loss  (i.e > glitch threshold)
+            Utils.APIHelper(self.selectedStream["httpPort"]).postByURL("/simulateloss", packetsToSkip=-2)
+        except Exception as e:
+            Utils.Message.addMessage(f"ERR:UI.__onInsertMajorPacketloss() {e}")
 
     def __onAboutDialogue(self):
         # Toggle display of About  dialogue
