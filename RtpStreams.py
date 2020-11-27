@@ -3385,7 +3385,7 @@ class RtpReceiveStream(RtpReceiveCommon):
 # ResultsTransmitter and ResultsReceiver objects)
 # It does't perform any calculations itself (unlike RtpReceiveStream) but it does have similar getter methods for results,
 # which should allow displayThread to treat this like an RtpStream object without any additional code alteration
-class RtpStreamResults(RtpReceiveCommon):
+class RtpStreamResults_OLD(RtpReceiveCommon):
     def __init__(self, syncSourceID, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, controllerTCPPort=None):
 
         super().__init__()
@@ -3533,6 +3533,158 @@ class RtpStreamResults(RtpReceiveCommon):
                                                   end=end)
         return filteredEventList
 
+# Define a class to encompass the results sent back from the receiving to the transmitting side (via the
+# ResultsTransmitter and ResultsReceiver objects)
+# It does't perform any calculations itself (unlike RtpReceiveStream) but it does have similar getter methods for results,
+# which should allow displayThread to treat this like an RtpStream object without any additional code alteration
+class RtpStreamResults(RtpReceiveCommon):
+    def __init__(self, syncSourceID, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, controllerTCPPort=None):
+
+        super().__init__()
+        self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
+        # self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
+        # self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
+        self.syncSourceID = syncSourceID
+        # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
+        self.__stats = {}
+
+        # Create private empty list to hold Events for this RtpStream object. Accessible via a getter method
+        # self.__eventList = []
+        # __eventList is a collections.deque object so will auto-housekeep
+        self.__eventList = deque(maxlen=Registry.rtpStreamResultsHistoricEventsLimit)
+
+        # Create mutex locks for data access
+        self.__accessRtpStreamStatsMutex = threading.Lock()         # for the stats dictionary
+        self.__accessRtpStreamEventListMutex = threading.Lock()     # for the eventsList
+
+        # Used to record when this object last received updated stats
+        self.lastUpdatedTimestamp = datetime.timedelta()
+
+        # #Add this new RtpStreamResults object to the rtpTxStreamResultsDict
+        # self.rtpTxStreamResultsDictMutex.acquire()
+        # self.rtpTxStreamResultsDict[self.syncSourceID] = self
+        # self.rtpTxStreamResultsDictMutex.release()
+
+
+    def updateStats(self, statsDict):
+        # Will copy statsDict into self.__stats
+        self.__accessRtpStreamStatsMutex.acquire()
+        # Empty the current contents of the dictionary
+        self.__stats.clear()
+        # Copy supplied Dict contents into self.__stats{}
+        self.__stats = deepcopy(statsDict)
+        # Release the mutex
+        self.__accessRtpStreamStatsMutex.release()
+        # update the lastUpdated timestamp
+        self.lastUpdatedTimestamp = datetime.datetime.now()
+
+    def updateEventsList(self, eventsList, replaceExistingList=False):
+        # Will take a list of new events and, by default, append them to the existing eventsList list
+        # If replaceExistingList is set, it will completely replace the old list with the new list
+        # NOTE: It won't check for duplicate entries or validate the list items,
+        # it will blindly just append to what's already there
+
+        # Take control of the mutex
+        self.__accessRtpStreamEventListMutex.acquire()
+        if replaceExistingList is False:
+            # Default behaviour. Append the new events list to the existing list
+            self.__eventList.extend(eventsList)
+        else:
+            # Completely replace the existing list with the newly supplied list
+            self.__eventList=eventsList
+        # Release the mutex
+        self.__accessRtpStreamEventListMutex.release()
+        # update the lastUpdated timestamp
+        self.lastUpdatedTimestamp = datetime.datetime.now()
+        # Now create a message for each event added (showing the summary for each event)
+        for event in eventsList:
+            try:
+                Utils.Message.addMessage(event.getSummary()["summary"])
+            except Exception as e:
+                Utils.Message.addMessage("ERR:RtpStreamresults.updateEventsList(), len " + str(len(eventsList)) +\
+                                         ", " + str(e))
+
+
+    # This method will remove this stream object from the rtpTxStreamResultsDict dictionary
+    def killStream(self):
+        # self.rtpTxStreamResultsDictMutex.acquire()
+        # Utils.Message.addMessage("Deleting RtpStreamResults object for stream: " + str(self.syncSourceID))
+        # del self.rtpTxStreamResultsDict[self.syncSourceID]
+        # self.rtpTxStreamResultsDictMutex.release()
+        pass
+
+    # Define getter methods
+    def getRTPStreamID(self):
+        # Thread-safe method to access stream syncSource, src address, src port and name fields
+        self.__accessRtpStreamStatsMutex.acquire()
+        stats = self.__stats.copy()
+        self.__accessRtpStreamStatsMutex.release()
+        return stats["stream_syncSource"], stats["stream_srcAddress"], \
+               stats["stream_srcPort"], self.__stats["stream_friendly_name"]
+
+    # Thread-safe method for accessing all RtpStream stats
+    def getRtpStreamStats(self, keyIs=None, keyContains=None, keyStartsWith=None, listKeys=False):
+    # def getRtpStreamStats(self, **kwargs):
+        self.__accessRtpStreamStatsMutex.acquire()
+        stats = self.__stats.copy()
+        self.__accessRtpStreamStatsMutex.release()
+        # Get a filtered version of the stats dict
+        filteredStats = Utils.filterDictByKey(stats, keyIs=keyIs, keyContains=keyContains, keyStartsWith=keyStartsWith, listKeys=listKeys)
+        return filteredStats
+
+
+    def getRtpStreamStatsByFilter(self, keyFilter):
+        # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
+        # Returns a list of tuples
+        self.__accessRtpStreamStatsMutex.acquire()
+        stats = self.__stats.copy()
+        self.__accessRtpStreamStatsMutex.release()
+        # Filter keys of stats by startswith('filter') into a new dictionary
+        filteredStats = {k: v for k, v in stats.items() if k.startswith(keyFilter)}
+        return filteredStats
+
+    def getRtpStreamStatsByKey(self, key):
+        # Thread safe method to retrive a single stats item by key
+        # If the key doesn't exist, it will return None type
+        self.__accessRtpStreamStatsMutex.acquire()
+        stats = self.__stats.copy()
+        self.__accessRtpStreamStatsMutex.release()
+        if key in stats:
+            return stats[key]
+        else:
+            return None
+
+    # Thread-safe method for accessing realtime RtpStream eventList
+    # No args: Returns the entire list
+    # 1 arg: Returns the last n events
+    # 2 args: returns the range specified (inclusive)
+    # filterList is an optional arg containing a list of Event object types to test against within EventsList
+    # eg filterList = [Glitch] will return only a list of glitches, [Glitch, StreamStarted] would give you a list
+    # containing all Glitch and StreamStarted events
+    # The filter (if present) is applied first, then the range specifier
+    # Finally, if reverseOrder==True, the list will be returned in reverse order
+    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, requestedEventNo=None,
+                              recent=None, start=None, end=None):
+        self.__accessRtpStreamEventListMutex.acquire()
+        # Create copy of events list
+        unfilteredEventList = list(self.__eventList)
+        self.__accessRtpStreamEventListMutex.release()
+
+        # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
+        # (or else, if kwarg 'start' and 'end' are  specified'
+        if len(args) == 2:
+            start = args[0]
+            end = args[1]
+        # If one arg supplied, return the last n events (or else, if kwarg 'recent' is specified'
+        # IF event list not as long as n, return what does exist
+        elif len(args) == 1:  # If non kwarg supplied, use that instead
+            recent = args[0]
+
+        # Filter the events list using the specified criteria
+        filteredEventList = self.filterEventsList(unfilteredEventList, filterList=filterList, reverseOrder=reverseOrder,
+                                                  requestedEventNo=requestedEventNo, recent=recent, start=start,
+                                                  end=end)
+        return filteredEventList
 
 # Define an RTP Generator that can run autonomously as a thread
 class RtpGenerator(RtpCommon):
@@ -6470,11 +6622,17 @@ class ResultsReceiver(object):
 
                         if statsValidated:
                             try:
-                                # Firstly check to see a stream object with this id exists in self.rtpTxStreamResultsDict
-                                if stats["stream_syncSource"] in self.rtpTxStreamResultsDict:
-                                    # If it does, add the new data
-                                    self.rtpTxStreamResultsDict[stats["stream_syncSource"]].updateStats(stats)
+                                # # Firstly check to see a stream object with this id exists in self.rtpTxStreamResultsDict
+                                # if stats["stream_syncSource"] in self.rtpTxStreamResultsDict:
+                                #     # If it does, add the new data
+                                #     self.rtpTxStreamResultsDict[stats["stream_syncSource"]].updateStats(stats)
 
+                                # Firstly check to see if the RtpStreamResults object already exists for this stream
+                                if self.relatedRtpGenerator.relatedRtpStreamResults is not None:
+                                    # It does exist, so get a handle on it
+                                    rtpStreamResults = self.relatedRtpGenerator.relatedRtpStreamResults
+                                    # And update the stats
+                                    rtpStreamResults.updateStats(stats)
                                 else:
                                     # Otherwise that stream object doesn't exist yet, so create it
                                     Utils.Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
@@ -6484,6 +6642,8 @@ class ResultsReceiver(object):
                                                                         self.rtpTxStreamResultsDict,
                                                                         self.rtpTxStreamResultsDictMutex,
                                                                         controllerTCPPort=self.relatedRtpGenerator.controllerTCPPort)
+
+
                                     # Pass the rtpStreamResults back to the related RtpGenerator object
                                     self.relatedRtpGenerator.relatedRtpStreamResults = rtpStreamResults
                                     # Immediately update the stats
@@ -6522,9 +6682,9 @@ class ResultsReceiver(object):
                             # If all the received events in latestEventsList are valid, update the events list for the specified stream
                             if eventsValidated:
                                 # Utils.Message.addMessage("DBUG: **latestEventsList: " + str(latestEventsList[-1].eventNo))
-                                # Get handle on an (existing) RtpStreamResults object
                                 syncSourceID = stats["stream_syncSource"]
-                                rtpStreamResults = self.rtpTxStreamResultsDict[syncSourceID]
+                                # Get handle on an (existing) RtpStreamResults object
+                                rtpStreamResults = self.relatedRtpGenerator.relatedRtpStreamResults
 
                                 # Update (All) Events list
                                 try:
