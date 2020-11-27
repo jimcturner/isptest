@@ -4550,8 +4550,7 @@ class UI(object):
 
                     # All tx stream parameters validated so create the new RtpGenerator object
                     rtpGenerator = RtpGenerator(destAddr, destPort, txRate_bps, packetLength, syncSourceID, timeToLive, \
-                                                self.rtpTxStreamsDict, self.rtpTxStreamsDictMutex, \
-                                                self.rtpTxStreamResultsDict, self.rtpTxStreamResultsDictMutex, uiInstance=self,\
+                                                uiInstance=self,\
                                                 friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
                                                 controllerTCPPort=self.controllerTCPPort)
 
@@ -7077,7 +7076,7 @@ class ISPTestHTTPServer(object):
                         if len(filteredList) > 0:
                             # Requested stream exists so we know we can delete it
                             if pathIndex == pathLen - 1:  # Is this the last step of the path
-                                msg = str(filterType) + " " + str(currentStep) + " to be deleted"
+                                msg = str(filterType) + " " + str(currentStep) + " to be removed from streams directory"
                                 try:
                                     # Remove the stream from the list
                                     self.server.parentObject.removeFromStreamsList(filteredList[0])
@@ -7733,27 +7732,51 @@ def main(argv):
 
         # Attempt to remove all rtp stream objects (be they RtpGenrators (which themselves reference RtpStreamresults objects)
         # or RtpReceiveStream objects
-        for dict in [rtpTxStreamsDict, rtpRxStreamsDict]:
-            if len(dict) > 0:
-                # Temporary list to hold the streams currently in rtpStreamsDict
-                # Note: We can't iterate over the dict cal the the killStream methods directly. This is because
-                # killStream() acts on the rtpTxStreamsDict or rtpRxStreamsDict dictionary itself -
-                # and you can't iterate over a dictionary whilst simultaneously modifying it
-                tempStreamList = []
-                # take a copy of the dict to iterate over
-                for stream in dict:
-                    # Take a copy of the key value (the stream ID)
-                    tempStreamList.append(stream)
+        # for dict in [rtpTxStreamsDict, rtpRxStreamsDict]:
+        #     if len(dict) > 0:
+        #         # Temporary list to hold the streams currently in rtpStreamsDict
+        #         # Note: We can't iterate over the dict cal the the killStream methods directly. This is because
+        #         # killStream() acts on the rtpTxStreamsDict or rtpRxStreamsDict dictionary itself -
+        #         # and you can't iterate over a dictionary whilst simultaneously modifying it
+        #         tempStreamList = []
+        #         # take a copy of the dict to iterate over
+        #         for stream in dict:
+        #             # Take a copy of the key value (the stream ID)
+        #             tempStreamList.append(stream)
+        #
+        #
+        #         # Now iterate of the new streamList, calling .killStream() on all the objects within
+        #         for stream in tempStreamList:
+        #             Utils.Message.addMessage("INFO: Killing " + str(type(dict[stream])) + ": " + str(stream))
+        #             # print("Killing stream " + str(stream) + "\n")
+        #             # Invoke the kill method of each stream
+        #             dict[stream].killStream()
+
+        # Get a list of streams and send the delete method to each in turn
+        streamsList = Utils.APIHelper(isptesttHTTPServerPort).getStreamsList()
 
 
-                # Now iterate of the new streamList, calling .killStream() on all the objects within
-                for stream in tempStreamList:
-                    Utils.Message.addMessage("INFO: Killing " + str(type(dict[stream])) + ": " + str(stream))
-                    # print("Killing stream " + str(stream) + "\n")
-                    # Invoke the kill method of each stream
-                    dict[stream].killStream()
+        # Iterate over streamsList to send an HTTP DELETE via the api
+        for stream in streamsList:
+            try:
+                # send an HTTP DELETE to each object, to cause it to die
+                Utils.APIHelper(stream["httpPort"]).deleteByURL("/delete")
+            except Exception as e:
+                Utils.Message.addMessage(f"main.shutdownApplication() HTTP DELETE streams {e}")
 
-
+        # Now wait for the streamsList to be empty (i.e have all the stream objects de-registered themselves),
+        # before continuing with the shutdown process
+        while True:
+            # update streamsList
+            try:
+                streamsList = Utils.APIHelper(isptesttHTTPServerPort).getStreamsList()
+            except Exception as e:
+                Utils.Message.addMessage(f"main.shutdownApplication() Wait for HTTP DELETE streams to complete {e}")
+            # Wait for the streamsList to be emptied
+            if len(streamsList) == 0:
+                break
+            Utils.Message.addMessage(f"DBUG:main.shutdownApplication() Remaining streams {len(streamsList)}")
+            time.sleep(0.5)
 
         # Kill the whoIsResolver object
         whoIsResolver.kill()

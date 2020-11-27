@@ -6393,10 +6393,10 @@ class ResultsReceiver(object):
         # Finally, attempt to remove the RtpStreamResults object created by __resultsReceiverThread from
         # the rtpTxStreamResultsDict
 
-        # Check to see if the RtpStreamResults object exists in rtpTxStreamResultsDict
-        if self.relatedRtpGenerator.syncSourceIdentifier in self.rtpTxStreamResultsDict:
-            # If so, invoke its killStream method (to remove itself from rtpTxStreamResultsDict
-            self.rtpTxStreamResultsDict[self.relatedRtpGenerator.syncSourceIdentifier].killStream()
+        # # Check to see if the RtpStreamResults object exists in rtpTxStreamResultsDict
+        # if self.relatedRtpGenerator.syncSourceIdentifier in self.rtpTxStreamResultsDict:
+        #     # If so, invoke its killStream method (to remove itself from rtpTxStreamResultsDict
+        #     self.rtpTxStreamResultsDict[self.relatedRtpGenerator.syncSourceIdentifier].killStream()
 
 
     def __resultsReceiverThread(self):
