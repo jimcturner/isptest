@@ -3988,7 +3988,9 @@ class RtpGenerator(RtpCommon):
                 'Time to live': self.timeToLive,
                 'Sleep Time mean': self.meanSleepTime,
                 #'Calculation time mean': self.meanCalculationTime,
-                'Tx period': self.txPeriod
+                'Tx period': self.txPeriod,
+                'simulateJitterStatus': self.getJitterStatus(),
+                'streamEnabledStatus': self.getEnableStreamStatus()
                 }
 
     def getRtpStreamStatsByKey(self, key):
