@@ -7697,9 +7697,14 @@ def main(argv):
                 try:
                     # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
                     streamApi = Utils.APIHelper(stream["httpPort"])
+                    # Get the latest stream stats
                     stats = streamApi.getStats()
+
+                    # Get the pickled Events list
                     eventsListPickled = streamApi.getByURL('/events/raw', returnAsBytes=True)
-                    # Unpickle the events list
+                    # Unpickle the events list to regenerate the original Event objects
+                    # NOTE: This is **horrifically** inefficient because we're about to re-pickle the events
+                    # so that we can save them to disk (via Utils.exportObjectToDisk()
                     eventsList = pickle.loads(eventsListPickled)
                     rxStreamExportList.append([stream["streamID"], stats, eventsList])
                 except Exception as e:
@@ -7846,7 +7851,13 @@ def main(argv):
                         # Attempt to validate the keys/Values of the stats dict by reading each key
                         for stat in stats:  # Iterate over keys
                             # This should (hopefully) cause an exception if a key/value can't be read
-                            x = stats[stat]
+                            # We also use this opportunity to make sure that any of the imported values
+                            # are timedelta/datetime objects represented as strings, we convert them back to Python types
+                            x = Utils.convertStringToPythonDataType(stats[stat])
+                            if not isinstance(stats[stat], type(x)):
+                                Utils.Message.addMessage(f"DBUG: Recreating stream. converted {stat} from {type(stats[stat])} to {type(x)}")
+                                # assign the type-converted value back to the value in the dict
+                                stats[stat] = x
 
                         eventsList = stream[2]
                         # Attempt to validate the keys/Values of the events list by reading the event no

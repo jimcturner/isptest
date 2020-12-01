@@ -2179,6 +2179,44 @@ def convertStringToTimeDelta(s):
         # Parsing failed, so just return the source object as-is
         return s
 
+# Utility function to convert a string value back to a Python data type.
+# This is typically required when data is retrieved via the API, because the original data type is lost -
+# and all values are represented as strings
+# It will attempt to detect datetime.datetime, datetime.timedelta, bool, integer and float
+# if the type can't be determined, it will just return the value unchanged
+def convertStringToPythonDataType(value):
+    # Test to see if the value is datetime object encoded in ISO 8601 format (YYYY-MM-DDTHH:MM:SS.mmmmmm)
+    # If so, convert it back to a python Datetime object
+    try:
+        value = datetime.datetime.strptime(value, '%Y-%m-%d %H:%M:%S.%f')
+        return value
+    except:
+        # If this fails, test to see if the object is a datetime.timedelta object encoded as a string
+        try:
+            value = convertStringToTimeDelta(value)
+            return value
+        except:
+            # Now attempt to detect bools
+            if value in ["true", "True"]:
+                value = True
+            elif value in ["false", "False"]:
+                value = False
+            elif value in ["None", "none"]:
+                value = None
+
+            # Test if the value is an integer
+            elif str(value).isnumeric():
+                value = int(value)
+            else:
+                try:
+                    # See if the value is float by trying to cast it as a float (this will fail, if it's not)
+                    value = float(value)
+                except:
+                    pass
+    finally:
+        return value
+
+
 def doubleToPatval(inputVal):
     multiplier = [1,10,100,1000]
     scaledValue = 0

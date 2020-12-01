@@ -2906,7 +2906,8 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Kill itself
                     self.killStream(caller=self)
             except Exception as e:
-                Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread auto remove stream " + str(e))
+                Utils.Message.addMessage(f"ERR:RtpReceiveStream.__samplingThread auto remove stream:"
+                                         f"lossOfStreamEventTimestamp: {self.__stats['lossOfStreamEventTimestamp']}, err: {e}")
 
             # Increment 1 sec loop counter
             loopCounter += 1
