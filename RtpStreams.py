@@ -1444,7 +1444,7 @@ class RtpReceiveStream(RtpReceiveCommon):
     # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold,
-                 rtpRxStreamsDict, rtpRxStreamsDictMutex, txMessageQueue,
+                 rtpRxStreamsDict, rtpRxStreamsDictMutex, txMessageQueue, inputQueue,
                  restoredStreamFlag=False, historicStatsDict=None, historicEventsList=None, controllerTCPPort=None):
         # Call super constructor
         super().__init__()
@@ -1758,9 +1758,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                     f'ERR:RtpReceiveStream.__init__() Initial stream Registration failed {self.syncSourceIdentifier}, {e}')
 
             # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
-            self.rtpRxStreamsDictMutex.acquire()
-            self.rtpRxStreamsDict[self.__stats["stream_syncSource"]] = self
-            self.rtpRxStreamsDictMutex.release()
+            # self.rtpRxStreamsDictMutex.acquire()
+            # self.rtpRxStreamsDict[self.__stats["stream_syncSource"]] = self
+            # self.rtpRxStreamsDictMutex.release()
 
             Utils.Message.postMessage(f"DBUG:RtpReceiveStream.__init__(): {self.__stats['stream_syncSource']}", tcpPort=self.controllerTCPPort)
 
@@ -2048,14 +2048,14 @@ class RtpReceiveStream(RtpReceiveCommon):
             Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() removeFromStreamsDirectory() for stream " + \
                                      str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
-        # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
-        self.rtpRxStreamsDictMutex.acquire()
-        try:
-            Utils.Message.addMessage("Removing RtpReceiveStream object " + str(self.__stats["stream_syncSource"]))
-            del self.rtpRxStreamsDict[self.__stats["stream_syncSource"]]
-        except Exception as e:
-            Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() (remove from rtpRxStreamsDict{})" + str(self.__stats["stream_syncSource"]))
-        self.rtpRxStreamsDictMutex.release()
+        # # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
+        # self.rtpRxStreamsDictMutex.acquire()
+        # try:
+        #     Utils.Message.addMessage("Removing RtpReceiveStream object " + str(self.__stats["stream_syncSource"]))
+        #     del self.rtpRxStreamsDict[self.__stats["stream_syncSource"]]
+        # except Exception as e:
+        #     Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() (remove from rtpRxStreamsDict{})" + str(self.__stats["stream_syncSource"]))
+        # self.rtpRxStreamsDictMutex.release()
 
 
     # This method will parse the isptest header data (and update the instance variables accordingly)

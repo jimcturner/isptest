@@ -5916,18 +5916,19 @@ class RtpPacketReceiver(object):
             return None, None, None, None, None
 
 
-    def __init__(self, rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
+    def __init__(self, rxQueuesDict, txQueuesDict, shutdownFlag,
                        UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, uiInstance,
-                       txMessageQueue, controllerTCPPort=None):
-        self.rtpRxStreamsDict = rtpRxStreamsDict
-        self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
+                       controllerTCPPort=None):
+        # self.rtpRxStreamsDict = rtpRxStreamsDict
+        # self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
+        self.rxQueuesDict = rxQueuesDict
+        self.txQueuesDict = txQueuesDict
         self.shutdownFlag = shutdownFlag
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
         self.ISPTEST_HEADER_SIZE = ISPTEST_HEADER_SIZE
         self.glitchEventTriggerThreshold = glitchEventTriggerThreshold
         self.uiInstance = uiInstance
-        self.txMessageQueue = txMessageQueue
         self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
 
         # Create and initialise variables used for debugging -tracing lost packets
@@ -6255,32 +6256,41 @@ class RtpPacketReceiver(object):
                         # Attempt to add the data to an existing rtpStream object keyed by the rtpSyncSourceIdentifier
                         # This will raise an Exception if the key doesn't yet exist in the dictionary
                         try:
-                            # Add the the new rtp data object to the RtpReceiveStream
-                            self.rtpRxStreamsDict[syncSourceID].addData( \
-                                seqNo, udpPayloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, \
-                                rxTTL, srcAddress, srcPort)
+                            # # Add the the new rtp data object to the RtpReceiveStream
+                            # self.rtpRxStreamsDict[syncSourceID].addData( \
+                            #     seqNo, udpPayloadLength, packetArrivedTimestamp, syncSourceID, isptestHeaderData, \
+                            #     rxTTL, srcAddress, srcPort)
 
-                            # Now verify that the RtpReceiveStream object for this stream is using the correct
-                            # txMessageQueue. (As it's posible that initially the RtpReceiveStream might not have had
-                            # it's txMessageQueue set (eg if it was a historic RtpReceiveStream restored from a snapshot file)
-                            # Without a valid txMessageQueue, the RtpReceiveStream will not be able to send results back
-                            # to the transmitter
-                            # Get the existing  txMessageQueue from the object
-                            currentTxMessageQueue = self.rtpRxStreamsDict[syncSourceID].getResultsTxQueue()
-                            # Check to see if the RtpReceiveStream and RtpPacketReceiver are both pointing at the
-                            # the same object
-                            if currentTxMessageQueue is not self.txMessageQueue:
-                                # There is a mismatch between the messageQueue - update the RtpReceiveStream object
-                                try:
-                                    status = self.rtpRxStreamsDict[syncSourceID].setResultsTxQueue(self.txMessageQueue)
-                                    Utils.Message.addMessage("**RtpPacketReceiver modify TxMessageQueue for stream " + \
-                                                         str(syncSourceID) + ":" + str(status))
-                                except Exception as e:
-                                    Utils.Message.addMessage("** FAIL RtpPacketReceiver modify TxMessageQueue for stream " + \
-                                                             str(syncSourceID) + ", " + str(e))
+                            # Add the most recent packet to the newly created rx queue (whereby the
+                            # RtpReceieveStream will be able to pick it up)
+                            try:
+                                self.rxQueuesDict[syncSourceID].put(RtpData(seqNo, udpPayloadLength,
+                                                                            packetArrivedTimestamp,
+                                                                            syncSourceID, isptestHeaderData,
+                                                                            rxTTL, srcAddress, srcPort))
+                            except Exception as e:
+                                Utils.Message.addMessage(f"ERR:RtpPacketReceiver.__rtpPacketReceiverThread()"
+                                                         f"rxQueuesDict[{syncSourceID}].put()*existing* + {e}")
 
-
-
+    ###### IMPORTANT TX Queue validation
+                            # # Now verify that the RtpReceiveStream object for this stream is using the correct
+                            # # txMessageQueue. (As it's posible that initially the RtpReceiveStream might not have had
+                            # # it's txMessageQueue set (eg if it was a historic RtpReceiveStream restored from a snapshot file)
+                            # # Without a valid txMessageQueue, the RtpReceiveStream will not be able to send results back
+                            # # to the transmitter
+                            # # Get the existing  txMessageQueue from the object
+                            # currentTxMessageQueue = self.rtpRxStreamsDict[syncSourceID].getResultsTxQueue()
+                            # # Check to see if the RtpReceiveStream and RtpPacketReceiver are both pointing at the
+                            # # the same object
+                            # if currentTxMessageQueue is not self.txMessageQueue:
+                            #     # There is a mismatch between the messageQueue - update the RtpReceiveStream object
+                            #     try:
+                            #         status = self.rtpRxStreamsDict[syncSourceID].setResultsTxQueue(self.txMessageQueue)
+                            #         Utils.Message.addMessage("**RtpPacketReceiver modify TxMessageQueue for stream " + \
+                            #                              str(syncSourceID) + ":" + str(status))
+                            #     except Exception as e:
+                            #         Utils.Message.addMessage("** FAIL RtpPacketReceiver modify TxMessageQueue for stream " + \
+                            #                                  str(syncSourceID) + ", " + str(e))
                         except:
                             # Test to see if the latest rtpSyncSourceIdentifier already exists as a key in tpRxStreamTempDict
                             # Attempt to add the latest rtpSyncSourceIdentifier to tpRxStreamTempDict
@@ -6313,17 +6323,30 @@ class RtpPacketReceiver(object):
 
                                         Utils.Message.addMessage(Fore.GREEN + "Rtp stream " + str(syncSourceID) +
                                                                  " validated. Creating new RtpReceiveStream")
+                                        # Create a Queue specifically for data with this sync source id
+                                        # and add it to rxQueuesDict {}
+                                        self.rxQueuesDict[syncSourceID] = SimpleQueue()
+
                                         # Create and add the new stream to the rtpRxStreamsDict
                                         newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
                                                                         self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
-                                                                        self.rtpRxStreamsDict, self.rtpRxStreamsDictMutex,
-                                                                        self.txMessageQueue,
-                                                                        controllerTCPPort=self.controllerTCPPort)
-                                        # Add the most recent packet to the newly created stream
-                                        newRtpStream.addData(seqNo, udpPayloadLength, packetArrivedTimestamp,
-                                                             syncSourceID, isptestHeaderData, rxTTL, srcAddress,
-                                                             srcPort)
+                                                                        self.rxQueuesDict, self.txQueuesDict,
+                                                                        controllerTCPPort=self.controllerTCPPort,)
+                                        # # Add the most recent packet to the newly created stream
+                                        # newRtpStream.addData(seqNo, udpPayloadLength, packetArrivedTimestamp,
+                                        #                      syncSourceID, isptestHeaderData, rxTTL, srcAddress,
+                                        #                      srcPort)
 
+                                        # Add the most recent packet to the newly created rx queue (whereby the
+                                        # RtpReceieveStream will be able to pick it up)
+                                        try:
+                                            self.rxQueuesDict[syncSourceID].put(RtpData(seqNo, udpPayloadLength,
+                                                                                        packetArrivedTimestamp,
+                                                                                        syncSourceID, isptestHeaderData,
+                                                                                        rxTTL, srcAddress, srcPort))
+                                        except Exception as e:
+                                            Utils.Message.addMessage(f"ERR:RtpPacketReceiver.__rtpPacketReceiverThread()"
+                                                                     f"rxQueuesDict[{syncSourceID}].put()*new* + {e}")
                                     else:
                                         # The sequence numbers don't appear to have incremented
                                         Utils.Message.addMessage(Fore.RED + "Non-RTP packets received from " + \
@@ -7863,6 +7886,18 @@ def main(argv):
         except Exception as e:
             Utils.Message.addMessage("Prev streams import failed " + str(e))
 
+        # Create a dict to hold the queues into which the received stream data will be added
+        # Each stream is keyed by it's RTP sync source ID
+        # These dicts will be shared between the RtpPacketReceiver and the RtpReceiveStream objects
+        # RtpPacketReceiver will create a queue for every syncSourceID and place rtp packets with that syncSourceID
+        # on to that specific queue
+        # Meanwhile, each RtpReceiveStream will be able to 'self-select' the relevant receive queue based on it's sync source ID
+        # (which is used as a dictionary key)
+        rxQueuesDict = {}
+        # txQueuesDict is an equivalent of rxQueuesDict and is a dict of queues used to send results data back to the
+        # transmitters. Once again it is keyed by syncSourceID which means that each RtpReceiveStream object is able to
+        # self-select which queue to put it's tx message data on
+        txQueuesDict = {}
 
         # Create list of udp ports to listen on (and send from)
         # receivePortList = [UDP_RX_PORT]
@@ -7880,7 +7915,7 @@ def main(argv):
             txMessageQueue = SimpleQueue()
 
             # Create an RtpPacketReceiver to capture incoming rtp packets and create RtpReceiveStreams
-            rtpPacketReceiver = RtpPacketReceiver(rtpRxStreamsDict, rtpRxStreamsDictMutex, shutdownFlag,
+            rtpPacketReceiver = RtpPacketReceiver(rxQueuesDict, txQueuesDict, shutdownFlag,
                        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
                                                   glitchEventTriggerThreshold,
                                                   ui, txMessageQueue, controllerTCPPort=isptesttHTTPServer.getTCPPort())
