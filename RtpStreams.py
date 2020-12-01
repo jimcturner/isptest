@@ -1857,7 +1857,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                 "args": [],
                                 "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
                                             "start", "end", ],
-                                "contentType": 'application/octet-stream'
+                                "contentType": 'application/python-pickle'
                                 },
                 "/traceroute": {"targetMethod": parent.getTraceRouteHopsList, "args": [], "optKeys": []},
 

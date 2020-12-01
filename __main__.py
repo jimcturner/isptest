@@ -7698,8 +7698,10 @@ def main(argv):
                     # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
                     streamApi = Utils.APIHelper(stream["httpPort"])
                     stats = streamApi.getStats()
-                    eventsListAsAJson = streamApi.getRTPStreamEventListAsJson()
-                    rxStreamExportList.append([stream["streamID"], stats, eventsListAsAJson])
+                    eventsListPickled = streamApi.getByURL('/events/raw', returnAsBytes=True)
+                    # Unpickle the events list
+                    eventsList = pickle.loads(eventsListPickled)
+                    rxStreamExportList.append([stream["streamID"], stats, eventsList])
                 except Exception as e:
                     Utils.Message.addMessage(f"main().createStreamsSnapshot() {e}")
 

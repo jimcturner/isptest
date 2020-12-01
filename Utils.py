@@ -1813,21 +1813,25 @@ class APIHelper(object):
     # This is a generic function that will take any url path, and attempt to do an HTTP GET using that path
     # It will also pass in **kwargs
     # If the api has a matching endpoint, the response will be returned
-    # By default it assumes a JSON encoded response and will attempt to parse it as such
-    # If this fails, it will just return the api response as text
-    def getByURL(self, path, **kwargs):
+    # If returnAsBytes is set, return the response as , otherswise attempt to decode it as json, and then, if
+    # that fails, as pure text
+
+    def getByURL(self, path, returnAsBytes=False, **kwargs):
         url = f"http://{self.addr}:{self.port}{path}"
         try:
             r = requests.get(url, params=kwargs, timeout=self.timeout)
             # test the response
             r.raise_for_status()  # Will raise an Exception if there was a problem
-            # Attempt to decode the response as json and return it
-            try:
-                # Try parsing the response as json first (this will recreate any lists or dicts)
-                return r.json()
-            except:
-                # Otherwise just return the response as-is
-                return r.text
+            if returnAsBytes:
+                return r.content
+            else:
+                # Attempt to decode the response as json and return it
+                try:
+                    # Try parsing the response as json first (this will recreate any lists or dicts)
+                    return r.json()
+                except:
+                    # Otherwise just return the response as-is
+                    return r.text
         except Exception as e:
             raise Exception(f"ERR: APIHelper.getByURL() path: {path}, params: {kwargs}, error: {e}")
 
@@ -2058,11 +2062,12 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
                     # Create the headers useing the content type specified in the getMappings{} dict
                     self._set_response(contentType=contentType)
 
-                elif contentType == 'application/json':
-                    # Return value of fn() already encoded as JSON, pass it on as-is
+                elif contentType in ['application/json', 'application/python-pickle']:
+                    # Return value of fn() already encoded as JSON (or in Picle format), pass it on as-is
                     response = retVal
                     # Set the headers
-                    self._set_response(contentType='application/json')
+                    self._set_response(contentType=contentType)
+
                 else:
                     # We don't know the format, so encode as JSON as a default
                     response = (json.dumps(retVal, sort_keys=True, indent=4, default=str) + "\n").encode('utf-8')
