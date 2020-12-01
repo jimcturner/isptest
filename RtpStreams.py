@@ -1853,6 +1853,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                                               "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
                                                           "start", "end",]
                                 },
+                "/events/raw": {"targetMethod": self.getEventsListAsRaw,
+                                "args": [],
+                                "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
+                                            "start", "end", ],
+                                "contentType": 'application/octet-stream'
+                                },
                 "/traceroute": {"targetMethod": parent.getTraceRouteHopsList, "args": [], "optKeys": []},
 
                 "/txrate/inc": {"targetMethod": self.remotelyControlTxStream, "args": ["/txrate/inc"], "optKeys": []},
@@ -1953,6 +1959,31 @@ class RtpReceiveStream(RtpReceiveCommon):
                 return eventsListAsCSV
             except Exception as e:
                 return [str(e)]
+
+        # Returns a list of events as pickles
+        def getEventsListAsRaw(self, **kwargs):
+            try:
+                # Get a handle on the RtpStreamsResults object
+                # This will fail if the object doesn't exist yet
+                rtpStreamResults = self.server.parentObject
+
+                # Prefilter the kwargs to allow only the keys accepted by getRTPStreamEventList()
+                filteredKwargs = Utils.extractWantedKeysFromDict(kwargs,
+                                                                 ["filterList", "reverseOrder",
+                                                                  "requestedEventNo",
+                                                                  "recent", "start", "end"])
+                # Get the events list - pass in the kwargs
+                eventsList = rtpStreamResults.getRTPStreamEventList(**filteredKwargs)
+
+                # now pickle the list so that it can be sent via http
+                pickledEventsList = pickle.dumps(eventsList)
+                # Return the list
+                return pickledEventsList
+
+            except Exception as e:
+                return [str(e)]
+
+
 
         # render HTML index page
         # Shown a list of available api endpoints

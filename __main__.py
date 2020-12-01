@@ -6311,7 +6311,7 @@ class RtpPacketReceiver(object):
                                 # In this way we can test for a constant sync source ID field and an incrementing seq no
                                 # Check to see how many packets with the same sync source ID have been received
                                 if (len(rtpRxStreamTempDict[syncSourceID]) > Registry.receiveStreamAcceptThreshold):
-                                    # DECREMENTED Now check to see if the sequence numbers appear to have incremented by at least the
+                                    # DEPRECATED Now check to see if the sequence numbers appear to have incremented by at least the
                                     # #####no of packets received with this sync source ID
                                     # ##########if (rtpRxStreamTempDict[syncSourceID][-1] - rtpRxStreamTempDict[syncSourceID][0]) == \
                                     #         (len(rtpRxStreamTempDict[syncSourceID]) - 1):
@@ -6333,11 +6333,6 @@ class RtpPacketReceiver(object):
                                                                         self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
                                                                         self.rxQueuesDict, self.txMessageQueue,
                                                                         controllerTCPPort=self.controllerTCPPort,)
-                                        # # Add the most recent packet to the newly created stream
-                                        # newRtpStream.addData(seqNo, udpPayloadLength, packetArrivedTimestamp,
-                                        #                      syncSourceID, isptestHeaderData, rxTTL, srcAddress,
-                                        #                      srcPort)
-
                                         # Add the most recent packet to the newly created rx queue (whereby the
                                         # RtpReceieveStream will be able to pick it up)
                                         try:
@@ -7690,27 +7685,46 @@ def main(argv):
     # and save them to disk. This allows the streams and all their stats to be 'restored' when the program restarts
     # The parameters for *each* stream are saved as a three as a three element list [streamID, stats{}, eventsList[]]
     # Returns True and the number of streams successfuly exported (saved) or False, plus error message on failure
-    def createStreamsSnapshot():
+    def createStreamsSnapshot(controllerTCPPort, controllerTCPAddress="127.0.0.1"):
         try:
 
-            # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
-            rxStreamExportList = []
-            for streamID, RtpReceiveStream in rtpRxStreamsDict.items():  # Iterate over keys, values
-                rxStreamExportList.append([streamID,
-                                           RtpReceiveStream.getRtpStreamStats(),
-                                           RtpReceiveStream.getRTPStreamEventList()])
+            # Get list of RtpReceiveStream objects from the API
+            api = Utils.APIHelper(controllerTCPPort, addr=controllerTCPAddress)
+            availableRtpStreamList = api.getStreamsList(streamType="RtpReceiveStream")
 
-            # Now write the rxStreamExportList to a file
-            saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
-            if saveStatus is True:
-                # Utils.Message.addMessage("Created snapshot for " + str(len(rxStreamExportList)) + \
-                #                          " streams to file " + str(Registry.streamsSnapshotFilename))
-                # Return the no of streams exported
-                return True, len(rxStreamExportList)
+            rxStreamExportList = []
+            for stream in availableRtpStreamList:
+                try:
+                    # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
+                    streamApi = Utils.APIHelper(stream["httpPort"])
+                    stats = streamApi.getStats()
+                    eventsListAsAJson = streamApi.getRTPStreamEventListAsJson()
+                    rxStreamExportList.append([stream["streamID"], stats, eventsListAsAJson])
+                except Exception as e:
+                    Utils.Message.addMessage(f"main().createStreamsSnapshot() {e}")
+
+
+            # # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
+            # for streamID, RtpReceiveStream in rtpRxStreamsDict.items():  # Iterate over keys, values
+            #     rxStreamExportList.append([streamID,
+            #                                RtpReceiveStream.getRtpStreamStats(),
+            #                                RtpReceiveStream.getRTPStreamEventList()])
+
+            # If there are streams to be exported
+            if len(rxStreamExportList) > 0:
+                # Write the rxStreamExportList to a file
+                saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
+                if saveStatus is True:
+                    # Utils.Message.addMessage("Created snapshot for " + str(len(rxStreamExportList)) + \
+                    #                          " streams to file " + str(Registry.streamsSnapshotFilename))
+                    # Return the no of streams exported
+                    return True, len(rxStreamExportList)
+                else:
+                    Utils.Message.addMessage("ERR:createStreamsSnapshot() Export streams save failure " + str(saveStatus))
+                    # Return error message
+                    return False, saveStatus
             else:
-                Utils.Message.addMessage("ERR:createStreamsSnapshot() Export streams save failure " + str(saveStatus))
-                # Return error message
-                return False, saveStatus
+                return True, 0
 
         except Exception as e:
             Utils.Message.addMessage("ERR:createStreamsSnapshot() Export streams snapshot failure " + str(e))
@@ -7746,7 +7760,7 @@ def main(argv):
                 Utils.Message.addMessage("ERR: shutdownApplication Couldn't verify rtpPacketReceiver has ended " + str(e))
 
 
-            status, code = createStreamsSnapshot()
+            status, code = createStreamsSnapshot(isptesttHTTPServerPort)
             if status == True:
                 Utils.Message.addMessage("Created snapshot for " + str(code) + \
                                      " streams to file " + str(Registry.streamsSnapshotFilename))
@@ -7755,27 +7769,6 @@ def main(argv):
 
 
         # Attempt to remove all rtp stream objects (be they RtpGenrators (which themselves reference RtpStreamresults objects)
-        # or RtpReceiveStream objects
-        # for dict in [rtpTxStreamsDict, rtpRxStreamsDict]:
-        #     if len(dict) > 0:
-        #         # Temporary list to hold the streams currently in rtpStreamsDict
-        #         # Note: We can't iterate over the dict cal the the killStream methods directly. This is because
-        #         # killStream() acts on the rtpTxStreamsDict or rtpRxStreamsDict dictionary itself -
-        #         # and you can't iterate over a dictionary whilst simultaneously modifying it
-        #         tempStreamList = []
-        #         # take a copy of the dict to iterate over
-        #         for stream in dict:
-        #             # Take a copy of the key value (the stream ID)
-        #             tempStreamList.append(stream)
-        #
-        #
-        #         # Now iterate of the new streamList, calling .killStream() on all the objects within
-        #         for stream in tempStreamList:
-        #             Utils.Message.addMessage("INFO: Killing " + str(type(dict[stream])) + ": " + str(stream))
-        #             # print("Killing stream " + str(stream) + "\n")
-        #             # Invoke the kill method of each stream
-        #             dict[stream].killStream()
-
         # Get a list of streams and send the delete method to each in turn
         streamsList = Utils.APIHelper(isptesttHTTPServerPort).getStreamsList()
 
@@ -7830,6 +7823,15 @@ def main(argv):
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
+        # Create a dict to hold the queues into which the received stream data will be added
+        # Each stream is keyed by it's RTP sync source ID
+        # These dicts will be shared between the RtpPacketReceiver and the RtpReceiveStream objects
+        # RtpPacketReceiver will create a queue for every syncSourceID and place rtp packets with that syncSourceID
+        # on to that specific queue
+        # Meanwhile, each RtpReceiveStream will be able to 'self-select' the relevant receive queue based on it's sync source ID
+        # (which is used as a dictionary key)
+        rxQueuesDict = {}
+
         # Attempt to import a previously saved snapshot
         # If it exists, this will prepopulate rtpRxStreamsDict{} with a list of previously known
         # receive streams
@@ -7866,9 +7868,8 @@ def main(argv):
                                                             stats["stream_rxAddress"],
                                                             stats["stream_rxPort"],
                                                             stats["glitch_Event_Trigger_Threshold_packets"],
-                                                            rtpRxStreamsDict,
-                                                            rtpRxStreamsDictMutex,
-                                                            None,
+                                                            rxQueuesDict,
+                                                            None,  # txMessageQueue unknown at this point
                                                             # Specify None as the txMessageQueue, as we don't know what it is yet
                                                             # This will have to be determined by RtpPacketReceiver once the
                                                             # packets start arriving
@@ -7883,22 +7884,9 @@ def main(argv):
                                 ("ERR:Recreate RtpReceiveStream from file: create RtpReceiveStream " + \
                                  " ID: " + str(stats["stream_syncSource"]) + ", " + str(e)))
             else:
-                Utils.Message.addMessage("Prev streams import failed " + str(importedSnapshotsList))
+                Utils.Message.addMessage("ERR:Prev streams import failed " + str(importedSnapshotsList))
         except Exception as e:
-            Utils.Message.addMessage("Prev streams import failed " + str(e))
-
-        # Create a dict to hold the queues into which the received stream data will be added
-        # Each stream is keyed by it's RTP sync source ID
-        # These dicts will be shared between the RtpPacketReceiver and the RtpReceiveStream objects
-        # RtpPacketReceiver will create a queue for every syncSourceID and place rtp packets with that syncSourceID
-        # on to that specific queue
-        # Meanwhile, each RtpReceiveStream will be able to 'self-select' the relevant receive queue based on it's sync source ID
-        # (which is used as a dictionary key)
-        rxQueuesDict = {}
-        # txQueuesDict is an equivalent of rxQueuesDict and is a dict of queues used to send results data back to the
-        # transmitters. Once again it is keyed by syncSourceID which means that each RtpReceiveStream object is able to
-        # self-select which queue to put it's tx message data on
-        txQueuesDict = {}
+            Utils.Message.addMessage("ERR:Prev streams import failed " + str(e))
 
         # Create list of udp ports to listen on (and send from)
         # receivePortList = [UDP_RX_PORT]
@@ -7959,9 +7947,9 @@ def main(argv):
     prevPeakMemUsage = 0
     peakMemUsage = None
 
-    # Dictionary to hold a list of the http server objects for each of the streams (be they Tx, Rx or Results)
-    httpServerDict = {}
-    tcpPort = 8080 # Starting port for the http server
+    ## Dictionary to hold a list of the http server objects for each of the streams (be they Tx, Rx or Results)
+    # httpServerDict = {}
+    # tcpPort = 8080 # Starting port for the http server
 
     # Endless loop
     while True:
@@ -7975,7 +7963,7 @@ def main(argv):
                 try:
                     if MODE == 'RECEIVE' and (loopCounter % Registry.streamsSnapshotAutoSaveInterval_s == 0):
                         # Create snapshot of current receive streams
-                        status, code = createStreamsSnapshot()
+                        status, code = createStreamsSnapshot(isptesttHTTPServerPort)
                         if status == False:
                             raise Exception(str(code))
 
