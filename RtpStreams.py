@@ -1444,7 +1444,7 @@ class RtpReceiveStream(RtpReceiveCommon):
     # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold,
-                 rxQueuesDict, txQueuesDict,
+                 rxQueuesDict, txMessageQueue,
                  restoredStreamFlag=False, historicStatsDict=None, historicEventsList=None, controllerTCPPort=None):
         # Call super constructor
         super().__init__()
@@ -1466,11 +1466,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                                             # packet receive queue for this stream
         self.rtpStreamQueueCurrentSize = 0  # Tracks the current size of the receive queue
         self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
-        self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
+        # self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
 
         # self.resultsTxQueue = txMessageQueue    # Shared queue for sending results back to the transmitter
-        self.txQueuesDict = txQueuesDict    # This dict will contain a key (the syncSourceID) whose value points to the
-                                            # message transmit queue for this stream
+        # self.txQueuesDict = txQueuesDict    # This dict will contain a key (the syncSourceID) whose value points to the
+        #                                     # message transmit queue for this stream
+        self.txMessageQueue = txMessageQueue # Shared queue for sending results back to the transmitter
 
 
         self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
@@ -1980,8 +1981,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     "stream_transmitter_txRate_bps": stats["stream_transmitter_txRate_bps"],
                     "Rx current queue size": rtpRxStream.rtpStreamQueueCurrentSize,
                     "Rx max queue size": rtpRxStream.rtpStreamQueueMaxSize,
-                    "Rx Q packets added": rtpRxStream.packetsAddedToRxQueueCount,
-                    "Rx Q packets removed": rtpRxStream.packetCounterReceivedTotal,
+                    "Rx Queue packets extracted": rtpRxStream.packetCounterReceivedTotal,
                     "Active Threads": Utils.listCurrentThreads(asList=True)
                 }
                 return debugInfoDict
@@ -2788,15 +2788,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # currently receiving bytes AND only if we have a valid message queue to send through
                     if (self.__stats["stream_transmitterVersion"] > 0) and \
                             self.__stats["packet_data_received_1S_bytes"] > 0 and \
-                                self.syncSourceIdentifier in self.txQueuesDict:
-                                # self.resultsTxQueue is not None:
+                                self.txMessageQueue is not None:
 
                             # Get the last 5 events for this stream
                             NO_OF_PREV_EVENTS_TO_SEND = 5
                             eventsList = self.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
-                            # Get a handle on the transmit queue
-                            txQueue = self.txQueuesDict[self.syncSourceIdentifier]
-                            addResultsToTxQueue(self.__stats, eventsList, txQueue,
+                            addResultsToTxQueue(self.__stats, eventsList, self.txMessageQueue,
                                                 self.__stats["stream_srcAddress"],
                                                 self.__stats["stream_srcPort"])
                 except Exception as e:
@@ -3392,8 +3389,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # pickledMessage = pickle.dumps(wrappedMessage, protocol=2)
                 pickledMessage = pickle.dumps(wrappedMessage)
                 # add the pickled message to the txMessageQueue
-                self.resultsTxQueue.put(\
-                    [pickledMessage, self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"]])
+                self.txMessageQueue.put([pickledMessage, self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"]])
                 return {"status": True, "error": None}
 
             except Exception as e:

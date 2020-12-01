@@ -5916,13 +5916,14 @@ class RtpPacketReceiver(object):
             return None, None, None, None, None
 
 
-    def __init__(self, rxQueuesDict, txQueuesDict, shutdownFlag,
+    def __init__(self, rxQueuesDict, txMessageQueue, shutdownFlag,
                        UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, uiInstance,
                        controllerTCPPort=None):
         # self.rtpRxStreamsDict = rtpRxStreamsDict
         # self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
         self.rxQueuesDict = rxQueuesDict
-        self.txQueuesDict = txQueuesDict
+        # self.txQueuesDict = txQueuesDict
+        self.txMessageQueue = txMessageQueue
         self.shutdownFlag = shutdownFlag
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
@@ -6330,7 +6331,7 @@ class RtpPacketReceiver(object):
                                         # Create and add the new stream to the rtpRxStreamsDict
                                         newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
                                                                         self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
-                                                                        self.rxQueuesDict, self.txQueuesDict,
+                                                                        self.rxQueuesDict, self.txMessageQueue,
                                                                         controllerTCPPort=self.controllerTCPPort,)
                                         # # Add the most recent packet to the newly created stream
                                         # newRtpStream.addData(seqNo, udpPayloadLength, packetArrivedTimestamp,
@@ -7915,7 +7916,7 @@ def main(argv):
             txMessageQueue = SimpleQueue()
 
             # Create an RtpPacketReceiver to capture incoming rtp packets and create RtpReceiveStreams
-            rtpPacketReceiver = RtpPacketReceiver(rxQueuesDict, txQueuesDict, shutdownFlag,
+            rtpPacketReceiver = RtpPacketReceiver(rxQueuesDict, txMessageQueue, shutdownFlag,
                        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
                                                   glitchEventTriggerThreshold,
                                                   ui, controllerTCPPort=isptesttHTTPServer.getTCPPort())
