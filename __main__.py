@@ -7706,12 +7706,6 @@ def main(argv):
                     Utils.Message.addMessage(f"main().createStreamsSnapshot() {e}")
 
 
-            # # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
-            # for streamID, RtpReceiveStream in rtpRxStreamsDict.items():  # Iterate over keys, values
-            #     rxStreamExportList.append([streamID,
-            #                                RtpReceiveStream.getRtpStreamStats(),
-            #                                RtpReceiveStream.getRTPStreamEventList()])
-
             # If there are streams to be exported
             if len(rxStreamExportList) > 0:
                 # Write the rxStreamExportList to a file
