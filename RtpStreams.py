@@ -1444,20 +1444,35 @@ class RtpReceiveStream(RtpReceiveCommon):
     # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold,
-                 rtpRxStreamsDict, rtpRxStreamsDictMutex, txMessageQueue, inputQueue,
+                 rxQueuesDict, txQueuesDict,
                  restoredStreamFlag=False, historicStatsDict=None, historicEventsList=None, controllerTCPPort=None):
         # Call super constructor
         super().__init__()
+##### OLD CODE
         # Create Queue to accept the received packets
-        self.rtpStreamQueue = SimpleQueue()
+        # self.rtpStreamQueue = SimpleQueue()
+        # self.rtpStreamQueueCurrentSize = 0  # Tracks the current size of the receive queue
+        # self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
+        # self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
+        #
+        # self.resultsTxQueue = txMessageQueue    # Shared queue for sending results back to the transmitter
+        #
+        # self.rtpRxStreamsDict = rtpRxStreamsDict
+        # self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
+
+        # Queue to accept the received packets
+        # self.rtpStreamQueue = SimpleQueue()
+        self.rxQueuesDict = rxQueuesDict    # This dict will contain a key (the syncSourceID) whose value points to the
+                                            # packet receive queue for this stream
         self.rtpStreamQueueCurrentSize = 0  # Tracks the current size of the receive queue
         self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
         self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
 
-        self.resultsTxQueue = txMessageQueue    # Shared queue for sending results back to the transmitter
+        # self.resultsTxQueue = txMessageQueue    # Shared queue for sending results back to the transmitter
+        self.txQueuesDict = txQueuesDict    # This dict will contain a key (the syncSourceID) whose value points to the
+                                            # message transmit queue for this stream
 
-        self.rtpRxStreamsDict = rtpRxStreamsDict
-        self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
+
         self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
         # Create an API helper to allow access to the HTTP API of the Controller
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
@@ -2773,12 +2788,15 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # currently receiving bytes AND only if we have a valid message queue to send through
                     if (self.__stats["stream_transmitterVersion"] > 0) and \
                             self.__stats["packet_data_received_1S_bytes"] > 0 and \
-                                self.resultsTxQueue is not None:
+                                self.syncSourceIdentifier in self.txQueuesDict:
+                                # self.resultsTxQueue is not None:
 
                             # Get the last 5 events for this stream
                             NO_OF_PREV_EVENTS_TO_SEND = 5
                             eventsList = self.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
-                            addResultsToTxQueue(self.__stats, eventsList, self.resultsTxQueue,
+                            # Get a handle on the transmit queue
+                            txQueue = self.txQueuesDict[self.syncSourceIdentifier]
+                            addResultsToTxQueue(self.__stats, eventsList, txQueue,
                                                 self.__stats["stream_srcAddress"],
                                                 self.__stats["stream_srcPort"])
                 except Exception as e:
@@ -2998,7 +3016,9 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Now wait for items to appear in the queue (with a timeout)
             try:
                 # Wait for a packet to arrive in the receive queue
-                rtpPacketData = self.rtpStreamQueue.get(timeout=0.2)
+                # Get a handle on the receive queue
+                rxQueue = self.rxQueuesDict[self.syncSourceIdentifier]
+                rtpPacketData = rxQueue.get(timeout=0.2)
                 # Copy the latest received rtp packet into the instance variable (so it can be referenced elsewhere)
                 self.__latestReceivedRtpPacket = rtpPacketData
 
@@ -3008,7 +3028,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Monitor the size of the queue
                 # If the queue size starts creeping up, this suggests the CPU can't can't keep up with the rate
                 # of incoming packets
-                self.rtpStreamQueueCurrentSize = self.rtpStreamQueue.qsize()
+                self.rtpStreamQueueCurrentSize = rxQueue.qsize()
                 if self.rtpStreamQueueCurrentSize > self.rtpStreamQueueMaxSize:
                     # Keep track of the maximum queue size
                     self.rtpStreamQueueMaxSize = self.rtpStreamQueueCurrentSize
@@ -3343,16 +3363,18 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
     # Define setter methods
-    def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTl, srcAddress, srcPort):
-        # Create a new rtp data object to hold the rtp packet data and add it to the receive queue
-        # newData = RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData)
-        try:
-            self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, \
-                                            rxTTl, srcAddress, srcPort))
-            # Increment the counter. Packets out should equal packets in
-            self.packetsAddedToRxQueueCount += 1
-        except Exception as e:
-            Utils.Message.addMessage("RtpReceiveStream.addData() " + str(e))
+    #### DEPRECATED  1/12/20 RtpPacketReceiver now places new RtpData objects directly into the queue referenced in
+    # rxQueuesDict{}
+    # def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTl, srcAddress, srcPort):
+    #     # Create a new rtp data object to hold the rtp packet data and add it to the receive queue
+    #     # newData = RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData)
+    #     try:
+    #         self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, \
+    #                                         rxTTl, srcAddress, srcPort))
+    #         # Increment the counter. Packets out should equal packets in
+    #         self.packetsAddedToRxQueueCount += 1
+    #     except Exception as e:
+    #         Utils.Message.addMessage("RtpReceiveStream.addData() " + str(e))
 
     # Sends a control message to the isptest Transmitter associated with this ReceiverStream object
     # by pickling the supplied message and wrapping it up in another dict along with

@@ -6269,8 +6269,8 @@ class RtpPacketReceiver(object):
                                                                             syncSourceID, isptestHeaderData,
                                                                             rxTTL, srcAddress, srcPort))
                             except Exception as e:
-                                Utils.Message.addMessage(f"ERR:RtpPacketReceiver.__rtpPacketReceiverThread()"
-                                                         f"rxQueuesDict[{syncSourceID}].put()*existing* + {e}")
+                                raise Exception(f"ERR:RtpPacketReceiver.__rtpPacketReceiverThread()"
+                                                         f"rxQueuesDict[{syncSourceID}].put()*existing* {e}")
 
     ###### IMPORTANT TX Queue validation
                             # # Now verify that the RtpReceiveStream object for this stream is using the correct
@@ -6345,7 +6345,7 @@ class RtpPacketReceiver(object):
                                                                                         syncSourceID, isptestHeaderData,
                                                                                         rxTTL, srcAddress, srcPort))
                                         except Exception as e:
-                                            Utils.Message.addMessage(f"ERR:RtpPacketReceiver.__rtpPacketReceiverThread()"
+                                            raise Exception(f"ERR:RtpPacketReceiver.__rtpPacketReceiverThread()"
                                                                      f"rxQueuesDict[{syncSourceID}].put()*new* + {e}")
                                     else:
                                         # The sequence numbers don't appear to have incremented
@@ -7918,7 +7918,7 @@ def main(argv):
             rtpPacketReceiver = RtpPacketReceiver(rxQueuesDict, txQueuesDict, shutdownFlag,
                        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
                                                   glitchEventTriggerThreshold,
-                                                  ui, txMessageQueue, controllerTCPPort=isptesttHTTPServer.getTCPPort())
+                                                  ui, controllerTCPPort=isptesttHTTPServer.getTCPPort())
 
             # Wait for socket (Created by rtpPacketReceiver) to become available (this might take some time)
             while rtpPacketReceiver.getSocket() is None:
