@@ -2165,7 +2165,8 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
 
 # String parser to convert a string reprersentation of a timedelta object (obtained via the api) back into a timedelta
 # Copied from https://stackoverflow.com/a/21074460
-def convertStringToTimeDelta(s):
+# if raiseException=True, the function will raise an Exception if the supplied string is not a timedelta object
+def convertStringToTimeDelta(s, raiseExceptionOnError=False):
     try:
         if 'day' in s:
             m = re.match(r'(?P<days>[-\d]+) day[s]*, (?P<hours>\d+):(?P<minutes>\d+):(?P<seconds>\d[\.\d+]*)', s)
@@ -2176,8 +2177,42 @@ def convertStringToTimeDelta(s):
         # Create a timedelta object
         return datetime.timedelta(**timeDeltaDict)
     except Exception as e:
-        # Parsing failed, so just return the source object as-is
-        return s
+        if raiseExceptionOnError:
+            # If raiseExceptionOnError enabled, throw an Exception
+            raise Exception(f"convertStringToTimeDelta() {e}")
+        else:
+            # Parsing failed, so just return the source object as-is
+            return s
+
+# This function tests the operation of convertStringToPythonDataType
+def testConvertStringToPythonDataType(value=None):
+    testValues=[
+        [str(datetime.timedelta(seconds=8754875638)), datetime.timedelta],
+        [str(datetime.timedelta(seconds=1.3)), datetime.timedelta],
+        [str(datetime.datetime.now()), datetime.datetime],
+        [str("true"), bool],
+        [str("True"), bool],
+        [str("false"), bool],
+        [str("False"), bool],
+        [str("none"), type(None)],
+        [str("None"), type(None)],
+        [str("0"), int],
+        [str("-1"), int],
+        [str("128"), int],
+        [str("3.4"), float],
+    ]
+    # Test testValues array
+    if value is None:
+        for test in testValues:
+            # print(f"{isinstance(convertStringToPythonDataType(test[0]), test[1])}, {test[0]}>>>{convertStringToPythonDataType(test[0])}")
+            result = convertStringToPythonDataType(test[0])
+
+            print(f"{test[0]} {type(test[0])}>>>{result} {type(result)} {type(result)==test[1]}")
+    # Test suppled value
+    else:
+        result = convertStringToPythonDataType(value)
+        print(f"{value} {type(value)}>>>{result} {type(result)}")
+
 
 # Utility function to convert a string value back to a Python data type.
 # This is typically required when data is retrieved via the API, because the original data type is lost -
@@ -2190,12 +2225,12 @@ def convertStringToPythonDataType(value):
     try:
         value = datetime.datetime.strptime(value, '%Y-%m-%d %H:%M:%S.%f')
         return value
-    except:
+    except Exception as e:
         # If this fails, test to see if the object is a datetime.timedelta object encoded as a string
         try:
-            value = convertStringToTimeDelta(value)
+            value = convertStringToTimeDelta(value, raiseExceptionOnError=True)
             return value
-        except:
+        except Exception as e:
             # Now attempt to detect bools
             if value in ["true", "True"]:
                 value = True
@@ -2204,14 +2239,18 @@ def convertStringToPythonDataType(value):
             elif value in ["None", "none"]:
                 value = None
 
-            # Test if the value is an integer
+            # Test if the value is a +ve integer
             elif str(value).isnumeric():
                 value = int(value)
+            # Test if a negative integer (starts with '-')
+            elif value.startswith('-') and value[1:].isdigit():
+                value = int(value)
+            # Otherwise test to see if it's a float
             else:
                 try:
                     # See if the value is float by trying to cast it as a float (this will fail, if it's not)
                     value = float(value)
-                except:
+                except Exception as e:
                     pass
     finally:
         return value
