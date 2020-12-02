@@ -593,6 +593,52 @@ class SrcAddrChange(Event):
         jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
         return jsonRepresentation
 
+# Define an Event to represent a change in dest address (address or port)
+class DestAddrChange(Event):
+
+    def __init__(self, stats, prevDestAddr, prevDestPort, currentDestAddr, currentDestPort):
+        # Call Constructor of parent class. This will set parameters such as timeCreated etc
+        super().__init__(stats)
+        # Declare specific instance variables
+        self.prevDestAddr = prevDestAddr
+        self.prevDestPort = prevDestPort
+        self.currentDestAddr = currentDestAddr
+        self.currentDestPort = currentDestPort
+
+    def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True,
+                   includeFriendlyName=True):
+        try:
+            optionalFields = ", " + str(self.prevDestAddr) + ":" + str(self.prevDestPort) + \
+                             ">" + str(self.currentDestAddr) + ":" + str(self.currentDestPort)
+        except:
+            optionalFields = ""
+        summary = Event.createCommonSummaryText(self, includeStreamSyncSourceID=includeStreamSyncSourceID,
+                                                includeEventNo=includeEventNo,
+                                                includeType=includeType,
+                                                includeFriendlyName=includeFriendlyName)
+
+        summary += optionalFields
+        data = {'timeCreated': self.timeCreated, 'summary': summary}
+        return data
+
+    def getCSV(self):
+        optionalFields = ""
+        try:
+            optionalFields = "prev dest," + str(self.prevDestAddr) + ":" + str(self.prevDestPort) + \
+                             ",current dest," + str(self.currentDestAddr) + ":" + str(self.currentDestPort)
+        except:
+            pass
+        csv = Event.createCommonCSVString(self) + optionalFields
+        return csv
+
+    def getJSON(self):
+        # # Returns a json object representation of the event as a string
+        # Create dictionary with any additional keys specific to this type of event
+        additionalData = {'prev dest address': self.prevDestAddr, 'prev dest port': self.prevDestPort,
+                          'current dest address': self.currentDestAddr, 'current dest port': self.currentDestPort}
+        jsonRepresentation = Event.createJsonRepresentationOfEvent(self, additionalKeysDict=additionalData)
+        return jsonRepresentation
+
 # Define an Event that represents the resuming of an existing known stream, following a Streamlost Event
 # Calculates the duration between the previous StreamLost and 'now' to
 class StreamResumed(Event):
@@ -2332,6 +2378,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         # Stores previous source address and UDP port. Used to detect changes
         prevSrcAddr = None
         prevSrcPort = None
+        # Stores previous destination address and UDP port. Used to detect changes
+        prevDestAddr = None
+        prevDestPort = None
 
         # Infinite loop
         while self.samplingThreadActiveFlag:
@@ -2348,21 +2397,28 @@ class RtpReceiveStream(RtpReceiveCommon):
                 latestReceivePeriodCount = self.__receivePeriodRunningTotal
                 # Snapshot latest jitter count
                 latestJitterPeriodCount = self.__jitterRunningtotal
-                # Snapshot last packet seen timestamp (if it exists)
+
+                # If __latestReceivedRtpPacket is set, update the snapshots
                 if type(self.__latestReceivedRtpPacket) == RtpData:
+                    # Snapshot last packet seen timestamp (if it exists)
                     self.__stats["packet_last_seen_received_timestamp"] = self.__latestReceivedRtpPacket.timestamp
+                    # Snapshot latest packet IP TTL value
+                    self.__stats["packet_instantaneous_ttl"] = self.__latestReceivedRtpPacket.rxTTL
+                    # self.__stats["packet_instantaneous_ttl"] = 10
+                    # Snapshot latest src address
+                    self.__stats["stream_srcAddress"] = self.__latestReceivedRtpPacket.srcAddr
+                    # Snapshot latest src port
+                    self.__stats["stream_srcPort"] = self.__latestReceivedRtpPacket.srcPort
+                    # Snapshot latest dest address
+                    self.__stats["stream_rxAddress"] = self.__latestReceivedRtpPacket.destAddr
+                    # Snapshot latest dest port
+                    self.__stats["stream_rxPort"] = self.__latestReceivedRtpPacket.destPort
+
                 # Snapshot packetCounterTransmittedTotal (packets Tx'd according to the transmitter
                 self.__stats["packet_counter_transmitted_total"] = self.__packetCounterTransmittedTotal
                 # Snapshot streamTransmitterTxRateBps (intended tx rate, according to the transmitter)
                 self.__stats["stream_transmitter_txRate_bps"] = self.__streamTransmitterTxRateBps
-                # Snapshot latest packet IP TTL value
-                self.__stats["packet_instantaneous_ttl"] = self.__rxTTL
-                # self.__stats["packet_instantaneous_ttl"] = 10
-                # Snapshot latest src address
-                self.__stats["stream_srcAddress"] = self.__srcAddress
-                # Snapshot latest src port
-                self.__stats["stream_srcPort"] = self.__srcPort
-                # Snapshot latest stream time to live
+                # Snapshot latest transmitter stream time to live
                 self.__stats["stream_transmitter_TimeToLive_sec"] = self.__txStreamTimeToLive
             except Exception as e:
                 Utils.Message.addMessage("ERR: RtpReceiveStream.__samplingThread snapshot stats " + str(e))
@@ -2624,6 +2680,34 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect source address/port changes " + str(e))
+
+                ######## Detect changes in the dest address/port
+                try:
+                    # Set initial values
+                    if prevDestAddr is None:
+                        prevDestAddr = self.__stats["stream_rxAddress"]
+                    if prevDestPort is None:
+                        prevDestPort = self.__stats["stream_rxPort"]
+
+                    # Test for changes of either source IP address or port
+                    if (prevDestAddr != self.__stats["stream_rxAddress"]) or (prevDestPort != self.__stats["stream_rxPort"]):
+                        # Dest has changed, create a DestAddressChange Event
+                        destAddressChange = DestAddrChange(self.__stats, prevDestAddr, prevDestPort,
+                                                         self.__stats["stream_rxAddress"],
+                                                         self.__stats["stream_rxPort"])
+                        # Add the event to the event list
+                        self.__eventList.append(destAddressChange)
+                        # # Increment the all_events counter
+                        self.__stats["stream_all_events_counter"] += 1
+                        # # Post a message
+                        Utils.Message.addMessage(
+                            destAddressChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+                    # Now snapshot latest values
+                    prevDestAddr = self.__stats["stream_rxAddress"]
+                    prevDestPort = self.__stats["stream_rxPort"]
+                except Exception as e:
+                    Utils.Message.addMessage(
+                        "ERR:RtpReceiveStream.__samplingThread detect dest address/port changes " + str(e))
 
                 ######## Detect changes in the value of rxTTL
                 try:
