@@ -2200,6 +2200,7 @@ def testConvertStringToPythonDataType(value=None):
         [str("-1"), int],
         [str("128"), int],
         [str("3.4"), float],
+        [str("+17"), int],
     ]
     # Test testValues array
     if value is None:
@@ -2242,8 +2243,10 @@ def convertStringToPythonDataType(value):
             # Test if the value is a +ve integer
             elif str(value).isnumeric():
                 value = int(value)
-            # Test if a negative integer (starts with '-')
-            elif value.startswith('-') and value[1:].isdigit():
+            # # Test if a negative integer (starts with '-') (or starts with a +)
+            # elif value.startswith('-') and value[1:].isdigit():
+            #     value = int(value)
+            elif value[0] in ('-', '+') and value[1:].isdigit():
                 value = int(value)
             # Otherwise test to see if it's a float
             else:
