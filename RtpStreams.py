@@ -723,7 +723,8 @@ class MovingTotalEventCounter(object):
 # Define an object to hold data about an individual received rtp packet
 class RtpData(object):
     # Constructor method
-    def __init__(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTL, srcAddr, srcPort):
+    def __init__(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTL,
+                 srcAddr, srcPort, destAddr, destPort):
         self.rtpSequenceNo = rtpSequenceNo
         self.payloadSize = payloadSize
         self.timestamp = timestamp
@@ -732,6 +733,8 @@ class RtpData(object):
         self.rxTTL = rxTTL  # The TTL field from the IP header carrying this Rtp packet
         self.srcAddr = srcAddr
         self.srcPort = srcPort
+        self.destAddr = destAddr
+        self.destPort = destPort
         # timeDelta will store the timestamp diff between this and the previous packet
         self.timeDelta = 0
         # jitter will store the diff between the timeDelta of this and the prev packet

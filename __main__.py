@@ -6268,7 +6268,8 @@ class RtpPacketReceiver(object):
                                 self.rxQueuesDict[syncSourceID].put(RtpData(seqNo, udpPayloadLength,
                                                                             packetArrivedTimestamp,
                                                                             syncSourceID, isptestHeaderData,
-                                                                            rxTTL, srcAddress, srcPort))
+                                                                            rxTTL, srcAddress, srcPort,
+                                                                            self.UDP_RX_IP, self.UDP_RX_PORT))
                             except Exception as e:
                                 raise Exception(f"ERR:RtpPacketReceiver.__rtpPacketReceiverThread()"
                                                          f"rxQueuesDict[{syncSourceID}].put()*existing* {e}")
@@ -6320,7 +6321,8 @@ class RtpPacketReceiver(object):
                                             self.rxQueuesDict[syncSourceID].put(RtpData(seqNo, udpPayloadLength,
                                                                                         packetArrivedTimestamp,
                                                                                         syncSourceID, isptestHeaderData,
-                                                                                        rxTTL, srcAddress, srcPort))
+                                                                                        rxTTL, srcAddress, srcPort,
+                                                                                        self.UDP_RX_IP, self.UDP_RX_PORT))
                                         except Exception as e:
                                             raise Exception(f"ERR:RtpPacketReceiver.__rtpPacketReceiverThread()"
                                                                      f"rxQueuesDict[{syncSourceID}].put()*new* + {e}")
