@@ -1448,20 +1448,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                  restoredStreamFlag=False, historicStatsDict=None, historicEventsList=None, controllerTCPPort=None):
         # Call super constructor
         super().__init__()
-##### OLD CODE
-        # Create Queue to accept the received packets
-        # self.rtpStreamQueue = SimpleQueue()
-        # self.rtpStreamQueueCurrentSize = 0  # Tracks the current size of the receive queue
-        # self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
-        # self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
-        #
-        # self.resultsTxQueue = txMessageQueue    # Shared queue for sending results back to the transmitter
-        #
-        # self.rtpRxStreamsDict = rtpRxStreamsDict
-        # self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
 
-        # Queue to accept the received packets
-        # self.rtpStreamQueue = SimpleQueue()
         self.rxQueuesDict = rxQueuesDict    # This dict will contain a key (the syncSourceID) whose value points to the
                                             # packet receive queue for this stream
         self.rtpStreamQueueCurrentSize = 0  # Tracks the current size of the receive queue
@@ -1751,7 +1738,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Verify that the http server is actually running, by attempting to connect it
                 r = requests.get(f"http://127.0.0.1:{self.tcpListenPort}", timeout=1)
                 r.raise_for_status()  # Will raise an Exception if there was a problem
-                Utils.Message.addMessage(f"INFO:RTPReceiveStream({self.syncSourceIdentifier}) http server successfully running on port {self.tcpListenPort}")
+                Utils.Message.addMessage(f"INFO:RTPReceiveStream({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
 
 
             except Exception as e:
@@ -2094,6 +2081,11 @@ class RtpReceiveStream(RtpReceiveCommon):
             Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() removeFromStreamsDirectory() for stream " + \
                                      str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
+        # Now remove the Receive queue for this stream (from rxQueuesDict)
+        try:
+            del self.rxQueuesDict[self.syncSourceIdentifier]
+        except Exception as e:
+            Utils.Message.addMessage(f"ERR:RtpReceiveStream() del rxQueuesDict[{self.syncSourceIdentifier}], {e}")
         # # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
         # self.rtpRxStreamsDictMutex.acquire()
         # try:
@@ -4194,7 +4186,7 @@ class RtpGenerator(RtpCommon):
             r = requests.get(f"http://127.0.0.1:{self.tcpListenPort}", timeout=1)
             r.raise_for_status()  # Will raise an Exception if there was a problem
             Utils.Message.addMessage(
-                f"INFO:RTPGenerator({self.syncSourceIdentifier}) http server successfully running on port {self.tcpListenPort}")
+                f"INFO:RTPGenerator({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
 
         except Exception as e:
             Utils.Message.addMessage(f'ERR:RTPGenerator.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
