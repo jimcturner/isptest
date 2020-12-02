@@ -1808,12 +1808,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 Utils.Message.addMessage(
                     f'ERR:RtpReceiveStream.__init__() Initial stream Registration failed {self.syncSourceIdentifier}, {e}')
 
-            # Finally, add this RtpReceiveStream object to rtpRxStreamsDictMutex
-            # self.rtpRxStreamsDictMutex.acquire()
-            # self.rtpRxStreamsDict[self.__stats["stream_syncSource"]] = self
-            # self.rtpRxStreamsDictMutex.release()
-
-            Utils.Message.postMessage(f"DBUG:RtpReceiveStream.__init__(): {self.__stats['stream_syncSource']}", tcpPort=self.controllerTCPPort)
+            Utils.Message.postMessage(f"DBUG:RtpReceiveStream.__init__() completed: {self.__stats['stream_syncSource']}", tcpPort=self.controllerTCPPort)
 
     # Thread-safe method to update individual elements of the *live* (i.e unstable) traceroute hops list
     # It should be much faster than setTraceRouteHopsList (which has to copy the entire list)
@@ -2134,14 +2129,6 @@ class RtpReceiveStream(RtpReceiveCommon):
             del self.rxQueuesDict[self.syncSourceIdentifier]
         except Exception as e:
             Utils.Message.addMessage(f"ERR:RtpReceiveStream() del rxQueuesDict[{self.syncSourceIdentifier}], {e}")
-        # # Finally remove this RtpReceiveStream (itself) from rtpRxStreamsDict
-        # self.rtpRxStreamsDictMutex.acquire()
-        # try:
-        #     Utils.Message.addMessage("Removing RtpReceiveStream object " + str(self.__stats["stream_syncSource"]))
-        #     del self.rtpRxStreamsDict[self.__stats["stream_syncSource"]]
-        # except Exception as e:
-        #     Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() (remove from rtpRxStreamsDict{})" + str(self.__stats["stream_syncSource"]))
-        # self.rtpRxStreamsDictMutex.release()
 
 
     # This method will parse the isptest header data (and update the instance variables accordingly)
@@ -3529,158 +3516,6 @@ class RtpReceiveStream(RtpReceiveCommon):
 # ResultsTransmitter and ResultsReceiver objects)
 # It does't perform any calculations itself (unlike RtpReceiveStream) but it does have similar getter methods for results,
 # which should allow displayThread to treat this like an RtpStream object without any additional code alteration
-class RtpStreamResults_OLD(RtpReceiveCommon):
-    def __init__(self, syncSourceID, rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex, controllerTCPPort=None):
-
-        super().__init__()
-        self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
-        self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
-        self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
-        self.syncSourceID = syncSourceID
-        # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
-        self.__stats = {}
-
-        # Create private empty list to hold Events for this RtpStream object. Accessible via a getter method
-        # self.__eventList = []
-        # __eventList is a collections.deque object so will auto-housekeep
-        self.__eventList = deque(maxlen=Registry.rtpStreamResultsHistoricEventsLimit)
-
-        # Create mutex locks for data access
-        self.__accessRtpStreamStatsMutex = threading.Lock()         # for the stats dictionary
-        self.__accessRtpStreamEventListMutex = threading.Lock()     # for the eventsList
-
-        # Used to record when this object last received updated stats
-        self.lastUpdatedTimestamp = datetime.timedelta()
-
-        #Add this new RtpStreamResults object to the rtpTxStreamResultsDict
-        self.rtpTxStreamResultsDictMutex.acquire()
-        self.rtpTxStreamResultsDict[self.syncSourceID] = self
-        self.rtpTxStreamResultsDictMutex.release()
-
-
-    def updateStats(self, statsDict):
-        # Will copy statsDict into self.__stats
-        self.__accessRtpStreamStatsMutex.acquire()
-        # Empty the current contents of the dictionary
-        self.__stats.clear()
-        # Copy supplied Dict contents into self.__stats{}
-        self.__stats = deepcopy(statsDict)
-        # Release the mutex
-        self.__accessRtpStreamStatsMutex.release()
-        # update the lastUpdated timestamp
-        self.lastUpdatedTimestamp = datetime.datetime.now()
-
-    def updateEventsList(self, eventsList, replaceExistingList=False):
-        # Will take a list of new events and, by default, append them to the existing eventsList list
-        # If replaceExistingList is set, it will completely replace the old list with the new list
-        # NOTE: It won't check for duplicate entries or validate the list items,
-        # it will blindly just append to what's already there
-
-        # Take control of the mutex
-        self.__accessRtpStreamEventListMutex.acquire()
-        if replaceExistingList is False:
-            # Default behaviour. Append the new events list to the existing list
-            self.__eventList.extend(eventsList)
-        else:
-            # Completely replace the existing list with the newly supplied list
-            self.__eventList=eventsList
-        # Release the mutex
-        self.__accessRtpStreamEventListMutex.release()
-        # update the lastUpdated timestamp
-        self.lastUpdatedTimestamp = datetime.datetime.now()
-        # Now create a message for each event added (showing the summary for each event)
-        for event in eventsList:
-            try:
-                Utils.Message.addMessage(event.getSummary()["summary"])
-            except Exception as e:
-                Utils.Message.addMessage("ERR:RtpStreamresults.updateEventsList(), len " + str(len(eventsList)) +\
-                                         ", " + str(e))
-
-
-    # This method will remove this stream object from the rtpTxStreamResultsDict dictionary
-    def killStream(self):
-        self.rtpTxStreamResultsDictMutex.acquire()
-        Utils.Message.addMessage("Deleting RtpStreamResults object for stream: " + str(self.syncSourceID))
-        del self.rtpTxStreamResultsDict[self.syncSourceID]
-        self.rtpTxStreamResultsDictMutex.release()
-
-    # Define getter methods
-    def getRTPStreamID(self):
-        # Thread-safe method to access stream syncSource, src address, src port and name fields
-        self.__accessRtpStreamStatsMutex.acquire()
-        stats = self.__stats.copy()
-        self.__accessRtpStreamStatsMutex.release()
-        return stats["stream_syncSource"], stats["stream_srcAddress"], \
-               stats["stream_srcPort"], self.__stats["stream_friendly_name"]
-
-    # Thread-safe method for accessing all RtpStream stats
-    def getRtpStreamStats(self, keyIs=None, keyContains=None, keyStartsWith=None, listKeys=False):
-    # def getRtpStreamStats(self, **kwargs):
-        self.__accessRtpStreamStatsMutex.acquire()
-        stats = self.__stats.copy()
-        self.__accessRtpStreamStatsMutex.release()
-        # Get a filtered version of the stats dict
-        filteredStats = Utils.filterDictByKey(stats, keyIs=keyIs, keyContains=keyContains, keyStartsWith=keyStartsWith, listKeys=listKeys)
-        return filteredStats
-
-
-    def getRtpStreamStatsByFilter(self, keyFilter):
-        # Thread-safe method to return specific stats who's dictionary key starts with 'filter'
-        # Returns a list of tuples
-        self.__accessRtpStreamStatsMutex.acquire()
-        stats = self.__stats.copy()
-        self.__accessRtpStreamStatsMutex.release()
-        # Filter keys of stats by startswith('filter') into a new dictionary
-        filteredStats = {k: v for k, v in stats.items() if k.startswith(keyFilter)}
-        return filteredStats
-
-    def getRtpStreamStatsByKey(self, key):
-        # Thread safe method to retrive a single stats item by key
-        # If the key doesn't exist, it will return None type
-        self.__accessRtpStreamStatsMutex.acquire()
-        stats = self.__stats.copy()
-        self.__accessRtpStreamStatsMutex.release()
-        if key in stats:
-            return stats[key]
-        else:
-            return None
-
-    # Thread-safe method for accessing realtime RtpStream eventList
-    # No args: Returns the entire list
-    # 1 arg: Returns the last n events
-    # 2 args: returns the range specified (inclusive)
-    # filterList is an optional arg containing a list of Event object types to test against within EventsList
-    # eg filterList = [Glitch] will return only a list of glitches, [Glitch, StreamStarted] would give you a list
-    # containing all Glitch and StreamStarted events
-    # The filter (if present) is applied first, then the range specifier
-    # Finally, if reverseOrder==True, the list will be returned in reverse order
-    def getRTPStreamEventList(self, *args, filterList=None, reverseOrder=False, requestedEventNo=None,
-                              recent=None, start=None, end=None):
-        self.__accessRtpStreamEventListMutex.acquire()
-        # Create copy of events list
-        unfilteredEventList = list(self.__eventList)
-        self.__accessRtpStreamEventListMutex.release()
-
-        # If two args supplied, take the first and second as the range of requested messages to return (inclusive)
-        # (or else, if kwarg 'start' and 'end' are  specified'
-        if len(args) == 2:
-            start = args[0]
-            end = args[1]
-        # If one arg supplied, return the last n events (or else, if kwarg 'recent' is specified'
-        # IF event list not as long as n, return what does exist
-        elif len(args) == 1:  # If non kwarg supplied, use that instead
-            recent = args[0]
-
-        # Filter the events list using the specified criteria
-        filteredEventList = self.filterEventsList(unfilteredEventList, filterList=filterList, reverseOrder=reverseOrder,
-                                                  requestedEventNo=requestedEventNo, recent=recent, start=start,
-                                                  end=end)
-        return filteredEventList
-
-# Define a class to encompass the results sent back from the receiving to the transmitting side (via the
-# ResultsTransmitter and ResultsReceiver objects)
-# It does't perform any calculations itself (unlike RtpReceiveStream) but it does have similar getter methods for results,
-# which should allow displayThread to treat this like an RtpStream object without any additional code alteration
 class RtpStreamResults(RtpReceiveCommon):
     def __init__(self, syncSourceID, controllerTCPPort=None):
 
@@ -3742,7 +3577,7 @@ class RtpStreamResults(RtpReceiveCommon):
                                          ", " + str(e))
 
 
-    # This method will remove this stream object from the rtpTxStreamResultsDict dictionary
+    # This method is currently unused but can be used for cleanups
     def killStream(self):
         pass
 
@@ -3833,10 +3668,6 @@ class RtpGenerator(RtpCommon):
     #       1)force the time to live to zero (which will cause the object to delete itself
     #       2)call the corresponding ResultsReceiver.kill() method which will:-
     #           1)Cause the the ResultsReceiver receive thread to cease (killing the object)
-    #           2) Check to see if a corresponding RtpStreamResults object exists for this stream ID, and if so
-    #              call it's RtpStreamResults.killStream() method. This will cause the object to remove itself
-    #              from the rtpTxStreamResultsDict{} which will then mean the object ceases to exist also.
-
 
     # The size of the messages sent in the RtpGenerator payload
     # This can be queried by the class method getIsptestHeaderSize() (and is consumed by RtpReceiveStream and main())
@@ -4892,12 +4723,6 @@ class RtpGenerator(RtpCommon):
             self.relatedRtpStreamResults = None
         except Exception as e:
             Utils.Message.addMessage("ERR:RtpGenerator.killStream() kill rtpStreamResultsReceiver " + str(e))
-
-        # Finally, remove this RtpGenerator object from rtpTxStreamsDict
-        # self.rtpTxStreamsDictMutex.acquire()
-        # Utils.Message.addMessage("INFO: Deleting RtpGenerator entry in rtpTxStreamsDict for stream: " + str(self.syncSourceIdentifier))
-        # del self.rtpTxStreamsDict[self.syncSourceIdentifier]
-        # self.rtpTxStreamsDictMutex.release()
 
         # Now kill UDP socket
         try:
@@ -6420,6 +6245,7 @@ class RtpGenerator(RtpCommon):
                         # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
                         # # So has to be updated manually here
                         try:
+                            # Confirm the existence of the corresponding RtpStreamResults object
                             if self.relatedRtpStreamResults is not None:
                                 ### Copy the traceroute hops list into the object instance var
                                 self.relatedRtpStreamResults.setTraceRouteHopsList(hopsList)
@@ -6449,10 +6275,7 @@ class RtpGenerator(RtpCommon):
                             # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
                             # # So has to be updated manually here
                             try:
-                                # # get the instance of the corresponding RtpStreamResults object
-                                # rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                                # # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
-                                # rtpStreamResults.setTraceRouteHopsList([])
+                                # Confirm the existence of the corresponding RtpStreamResults object
                                 if self.relatedRtpStreamResults is not None:
                                     ### Copy the traceroute hops list into the object instance var
                                     self.relatedRtpStreamResults.setTraceRouteHopsList([])
@@ -6528,15 +6351,6 @@ class ResultsReceiver(object):
         Utils.Message.addMessage("DBUG: ResultsReceiver.kill() Waiting for resultsReceiverThread to end")
         self.resultsReceiverThread.join()
         Utils.Message.addMessage("DBUG: ResultsReceiver.kill() resultsReceiverThread has ended")
-
-
-        # Finally, attempt to remove the RtpStreamResults object created by __resultsReceiverThread from
-        # the rtpTxStreamResultsDict
-
-        # # Check to see if the RtpStreamResults object exists in rtpTxStreamResultsDict
-        # if self.relatedRtpGenerator.syncSourceIdentifier in self.rtpTxStreamResultsDict:
-        #     # If so, invoke its killStream method (to remove itself from rtpTxStreamResultsDict
-        #     self.rtpTxStreamResultsDict[self.relatedRtpGenerator.syncSourceIdentifier].killStream()
 
 
     def __resultsReceiverThread(self):
@@ -6739,7 +6553,7 @@ class ResultsReceiver(object):
                                     rtpStreamResults.updateStats(stats)
 
                             except Exception as e:
-                                Utils.Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict or can't add new stream to rtpTxStreamResultsDict. " + str(e))
+                                Utils.Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict. " + str(e))
 
                     # Check to see if the new eventList contains any data and also that there exists a stream object to add the data to
                     if len(latestEventsList) > 0 and len(stats) > 0:

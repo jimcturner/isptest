@@ -2273,12 +2273,17 @@ def doubleToPatval(inputVal):
         selector = 3        # Scale by '1000'
 
     scaledValue = int(inputVal * multiplier[selector]) # Multiplies inputVal by 1,10,100 or 1000 depending upon it's magnitude and casts as an int
-
+    print (f"selector:{selector}, scaledValue:{scaledValue}")
     # The most logical next step is to then do.....
     msb = selector << 14 # Shift selector (a 2 bit value) 14 steps the left to make it the highest two bits of the 16bit value
     lsb = 0x3fff & scaledValue # Mask with '6 zeros and 10 ones' so that only the bottom 10 bits get through
+    shiftedMSB = msb>>8
+    shiftedLSB = lsb<<6
+    print(f"msb {bin(msb)} length: {len(bin(msb)) -2}>>>> {bin(shiftedMSB)}, length: {len(bin(shiftedMSB)) -2} bits")
+    print(f"lsb {bin(lsb)} length: {len(bin(lsb)) -2} >>>> {bin(shiftedLSB)}, length: {len(bin(shiftedLSB)) -2} bits")
     # Create aggregate value by 'OR'ing msb and lsb together
     msblsb = msb | lsb
+
 
     # selector value = 11000000
     # 'info' value   = 00000011
@@ -2291,4 +2296,5 @@ def doubleToPatval(inputVal):
     # 1 1 1
 
     lsbmsb = (lsb<<8 ) | (msb >> 8)
-    return str(hex(msblsb)), str(hex(lsbmsb))
+    # print(f"lsb<<8 {hex(lsb<<8)}, {bin(lsb<<8)}, msb>>8{hex(msb>>8)}, {bin(msb>>8)}")
+    return f"msblsb:{hex(msblsb)}, lsbmsb:{hex(lsbmsb)}"
