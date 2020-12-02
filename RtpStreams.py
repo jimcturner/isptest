@@ -1251,8 +1251,9 @@ class RtpReceiveCommon(RtpCommon):
                     streamReport += f"Current: Last updated {tracerouteLastUpdate.strftime('%d/%m/%Y %H:%M:%S')}\r\n" +\
                                      currentTraceRoute + separator
                 except Exception as e:
-                    Utils.Message.addMessage("ERR: RtpReceiveCommon.generateTracerouteHistoryReport, get current traceroute hops list. stream " + \
-                                             str(stats["stream_syncSource"]) + ", " + str(e))
+                    Utils.Message.addMessage(f"ERR: RtpReceiveCommon.generateTracerouteHistoryReport, get current traceroute hops list. stream "
+                                             f" {stats['stream_syncSource']}, {e}, tracerouteLastUpdate:{tracerouteLastUpdate}, tracerouteHopsList:{tracerouteHopsList}")
+
 
                 ####### Create tables containing historic traceroute data with whois lookup
                 try:
@@ -6419,14 +6420,9 @@ class RtpGenerator(RtpCommon):
                         # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
                         # # So has to be updated manually here
                         try:
-                            # get the instance of the corresponding RtpStreamResults object
-                            rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-
-                            ### Copy the traceroute hops list into the object instance var
-                            rtpStreamResults.setTraceRouteHopsList(hopsList)
-
-
-
+                            if self.relatedRtpStreamResults is not None:
+                                ### Copy the traceroute hops list into the object instance var
+                                self.relatedRtpStreamResults.setTraceRouteHopsList(hopsList)
                         except Exception as e:
                             # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
                             pass
@@ -6453,16 +6449,18 @@ class RtpGenerator(RtpCommon):
                             # # Note: This is not transmitted by the receiver (because it's not part of the stats dictionary)
                             # # So has to be updated manually here
                             try:
-                                # get the instance of the corresponding RtpStreamResults object
-                                rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
-                                # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
-                                rtpStreamResults.setTraceRouteHopsList([])
-
+                                # # get the instance of the corresponding RtpStreamResults object
+                                # rtpStreamResults = self.rtpTxStreamResultsDict[self.syncSourceIdentifier]
+                                # # Copy the entire RtpGenerator tracerouteHops list into the rtpStreamResults tracerouteHops list
+                                # rtpStreamResults.setTraceRouteHopsList([])
+                                if self.relatedRtpStreamResults is not None:
+                                    ### Copy the traceroute hops list into the object instance var
+                                    self.relatedRtpStreamResults.setTraceRouteHopsList([])
                             except Exception as e:
                                 # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
                                 pass
 
-                # Incrment traceroute loop counter
+                # Increment traceroute loop counter
                 tracerouteLoopCounter += 1
                 # Sleep for 1 sec between completed traceroutes
                 time.sleep(1)
