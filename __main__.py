@@ -561,13 +561,6 @@ class UI(object):
     def __init__(self, operationMode, specialFeaturesModeFlag, receiversAndSendersList, controllerTCPPort=None):
         self.operationMode = operationMode
         self.specialFeaturesModeFlag = specialFeaturesModeFlag
-        # self.rtpTxStreamsDict = rtpTxStreamsDict
-        # self.rtpTxStreamsDictMutex = rtpTxStreamsDictMutex
-        # self.rtpRxStreamsDict = rtpRxStreamsDict
-        # self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
-        # self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
-        # self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
-
         self.receiversAndSendersList = receiversAndSendersList # This will contain the UDP_RX_IP and  UDP_RX_PORT(s)
         self.controllerTCPPort = controllerTCPPort # The TCP listen port for the HTTP server
         # Create an API helper
