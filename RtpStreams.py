@@ -1444,7 +1444,7 @@ class RtpReceiveStream(RtpReceiveCommon):
     # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold,
-                 rxQueuesDict, txMessageQueue,
+                 rxQueuesDict, txQueuesDict,
                  restoredStreamFlag=False, historicStatsDict=None, historicEventsList=None, controllerTCPPort=None):
         # Call super constructor
         super().__init__()
@@ -1455,10 +1455,10 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
         # self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
 
-        # self.resultsTxQueue = txMessageQueue    # Shared queue for sending results back to the transmitter
-        # self.txQueuesDict = txQueuesDict    # This dict will contain a key (the syncSourceID) whose value points to the
-        #                                     # message transmit queue for this stream
-        self.txMessageQueue = txMessageQueue # Shared queue for sending results back to the transmitter
+        self.txQueuesDict = txQueuesDict # Shared dict of Queues for sending results back to the transmitter (keyed by
+                                        # udp receive port)
+                                        # So to access the tx queue for this object we would use
+                                        # self.txQueuesDict[self.__stats["stream_rxPort"]]
 
 
         self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
@@ -2024,19 +2024,19 @@ class RtpReceiveStream(RtpReceiveCommon):
             except Exception as e:
                 Utils.Message.addMessage(f"ERR:RtpReceiveStream.HTTPRequestHandler.remotelyControlTxStream ({syncSourceID}),"\
                                          f" controlMessage{controlMessage}")
-    # Getter method for self.resultsTxQueue
-    def getResultsTxQueue(self):
-        return self.resultsTxQueue
-
-    # Setter method for self.resultsTxQueue (tests the incoming type, but doesn't validate it)
-    def setResultsTxQueue(self, newResultsTxQueue):
-        if type(newResultsTxQueue) == SimpleQueue:
-            self.resultsTxQueue = newResultsTxQueue
-            Utils.Message.addMessage("DBUG:RtpReceiveStream.setResultsTxQueue() (stream " + \
-                                     str(self.__stats["stream_syncSource"]) + " updated")
-            return True
-        else:
-            return False
+    # # Getter method for self.resultsTxQueue
+    # def getResultsTxQueue(self):
+    #     return self.resultsTxQueue
+    #
+    # # Setter method for self.resultsTxQueue (tests the incoming type, but doesn't validate it)
+    # def setResultsTxQueue(self, newResultsTxQueue):
+    #     if type(newResultsTxQueue) == SimpleQueue:
+    #         self.resultsTxQueue = newResultsTxQueue
+    #         Utils.Message.addMessage("DBUG:RtpReceiveStream.setResultsTxQueue() (stream " + \
+    #                                  str(self.__stats["stream_syncSource"]) + " updated")
+    #         return True
+    #     else:
+    #         return False
 
     # Method to destroy this object
     # Caller is an optional field to allow the method to check where the call is coming from
@@ -2811,12 +2811,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # currently receiving bytes AND only if we have a valid message queue to send through
                     if (self.__stats["stream_transmitterVersion"] > 0) and \
                             self.__stats["packet_data_received_1S_bytes"] > 0 and \
-                                self.txMessageQueue is not None:
+                                self.__stats["stream_rxPort"] in self.txQueuesDict:
 
                             # Get the last 5 events for this stream
                             NO_OF_PREV_EVENTS_TO_SEND = 5
                             eventsList = self.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
-                            addResultsToTxQueue(self.__stats, eventsList, self.txMessageQueue,
+                            addResultsToTxQueue(self.__stats, eventsList, self.txQueuesDict[self.__stats["stream_rxPort"]],
                                                 self.__stats["stream_srcAddress"],
                                                 self.__stats["stream_srcPort"])
                 except Exception as e:
@@ -3279,10 +3279,11 @@ class RtpReceiveStream(RtpReceiveCommon):
             friendlyName = friendlyName[:self.maxNameLength]
 
         # Confirm whether the stream is being sent from an instance of isptest AND only send if we're
-        # currently receiving bytes AND only if we have a valid message queue to send through
+        # currently receiving bytes AND only if we have a valid tx message queue to send through
         if (self.__stats["stream_transmitterVersion"] > 0) and \
                 self.__stats["packet_data_received_1S_bytes"] > 0 and \
-                    self.resultsTxQueue is not None:
+                    self.__stats["stream_rxPort"] in self.txQueuesDict:
+
             try:
                 # Send a 'name change' message back to the TRANSMITTER
                 self.sendControlMessageToTransmitter({"syncSourceID": self.syncSourceIdentifier,
@@ -3412,20 +3413,27 @@ class RtpReceiveStream(RtpReceiveCommon):
     # Messages sent by this method will be parsed by RtpGenerator.parseControlMessage()
     def sendControlMessageToTransmitter(self, msg):
         # Test to see if the rtp source of this stream is actually an instance of isptest
-        if self.__stats["stream_transmitterVersion"] > 0:
-            Utils.Message.addMessage("DBUG:sendControlMessageToTransmitter() msg to send: " + str(msg))
-            try:
-                # wrap the message in a dict with the "control" key. This will be detected in ResultsReceiver.__resultsReceiverThread()
-                wrappedMessage = {"control": msg}
-                # pickle the wrapped message
-                # pickledMessage = pickle.dumps(wrappedMessage, protocol=2)
-                pickledMessage = pickle.dumps(wrappedMessage)
-                # add the pickled message to the txMessageQueue
-                self.txMessageQueue.put([pickledMessage, self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"]])
-                return {"status": True, "error": None}
 
-            except Exception as e:
-                return {"status": False, "error": str(e)}
+        if self.__stats["stream_transmitterVersion"] > 0:
+            # and a valid tx queue exists
+            if self.__stats["stream_rxPort"] in self.txQueuesDict:
+                Utils.Message.addMessage("DBUG:sendControlMessageToTransmitter() msg to send: " + str(msg))
+                try:
+                    # wrap the message in a dict with the "control" key. This will be detected in ResultsReceiver.__resultsReceiverThread()
+                    wrappedMessage = {"control": msg}
+                    # pickle the wrapped message
+                    # pickledMessage = pickle.dumps(wrappedMessage, protocol=2)
+                    pickledMessage = pickle.dumps(wrappedMessage)
+                    # add the pickled message to the txMessageQueue
+                    txQueue = self.txQueuesDict[self.__stats["stream_rxPort"]]
+                    txQueue.put([pickledMessage, self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"]])
+                    return {"status": True, "error": None}
+
+                except Exception as e:
+                    return {"status": False, "error": str(e)}
+            else:
+                return {"status": False, "error": "Rtp stream " + str(self.__stats["stream_syncSource"]) + \
+                                                  " can't be remotely controlled. No Tx Queue available"}
         else:
             return {"status": False, "error": "Rtp stream " + str(self.__stats["stream_syncSource"]) +\
                                                         " can't be remotely controlled. Not generated by isptest"}
