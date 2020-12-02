@@ -558,20 +558,15 @@ class InvalidTxRateSpecifier(Exception):
 
 # A class that will be responsible for rendering the display and catching keyboard output
 class UI(object):
-    def __init__(self,operationMode, specialFeaturesModeFlag,
-                    rtpTxStreamsDict, rtpTxStreamsDictMutex,
-                    rtpRxStreamsDict, rtpRxStreamsDictMutex,
-                    rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,
-                    receiversAndSendersList, controllerTCPPort=None):
-
+    def __init__(self, operationMode, specialFeaturesModeFlag, receiversAndSendersList, controllerTCPPort=None):
         self.operationMode = operationMode
         self.specialFeaturesModeFlag = specialFeaturesModeFlag
-        self.rtpTxStreamsDict = rtpTxStreamsDict
-        self.rtpTxStreamsDictMutex = rtpTxStreamsDictMutex
-        self.rtpRxStreamsDict = rtpRxStreamsDict
-        self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
-        self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
-        self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
+        # self.rtpTxStreamsDict = rtpTxStreamsDict
+        # self.rtpTxStreamsDictMutex = rtpTxStreamsDictMutex
+        # self.rtpRxStreamsDict = rtpRxStreamsDict
+        # self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
+        # self.rtpTxStreamResultsDict = rtpTxStreamResultsDict
+        # self.rtpTxStreamResultsDictMutex = rtpTxStreamResultsDictMutex
 
         self.receiversAndSendersList = receiversAndSendersList # This will contain the UDP_RX_IP and  UDP_RX_PORT(s)
         self.controllerTCPPort = controllerTCPPort # The TCP listen port for the HTTP server
@@ -3361,11 +3356,8 @@ class RtpPacketReceiver(object):
     def __init__(self, rxQueuesDict, txQueuesDict, shutdownFlag,
                        UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, uiInstance,
                        controllerTCPPort=None):
-        # self.rtpRxStreamsDict = rtpRxStreamsDict
-        # self.rtpRxStreamsDictMutex = rtpRxStreamsDictMutex
         self.rxQueuesDict = rxQueuesDict
         self.txQueuesDict = txQueuesDict
-        # self.txMessageQueue = txMessageQueue
         self.shutdownFlag = shutdownFlag
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
@@ -5078,11 +5070,8 @@ def main(argv):
     # # Create a UI flag that will allow the UI thread to be woken up (to force a redraw)
     # wakeUpUI = threading.Event()
 
-    ui = UI(MODE, specialFeaturesModeFlag,\
-        rtpTxStreamsDict, rtpTxStreamsDictMutex,\
-        rtpRxStreamsDict, rtpRxStreamsDictMutex,\
-        rtpTxStreamResultsDict, rtpTxStreamResultsDictMutex,\
-        receiversAndSendersList, controllerTCPPort=isptesttHTTPServerPort)
+    # Create a UI object (that spawns its own thread)
+    ui = UI(MODE, specialFeaturesModeFlag, receiversAndSendersList, controllerTCPPort=isptesttHTTPServerPort)
 
     # Create a diskLogging Thread - This thread polls the available streams EventsLists and logs then to a file
     diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, shutdownFlag, isptesttHTTPServerPort,))
@@ -5280,8 +5269,8 @@ def main(argv):
         txQueuesDict = {}
 
         # Attempt to import a previously saved snapshot
-        # If it exists, this will prepopulate rtpRxStreamsDict{} with a list of previously known
-        # receive streams
+        # If it exists, this will prepopulate rxQueuesDict with a list of previously known
+        # receive stream syncSourceIds and receive queues
         importedSnapshotsList = []
         try:
             status, importedSnapshotsList = Utils.importObjectFromDisk()
