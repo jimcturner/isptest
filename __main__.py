@@ -7851,8 +7851,8 @@ def main(argv):
                         # Attempt to validate the keys/Values of the stats dict by reading each key
                         for stat in stats:  # Iterate over keys
                             # This should (hopefully) cause an exception if a key/value can't be read
-                            # We also use this opportunity to make sure that any of the imported values
-                            # are timedelta/datetime objects represented as strings, we convert them back to Python types
+                            # We also use this opportunity to convert the exported snapshot stats values (that were
+                            # all encoded as strings - on account of being obtained via the api) back to Python data types
                             x = Utils.convertStringToPythonDataType(stats[stat])
                             if not isinstance(stats[stat], type(x)):
                                 Utils.Message.addMessage(f"DBUG: Recreating stream. converted {stat} from {type(stats[stat])} to {type(x)}")
@@ -7885,7 +7885,9 @@ def main(argv):
                                                             historicEventsList=eventsList,
                                                             controllerTCPPort=isptesttHTTPServerPort
                                                             )
-
+                            # Now create a corresponding queue in rxQueuesDict so that this stream
+                            # will be ready to receive new data as soon as RtpPacketReceiver comes into being
+                            rxQueuesDict[stats["stream_syncSource"]] = SimpleQueue()
                         except Exception as e:
                             Utils.Message.addMessage(
                                 ("ERR:Recreate RtpReceiveStream from file: create RtpReceiveStream " + \
