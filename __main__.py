@@ -7765,17 +7765,33 @@ def main(argv):
 
         # Now wait for the streamsList to be empty (i.e have all the stream objects de-registered themselves),
         # before continuing with the shutdown process
-        while True:
+        prevStreamsRemainingCounter = 0
+        stalledStreamsThreshold = 5 # The no of loops to tolerate if streamsRemainingCounter is not decrementing - used as a timeout
+        while stalledStreamsThreshold > 0:
             # update streamsList
             try:
                 streamsList = Utils.APIHelper(isptesttHTTPServerPort).getStreamsList()
             except Exception as e:
                 Utils.Message.addMessage(f"main.shutdownApplication() Wait for HTTP DELETE streams to complete {e}")
-            # Wait for the streamsList to be emptied
-            if len(streamsList) == 0:
+            streamsRemainingCounter = len(streamsList)
+            # If all streams deleted, we can move on
+            if streamsRemainingCounter == 0:
                 break
-            Utils.Message.addMessage(f"DBUG:main.shutdownApplication() Remaining streams {len(streamsList)}")
-            time.sleep(0.5)
+            Utils.Message.addMessage(f"DBUG:main.shutdownApplication() Remaining streams {streamsRemainingCounter}")
+            # Update the loop counters
+            if prevStreamsRemainingCounter == streamsRemainingCounter:
+                # No further streams have been deleted since the last check. Assume something is stuck
+                # decrement stalledStreamsThreshold
+                stalledStreamsThreshold -= 1
+                if stalledStreamsThreshold < 1:
+                    Utils.Message.addMessage(f"ERR:main()shutdownApplication() stalledStreamsThreshold:{stalledStreamsThreshold}, "\
+                                             f"streamsRemaining:{[s['streamID'] for s in streamsList]}")
+            else:
+                # reset the threshold counter
+                stalledStreamsThreshold = 5
+            # Update prevStreamsRemainingCounter
+            prevStreamsRemainingCounter = streamsRemainingCounter
+            time.sleep(1)
 
         # Kill the whoIsResolver object
         whoIsResolver.kill()

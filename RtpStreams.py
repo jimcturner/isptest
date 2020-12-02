@@ -1459,8 +1459,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                                         # udp receive port)
                                         # So to access the tx queue for this object we would use
                                         # self.txQueuesDict[self.__stats["stream_rxPort"]]
-
-
         self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
         # Create an API helper to allow access to the HTTP API of the Controller
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
