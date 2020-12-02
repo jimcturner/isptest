@@ -7853,11 +7853,16 @@ def main(argv):
                             # This should (hopefully) cause an exception if a key/value can't be read
                             # We also use this opportunity to convert the exported snapshot stats values (that were
                             # all encoded as strings - on account of being obtained via the api) back to Python data types
-                            x = Utils.convertStringToPythonDataType(stats[stat])
-                            if not isinstance(stats[stat], type(x)):
-                                Utils.Message.addMessage(f"DBUG: Recreating stream. converted {stat} from {type(stats[stat])} to {type(x)}")
-                                # assign the type-converted value back to the value in the dict
-                                stats[stat] = x
+                            # BUT Exclude stats["stream_friendly_name"] key, because that is a string and should remain so,
+                            # even if it's numeric
+                            if stat in ["stream_friendly_name"]: # 'Exclude' list
+                                pass
+                            else:
+                                x = Utils.convertStringToPythonDataType(stats[stat])
+                                if not isinstance(stats[stat], type(x)):
+                                    Utils.Message.addMessage(f"DBUG: Recreating stream. converted {stat} from {type(stats[stat])} to {type(x)}")
+                                    # assign the type-converted value back to the value in the dict
+                                    stats[stat] = x
 
                         eventsList = stream[2]
                         # Attempt to validate the keys/Values of the events list by reading the event no
