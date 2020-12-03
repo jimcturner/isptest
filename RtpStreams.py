@@ -1482,9 +1482,6 @@ class RtpReceiveCommon(RtpCommon):
 
         return filteredEventList
 
-
-
-
 # Define a class to represent a stream of received rtp packets (and associated stats)
 # if restoredStreamFlag is set (in the constructor), the following optional arguments (historicStatsDict{} and
 # historicEventsList[] will be used to recreate the stream by reconstructing all the old packet counters etc to
@@ -1541,10 +1538,6 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         # Var to store the traceroute checksum value extracted from the isptestheader data
         self.tracerouteReceivedChecksum = 0
-        # Create a mutex lock to be used by the a thread
-        # To set the lock use: __accessRtpDataMutex.acquire(), To release use: __accessRtpDataMutex.release()
-        # self.__accessRtpStreamStatsMutex = threading.Lock()
-        # self.__accessRtpStreamEventListMutex = threading.Lock()
 
         # Add a name field (which can be set with a friendly name (via a setter method) to identify the stream)
         # This value is pulled from the RtpGenerator object
@@ -1864,43 +1857,47 @@ class RtpReceiveStream(RtpReceiveCommon):
             # Some methods (eg getEventsListAsJson()) already return json, so there is no need to re-encode it
             # Additionally, the /report generation methods return plaintext so the "contentType" key is a means of
             # signalling to do_GET() how to handle the returned values
-            getMappings = {
-                "/": {"targetMethod": self.renderIndexPage, "args": [], "optKeys":[], "contentType": 'text/html'},
-                "/debug": {"targetMethod": self.renderDebugPage, "args": [], "optKeys": []},
-                "/stats": {"targetMethod": parent.getRtpStreamStats, "args": [],
-                           "optKeys": ["keyIs", "keyContains", "keyStartsWith", "listKeys"]},
-                "/report/traceroute": {"targetMethod": parent.generateTracerouteHistoryReport, "args": [],
-                                       "optKeys": ["historyLength"], "contentType": 'text/plain'},
-                "/report/summary": {"targetMethod": parent.generateReport, "args": [],
-                                       "optKeys": ["eventFilterList"], "contentType": 'text/plain'},
-                "/events/json": {"targetMethod": self.getEventsListAsJson, "args": [],
-                                 "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"],
-                                 "contentType": 'application/json'},
-                "/events/summary": {"targetMethod": self.getEventsSummaries, "args": [],
-                                 "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]+\
-                                    ["includeStreamSyncSourceID", "includeEventNo", "includeType","includeFriendlyName"]
-                                 },
-                "/events/csv": {"targetMethod": self.getEventsListAsCSV,
-                                              "args": [],
-                                              "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
-                                                          "start", "end",]
-                                },
-                "/events/raw": {"targetMethod": self.getEventsListAsRaw,
-                                "args": [],
-                                "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
-                                            "start", "end", ],
-                                "contentType": 'application/python-pickle'
-                                },
-                "/traceroute": {"targetMethod": parent.getTraceRouteHopsList, "args": [], "optKeys": []},
+            try:
+                getMappings = {
+                    "/": {"targetMethod": self.renderIndexPage, "args": [], "optKeys":[], "contentType": 'text/html'},
+                    "/debug": {"targetMethod": self.renderDebugPage, "args": [], "optKeys": []},
+                    "/stats": {"targetMethod": parent.getRtpStreamStats, "args": [],
+                               "optKeys": ["keyIs", "keyContains", "keyStartsWith", "listKeys"]},
+                    "/report/traceroute": {"targetMethod": parent.generateTracerouteHistoryReport, "args": [],
+                                           "optKeys": ["historyLength"], "contentType": 'text/plain'},
+                    "/report/summary": {"targetMethod": parent.generateReport, "args": [],
+                                           "optKeys": ["eventFilterList"], "contentType": 'text/plain'},
+                    "/events/json": {"targetMethod": self.getEventsListAsJson, "args": [],
+                                     "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"],
+                                     "contentType": 'application/json'},
+                    "/events/summary": {"targetMethod": self.getEventsSummaries, "args": [],
+                                     "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]+\
+                                        ["includeStreamSyncSourceID", "includeEventNo", "includeType","includeFriendlyName"]
+                                     },
+                    "/events/csv": {"targetMethod": self.getEventsListAsCSV,
+                                                  "args": [],
+                                                  "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
+                                                              "start", "end",]
+                                    },
+                    "/events/raw": {"targetMethod": self.getEventsListAsRaw,
+                                    "args": [],
+                                    "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
+                                                "start", "end", ],
+                                    "contentType": 'application/python-pickle'
+                                    },
+                    "/traceroute": {"targetMethod": parent.getTraceRouteHopsList, "args": [], "optKeys": []},
 
-                "/txrate/inc": {"targetMethod": self.remotelyControlTxStream, "args": ["/txrate/inc"], "optKeys": []},
-                "/txrate/dec": {"targetMethod": self.remotelyControlTxStream, "args": ["/txrate/dec"], "optKeys": []},
-                "/length/inc": {"targetMethod": self.remotelyControlTxStream, "args": ["/length/inc"], "optKeys": []},
-                "/length/dec": {"targetMethod": self.remotelyControlTxStream, "args": ["/length/dec"], "optKeys": []},
-                "/ttl/inc": {"targetMethod": self.remotelyControlTxStream, "args": ["/ttl/inc"], "optKeys": []},
-                "/ttl/dec": {"targetMethod": self.remotelyControlTxStream, "args": ["/ttl/dec"], "optKeys": []},
-                "/burst": {"targetMethod": self.remotelyControlTxStream, "args": ["/burst"], "optKeys": []},
-            }
+                    "/txrate/inc": {"targetMethod": self.remotelyControlTxStream, "args": ["/txrate/inc"], "optKeys": []},
+                    "/txrate/dec": {"targetMethod": self.remotelyControlTxStream, "args": ["/txrate/dec"], "optKeys": []},
+                    "/length/inc": {"targetMethod": self.remotelyControlTxStream, "args": ["/length/inc"], "optKeys": []},
+                    "/length/dec": {"targetMethod": self.remotelyControlTxStream, "args": ["/length/dec"], "optKeys": []},
+                    "/ttl/inc": {"targetMethod": self.remotelyControlTxStream, "args": ["/ttl/inc"], "optKeys": []},
+                    "/ttl/dec": {"targetMethod": self.remotelyControlTxStream, "args": ["/ttl/dec"], "optKeys": []},
+                    "/burst": {"targetMethod": self.remotelyControlTxStream, "args": ["/burst"], "optKeys": []},
+                }
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:RtpReceiveStream.HTTPRequestHandler.apiGETEndpoints() corrupt endpoint definitions {e}")
+                getMappings = {}
             return getMappings
 
         # Acts a repository for the POST endpoints provided by the HTTP API
@@ -1917,17 +1914,27 @@ class RtpReceiveStream(RtpReceiveCommon):
             #       "reqKeys":[required arg1, required arg2..],    <---*only* the values are passed to the mapped function
             #       "optKeys":[optional arg1, arg2..]    <------the key/value pairs are passed to the function
             #   }
-            postMappings = {
-                # "/url": {"targetMethod": None, "reqKeys": [], "optKeys": []},
-                "/label": {"targetMethod": parent.setFriendlyName, "reqKeys": ["name"], "optKeys": []}
-            }
+            try:
+                postMappings = {
+                    # "/url": {"targetMethod": None, "reqKeys": [], "optKeys": []},
+                    "/label": {"targetMethod": parent.setFriendlyName, "reqKeys": ["name"], "optKeys": []}
+                }
+            except Exception as e:
+                Utils.Message.addMessage(
+                    f"ERR:RtpReceiveStream.HTTPRequestHandler.apiPOSTEndpoints() corrupt endpoint definitions {e}")
+                postMappings = {}
             return postMappings
 
         # Acts a repository for the DELETE endpoints provided by the HTTP API
         def apiDELETEEndpoints(self):
             # Access parent Rtp Stream object methods via server attribute
             parent = self.server.parentObject
-            deleteMappings = {"/delete": {"targetMethod": parent.killStream, "reqKeys": [], "optKeys": []}}
+            try:
+                deleteMappings = {"/delete": {"targetMethod": parent.killStream, "reqKeys": [], "optKeys": []}}
+            except Exception as e:
+                Utils.Message.addMessage(
+                    f"ERR:RtpReceiveStream.HTTPRequestHandler.apiDELETEEndpoints() corrupt endpoint definitions {e}")
+                deleteMappings = {}
             return deleteMappings
 
         def getEventsListAsJson(self, **kwargs):
@@ -3794,67 +3801,71 @@ class RtpGenerator(RtpCommon):
             # Some methods (eg getEventsListAsJson()) already return json, so there is no need to re-encode it
             # Additionally, the /report generation methods return plaintext so the "contentType" key is a means of
             # signalling to do_GET() how to handle the returned values
-            getMappings = {
-                #"/url": {"targetMethod": None, "args": [], "optKeys": [], "contentType": 'application/json'},
-                "/": {"targetMethod": self.renderIndexPage, "args": [], "optKeys": [], "contentType": 'text/html'},
-                "/debug": {"targetMethod": self.renderDebugPage, "args": [], "optKeys": []},
-                "/txrate/inc": {"targetMethod": rtpGen.setTxRate, "args": [0, 1], "optKeys": []},
-                "/txrate/dec": {"targetMethod": rtpGen.setTxRate, "args": [0, -1], "optKeys": []},
-                "/length/inc": {"targetMethod": rtpGen.setPayloadLength, "args": [0, 1], "optKeys": []},
-                "/length/dec": {"targetMethod": rtpGen.setPayloadLength, "args": [0, -1], "optKeys": []},
-                "/ttl/inc": {"targetMethod": rtpGen.setTimeToLive, "args": [0, 1], "optKeys": []},
-                "/ttl/dec": {"targetMethod": rtpGen.setTimeToLive, "args": [0, -1], "optKeys": []},
-                "/burst": {"targetMethod": rtpGen.enableBurstMode, "args": [], "optKeys": []},
-                "/enable": {"targetMethod": rtpGen.enableStream, "args": [], "optKeys": []},
-                "/disable": {"targetMethod": rtpGen.disableStream, "args": [], "optKeys": []},
-                "/jitter/on": {"targetMethod": rtpGen.enableJitter, "args": [], "optKeys": []},
-                "/jitter/off": {"targetMethod": rtpGen.disableJitter, "args": [], "optKeys": []},
-                "/txstats": {"targetMethod": rtpGen.getRtpStreamStats, "args": [], "optKeys": []},
-                "/traceroute": {"targetMethod": rtpGen.getTraceRouteHopsList, "args": [], "optKeys": []}
-            }
-            # Add additonal endpoints that relate to the RtpStreamResults associated with this RtpGenerator
-            # Note, this object (and therefore its methods) will only exist if the Receiver has responded to
-            # the transmitter.
-            # Therefore we can't assume that the methods will be available
             try:
-                # Attempt to add a /stats endpoint
-                getMappings["/stats"] = {"targetMethod": rtpGen.relatedRtpStreamResults.getRtpStreamStats,
-                                         "args": [],
-                                         "optKeys": ["keyIs", "keyContains", "keyStartsWith", "listKeys"]
-                                         }
-                getMappings["/events/json"] = {"targetMethod": self.getEventsListAsJson,
-                                         "args": [],
-                                         "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end",
-                                                     ],
-                                         "contentType": 'application/json' # <<--denotes that this fn returns json
-                                         }
-                getMappings["/events/csv"] = {"targetMethod": self.getEventsListAsCSV,
-                                               "args": [],
-                                               "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
-                                                           "start", "end",
-                                                           ],
-                                               }
+                getMappings = {
+                    #"/url": {"targetMethod": None, "args": [], "optKeys": [], "contentType": 'application/json'},
+                    "/": {"targetMethod": self.renderIndexPage, "args": [], "optKeys": [], "contentType": 'text/html'},
+                    "/debug": {"targetMethod": self.renderDebugPage, "args": [], "optKeys": []},
+                    "/txrate/inc": {"targetMethod": rtpGen.setTxRate, "args": [0, 1], "optKeys": []},
+                    "/txrate/dec": {"targetMethod": rtpGen.setTxRate, "args": [0, -1], "optKeys": []},
+                    "/length/inc": {"targetMethod": rtpGen.setPayloadLength, "args": [0, 1], "optKeys": []},
+                    "/length/dec": {"targetMethod": rtpGen.setPayloadLength, "args": [0, -1], "optKeys": []},
+                    "/ttl/inc": {"targetMethod": rtpGen.setTimeToLive, "args": [0, 1], "optKeys": []},
+                    "/ttl/dec": {"targetMethod": rtpGen.setTimeToLive, "args": [0, -1], "optKeys": []},
+                    "/burst": {"targetMethod": rtpGen.enableBurstMode, "args": [], "optKeys": []},
+                    "/enable": {"targetMethod": rtpGen.enableStream, "args": [], "optKeys": []},
+                    "/disable": {"targetMethod": rtpGen.disableStream, "args": [], "optKeys": []},
+                    "/jitter/on": {"targetMethod": rtpGen.enableJitter, "args": [], "optKeys": []},
+                    "/jitter/off": {"targetMethod": rtpGen.disableJitter, "args": [], "optKeys": []},
+                    "/txstats": {"targetMethod": rtpGen.getRtpStreamStats, "args": [], "optKeys": []},
+                    "/traceroute": {"targetMethod": rtpGen.getTraceRouteHopsList, "args": [], "optKeys": []}
+                }
+                # Add additonal endpoints that relate to the RtpStreamResults associated with this RtpGenerator
+                # Note, this object (and therefore its methods) will only exist if the Receiver has responded to
+                # the transmitter.
+                # Therefore we can't assume that the methods will be available
+                try:
+                    # Attempt to add a /stats endpoint
+                    getMappings["/stats"] = {"targetMethod": rtpGen.relatedRtpStreamResults.getRtpStreamStats,
+                                             "args": [],
+                                             "optKeys": ["keyIs", "keyContains", "keyStartsWith", "listKeys"]
+                                             }
+                    getMappings["/events/json"] = {"targetMethod": self.getEventsListAsJson,
+                                             "args": [],
+                                             "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end",
+                                                         ],
+                                             "contentType": 'application/json' # <<--denotes that this fn returns json
+                                             }
+                    getMappings["/events/csv"] = {"targetMethod": self.getEventsListAsCSV,
+                                                   "args": [],
+                                                   "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent",
+                                                               "start", "end",
+                                                               ],
+                                                   }
 
-                getMappings["/events/summary"] = {
-                    "targetMethod": self.getEventsSummaries,
-                    "args": [],
-                    "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]+ \
-                                ["includeStreamSyncSourceID", "includeEventNo", "includeType","includeFriendlyName"]
-                    }
-                getMappings["/report/summary"] = {"targetMethod": rtpGen.relatedRtpStreamResults.generateReport,
-                                         "args": [],
-                                         "optKeys": ["eventFilterList"],
-                                         "contentType": 'text/plain' # <<--denotes that this fn returns plain text
-                                         }
-                getMappings["/report/traceroute"] = {"targetMethod": rtpGen.relatedRtpStreamResults.generateTracerouteHistoryReport,
-                                                  "args": [],
-                                                  "optKeys": ["historyLength"],
-                                                  "contentType": 'text/plain'
-                                                  # <<--denotes that this fn returns plain text
-                                                  }
+                    getMappings["/events/summary"] = {
+                        "targetMethod": self.getEventsSummaries,
+                        "args": [],
+                        "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"]+ \
+                                    ["includeStreamSyncSourceID", "includeEventNo", "includeType","includeFriendlyName"]
+                        }
+                    getMappings["/report/summary"] = {"targetMethod": rtpGen.relatedRtpStreamResults.generateReport,
+                                             "args": [],
+                                             "optKeys": ["eventFilterList"],
+                                             "contentType": 'text/plain' # <<--denotes that this fn returns plain text
+                                             }
+                    getMappings["/report/traceroute"] = {"targetMethod": rtpGen.relatedRtpStreamResults.generateTracerouteHistoryReport,
+                                                      "args": [],
+                                                      "optKeys": ["historyLength"],
+                                                      "contentType": 'text/plain'
+                                                      # <<--denotes that this fn returns plain text
+                                                      }
+                except Exception as e:
+                    # Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() {e}")
+                    pass
             except Exception as e:
-                # Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() {e}")
-                pass
+                Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() corrupt endpoint definitions {e}")
+                getMappings = {}
 
             return getMappings
 
@@ -3872,21 +3883,31 @@ class RtpGenerator(RtpCommon):
             #       "reqKeys":[required arg1, required arg2..],    <---*only* the values are passed to the mapped function
             #       "optKeys":[optional arg1, arg2..]    <------the key/value pairs are passed to the function
             #   }
-            postMappings = {
-                "/label": {"targetMethod": rtpGen.setFriendlyName, "reqKeys": ["name"], "optKeys": []},
-                "/txrate": {"targetMethod": rtpGen.setTxRate, "reqKeys": ["bps"], "optKeys": []},
-                "/length": {"targetMethod": rtpGen.setPayloadLength, "reqKeys": ["bytes"], "optKeys": []},
-                "/ttl": {"targetMethod": rtpGen.setTimeToLive, "reqKeys": ["seconds"], "optKeys": []},
-                "/burst": {"targetMethod": rtpGen.enableBurstMode, "reqKeys": [], "optKeys": ["burstLength_s", "burstRatio"]},
-                "/simulateloss": {"targetMethod": rtpGen.simulatePacketLoss, "reqKeys": [], "optKeys": ["packetsToSkip"]}
-            }
+            try:
+                postMappings = {
+                    "/label": {"targetMethod": rtpGen.setFriendlyName, "reqKeys": ["name"], "optKeys": []},
+                    "/txrate": {"targetMethod": rtpGen.setTxRate, "reqKeys": ["bps"], "optKeys": []},
+                    "/length": {"targetMethod": rtpGen.setPayloadLength, "reqKeys": ["bytes"], "optKeys": []},
+                    "/ttl": {"targetMethod": rtpGen.setTimeToLive, "reqKeys": ["seconds"], "optKeys": []},
+                    "/burst": {"targetMethod": rtpGen.enableBurstMode, "reqKeys": [], "optKeys": ["burstLength_s", "burstRatio"]},
+                    "/simulateloss": {"targetMethod": rtpGen.simulatePacketLoss, "reqKeys": [], "optKeys": ["packetsToSkip"]}
+                }
+            except Exception as e:
+                Utils.Message.addMessage(
+                    f"ERR:RtpGenerator.HTTPRequestHandler.apiPOSTEndpoints() corrupt endpoint definitions {e}")
+                postMappings = {}
             return postMappings
 
         # Acts a repository for the POST endpoints provided by the RtpGenerator HTTP API
         def apiDELETEEndpoints(self):
             # Access parent Rtp Stream object via server attribute
             rtpGen = self.server.parentObject
-            deleteMappings = {"/delete": {"targetMethod": rtpGen.killStream, "reqKeys": [], "optKeys": []}}
+            try:
+                deleteMappings = {"/delete": {"targetMethod": rtpGen.killStream, "reqKeys": [], "optKeys": []}}
+            except Exception as e:
+                Utils.Message.addMessage(
+                    f"ERR:RtpGenerator.HTTPRequestHandler.apiDELETEEndpoints() corrupt endpoint definitions {e}")
+                deleteMappings = {}
             return deleteMappings
 
         # render HTML index page
