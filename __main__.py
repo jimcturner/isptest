@@ -5491,49 +5491,40 @@ def main(argv):
                     except Exception as e:
                         Utils.Message.addMessage("ERR: main.getPeakMemoryUsage() " + str(e))
 
-                # # Every 60 seconds, or if the measureObjectMemoryUsageFlag is set, record the object memory usage
-                # if loopCounter % 60 == 0 or measureObjectMemoryUsageFlag:
-                #     try:
-                #         # Create list of objects to track memory usage and a friendly name
-                #         # Each object is contained within its own dict which also contains a friendly name.
-                #         # this will help genration of a report
-                #         objectsToProfile = [{"obj":ui, "name":"ui"}, {"obj":whoIsResolver, "name":"whoIsResolver"}]  # These never change
-                #         # Create a string to store the object sizes
-                #         summaryString = ""
-                #
-                #         # Create list of dictionaries to be polled for streams
-                #         dictsToBePolled = [rtpTxStreamsDict, rtpTxStreamResultsDict, rtpRxStreamsDict]
-                #         for streamDict in dictsToBePolled:
-                #             # Iterate over the contents of each dict in turn
-                #             copyOfDict = dict(streamDict)  # Create a copy so that we can safely iterate over it
-                #             if len(copyOfDict) > 0:
-                #                 # Append the current list of RtpGenerator objects to to objectsToProfile list
-                #                 for item in copyOfDict:  # iterate over keys
-                #                     objectsToProfile.append({"obj":copyOfDict[item], "name":item})
-                #
-                #         if MODE == "RECEIVE":
-                #             try:
-                #                 objectsToProfile.append({"obj":udpMessageSender, "name":"udpMessageSender"})
-                #                 objectsToProfile.append({"obj":rtpPacketReceiver, "name":"rtpPacketReceiver"})
-                #             except Exception as e:
-                #                 Utils.Message.addMessage("ERR: MODE==RECEIVE, objectsToProfile.append() " + str(e))
-                #
-                #
-                #         # Iterate over all the objects to be tracked, and report on the size
-                #         for obj in objectsToProfile:
-                #             objSize = Utils.getObjectSize(obj["obj"])
-                #             if objSize is not None and objSize > 0:
-                #                 summaryString += "[name: " + str(obj["name"]) + ", type" + \
-                #                                      str(type(obj["obj"])) + ":" + str(Utils.bToMb(objSize)) + "], "
-                #         # Write out peak mem use and object mem use summary
-                #         if peakMemUsage is not None:
-                #             Utils.Message.addMessage("DBUG:Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b")  # in bytes
-                #         Utils.Message.addMessage("DBUG:object profiler: " + summaryString)
-                #         # List all current running threads
-                #         Utils.Message.addMessage("DBUG:Current threads " + Utils.listCurrentThreads())
-                #
-                #     except Exception as e:
-                #         Utils.Message.addMessage("ERR:object profiler " + str(e))
+                # Every 60 seconds, or if the measureObjectMemoryUsageFlag is set, record the object memory usage
+                if loopCounter % 60 == 0 or measureObjectMemoryUsageFlag:
+                    try:
+                        # Create list of objects to track memory usage and a friendly name
+                        # Each object is contained within its own dict which also contains a friendly name.
+                        # this will help genration of a report
+                        objectsToProfile = [{"obj":ui, "name":"ui"},
+                                            {"obj":whoIsResolver, "name":"whoIsResolver"},
+                                            {"obj":isptesttHTTPServer, "name":"isptesttHTTPServer"}]  # These never change
+                        # Create a string to store the object sizes
+                        summaryString = ""
+
+                        if MODE == "RECEIVE":
+                            try:
+                                objectsToProfile.append({"obj":udpMessageSender, "name":"udpMessageSender"})
+                                objectsToProfile.append({"obj":rtpPacketReceiver, "name":"rtpPacketReceiver"})
+                            except Exception as e:
+                                Utils.Message.addMessage("ERR: MODE==RECEIVE, objectsToProfile.append() " + str(e))
+
+                        # Iterate over all the objects to be tracked, and report on the size
+                        for obj in objectsToProfile:
+                            objSize = Utils.getObjectSize(obj["obj"])
+                            if objSize is not None and objSize > 0:
+                                summaryString += "[name: " + str(obj["name"]) + ", type" + \
+                                                     str(type(obj["obj"])) + ":" + str(Utils.bToMb(objSize)) + "], "
+                        # Write out peak mem use and object mem use summary
+                        if peakMemUsage is not None:
+                            Utils.Message.addMessage("DBUG:Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b")  # in bytes
+                        Utils.Message.addMessage("DBUG:object profiler: " + summaryString)
+                        # List all current running threads
+                        Utils.Message.addMessage("DBUG:Current threads " + Utils.listCurrentThreads())
+
+                    except Exception as e:
+                        Utils.Message.addMessage("ERR:object profiler " + str(e))
 
 
         # This code will execute if the RequestShutdown Exception is raised (SIGINT, Ctrl-C)
