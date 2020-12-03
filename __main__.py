@@ -3733,26 +3733,34 @@ class RtpPacketReceiver(object):
 
                                         Utils.Message.addMessage(Fore.GREEN + "Rtp stream " + str(syncSourceID) +
                                                                  " validated. Creating new RtpReceiveStream")
-                                        # Create a Queue specifically for data with this sync source id
-                                        # and add it to rxQueuesDict {}
-                                        self.rxQueuesDict[syncSourceID] = SimpleQueue()
 
-                                        # Create and add the new stream to the rtpRxStreamsDict
-                                        newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
-                                                                        self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
-                                                                        self.rxQueuesDict, self.txQueuesDict,
-                                                                        controllerTCPPort=self.controllerTCPPort,)
-                                        # Add the most recent packet to the newly created rx queue (whereby the
-                                        # RtpReceieveStream will be able to pick it up)
                                         try:
+                                            # Create a Queue specifically for data with this sync source id
+                                            # and add it to rxQueuesDict {}
+                                            self.rxQueuesDict[syncSourceID] = SimpleQueue()
+
+                                            # Create a new RtpReceiveStream object to accept the data
+                                            newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
+                                                                            self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
+                                                                            self.rxQueuesDict, self.txQueuesDict,
+                                                                            controllerTCPPort=self.controllerTCPPort,)
+                                            # Add the most recent packet to the newly created rx queue (whereby the
+                                            # RtpReceieveStream will be able to pick it up)
+
                                             self.rxQueuesDict[syncSourceID].put(RtpData(seqNo, udpPayloadLength,
                                                                                         packetArrivedTimestamp,
                                                                                         syncSourceID, isptestHeaderData,
                                                                                         rxTTL, srcAddress, srcPort,
                                                                                         self.UDP_RX_IP, self.UDP_RX_PORT))
                                         except Exception as e:
+                                            try:
+                                                # Delete the queue associated with this abandoned stream
+                                                del self.rxQueuesDict[syncSourceID]
+                                            except Exception as e:
+                                                raise Exception(f"ERR:RtpPacketReceiver.__rtpPacketReceiverThread()"
+                                                                f"del self.rxQueuesDict[{syncSourceID}], {e}")
                                             raise Exception(f"ERR:RtpPacketReceiver.__rtpPacketReceiverThread()"
-                                                                     f"rxQueuesDict[{syncSourceID}].put()*new* + {e}")
+                                                                     f"Add RtpReceiveStream({syncSourceID}), {e}")
                                     else:
                                         # The sequence numbers don't appear to have incremented
                                         Utils.Message.addMessage(Fore.RED + "Non-RTP packets received from " + \
