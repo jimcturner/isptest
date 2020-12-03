@@ -4258,13 +4258,16 @@ class ISPTestHTTPServer(object):
                                     for hopNo in range(len(getQueryList)):
                                         # Extract the ip address
                                         hopAddr=getQueryList[hopNo][1]
-                                        # Get handle on WhoIsResolver instance
-                                        whoIsResolver = self.server.parentObject.externalResourcesDict["whoIsResolver"]
-                                        # Query the Whois Resolver for that name
-                                        whoisResult = whoIsResolver.queryWhoisCache(hopAddr)
                                         whoisNetName = ""
-                                        if whoisResult is not None:
-                                            whoisNetName = " " + whoisResult[0]['asn_description']
+                                        # Get handle on WhoIsResolver instance (if it exists)
+                                        if "whoIsResolver" in self.server.parentObject.externalResourcesDict:
+                                            whoIsResolver = self.server.parentObject.externalResourcesDict["whoIsResolver"]
+                                            # Query the Whois Resolver for that name
+                                            whoisResult = whoIsResolver.queryWhoisCache(hopAddr)
+                                            if whoisResult is not None:
+                                                whoisNetName = " " + whoisResult[0]['asn_description']
+                                        else:
+                                            Utils.Message.addMessage(f"DBUG:WhoIsResolver unavailable")
 
                                         outputList.append([hopAddr, whoisNetName])
                                     # Encode the list as json
@@ -5028,24 +5031,24 @@ def main(argv):
               ". Check you have write privileges for this folder\r")
         exit()
 
-    # Create a dictionaries for all streams
-    rtpTxStreamsDict ={}
-    # Create a mutex lock for the tx streams dictionary (for deleting objects)
-    rtpTxStreamsDictMutex = threading.Lock()
-
-    # Create a dictionary to hold the rx Streams
-    rtpRxStreamsDict = {}
-
-    # # Create a dictionary to initially hold the sync source of a potential rx stream
-    # rtpRxStreamTempDict = {}
-
-    # Create a mutex lock to be used when writing to the rtpRxStreamsDict (or deleting objects)
-    rtpRxStreamsDictMutex = threading.Lock()
-
-    # Create a dictionary to hold the server reports/results of the tx streams
-    rtpTxStreamResultsDict = {}
-    # Create an associated mutex
-    rtpTxStreamResultsDictMutex = threading.Lock()
+    # # Create a dictionaries for all streams
+    # rtpTxStreamsDict ={}
+    # # Create a mutex lock for the tx streams dictionary (for deleting objects)
+    # rtpTxStreamsDictMutex = threading.Lock()
+    #
+    # # Create a dictionary to hold the rx Streams
+    # rtpRxStreamsDict = {}
+    #
+    # # # Create a dictionary to initially hold the sync source of a potential rx stream
+    # # rtpRxStreamTempDict = {}
+    #
+    # # Create a mutex lock to be used when writing to the rtpRxStreamsDict (or deleting objects)
+    # rtpRxStreamsDictMutex = threading.Lock()
+    #
+    # # Create a dictionary to hold the server reports/results of the tx streams
+    # rtpTxStreamResultsDict = {}
+    # # Create an associated mutex
+    # rtpTxStreamResultsDictMutex = threading.Lock()
 
     # Create a list to hold the instances of RtpPacketReceiver and associated UDPMessageSender objects
     # (which are the objects resposible for actually receiving and sending the rtp/udp data)
@@ -5064,39 +5067,43 @@ def main(argv):
     shutdownFlag = threading.Event()
     # Make sure flag is initially cleared
     shutdownFlag.clear()
-    # Create flag that will be used to remotely enable/disable the disklogger and __receiveRtpStream threads
-    # enableUIFlag = threading.Event()
-    # # Make sure flag is initially set
-    # enableUIFlag.set()
+
 
     # Create dict to hold a list of Object instances that will be shared
     sharedObjects = {}
 
-    # Create new instance of WhoisResolver (which will create a background __whoisLookupThread)
-    whoIsResolver = Utils.WhoisResolver()
-    # Register whoIsResolver with the shared objects dict
-    sharedObjects = {"whoIsResolver": whoIsResolver}
-    isptesttHTTPServerPort = None
+    # # Create new instance of WhoisResolver (which will create a background __whoisLookupThread)
+    # whoIsResolver = Utils.WhoisResolver()
+    # # Register whoIsResolver with the shared objects dict
+    # sharedObjects = {"whoIsResolver": whoIsResolver}
     # Create and start the main HTTP Server
     try:
         # Establish what port the http server should be running on
-        httpListenPort = None  # Default value
-        # Let the http server allocate its own listen port
+        # Note, if this port is unavailable, The HTTP server should pick up the next available port
         if MODE == "RECEIVE":
-            httpListenPort = Registry.httpServerRtpReceiverTCPPort
+            isptesttHTTPServerPort = Registry.httpServerRtpReceiverTCPPort
         elif MODE == "TRANSMIT":
-            httpListenPort = Registry.httpServerRtpTransmitterTCPPort
+            isptesttHTTPServerPort = Registry.httpServerRtpTransmitterTCPPort
+        else:
+            isptesttHTTPServerPort = Utils.TCPListenPortCreator.getNext()
 
         # Create the server object
-        isptesttHTTPServer = ISPTestHTTPServer(operationMode=MODE, tcpListenPort=httpListenPort,
+        isptesttHTTPServer = ISPTestHTTPServer(operationMode=MODE, tcpListenPort=isptesttHTTPServerPort,
                                                externalResourcesDict=sharedObjects)
         # Get the actual TCP listener port from the ISPTestHTTPServer object itself
         isptesttHTTPServerPort = isptesttHTTPServer.getTCPPort()
     except Exception as e:
         Utils.Message.addMessage("ERR:isptesttHTTPServer = ISPTestHTTPServer() " + str(e))
+        print(f"ERR:Failed to start HTTP Server on port {isptesttHTTPServerPort}: {e}")
+        exit(1)
 
     # # Create a UI flag that will allow the UI thread to be woken up (to force a redraw)
     # wakeUpUI = threading.Event()
+
+    # Create new instance of WhoisResolver (which will create a background __whoisLookupThread)
+    whoIsResolver = Utils.WhoisResolver()
+    # and add it to the shared objects dict (so that HTTP Server will have access to it)
+    sharedObjects["whoIsResolver"] = whoIsResolver
 
     # Create a UI object (that spawns its own thread)
     ui = UI(MODE, specialFeaturesModeFlag, receiversAndSendersList, controllerTCPPort=isptesttHTTPServerPort)
@@ -5429,8 +5436,6 @@ def main(argv):
     peakMemUsage = None
 
     ## Dictionary to hold a list of the http server objects for each of the streams (be they Tx, Rx or Results)
-    # httpServerDict = {}
-    # tcpPort = 8080 # Starting port for the http server
 
     # Endless loop
     while True:
@@ -5457,7 +5462,7 @@ def main(argv):
                 # Also, the current stack trace will be dumped to a file isptest_faulthandler_stacktrace.txt
 
                 # Additionally, every 60 seconds, regardless of the current memory usage, the
-                # snapshot of object memory usage will be triggered
+                # snapshot of object memory usage will be triggered <<< Currently disabled
 
                 # For convenience, objectsToProfile[] is actually a list of dictionaries that contain the object to
                 # be measured and also a 'friendly name'
@@ -5483,85 +5488,49 @@ def main(argv):
                     except Exception as e:
                         Utils.Message.addMessage("ERR: main.getPeakMemoryUsage() " + str(e))
 
-                # Every 60 seconds, or if the measureObjectMemoryUsageFlag is set, record the object memory usage
-                if loopCounter % 60 == 0 or measureObjectMemoryUsageFlag:
-                    try:
-                        # Create list of objects to track memory usage and a friendly name
-                        # Each object is contained within its own dict which also contains a friendly name.
-                        # this will help genration of a report
-                        objectsToProfile = [{"obj":ui, "name":"ui"}, {"obj":whoIsResolver, "name":"whoIsResolver"}]  # These never change
-                        # Create a string to store the object sizes
-                        summaryString = ""
-
-                        # Create list of dictionaries to be polled for streams
-                        dictsToBePolled = [rtpTxStreamsDict, rtpTxStreamResultsDict, rtpRxStreamsDict]
-                        for streamDict in dictsToBePolled:
-                            # Iterate over the contents of each dict in turn
-                            copyOfDict = dict(streamDict)  # Create a copy so that we can safely iterate over it
-                            if len(copyOfDict) > 0:
-                                # Append the current list of RtpGenerator objects to to objectsToProfile list
-                                for item in copyOfDict:  # iterate over keys
-                                    objectsToProfile.append({"obj":copyOfDict[item], "name":item})
-
-                        if MODE == "RECEIVE":
-                            try:
-                                objectsToProfile.append({"obj":udpMessageSender, "name":"udpMessageSender"})
-                                objectsToProfile.append({"obj":rtpPacketReceiver, "name":"rtpPacketReceiver"})
-                            except Exception as e:
-                                Utils.Message.addMessage("ERR: MODE==RECEIVE, objectsToProfile.append() " + str(e))
-
-
-                        # Iterate over all the objects to be tracked, and report on the size
-                        for obj in objectsToProfile:
-                            objSize = Utils.getObjectSize(obj["obj"])
-                            if objSize is not None and objSize > 0:
-                                summaryString += "[name: " + str(obj["name"]) + ", type" + \
-                                                     str(type(obj["obj"])) + ":" + str(Utils.bToMb(objSize)) + "], "
-                        # Write out peak mem use and object mem use summary
-                        if peakMemUsage is not None:
-                            Utils.Message.addMessage("DBUG:Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b")  # in bytes
-                        Utils.Message.addMessage("DBUG:object profiler: " + summaryString)
-                        # List all current running threads
-                        Utils.Message.addMessage("DBUG:Current threads " + Utils.listCurrentThreads())
-
-                    except Exception as e:
-                        Utils.Message.addMessage("ERR:object profiler " + str(e))
-
-                # # Runs a previously created HTTPServer object in a seperate thread
-                # def __httpServerThread(httpd):
-                #     Utils.Message.addMessage("DBUG: start httpServerThread")
+                # # Every 60 seconds, or if the measureObjectMemoryUsageFlag is set, record the object memory usage
+                # if loopCounter % 60 == 0 or measureObjectMemoryUsageFlag:
                 #     try:
-                #         # This call will block
-                #         # self.httpd = HTTPServer(('localhost', 8080), self)
-                #         httpd.serve_forever()
-                #         Utils.Message.addMessage("DBUG:httpServerThread serve_forever() returned")
+                #         # Create list of objects to track memory usage and a friendly name
+                #         # Each object is contained within its own dict which also contains a friendly name.
+                #         # this will help genration of a report
+                #         objectsToProfile = [{"obj":ui, "name":"ui"}, {"obj":whoIsResolver, "name":"whoIsResolver"}]  # These never change
+                #         # Create a string to store the object sizes
+                #         summaryString = ""
+                #
+                #         # Create list of dictionaries to be polled for streams
+                #         dictsToBePolled = [rtpTxStreamsDict, rtpTxStreamResultsDict, rtpRxStreamsDict]
+                #         for streamDict in dictsToBePolled:
+                #             # Iterate over the contents of each dict in turn
+                #             copyOfDict = dict(streamDict)  # Create a copy so that we can safely iterate over it
+                #             if len(copyOfDict) > 0:
+                #                 # Append the current list of RtpGenerator objects to to objectsToProfile list
+                #                 for item in copyOfDict:  # iterate over keys
+                #                     objectsToProfile.append({"obj":copyOfDict[item], "name":item})
+                #
+                #         if MODE == "RECEIVE":
+                #             try:
+                #                 objectsToProfile.append({"obj":udpMessageSender, "name":"udpMessageSender"})
+                #                 objectsToProfile.append({"obj":rtpPacketReceiver, "name":"rtpPacketReceiver"})
+                #             except Exception as e:
+                #                 Utils.Message.addMessage("ERR: MODE==RECEIVE, objectsToProfile.append() " + str(e))
+                #
+                #
+                #         # Iterate over all the objects to be tracked, and report on the size
+                #         for obj in objectsToProfile:
+                #             objSize = Utils.getObjectSize(obj["obj"])
+                #             if objSize is not None and objSize > 0:
+                #                 summaryString += "[name: " + str(obj["name"]) + ", type" + \
+                #                                      str(type(obj["obj"])) + ":" + str(Utils.bToMb(objSize)) + "], "
+                #         # Write out peak mem use and object mem use summary
+                #         if peakMemUsage is not None:
+                #             Utils.Message.addMessage("DBUG:Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b")  # in bytes
+                #         Utils.Message.addMessage("DBUG:object profiler: " + summaryString)
+                #         # List all current running threads
+                #         Utils.Message.addMessage("DBUG:Current threads " + Utils.listCurrentThreads())
+                #
                 #     except Exception as e:
-                #         Utils.Message.addMessage("ERR:httpServerThread serve_forever() returned")
-
-                # # Create list of dictionaries to be polled for streams
-                # dictsToBePolled = [rtpTxStreamsDict, rtpTxStreamResultsDict, rtpRxStreamsDict]
-                # for streamDict in dictsToBePolled:
-                #     copyOfDict = dict(streamDict)  # Create a copy so that we can safely iterate over it
-                #     if len(copyOfDict) > 0:
-                #         # Append the current list of RtpGenerator objects to to objectsToProfile list
-                #         for item in copyOfDict:  # iterate over keys
-                #             # Check to see if this object already has an http server associated with it
-                #             if item in httpServerDict:
-                #                 # We don't have to worry, a web server already exists
-                #                 pass
-                #             else:
-                #                 # We need to create an HTTP Server for this object (as an individual thread)
-                #                 # Create an HTTP Server object. Pass the RTP stream object to it
-                #                 httpd = HTTPServer(('localhost', tcpPort), copyOfDict[item])
-                #                 # Create a thread,
-                #                 httpServerThread = threading.Thread(target=__httpServerThread, args=(httpd,))
-                #                 httpServerThread.daemon = True
-                #                 httpServerThread.start()
-                #                 # HTTP Server thread created. Now add the stream object to the httpServerDict
-                #                 # So that we don't attempt to recreate an HTTP server for this stream
-                #                 httpServerDict[item] = copyOfDict[item]
-                #                 # Increment the tcpPort
-                #                 tcpPort += 1
+                #         Utils.Message.addMessage("ERR:object profiler " + str(e))
 
 
         # This code will execute if the RequestShutdown Exception is raised (SIGINT, Ctrl-C)
