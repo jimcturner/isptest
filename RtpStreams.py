@@ -1792,6 +1792,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             except Exception as e:
                 Utils.Message.addMessage(f'ERR:RtpReceiveStream.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
 
+            self.streamRegisteredFlag = False   # Records whether the stream has been successfully registered
             # Now register the stream with the stream directory service
             # Note: If this fails, __samplingThread performs a 1 sec check to see if registration was successful,
             # and if not, attempts to re-add the stream
@@ -1802,8 +1803,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                     "httpPort": self.tcpListenPort,
                     "streamType": "RtpReceiveStream"
                 }
-                # Register the stream
+                # Register the stream - will thrown an Exception on failure
                 self.ctrlAPI.addToStreamsDirectory(streamDefinition)
+                # If execution gets this far, we can assume that streams was successfully registered
+                self.streamRegisteredFlag = True
             except Exception as e:
                 Utils.Message.addMessage(
                     f'ERR:RtpReceiveStream.__init__() Initial stream Registration failed {self.syncSourceIdentifier}, {e}')
@@ -2038,6 +2041,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 debugInfoDict = {
                     "syncSourceID": syncSourceID,
                     "type": rtpRxStream.__class__.__name__,
+                    "streamRegisteredFlag": rtpRxStream.streamRegisteredFlag,
                     "packet_counter_transmitted_total": stats["packet_counter_transmitted_total"],
                     "stream_transmitter_txRate_bps": stats["stream_transmitter_txRate_bps"],
                     "Rx current queue size": rtpRxStream.rtpStreamQueueCurrentSize,
@@ -2250,7 +2254,6 @@ class RtpReceiveStream(RtpReceiveCommon):
 
     # This thread updates the 1sec averages, moving counters and also housekeeps
     def __samplingThread(self):
-
         # Puts the current stream stats and events (the results) in a queue to be transmitted back to the transmitter
         # (if the transmitter is an instance of isptest)
         # Rather than sending the entire events list, we only send the last five events.
@@ -2900,29 +2903,35 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Finally verify that this stream has been successfully registered with the directory
                 # This should happen at the point of stream creation (in __init__()) but may fail
                 # if the server is busy
-                try:
-                    streamsList = self.ctrlAPI.getStreamsList(streamID=self.syncSourceIdentifier)
-                    # Test to see if response contains an entry for this stream
-                    if streamsList[0]["streamID"] == self.syncSourceIdentifier and \
-                            streamsList[0]["streamType"] == "RtpReceiveStream":
-                        # Utils.Message.addMessage(f"RtpReceiveStream {self.syncSourceIdentifier} exists in streamsList")
-                        pass
-                except:
-                    # stream doesn't exist, so need to register it
-                    # Create a dict to define the stream
-                    streamDefinition = {
-                        "streamID": self.syncSourceIdentifier,
-                        "httpPort": self.tcpListenPort,
-                        "streamType": "RtpReceiveStream"
-                    }
+                # Only check if we know that the stream hasn't been registered yet (otherwise we will be generating
+                # pointless HTTP trafic)
+                if self.streamRegisteredFlag is False:
                     try:
-                        # Register the stream
-                        self.ctrlAPI.addToStreamsDirectory(streamDefinition)
-                        Utils.Message.addMessage(f"DBUG:RtpReceiveStream.__samplingThread({self.syncSourceIdentifier}) "\
-                                                 f"successful stream registration")
-                    except Exception as e:
-                        Utils.Message.addMessage(f"ERR:RtpReceiveStream.__samplingThread({self.syncSourceIdentifier})"\
-                                                 f" registration fail {e}")
+                        streamsList = self.ctrlAPI.getStreamsList(streamID=self.syncSourceIdentifier)
+                        # Test to see if response contains an entry for this stream
+                        if streamsList[0]["streamID"] == self.syncSourceIdentifier and \
+                                streamsList[0]["streamType"] == "RtpReceiveStream":
+                            # Utils.Message.addMessage(f"RtpReceiveStream {self.syncSourceIdentifier} exists in streamsList")
+                            pass
+                    except:
+                        # stream doesn't exist (or server is busy), so need to register it
+                        # Create a dict to define the stream
+                        streamDefinition = {
+                            "streamID": self.syncSourceIdentifier,
+                            "httpPort": self.tcpListenPort,
+                            "streamType": "RtpReceiveStream"
+                        }
+                        try:
+                            # Register the stream
+                            self.ctrlAPI.addToStreamsDirectory(streamDefinition)
+                            Utils.Message.addMessage(f"DBUG:RtpReceiveStream.__samplingThread({self.syncSourceIdentifier}) "\
+                                                     f"successful stream registration")
+                            # If execution gets this far, we can assume that streams was successfully registered
+                            # set the flag
+                            self.streamRegisteredFlag = True
+                        except Exception as e:
+                            Utils.Message.addMessage(f"ERR:RtpReceiveStream.__samplingThread({self.syncSourceIdentifier})"\
+                                                     f" registration fail {e}")
 
                 # Utils.Message.addMessage("Tx pid " + str(self.__stats["stream_transmitter_PID"]) )
 
