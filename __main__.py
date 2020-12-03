@@ -2267,6 +2267,7 @@ class UI(object):
         debugInfo = [["",""],["Debug info",""]]
         debugInfo.append(["Process ID ", str(os.getpid())])
         debugInfo.append(["Run time ", str(Utils.dtstrft(self.runtime_s))])
+        debugInfo.append(["HTTP Server port ", str(self.controllerTCPPort)])
         if self.operationMode == "RECEIVE":
             # Display aggregate socket receive stats
             try:
