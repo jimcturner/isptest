@@ -5469,7 +5469,7 @@ def main(argv):
 
                 # Clear the flag
                 measureObjectMemoryUsageFlag = False
-                # Every 2 seconds, measure memory usage
+                # Every 2 seconds, measure memory usage and list running threads
                 if loopCounter % 2 == 0:
                     try:
                         peakMemUsage = Utils.getPeakMemoryUsage()
@@ -5483,6 +5483,9 @@ def main(argv):
                                     faulthandler.dump_traceback(file=faulthandlerLogFile, all_threads=True)
                                 # List all current running threads
                                 Utils.Message.addMessage("DBUG:Current threads " + Utils.listCurrentThreads())
+                                # Write out peak mem use and object mem use summary
+                                Utils.Message.addMessage(f"DBUG:Peak Mem Usage: {Utils.bToMb(peakMemUsage)}b")  # in bytes
+
                             # Snapshot peak memory usage
                             prevPeakMemUsage = peakMemUsage
                     except Exception as e:
