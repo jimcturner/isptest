@@ -2260,6 +2260,11 @@ def convertStringToPythonDataType(value):
 
 
 def doubleToPatval(inputVal):
+    def chunk(val):
+        valAsBin = bin(val)[2:]
+        chunks = [valAsBin[i:i + 8] for i in range(0, len(valAsBin), 8)]
+        return chunks
+
     multiplier = [1,10,100,1000]
     scaledValue = 0
     # Calculator multiplier selector no based on the size of the incoming no
@@ -2273,28 +2278,24 @@ def doubleToPatval(inputVal):
         selector = 3        # Scale by '1000'
 
     scaledValue = int(inputVal * multiplier[selector]) # Multiplies inputVal by 1,10,100 or 1000 depending upon it's magnitude and casts as an int
-    print (f"selector:{selector}, scaledValue:{scaledValue}")
+    print (f"selector:{selector}, multiplier:{multiplier[selector]}, scaledValue:{scaledValue}")
     # The most logical next step is to then do.....
     msb = selector << 14 # Shift selector (a 2 bit value) 14 steps the left to make it the highest two bits of the 16bit value
     lsb = 0x3fff & scaledValue # Mask with '6 zeros and 10 ones' so that only the bottom 10 bits get through
-    shiftedMSB = msb>>8
-    shiftedLSB = lsb<<6
-    print(f"msb {bin(msb)} length: {len(bin(msb)) -2}>>>> {bin(shiftedMSB)}, length: {len(bin(shiftedMSB)) -2} bits")
-    print(f"lsb {bin(lsb)} length: {len(bin(lsb)) -2} >>>> {bin(shiftedLSB)}, length: {len(bin(shiftedLSB)) -2} bits")
+
     # Create aggregate value by 'OR'ing msb and lsb together
     msblsb = msb | lsb
+    print(f"msblsb {chunk(msblsb)}")
 
+    lsbmsb = (lsb<<8 ) | (msb >> 8) #<<WRONG! because LSB could be a 10 bit value (not a byte) therefore when shifted,
+                                    # you could end up with an 18 bit value
+    print(f"lsbmsb {chunk(lsbmsb)}")
 
-    # selector value = 11000000
-    # 'info' value   = 00000011
-
-    # 11000011
-    # x y =
-    # 0 0 0
-    # 0 1 1
-    # 1 0 1
-    # 1 1 1
-
-    lsbmsb = (lsb<<8 ) | (msb >> 8)
+    shiftedMSB = (msblsb & 0xFF00) >> 8
+    shiftedLSB = (msblsb & 0x00FF) << 8
+    reversedMsbLsb = shiftedMSB | shiftedLSB
+    # reversedMsbLsbAsBin = bin(reversedMsbLsb)[2:]
+    # chunks = [reversedMsbLsbAsBin[i:i + 8] for i in range(0, len(reversedMsbLsbAsBin), 8)]
+    print(f"reversedMsbLsb {chunk(reversedMsbLsb)}")
     # print(f"lsb<<8 {hex(lsb<<8)}, {bin(lsb<<8)}, msb>>8{hex(msb>>8)}, {bin(msb>>8)}")
-    return f"msblsb:{hex(msblsb)}, lsbmsb:{hex(lsbmsb)}"
+    return f"msblsb:{hex(msblsb)}, lsbmsb:{hex(lsbmsb)}, reversedMsbLsb {hex(reversedMsbLsb)}"

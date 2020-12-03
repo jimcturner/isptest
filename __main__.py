@@ -3909,10 +3909,34 @@ class ISPTestHTTPServer(object):
         return self.tcpListenPort
 
     # Threadsafe method to append an item to the streamsList
-    def appendToStreamsList(self, item):
+    def appendToStreamsListOld(self, item):
         self.streamsListMutex.acquire()
         self.streamsList.append(item)
         self.streamsListMutex.release()
+
+    # Threadsafe method to append astream definition to the streamsList
+    # Note this method checks first to see if an item in the list with the same streamId is already present.
+    # If so, it will raise an Exception
+    def appendToStreamsList(self, newItem, uniqueKeyCheck="streamID"):
+        self.streamsListMutex.acquire()
+        try:
+            # create list of keys as specified by uniqueKeyCheck
+            existingItems = [item[uniqueKeyCheck] for item in self.streamsList]
+            # Now check to see if the item with the same streamID (or whatever key uniqueKeyCheck is set to) is already
+            # present in existingItems[]
+            if newItem[uniqueKeyCheck] in existingItems:
+                # A stream Definition with this key value already exists - duplicate detected
+                raise Exception(f"duplicate {uniqueKeyCheck} detected: {newItem[uniqueKeyCheck]}")
+            else:
+                # Otherwise, this stream is new so we can add it
+                self.streamsList.append(newItem)
+                # Release the mutex
+                self.streamsListMutex.release()
+        except Exception as e:
+            # Release the mutex
+            self.streamsListMutex.release()
+            raise Exception(f"appendToStreamsList() item[{uniqueKeyCheck}], {e}")
+
 
     # Threadsafe method to remove an item from the streamsList
     def removeFromStreamsList(self, item):
@@ -4415,7 +4439,7 @@ class ISPTestHTTPServer(object):
                                                     "timeCreated": datetime.datetime.now()
                                                 })
                             except Exception as e:
-                                errorText = "ERR:HTTPRequestHandler.do_POST() Failed to append() "+ str(e)
+                                errorText = "ERR:HTTPRequestHandler.do_POST() Failed to append stream: " + str(e)
                                 Utils.Message.addMessage(errorText)
                                 raise Exception(errorText)
 
