@@ -4070,6 +4070,28 @@ class RtpGenerator(RtpCommon):
         #   {"txbps_dec"} Decrease the tx bitrate
         self.__controlMessageQueue = SimpleQueue()
 
+        # Create an HTTP server thread. If fails, then abort creation of the object
+        try:
+            # Request an unused TCP port for the HTTP server to listen on
+            self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
+            Utils.Message.addMessage(f"DBUG: Creating httpServerThread for RtpGenerator:{self.syncSourceIdentifier}, TCP port:{self.tcpListenPort}")
+            self.httpServerThread = threading.Thread(target=self.httpServerThreadCommon,
+                                                     args=(self.tcpListenPort,
+                                                           self.syncSourceIdentifier,
+                                                           RtpGenerator.HTTPRequestHandler))
+            self.httpServerThread.daemon = False
+            self.httpServerThread.setName(f"{self.syncSourceIdentifier}:httpServerThread({self.tcpListenPort})")
+            self.httpServerThread.start()
+
+            # Verify that the http server is actually running, by attempting to connect it
+            r = requests.get(f"http://127.0.0.1:{self.tcpListenPort}", timeout=1)
+            r.raise_for_status()  # Will raise an Exception if there was a problem
+            Utils.Message.addMessage(
+                f"INFO:RTPGenerator({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
+
+        except Exception as e:
+            Utils.Message.addMessage(f'ERR:RTPGenerator.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
+            raise Exception(f'ERR:RTPGenerator({self.syncSourceIdentifier}).__init__() HTTP Server failed to start. Aborting')
 
         ######## Actual code starts here
         # Start the traffic generator thread
@@ -4103,32 +4125,10 @@ class RtpGenerator(RtpCommon):
         self.samplingThread.setName(str(self.syncSourceIdentifier) + ":samplingThread")
         self.samplingThread.start()
 
-        # Create an HTTP server thread. If successful, register the stream
-        try:
-            # Request an unused TCP port for the HTTP server to listen on
-            self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
-            Utils.Message.addMessage(f"DBUG: Creating httpServerThread for RtpGenerator:{self.syncSourceIdentifier}, TCP port:{self.tcpListenPort}")
-            self.httpServerThread = threading.Thread(target=self.httpServerThreadCommon,
-                                                     args=(self.tcpListenPort,
-                                                           self.syncSourceIdentifier,
-                                                           RtpGenerator.HTTPRequestHandler))
-            self.httpServerThread.daemon = False
-            self.httpServerThread.setName(f"{self.syncSourceIdentifier}:httpServerThread({self.tcpListenPort})")
-            self.httpServerThread.start()
-
-            # Verify that the http server is actually running, by attempting to connect it
-            r = requests.get(f"http://127.0.0.1:{self.tcpListenPort}", timeout=1)
-            r.raise_for_status()  # Will raise an Exception if there was a problem
-            Utils.Message.addMessage(
-                f"INFO:RTPGenerator({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
-
-        except Exception as e:
-            Utils.Message.addMessage(f'ERR:RTPGenerator.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
-
         # Now register the stream with the stream directory service
         self.streamRegisteredFlag = False  # Records whether the stream has been successfully registered
         # Note: If this fails, __samplingThread performs a 1 sec check to see if registration was successful,
-        # and if not, attempts to re-add the stream
+        # and if not, attempts to re-add the stream until self.streamRegisteredFlag is set
         try:
             # Create a dict to define the stream
             streamDefinition = {

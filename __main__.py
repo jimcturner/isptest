@@ -1978,13 +1978,16 @@ class UI(object):
 
                 if allFieldsValidatedFlag:
 
-                    # All tx stream parameters validated so create the new RtpGenerator object
-                    rtpGenerator = RtpGenerator(destAddr, destPort, txRate_bps, packetLength, syncSourceID, timeToLive, \
-                                                uiInstance=self,\
-                                                friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
-                                                controllerTCPPort=self.controllerTCPPort)
+                    try:
+                        # All tx stream parameters validated so create the new RtpGenerator object
+                        rtpGenerator = RtpGenerator(destAddr, destPort, txRate_bps, packetLength, syncSourceID, timeToLive, \
+                                                    uiInstance=self,\
+                                                    friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
+                                                    controllerTCPPort=self.controllerTCPPort)
 
-                    Utils.Message.addMessage("[a] Added new " + str(Utils.bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
+                        Utils.Message.addMessage("[a] Added new " + str(Utils.bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
+                    except Exception as e:
+                        Utils.Message.addMessage(f"ERR:UI.__onAddTxStream() failed to create RtpGenerator {syncSourceID}, {e}")
                 # Force redraw
                 redrawScreen = True
             else:
