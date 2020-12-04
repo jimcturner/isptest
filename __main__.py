@@ -4053,6 +4053,7 @@ class ISPTestHTTPServer(object):
             self.end_headers()
 
         # Override log_message() to return *nothing*, otherwise the HTTP server will continually log all HTTP requests
+        # See here: https://stackoverflow.com/a/3389505
         def log_message(self, format, *args):
             return
 
