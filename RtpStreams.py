@@ -4122,7 +4122,7 @@ class RtpGenerator(RtpCommon):
             self.httpServerThread.setName(f"{self.syncSourceIdentifier}:httpServerThread({self.tcpListenPort})")
             self.httpServerThread.start()
 
-            # time.sleep(0.5) # Allow time for the HTTP server to start
+            time.sleep(0.5) # Allow time for the HTTP server to start
             maxConnectionAttempts = 5 # Max no of verification attempts
             # Verify that the http server is actually running, by attempting to connect it
             while maxConnectionAttempts > 0:
@@ -4140,9 +4140,6 @@ class RtpGenerator(RtpCommon):
                         raise Exception(f"ERR:maxConnectionAttempts exceeded")
                 time.sleep(1)
 
-            # # Verify that the http server is actually running, by attempting to connect it
-            # r = requests.get(f"http://127.0.0.1:{self.tcpListenPort}", timeout=1)
-            # r.raise_for_status()  # Will raise an Exception if there was a problem
             Utils.Message.addMessage(
                 f"INFO:RTPGenerator({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
 

@@ -1236,7 +1236,6 @@ class UI(object):
                             # If we're still in the middle of the list, append a ','
                             UDP_RX_PORTS += ","
 
-
             except Exception as e:
                 Utils.Message.addMessage(
                     "ERR:UI.__init() Couldn't extract UDP_RX_IP and UDP_RX_PORT(s) from receiversAndSendersList " + \
