@@ -1698,35 +1698,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         # destroyed)
         self.streamIsDeadThreshold_s = Registry.streamIsDeadThreshold_s
 
-        ############# Create an HTTP Server. This is crucial. If it fails, the RtpStream cannot be created as there will
-        # be no way to control or kill it
-
-        # Request an unused TCP port for the HTTP server to listen on
-        self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
-        # Create an HTTP server thread
-        try:
-            Utils.Message.addMessage(
-                f'DBUG: Creating httpServerThread for RtpReceiveStream:{self.__stats["stream_syncSource"]}')
-            self.httpServerThread = threading.Thread(target=self.httpServerThreadCommon,
-                                                     args=(self.tcpListenPort,
-                                                           self.__stats["stream_syncSource"],
-                                                           RtpReceiveStream.HTTPRequestHandler))
-            self.httpServerThread.daemon = False
-            self.httpServerThread.setName(f"{self.syncSourceIdentifier}:httpServerThread({self.tcpListenPort})")
-            self.httpServerThread.start()
-
-            # Verify that the http server is actually running, by attempting to connect it
-            r = requests.get(f"http://127.0.0.1:{self.tcpListenPort}", timeout=1)
-            r.raise_for_status()  # Will raise an Exception if there was a problem
-            Utils.Message.addMessage(
-                f"INFO:RTPReceiveStream({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
-
-        except Exception as e:
-            Utils.Message.addMessage(
-                f'ERR:RtpReceiveStream.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
-            raise Exception(f"RtpReceiveStream({self.syncSourceIdentifier}).__init__() failed to start HTTP Server {e}")
-
-        # Before starting the receive threads, check to see if this is a 'reconstructed stream' with historic values
+        # Before starting the receiver threads, check to see if this is a 'reconstructed stream' with historic values
         # If so, copy the historic values into the _stats{}, eventsList[] and other counters before the threads are launched
         streamsSuccessfullyRecreated = False
         try:
@@ -1760,9 +1732,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                         streamsSuccessfullyRecreated = True
                         Utils.Message.addMessage("Historic stream " + str(self.__stats["stream_syncSource"]) + " recreated")
                     else:
-                        Utils.Message.addMessage("ERR:RtpReceiveStream historicStatsDict key differences " + str(diff) +\
+                        Utils.Message.addMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}) historicStatsDict key differences " + str(diff) +\
                                                  " Aborting import of stats[] dict ")
                         streamsSuccessfullyRecreated = False
+                        raise Exception(
+                            f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__init__() failure to recreate stream from snapshot, {e}")
+
 
         except Exception as e:
             Utils.Message.addMessage("ERR:Stream " + str(self.__stats["stream_syncSource"]) +\
@@ -1770,6 +1745,49 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         if restoredStreamFlag is False or\
                 (restoredStreamFlag and streamsSuccessfullyRecreated):
+            ############# Create an HTTP Server. This is crucial. If it fails, the RtpStream cannot be created as there will
+            # be no way to control or kill it
+
+            # Request an unused TCP port for the HTTP server to listen on
+            self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
+            # Create an HTTP server thread
+            try:
+                Utils.Message.addMessage(
+                    f'DBUG: Creating httpServerThread for RtpReceiveStream:{self.__stats["stream_syncSource"]}')
+                self.httpServerThread = threading.Thread(target=self.httpServerThreadCommon,
+                                                         args=(self.tcpListenPort,
+                                                               self.__stats["stream_syncSource"],
+                                                               RtpReceiveStream.HTTPRequestHandler))
+                self.httpServerThread.daemon = False
+                self.httpServerThread.setName(f"{self.syncSourceIdentifier}:httpServerThread({self.tcpListenPort})")
+                self.httpServerThread.start()
+
+                # time.sleep(0.5)
+                maxConnectionAttempts = 5
+                # Verify that the http server is actually running, by attempting to connect it
+                while maxConnectionAttempts > 0:
+                    try:
+                        r = requests.get(f"http://127.0.0.1:{self.tcpListenPort}", timeout=1)
+                        r.raise_for_status()  # Will raise an Exception if there was a problem
+                        break
+                    except:
+                        # Decrement maxConnectionAttempts
+                        maxConnectionAttempts -= 1
+                        Utils.Message.addMessage(f"INFO:RTPReceiveStream({self.syncSourceIdentifier}) http server validation, "
+                                                 f"{maxConnectionAttempts} remaining")
+                        if maxConnectionAttempts < 1:
+                            raise Exception(f"ERR:maxConnectionAttempts {maxConnectionAttempts} exceeded")
+                    time.sleep(1)
+
+                Utils.Message.addMessage(
+                    f"INFO:RTPReceiveStream({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
+
+            except Exception as e:
+                Utils.Message.addMessage(
+                    f'ERR:RtpReceiveStream.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
+                raise Exception(
+                    f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__init__() failed to start HTTP Server {e}")
+
             # Create a _consumeReceiveQueueThread
             self.queueReceiverThreadActiveFlag = True # Used as a signal to shut down the thread
             self.queueReceiverThread = threading.Thread(target=self.__queueReceiverThread, args=())
