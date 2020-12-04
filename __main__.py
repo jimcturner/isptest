@@ -800,6 +800,8 @@ class UI(object):
         # Stores the most recent message - used to determine whether we need to redraw the message table
         self.lastMessageAdded = ""
 
+        self.latestTxStreamStats = {} # Used to snapshot the stream parameters of the most recenrtly added stream
+                                        # This is used to prepopulate the 'add new stream' table
         # Get Initial snapshot of current verbosity level
         self.intialVerbosityLevel = Utils.Message.verbosityLevel
         # Flag to turn on/off error messages (verbosity level 1)
@@ -1787,9 +1789,7 @@ class UI(object):
         if self.operationMode == 'LOOPBACK' or self.operationMode == 'TRANSMIT':
 
             # Grab the stats of the most recent added tx stream, and make a copy derived from it's settings
-            # Check that there are actually some stream settings to copy
-            if len(self.latestTxStreamStats) > 0:
-
+            try:
                 # Use stats of existing tx stream to derive setup parameters for new stream
                 syncSourceID = self.latestTxStreamStats['Sync Source ID'] + 1
                 sourcePort = self.latestTxStreamStats['Tx Source Port'] + 1
@@ -1798,6 +1798,17 @@ class UI(object):
                 packetLength = self.latestTxStreamStats['Packet size']
                 friendlyName = str(syncSourceID)
 
+            except Exception as e:
+                # Otherwise specify some defaults
+                Utils.Message.addMessage(f"ERR:UI.__onAddTxStream prev stream parameters unavailable, using default values {e}")
+                syncSourceID = random.randint(1000, 2000) # Randomly generated value
+                sourcePort = 0
+                destPort = 0
+                destAddr = ""
+                packetLength = 1300
+                friendlyName = str(syncSourceID)
+
+            try:
                 # As a default, set time to live to be 1hr
                 timeToLive = Registry.defaultTxStreamTimeToLive_sec
                 # As a default, set tx rate to be 1 Mbps
@@ -1988,12 +1999,15 @@ class UI(object):
                         Utils.Message.addMessage("[a] Added new " + str(Utils.bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
                     except Exception as e:
                         Utils.Message.addMessage(f"ERR:UI.__onAddTxStream() failed to create RtpGenerator {syncSourceID}, {e}")
-                # Force redraw
-                redrawScreen = True
-            else:
-                # Note. This code should never be reachable because it shouldn't be possible to start in TRANSMIT mode
-                # without ever having specified an initial stream
-                Utils.Message.addMessage("ERR: No previous Tx stream stats to copy from. New stream not added")
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:UI.__onAddTxStream() failed to add new stream {e}")
+
+            # Force redraw
+            redrawScreen = True
+            # else:
+            #     # Note. This code should never be reachable because it shouldn't be possible to start in TRANSMIT mode
+            #     # without ever having specified an initial stream
+            #     Utils.Message.addMessage("ERR: No previous Tx stream stats to copy from. New stream not added")
 
     # 'd' -  Delete selected stream
     def __onDeleteStream(self):
