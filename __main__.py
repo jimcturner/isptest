@@ -4052,6 +4052,10 @@ class ISPTestHTTPServer(object):
             self.send_header('Content-type', contentType)
             self.end_headers()
 
+        # Override log_message() to return *nothing*, otherwise the HTTP server will continually log all HTTP requests
+        def log_message(self, format, *args):
+            return
+
         # # Split the url path into its component parts. Ignore the initial '/'
         # Returns a list
         def splitPath(self, completePath):
