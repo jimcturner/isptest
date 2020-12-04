@@ -2345,13 +2345,21 @@ class UI(object):
                 api = Utils.APIHelper(self.selectedStream["httpPort"])
                 # Get latest stable tracerouteHopsList from selected stream from the api
                 lastUpdated, tracerouteHopsList = api.getByURL("/traceroute")
-                # Get the stats dict
-                stats = api.getStats(keyStartsWith="stream")
-                # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
-                friendlyName = str(stats["stream_friendly_name"]).rstrip()
-                syncSourceID = str(stats["stream_syncSource"])
             except Exception as e:
                 Utils.Message.addMessage("ERR: UI.__onShowTracerouteDialogue(). getTraceRouteHopsList() " + str(e))
+
+            # Get the stats dict from the /stats endpoint - this may fail for a TRANSMITTER
+            #  if the RtpStreamResults object ash not yet been created
+            try:
+                stats = api.getStats(keyStartsWith="stream")
+                # # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
+                friendlyName = str(stats["stream_friendly_name"]).rstrip()
+                syncSourceID = str(stats["stream_syncSource"])
+            except:
+                # If the /stats endpoint fails, try to get the info RtpGenerator /txstats endpoint instead
+                stats = api.getByURL("/txstats")
+                friendlyName = str(stats["stream_friendly_name"]).rstrip()
+                syncSourceID = str(stats["stream_syncSource"])
 
             # Create a list of tuples containing the index no and the IP address and whois name
             tableContents = []
