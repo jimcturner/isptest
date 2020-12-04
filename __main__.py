@@ -2348,18 +2348,21 @@ class UI(object):
             except Exception as e:
                 Utils.Message.addMessage("ERR: UI.__onShowTracerouteDialogue(). getTraceRouteHopsList() " + str(e))
 
-            # Get the stats dict from the /stats endpoint - this may fail for a TRANSMITTER
-            #  if the RtpStreamResults object ash not yet been created
+            # Get the friendly name for the traceroute table title
+            # Get the stats dict from the /stats (RECEIVE mode) or txstats (TRANSMIT mode) endpoint -
             try:
-                stats = api.getStats(keyStartsWith="stream")
-                # # Get friendly name of the selected stream and strip off the trailing whitespace (if any)
+                if self.selectedStream["streamType"] == "RtpGenerator":
+                    apiURL = "/txstats"
+                    kwargs = {}
+                else:
+                    apiURL = "/stats"
+                    kwargs = {"keyStartsWith": "stream"} # Minimise the amount of data requested
+
+                stats = api.getByURL(apiURL, **kwargs)
                 friendlyName = str(stats["stream_friendly_name"]).rstrip()
                 syncSourceID = str(stats["stream_syncSource"])
-            except:
-                # If the /stats endpoint fails, try to get the info RtpGenerator /txstats endpoint instead
-                stats = api.getByURL("/txstats")
-                friendlyName = str(stats["stream_friendly_name"]).rstrip()
-                syncSourceID = str(stats["stream_syncSource"])
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:UI.__renderTracerouteTable() GET {apiURL}, {e}")
 
             # Create a list of tuples containing the index no and the IP address and whois name
             tableContents = []
