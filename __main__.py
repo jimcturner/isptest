@@ -2340,9 +2340,9 @@ class UI(object):
         syncSourceID = 0
         lastUpdated = None
         if self.selectedStream is not None:
+            # Create an APIHelper for the selected stream
+            api = Utils.APIHelper(self.selectedStream["httpPort"])
             try:
-                # Create an APIHelper for the selected stream
-                api = Utils.APIHelper(self.selectedStream["httpPort"])
                 # Get latest stable tracerouteHopsList from selected stream from the api
                 lastUpdated, tracerouteHopsList = api.getByURL("/traceroute")
             except Exception as e:
