@@ -2276,6 +2276,28 @@ class RtpReceiveStream(RtpReceiveCommon):
             pass
             # Utils.Message.addMessage("DBUG: Decoded header: " + str(e) + str(self.rtpStream[0].isptestHeaderData))
 
+    # Puts the current stream stats or events (the results) in a queue to be transmitted back to the transmitter
+    # (if the transmitter is an instance of isptest)
+    # Note: The correspoinding results receiver is able to ignore any events it has already received
+    # def addResultsToTxQueue(stats, eventsToBeSent, resultsTxQueue, destAddr, destPort):
+    # resultsType is a dict key  (a string) that will
+    # matched by the transmitter to establish what kind of data is contained
+    # within contentsToBeSent
+    def addMessageToTxQueue(self, messageType, messageContents, resultsTxQueue, destAddr, destPort):
+        try:
+            # Create a dictionary containing the data to be sent
+            msg = {messageType: messageContents}
+            # Pickle the message so that it can be sent
+            # pickledMessage = pickle.dumps(msg, protocol=2)
+            pickledMessage = pickle.dumps(msg)
+            # If compression is enabled, compress the message string before sending
+            if Registry.rtpReceiveStreamCompressResultsBeforeSending:
+                pickledMessage = bz2.compress(pickledMessage)
+            # add the pickled message to the txMessageQueue
+            resultsTxQueue.put([pickledMessage, destAddr, destPort])
+        except Exception as e:
+            raise Exception("ERR:RtpReceiveStream.__samplingThread.addMessageToTxQueue() " + str(e))
+
     # This thread updates the 1sec averages, moving counters and also housekeeps
     def __samplingThread(self):
         # Puts the current stream stats and events (the results) in a queue to be transmitted back to the transmitter
@@ -2296,28 +2318,6 @@ class RtpReceiveStream(RtpReceiveCommon):
 
             except Exception as e:
                 Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread.addResultsToTxQueue() " + str(e))
-
-        # Puts the current stream stats or events (the results) in a queue to be transmitted back to the transmitter
-        # (if the transmitter is an instance of isptest)
-        # Note: The correspoinding results receiver is able to ignore any events it has already received
-        # def addResultsToTxQueue(stats, eventsToBeSent, resultsTxQueue, destAddr, destPort):
-        # resultsType is a dict key  (a string) that will
-        # matched by the transmitter to establish what kind of data is contained
-        # within contentsToBeSent
-        def addMessageToTxQueue(messageType, messageContents, resultsTxQueue, destAddr, destPort):
-            try:
-                # Create a dictionary containing the data to be sent
-                msg = {messageType: messageContents}
-                # Pickle the message so that it can be sent
-                # pickledMessage = pickle.dumps(msg, protocol=2)
-                pickledMessage = pickle.dumps(msg)
-                # If compression is enabled, compress the message string before sending
-                if Registry.rtpReceiveStreamCompressResultsBeforeSending:
-                    pickledMessage = bz2.compress(pickledMessage)
-                # add the pickled message to the txMessageQueue
-                resultsTxQueue.put([pickledMessage, destAddr, destPort])
-            except Exception as e:
-                raise Exception("ERR:RtpReceiveStream.__samplingThread.addMessageToTxQueue() " + str(e))
 
         # This function attempts to calculate the mean period between events (such as glitch, or jitter)
         # to provide a value of how often, on average, the event has occurred
@@ -2936,15 +2936,16 @@ class RtpReceiveStream(RtpReceiveCommon):
                                 self.__stats["stream_rxPort"] in self.txQueuesDict:
 
                             # Send a copy of the stats dict
-                            addMessageToTxQueue("stats", dict(self.__stats), self.txQueuesDict[self.__stats["stream_rxPort"]],
+                            self.addMessageToTxQueue("stats", dict(self.__stats), self.txQueuesDict[self.__stats["stream_rxPort"]],
                                                 self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"])
 
                             # Get the last 5 events for this stream
                             NO_OF_PREV_EVENTS_TO_SEND = 5
                             eventsList = self.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
-                            # addResultsToTxQueue(self.__stats, eventsList, self.txQueuesDict[self.__stats["stream_rxPort"]],
-                            #                     self.__stats["stream_srcAddress"],
-                            #                     self.__stats["stream_srcPort"])
+                            # Send the events list
+                            self.addMessageToTxQueue("events", eventsList,
+                                                     self.txQueuesDict[self.__stats["stream_rxPort"]],
+                                                     self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"])
 
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
@@ -6609,9 +6610,16 @@ class ResultsReceiver(object):
                             lastKnownExpectedNoOfFragments = fragment[1]
                             # Update the 'expected' packets counter (we can only do this once, per set of fragments)
                             self.receiveResultsExpectedPacketsCounter += fragment[1]
-
                     except Exception as e:
-                        Utils.Message.addMessage("ERR: __resultsReceiverThread(single fragment): Unpickling error " + str(e))
+                        pass
+
+                    # Check to see if an rtpStreamResults already exists for this Tx Stream, if not create it
+                    if self.relatedRtpGenerator.relatedRtpStreamResults is None:
+                        # Create new RtpStreamResults object
+                        rtpStreamResults = RtpStreamResults(stats["stream_syncSource"],
+                                                            controllerTCPPort=self.relatedRtpGenerator.controllerTCPPort)
+                        # Otherwise just get a handle on the existing object
+                        rtpStreamResults = self.relatedRtpGenerator.relatedRtpStreamResults
 
                     # Check if we have some new stats data
                     if len(stats) > 0:
@@ -6631,31 +6639,33 @@ class ResultsReceiver(object):
 
                         if statsValidated:
                             try:
-                                # Firstly check to see if the RtpStreamResults object already exists for this stream
-                                if self.relatedRtpGenerator.relatedRtpStreamResults is not None:
-                                    # It does exist, so get a handle on it
-                                    rtpStreamResults = self.relatedRtpGenerator.relatedRtpStreamResults
-                                    # And update the stats
-                                    rtpStreamResults.updateStats(stats)
-                                else:
-                                    # Otherwise that stream object doesn't exist yet, so create it
-                                    Utils.Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
-                                                       + str(stats["stream_syncSource"]))
-                                    # Create new RtpStreamResults object
-                                    rtpStreamResults = RtpStreamResults(stats["stream_syncSource"],
-                                                                        controllerTCPPort=self.relatedRtpGenerator.controllerTCPPort)
-
-
-                                    # Pass the rtpStreamResults back to the related RtpGenerator object
-                                    self.relatedRtpGenerator.relatedRtpStreamResults = rtpStreamResults
-                                    # Immediately update the stats
-                                    rtpStreamResults.updateStats(stats)
+                                # Update the stats
+                                rtpStreamResults.updateStats(stats)
+                                # # Firstly check to see if the RtpStreamResults object already exists for this stream
+                                # if self.relatedRtpGenerator.relatedRtpStreamResults is not None:
+                                #     # It does exist, so get a handle on it
+                                #     rtpStreamResults = self.relatedRtpGenerator.relatedRtpStreamResults
+                                #     # And update the stats
+                                #     rtpStreamResults.updateStats(stats)
+                                # else:
+                                #     # Otherwise that stream object doesn't exist yet, so create it
+                                #     Utils.Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
+                                #                        + str(stats["stream_syncSource"]))
+                                #     # Create new RtpStreamResults object
+                                #     rtpStreamResults = RtpStreamResults(stats["stream_syncSource"],
+                                #                                         controllerTCPPort=self.relatedRtpGenerator.controllerTCPPort)
+                                #
+                                #
+                                #     # Pass the rtpStreamResults back to the related RtpGenerator object
+                                #     self.relatedRtpGenerator.relatedRtpStreamResults = rtpStreamResults
+                                #     # Immediately update the stats
+                                #     rtpStreamResults.updateStats(stats)
 
                             except Exception as e:
                                 Utils.Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict. " + str(e))
 
                     # Check to see if the new eventList contains any data and also that there exists a stream object to add the data to
-                    if len(latestEventsList) > 0 and len(stats) > 0:
+                    if len(latestEventsList) > 0:
                         try:
                             # validate each of the newly received events to check that they have not been corrupted by
                             # the pickling/unpickling process.
