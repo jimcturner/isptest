@@ -6611,7 +6611,7 @@ class ResultsReceiver(object):
                             # Update the 'expected' packets counter (we can only do this once, per set of fragments)
                             self.receiveResultsExpectedPacketsCounter += fragment[1]
                     except Exception as e:
-                        pass
+                        Utils.Message.addMessage("ERR: __resultsReceiverThread(single fragment): Unpickling error " + str(e))
 
                     # Check to see if an rtpStreamResults already exists for this Tx Stream, if not create it
                     if self.relatedRtpGenerator.relatedRtpStreamResults is None:
