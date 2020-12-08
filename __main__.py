@@ -1600,7 +1600,6 @@ class UI(object):
                 filenamePrefix = "traceroute_history_"
 
             elif self.displayPopup == self.__renderCompareStreamsTable:
-                Utils.Message.addMessage(f"save CompareStreamsTable report....not implemented yet")
                 # Specify filename prefix
                 filenamePrefix = "stream_comparison"
                 apiURL = None # API not used for this, we'll invoke the RtpStreamComparer object directly

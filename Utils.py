@@ -1905,6 +1905,10 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
     # See here: https://stackoverflow.com/a/3389505
     def log_message(self, format, *args):
         return
+
+    # def log_error(self, format, *args):
+    #     return
+
     # Method to retrieve list of Events and return them as a list that is **already json encoded**
     @abstractmethod
     def getEventsListAsJson(self, **kwargs):
