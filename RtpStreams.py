@@ -3553,14 +3553,11 @@ class RtpReceiveStream(RtpReceiveCommon):
             if self.__stats["stream_rxPort"] in self.txQueuesDict:
                 Utils.Message.addMessage("DBUG:sendControlMessageToTransmitter() msg to send: " + str(msg))
                 try:
-                    # wrap the message in a dict with the "control" key. This will be detected in ResultsReceiver.__resultsReceiverThread()
-                    wrappedMessage = {"control": msg}
-                    # pickle the wrapped message
-                    # pickledMessage = pickle.dumps(wrappedMessage, protocol=2)
-                    pickledMessage = pickle.dumps(wrappedMessage)
-                    # add the pickled message to the txMessageQueue
                     txQueue = self.txQueuesDict[self.__stats["stream_rxPort"]]
-                    txQueue.put([pickledMessage, self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"]])
+                    destAddr = self.__stats["stream_srcAddress"]
+                    destPort = self.__stats["stream_srcPort"]
+                    # Send the control message back to the
+                    self.addMessageToTxQueue("control", msg, txQueue, destAddr, destPort)
                     return {"status": True, "error": None}
 
                 except Exception as e:
