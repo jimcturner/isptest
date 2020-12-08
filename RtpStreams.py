@@ -6573,11 +6573,10 @@ class ResultsReceiver(object):
                                         # Utils.Message.addMessage("DBG:" + str(unPickledMessage))
 
                                         # Attempt to extract the stats dictionary and eventsList list
-
                                         if "stats" in unPickledMessage:
                                             stats = unPickledMessage["stats"]
-                                        if "eventList" in unPickledMessage:
-                                            latestEventsList = unPickledMessage["eventList"]
+                                        if "events" in unPickledMessage:
+                                            latestEventsList = unPickledMessage["events"]
                                         if "control" in unPickledMessage:
                                             controlMessage = unPickledMessage["control"]
                                             Utils.Message.addMessage(
@@ -6613,14 +6612,6 @@ class ResultsReceiver(object):
                     except Exception as e:
                         Utils.Message.addMessage("ERR: __resultsReceiverThread(single fragment): Unpickling error " + str(e))
 
-                    # Check to see if an rtpStreamResults already exists for this Tx Stream, if not create it
-                    if self.relatedRtpGenerator.relatedRtpStreamResults is None:
-                        # Create new RtpStreamResults object
-                        rtpStreamResults = RtpStreamResults(stats["stream_syncSource"],
-                                                            controllerTCPPort=self.relatedRtpGenerator.controllerTCPPort)
-                        # Otherwise just get a handle on the existing object
-                        rtpStreamResults = self.relatedRtpGenerator.relatedRtpStreamResults
-
                     # Check if we have some new stats data
                     if len(stats) > 0:
                         # Now perform a validation of the stas dictionary by attempting to iterate over the dictionary
@@ -6639,33 +6630,23 @@ class ResultsReceiver(object):
 
                         if statsValidated:
                             try:
+                                # Check to see if an rtpStreamResults already exists for this Tx Stream, if not create it
+                                if self.relatedRtpGenerator.relatedRtpStreamResults is None:
+                                    # Create new RtpStreamResults object
+                                    self.relatedRtpGenerator.relatedRtpStreamResults =\
+                                        RtpStreamResults(stats["stream_syncSource"],
+                                                                        controllerTCPPort=self.relatedRtpGenerator.controllerTCPPort)
                                 # Update the stats
-                                rtpStreamResults.updateStats(stats)
-                                # # Firstly check to see if the RtpStreamResults object already exists for this stream
-                                # if self.relatedRtpGenerator.relatedRtpStreamResults is not None:
-                                #     # It does exist, so get a handle on it
-                                #     rtpStreamResults = self.relatedRtpGenerator.relatedRtpStreamResults
-                                #     # And update the stats
-                                #     rtpStreamResults.updateStats(stats)
-                                # else:
-                                #     # Otherwise that stream object doesn't exist yet, so create it
-                                #     Utils.Message.addMessage("INFO:_resultsReceiverThread(). Stream doesn't exist, adding: "
-                                #                        + str(stats["stream_syncSource"]))
-                                #     # Create new RtpStreamResults object
-                                #     rtpStreamResults = RtpStreamResults(stats["stream_syncSource"],
-                                #                                         controllerTCPPort=self.relatedRtpGenerator.controllerTCPPort)
-                                #
-                                #
-                                #     # Pass the rtpStreamResults back to the related RtpGenerator object
-                                #     self.relatedRtpGenerator.relatedRtpStreamResults = rtpStreamResults
-                                #     # Immediately update the stats
-                                #     rtpStreamResults.updateStats(stats)
+                                self.relatedRtpGenerator.relatedRtpStreamResults.updateStats(stats)
 
                             except Exception as e:
                                 Utils.Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict. " + str(e))
 
-                    # Check to see if the new eventList contains any data and also that there exists a stream object to add the data to
-                    if len(latestEventsList) > 0:
+                    # Check to see if the new eventList contains any data and also that there exists a Results object to add the data to
+                    if len(latestEventsList) > 0 and self.relatedRtpGenerator.relatedRtpStreamResults is not None:
+                        # Get handle on an (existing) RtpStreamResults object
+                        rtpStreamResults = self.relatedRtpGenerator.relatedRtpStreamResults
+                        syncSourceID = rtpStreamResults.syncSourceID
                         try:
                             # validate each of the newly received events to check that they have not been corrupted by
                             # the pickling/unpickling process.
@@ -6694,9 +6675,7 @@ class ResultsReceiver(object):
                             # If all the received events in latestEventsList are valid, update the events list for the specified stream
                             if eventsValidated:
                                 # Utils.Message.addMessage("DBUG: **latestEventsList: " + str(latestEventsList[-1].eventNo))
-                                syncSourceID = stats["stream_syncSource"]
-                                # Get handle on an (existing) RtpStreamResults object
-                                rtpStreamResults = self.relatedRtpGenerator.relatedRtpStreamResults
+                                # syncSourceID = stats["stream_syncSource"]
 
                                 # Update (All) Events list
                                 try:
