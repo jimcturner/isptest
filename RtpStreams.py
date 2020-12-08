@@ -2282,7 +2282,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         # (if the transmitter is an instance of isptest)
         # Rather than sending the entire events list, we only send the last five events.
         # The correspoinding results receiver is able to ignore any events it has already received
-        def addResultsToTxQueue(stats, eventsToBeSent, resultsTxQueue, destAddr, destPort):
+        def addResultsToTxQueueOld(stats, eventsToBeSent, resultsTxQueue, destAddr, destPort):
             try:
                 # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
                 msg = {"stats": stats, "eventList": eventsToBeSent}
@@ -2296,6 +2296,28 @@ class RtpReceiveStream(RtpReceiveCommon):
 
             except Exception as e:
                 Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread.addResultsToTxQueue() " + str(e))
+
+        # Puts the current stream stats or events (the results) in a queue to be transmitted back to the transmitter
+        # (if the transmitter is an instance of isptest)
+        # Note: The correspoinding results receiver is able to ignore any events it has already received
+        # def addResultsToTxQueue(stats, eventsToBeSent, resultsTxQueue, destAddr, destPort):
+        # resultsType is a dict key  (a string) that will
+        # matched by the transmitter to establish what kind of data is contained
+        # within contentsToBeSent
+        def addMessageToTxQueue(messageType, messageContents, resultsTxQueue, destAddr, destPort):
+            try:
+                # Create a dictionary containing the data to be sent
+                msg = {messageType: messageContents}
+                # Pickle the message so that it can be sent
+                # pickledMessage = pickle.dumps(msg, protocol=2)
+                pickledMessage = pickle.dumps(msg)
+                # If compression is enabled, compress the message string before sending
+                if Registry.rtpReceiveStreamCompressResultsBeforeSending:
+                    pickledMessage = bz2.compress(pickledMessage)
+                # add the pickled message to the txMessageQueue
+                resultsTxQueue.put([pickledMessage, destAddr, destPort])
+            except Exception as e:
+                raise Exception("ERR:RtpReceiveStream.__samplingThread.addMessageToTxQueue() " + str(e))
 
         # This function attempts to calculate the mean period between events (such as glitch, or jitter)
         # to provide a value of how often, on average, the event has occurred
@@ -2913,12 +2935,17 @@ class RtpReceiveStream(RtpReceiveCommon):
                             self.__stats["packet_data_received_1S_bytes"] > 0 and \
                                 self.__stats["stream_rxPort"] in self.txQueuesDict:
 
+                            # Send a copy of the stats dict
+                            addMessageToTxQueue("stats", dict(self.__stats), self.txQueuesDict[self.__stats["stream_rxPort"]],
+                                                self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"])
+
                             # Get the last 5 events for this stream
                             NO_OF_PREV_EVENTS_TO_SEND = 5
                             eventsList = self.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
-                            addResultsToTxQueue(self.__stats, eventsList, self.txQueuesDict[self.__stats["stream_rxPort"]],
-                                                self.__stats["stream_srcAddress"],
-                                                self.__stats["stream_srcPort"])
+                            # addResultsToTxQueue(self.__stats, eventsList, self.txQueuesDict[self.__stats["stream_rxPort"]],
+                            #                     self.__stats["stream_srcAddress"],
+                            #                     self.__stats["stream_srcPort"])
+
                 except Exception as e:
                     Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
