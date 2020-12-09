@@ -2350,12 +2350,6 @@ def doubleToPatval14bit(inputVal):
     # print(f"lsb<<8 {hex(lsb<<8)}, {bin(lsb<<8)}, msb>>8{hex(msb>>8)}, {bin(msb>>8)}")
     return f"msblsb:{hex(msblsb)}, lsbmsb:{hex(lsbmsb)}, reversedMsbLsb {hex(reversedMsbLsb)}"
 
-# This function will call targetObject with args and kwargs and spin it off as a seperate process
-# it will optionally take a processName that will be applied to the process
-# On success it will return the pid of the new process or raise an Exception on failure
-def createProcessWrapper(targetObject, *args, **kwargs, processName=None, createProcessWrapperShutdownFlag=None):
-    pass
-
 # Takes an existing Object, and spins it off as a subprocess
 # objectType is the type of object (eg RtpGenerator) and initArgs[] is a list of parameters that would normally
 # be expected to be passed to that objects __init__() method when it was first created
@@ -2373,9 +2367,12 @@ class ProcessCreator(object):
         self.initKwargs = kwargs
         self.processName = processName
         # Create the sub-process
-        p = self.__createProcess()
-        # return a reference to the newly created process
-        return p
+        self.theNewProcess = self.__createProcess()
+
+
+    # Returns a reference to the new process
+    def getProcess(self):
+        return self.theNewProcess
 
     # This method instantiates the Object specified by self.objectType and passes in args and kwargs
     def __createObject(self):
@@ -2384,6 +2381,7 @@ class ProcessCreator(object):
         except Exception as e:
             raise Exception (f"ProcessCreator.__createObject() {e}")
 
+    # Actually create the subprocess (with a name set accordingly)
     def __createProcess(self):
         try:
             p = mp.Process(target=self.__createObject, name=self.processName, args=())
@@ -2393,28 +2391,28 @@ class ProcessCreator(object):
         except Exception as e:
             raise Exception (f"ProcessCreator.__createProcess() {e}")
 
-# Function to test the ProcessCreator class
-def testProcessCreator():
-    testTXDict = {},
-    testTXDictMutex = threading.Lock(),
-    testResultsDict = {},
-    testResultsDictMutex = threading.Lock()
-
-    args = [
-        "127.0.0.1",
-        2001,
-        1024 * 128,
-        1300,
-        12345,
-        -1,
-        testTXDict,
-        testTXDictMutex,  ## These can't be passed to a subprocess
-        testResultsDict,
-        testResultsDictMutex
-    ]
-    # attempt to create a subprocess
-    rtpGeneratorSubProcess = ProcessCreator(RtpGenerator, args)
-
-    while True:
-        print(str(datetime.datetime.now()))
-        time.sleep(5)
+# # Function to test the ProcessCreator class
+# def testProcessCreator():
+#     testTXDict = {},
+#     testTXDictMutex = threading.Lock(),
+#     testResultsDict = {},
+#     testResultsDictMutex = threading.Lock()
+#
+#     args = [
+#         "127.0.0.1",
+#         2001,
+#         1024 * 128,
+#         1300,
+#         12345,
+#         -1,
+#         testTXDict,
+#         testTXDictMutex,  ## These can't be passed to a subprocess
+#         testResultsDict,
+#         testResultsDictMutex
+#     ]
+#     # attempt to create a subprocess
+#     rtpGeneratorSubProcess = ProcessCreator(RtpGenerator, args)
+#
+#     while True:
+#         print(str(datetime.datetime.now()))
+#         time.sleep(5)

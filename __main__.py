@@ -4705,6 +4705,29 @@ def shutdownApplicationSignalHandler(signum, frame):
 
 
 def main(argv):
+    # Function to test the ProcessCreator class
+    def testProcessCreator():
+        args = [
+            "127.0.0.1",
+            2001,
+            1024 * 128,
+            1300,
+            12345,
+            -1,
+        ]
+        kwargs = {
+            "controllerTCPPort": 10000
+        }
+        # attempt to create a subprocess
+        rtpGeneratorSubProcess = Utils.ProcessCreator(RtpGenerator, *args, processName="subprocess_test", **kwargs)
+
+        while True:
+            pid = rtpGeneratorSubProcess.getProcess().pid
+            name = rtpGeneratorSubProcess.getProcess().name
+            print(f"datetime.datetime.now() {pid}, {name}")
+            time.sleep(5)
+
+    testProcessCreator()
     # testObject = Utils.TestObject()
     #
     # saveStatus = Utils.exportObjectToDisk(testObject)
