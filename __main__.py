@@ -101,6 +101,7 @@ from prompt_toolkit.shortcuts import message_dialog, yes_no_dialog, input_dialog
 from prompt_toolkit.styles import Style
 import pyperclip
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
+import multiprocessing as mp
 
 # Additional experimental libraries
 
@@ -4727,6 +4728,7 @@ def main(argv):
             print(f"datetime.datetime.now() {pid}, {name}")
             time.sleep(5)
 
+    mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs
     testProcessCreator()
     # testObject = Utils.TestObject()
     #
