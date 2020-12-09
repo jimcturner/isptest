@@ -2354,3 +2354,49 @@ def doubleToPatval14bit(inputVal):
 # On success it will return the pid of the new process or raise an Exception on failure
 def createProcessWrapper(targetObject, *args, **kwargs, processName=None, createProcessWrapperShutdownFlag=None):
     pass
+
+# Takes an existing Object, and spins it off as a subprocess
+# objectType is the type of object (eg RtpGenerator) and initArgs[] is a list of parameters that would normally
+# be expected to be passed to that objects __init__() method when it was first created
+# Note: This won't work for all objects. In fact, it can only work for objects that can be pickled
+# Therefore objects that take init args like file descriptors, sockets, mutexes etc wonlt work.
+# The objects should to be self contained
+class ProcessCreator(object):
+    def __init__(self, targetObject, *args, processName=None, createProcessWrapperShutdownFlag=None, **kwargs) -> None:
+        super().__init__()
+        print ("ProcessCreator called")
+        # Take a copy of the source object type to ber created
+        self.targetObject = targetObject
+        # Take a copy of the list of args that will be passed to the constructor of the object specified
+        self.initArgs = args
+        self.initKwargs = kwargs
+        # Create the sub-process
+        self.__createProcess()
+
+    # def createRtpGenerator(self):
+    #     print("createRtpGenerator() called")
+    #     try:
+    #         rtpGenerator = RtpGenerator(*self.initArgs)
+    #         # loopCounter = 20
+    #         # while loopCounter > 0:
+    #         #     print("createRtpGenerator()" + str(loopCounter) + "\r")
+    #         #     loopCounter -= 1
+    #
+    #     except Exception as e:
+    #         print("ERR:createRtpGenerator() " + str(e))
+
+    # This method instantiates the Object specified by self.objectType
+    def __createObject(self):
+        print("__createObject() called")
+        try:
+            newObject = self.targetObject(*self.initArgs, **self.initKwargs)
+        except Exception as e:
+            print("ERR:createObject() " + str(e))
+
+    def __createProcess(self):
+        print("createProcess() called")
+        try:
+            p = mp.Process(target=self.__createObject, args=())
+            p.start()
+        except Exception as e:
+            print("ERR:__createProcess() " + str(e))
