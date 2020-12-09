@@ -2348,3 +2348,9 @@ def doubleToPatval14bit(inputVal):
     print(f"reversedMsbLsb {chunk(reversedMsbLsb)}")
     # print(f"lsb<<8 {hex(lsb<<8)}, {bin(lsb<<8)}, msb>>8{hex(msb>>8)}, {bin(msb>>8)}")
     return f"msblsb:{hex(msblsb)}, lsbmsb:{hex(lsbmsb)}, reversedMsbLsb {hex(reversedMsbLsb)}"
+
+# This function will call targetObject with args and kwargs and spin it off as a seperate process
+# it will optionally take a processName that will be applied to the process
+# On success it will return the pid of the new process or raise an Exception on failure
+def createProcessWrapper(targetObject, *args, **kwargs, processName=None, createProcessWrapperShutdownFlag=None):
+    pass
