@@ -29,6 +29,7 @@ from Registry import Registry
 from ipwhois import IPWhois, exceptions
 import math
 import requests
+import multiprocessing as mp
 
 # Formats a datetime.timedelta object as a simple string hh:mm:ss
 # If showDays=True, returns dd:hh:mm:ss
@@ -2362,7 +2363,7 @@ def createProcessWrapper(targetObject, *args, **kwargs, processName=None, create
 # Therefore objects that take init args like file descriptors, sockets, mutexes etc wonlt work.
 # The objects should to be self contained
 class ProcessCreator(object):
-    def __init__(self, targetObject, *args, processName=None, createProcessWrapperShutdownFlag=None, **kwargs) -> None:
+    def __init__(self, targetObject, *args, processName=None, **kwargs) -> None:
         super().__init__()
         print ("ProcessCreator called")
         # Take a copy of the source object type to ber created
@@ -2370,33 +2371,50 @@ class ProcessCreator(object):
         # Take a copy of the list of args that will be passed to the constructor of the object specified
         self.initArgs = args
         self.initKwargs = kwargs
+        self.processName = processName
         # Create the sub-process
-        self.__createProcess()
+        p = self.__createProcess()
+        # return a reference to the newly created process
+        return p
 
-    # def createRtpGenerator(self):
-    #     print("createRtpGenerator() called")
-    #     try:
-    #         rtpGenerator = RtpGenerator(*self.initArgs)
-    #         # loopCounter = 20
-    #         # while loopCounter > 0:
-    #         #     print("createRtpGenerator()" + str(loopCounter) + "\r")
-    #         #     loopCounter -= 1
-    #
-    #     except Exception as e:
-    #         print("ERR:createRtpGenerator() " + str(e))
-
-    # This method instantiates the Object specified by self.objectType
+    # This method instantiates the Object specified by self.objectType and passes in args and kwargs
     def __createObject(self):
-        print("__createObject() called")
         try:
             newObject = self.targetObject(*self.initArgs, **self.initKwargs)
         except Exception as e:
-            print("ERR:createObject() " + str(e))
+            raise Exception (f"ProcessCreator.__createObject() {e}")
 
     def __createProcess(self):
-        print("createProcess() called")
         try:
-            p = mp.Process(target=self.__createObject, args=())
+            p = mp.Process(target=self.__createObject, name=self.processName, args=())
             p.start()
+            # If successful, return a reference to the newly created process
+            return p
         except Exception as e:
-            print("ERR:__createProcess() " + str(e))
+            raise Exception (f"ProcessCreator.__createProcess() {e}")
+
+# Function to test the ProcessCreator class
+def testProcessCreator():
+    testTXDict = {},
+    testTXDictMutex = threading.Lock(),
+    testResultsDict = {},
+    testResultsDictMutex = threading.Lock()
+
+    args = [
+        "127.0.0.1",
+        2001,
+        1024 * 128,
+        1300,
+        12345,
+        -1,
+        testTXDict,
+        testTXDictMutex,  ## These can't be passed to a subprocess
+        testResultsDict,
+        testResultsDictMutex
+    ]
+    # attempt to create a subprocess
+    rtpGeneratorSubProcess = ProcessCreator(RtpGenerator, args)
+
+    while True:
+        print(str(datetime.datetime.now()))
+        time.sleep(5)
