@@ -4709,7 +4709,7 @@ def main(argv):
     # Function to test the ProcessCreator class
     def testProcessCreator():
         args = [
-            "127.0.0.1",
+            "192.168.3.18",
             2001,
             1024 * 128,
             1300,
@@ -4720,12 +4720,16 @@ def main(argv):
             "controllerTCPPort": 10000
         }
         # attempt to create a subprocess
-        rtpGeneratorSubProcess = Utils.ProcessCreator(RtpGenerator, *args, processName="subprocess_test", **kwargs)
-
+        try:
+            rtpGeneratorSubProcess = Utils.ProcessCreator(RtpGenerator, *args, processName="subprocess_test", **kwargs)
+        except Exception as e:
+            print(f"Couldn't create subprocess {e}")
+            exit(0)
         while True:
             pid = rtpGeneratorSubProcess.getProcess().pid
             name = rtpGeneratorSubProcess.getProcess().name
-            print(f"datetime.datetime.now() {pid}, {name}")
+            is_Alive = rtpGeneratorSubProcess.getProcess().is_alive()
+            print(f"datetime.datetime.now() {pid}, {name}, isAlive:{is_Alive}")
             time.sleep(5)
 
     mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs

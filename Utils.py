@@ -2375,16 +2375,20 @@ class ProcessCreator(object):
         return self.theNewProcess
 
     # This method instantiates the Object specified by self.objectType and passes in args and kwargs
-    def __createObject(self):
+    def createObject(self):
+        print ("__createObject() called")
         try:
             newObject = self.targetObject(*self.initArgs, **self.initKwargs)
         except Exception as e:
             raise Exception (f"ProcessCreator.__createObject() {e}")
+        # # Now sit in infinite loop until some unspecified flag is set
+        # while True:
+        #     time.sleep(1)
 
     # Actually create the subprocess (with a name set accordingly)
     def __createProcess(self):
         try:
-            p = mp.Process(target=self.__createObject, name=self.processName, args=())
+            p = mp.Process(target=self.createObject, name=self.processName, args=())
             p.start()
             # If successful, return a reference to the newly created process
             return p
