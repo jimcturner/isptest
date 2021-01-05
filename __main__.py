@@ -1682,9 +1682,9 @@ class UI(object):
                                 # # Use the current display filter for events to determine which events are exported to the file
                                 # report = selectedRxOrResultsStream.generateReport(eventFilterList=self.filterListForDisplayedEvents[self.selectedFilterNo])
                                 # Invoke the Utils.writeReportToDisk method
-                                fileSavedStatus = Utils.writeReportToDisk(streamReport, fileName=fullSavePath)
                                 maxWidth = 70
-                                if fileSavedStatus == True:
+                                try:
+                                    Utils.writeReportToDisk(streamReport, fileName=fullSavePath)
                                     # Display a message box showing the successful save path + filname
                                     # Query the OS for the the absolute file path (this will be displayed)
 
@@ -1693,9 +1693,9 @@ class UI(object):
                                                             str(absoluteSavePath).center(maxWidth + 3)+ "\n\n" + \
                                                             "<Press a key to continue>".center(maxWidth + 3), \
                                                             "File save Successful", textColour=Term.WHITE, bgColour=Term.GREEN)
-                                else:
+                                except Exception as e:
                                     # Save failed, so show an error
-                                    errorMessage = textwrap.fill(str(fileSavedStatus), width=maxWidth)
+                                    errorMessage = textwrap.fill(str(e), width=maxWidth)
                                     self.__renderMessageBox("Error: Unable to save file:-".center(maxWidth + 3) + "\n" + \
                                                             str(errorMessage).center(maxWidth + 3) + "\n\n" + \
                                                             "<Press a key to continue>".center(maxWidth + 3), \
@@ -1990,8 +1990,14 @@ class UI(object):
 
                     try:
                         # All tx stream parameters validated so create the new RtpGenerator object
-                        rtpGenerator = RtpGenerator(destAddr, destPort, txRate_bps, packetLength, syncSourceID, timeToLive, \
-                                                    uiInstance=self,\
+                        # rtpGenerator = RtpGenerator(destAddr, destPort, txRate_bps, packetLength, syncSourceID, timeToLive, \
+                        #                             uiInstance=self,\
+                        #                             friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
+                        #                             controllerTCPPort=self.controllerTCPPort)
+
+                        rtpGenerator = Utils.ProcessCreator(RtpGenerator, destAddr, destPort, txRate_bps,
+                                                            packetLength, syncSourceID, timeToLive, \
+                                                    uiInstance=None, \
                                                     friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
                                                     controllerTCPPort=self.controllerTCPPort)
 
@@ -4026,11 +4032,9 @@ class ISPTestHTTPServer(object):
     def kill(self):
         # Kill the http server
         try:
-            # self.httpd.shutdown()
-
             Utils.Message.addMessage("DBUG:ISPTestHTTPServer() Closing http server (on port " + \
                                      str(self.tcpListenPort) + ")")
-            # Wrap the call to shutdown() inside another thread
+            # Wrap the call to HTTPServer.shutdown() inside another thread - it can't call itself otherwise it will deadlock
             threading.Thread(target=self.httpd.shutdown, daemon=True).start()
         except Exception as e:
             Utils.Message.addMessage(

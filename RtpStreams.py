@@ -861,11 +861,9 @@ class RtpCommon(object):
                 Utils.Message.postMessage(newMessage, self.controllerTCPPort, logToDisk=logToDisk)
             except Exception as e:
                 # log POST failed, so attempt to write to stderr instead
-                # print(f"ERR:RtpCommon.postMessage(2) {e}")
                 try:
                     sys.stderr.write(f"{e}, {newMessage}\n")
                 except Exception as e:
-                    # print(f"ERR:RtpCommon.postMessage(3) {e}")
                     pass
 
 
@@ -3030,9 +3028,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                     report = self.generateReport()
                     # Retrieve the auto-generated filename
                     _filename = self.createFilenameForReportExport()
-
                     # Write a report to disk
-                    Utils.writeReportToDisk(report, fileName=_filename)
+                    try:
+                        Utils.writeReportToDisk(report, fileName=_filename)
+                    except Exception as e:
+                        Utils.Message.addMessage(f"ERR: RtpReceiveStream({self.syncSourceIdentifier}) Can't save report for dead stream {e}")
                     # Kill itself
                     self.killStream(caller=self)
             except Exception as e:
@@ -5080,8 +5080,12 @@ class RtpGenerator(RtpCommon):
                             self.postMessage(
                                 "Stream " + str(self.syncSourceIdentifier) + " object is expiring. Autosaving report (__samplingThread)")
                             # Write a report to disk
-                            Utils.writeReportToDisk(report, fileName=_filename)
-                            self.postMessage("Autosaved " + str(_filename + " to disk"))
+                            try:
+                                Utils.writeReportToDisk(report, fileName=_filename)
+                                self.postMessage("Autosaved " + str(_filename + " to disk"))
+                            except Exception as e:
+                                Utils.Message.addMessage(
+                                    f"ERR: RtpReceiveStream({self.syncSourceIdentifier}) Can't auto save report for stream {e}")
                         except Exception as e:
                             self.postMessage(
                                 "ERR: RtpGenerator.killStream() rtpTxStreamResults.generateReport(): " + str(e))
