@@ -3982,6 +3982,7 @@ class RtpGenerator(RtpCommon):
                     "Total transmitted packets": rtpGen.txCounter_packets,
                     "Transmit error count": rtpGen.txErrorCounter,
                     "Traceroute function in use": str(rtpGen.tracerouteFunctionInUse),
+                    "Process pid": rtpGen.pid,
                     "Active Threads": Utils.listCurrentThreads(asList=True)
                 }
                 # Add further info relating to the rtpStreamResultsReceiver

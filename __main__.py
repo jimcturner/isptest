@@ -2219,7 +2219,7 @@ class UI(object):
                         "\n" + "  and event logging".center(maxWidth, " ") + \
                         "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth, " ") + \
                         "\n See https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
-                        "\n\n\nmost recent dev branch: mp1\n\n" + \
+                        "\n\n\nmost recent dev branch: mp3\n\n" + \
                         "Press the [any] key to continue".center(maxWidth, " ")
 
         # Render the message in a pop-up box
@@ -5176,12 +5176,19 @@ def main(argv):
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Attempt to create an RtpGenerator based on the supplied parameters
         try:
-            rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
-                                    payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
-                                    uiInstance=ui,
-                                    UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME,
-                                        controllerTCPPort=isptesttHTTPServerPort)
+            # rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
+            #                         payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
+            #                         uiInstance=ui,
+            #                         UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME,
+            #                             controllerTCPPort=isptesttHTTPServerPort)
 
+            # processName = f"RtpGenerator"
+            rtpGenerator = Utils.ProcessCreator(RtpGenerator, UDP_TX_IP, UDP_TX_PORT, txRate,
+                                        payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
+                                        uiInstance=None,
+                                        UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME,
+                                        controllerTCPPort=isptesttHTTPServerPort)
+            
         except Exception as e:
             Utils.Message.addMessage("ERR:main() Create RtpGenerator() " + str(e))
 
