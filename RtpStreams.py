@@ -6723,7 +6723,6 @@ class ResultsReceiver(object):
                         except Exception as e:
                             self.postMessage("ERR:_resultsReceiverThread(): rtpStreamResults. validate/updateEventsList() " + str(e))
 
-
                 # socket is set with a timeout, so need to catch timeouts but can ignore them
                 except socket.timeout:
                     # self.postMessage("DBUG: ResultsReceiver socket.recvfrom() timeout")
