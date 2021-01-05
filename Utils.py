@@ -85,7 +85,7 @@ def getOperatingSystem():
     return current_os
 # Returns a string listing the names of the currently running threads
 # if asList = True, will return as a list of strings
-def listCurrentThreads(asList = False):
+def listCurrentThreads(asList=False):
     activeThreads = threading.enumerate()
     if asList is False:
         s = ""
@@ -97,7 +97,6 @@ def listCurrentThreads(asList = False):
         for thread in activeThreads:
             threadsList.append(thread.getName())
         return threadsList
-
 
 
 # This function will break a string into a list of tuples containing smaller strings (portions).
