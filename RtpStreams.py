@@ -831,7 +831,7 @@ class RtpCommon(object):
     def httpServerThreadCommon(self, tcpListenPort, streamID, httpRequestHandler, addr="127.0.0.1"):
         # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
         try:
-            # This call will block
+            # Create an http server
             self.httpd = Utils.CustomHTTPServer((addr, tcpListenPort), httpRequestHandler)
 
             # Pass this RtpReceiveStream instance to the server (so that the dynamically created instances of
@@ -839,7 +839,6 @@ class RtpCommon(object):
             self.httpd.setParentObjectInstance(self)
             # Start the http server - *This will block until self.httpd.shutdown() is called (but only by another thread)*
             self.httpd.serve_forever()
-
         except Exception as e:
             raise Exception(f"ERR: RtpCommon.httpServerThread stream:{streamID}, port:{tcpListenPort}, error:{e}")
 
@@ -2139,10 +2138,14 @@ class RtpReceiveStream(RtpReceiveCommon):
             Utils.Message.addMessage("ERR:self.samplingThread.join() filed " + str(self.__stats["stream_syncSource"]) +\
                                      ", "+ str(e))
 
-        # Kill the http server
+        # Kill the http server - NOTE: HTTPServer.shutdown() has to be called from another thread
         try:
-            self.httpd.shutdown()
-            Utils.Message.addMessage("DBUG:Closing http server for stream " + str(self.__stats["stream_syncSource"]))
+            Utils.Message.addMessage("DBUG:RtpReceiveStream.killStream() Closing http server for stream " + str(self.__stats["stream_syncSource"]))
+            # Wrap the call to shutdown() inside another thread
+            threading.Thread(target=self.httpd.shutdown, daemon=True).start()
+            Utils.Message.addMessage(f"DBUG:RtpReceiveStream.killStream() Http server for stream "
+                                     f"{self.__stats['stream_syncSource']} ended")
+
         except Exception as e:
             Utils.Message.addMessage("ERR:Closing http server for stream " + str(self.__stats["stream_syncSource"]) + str(e))
 
@@ -4823,17 +4826,18 @@ class RtpGenerator(RtpCommon):
             self.postMessage(
                 "ERR: RtpGenerator.killStream()::udpTxSocket.close() for stream: " + str(self.syncSourceIdentifier))
 
-        # Kill the http server
+        # Kill the http server - NOTE: HTTPServer.shutdown() has to be called from another thread
         try:
-            self.httpd.shutdown()
-            self.postMessage(
-                "DBUG:Closing http server for RtpGenerator  " + str(self.syncSourceIdentifier))
+            self.postMessage("DBUG:Attempting to end http server for RtpGenerator  " + str(self.syncSourceIdentifier))
+            # Wrap the call to shutdown() inside another thread
+            threading.Thread(target=self.httpd.shutdown, daemon=True).start()
+            self.postMessage(f"DBUG:Http server for RtpGenerator {self.syncSourceIdentifier} ended")
         except Exception as e:
-            self.postMessage(
-                "ERR:Closing http server for RtpGenerator " + str(self.syncSourceIdentifier) + str(e))
+            self.postMessage("ERR:Closing http server for RtpGenerator " + str(self.syncSourceIdentifier) + str(e))
 
         # Now attempt to remove the stream from the streams directory
         try:
+            self.postMessage(f"DBUG: RtpGenerator.killStream() unregistering stream")
             self.ctrlAPI.removeFromStreamsDirectory("RtpGenerator", self.syncSourceIdentifier)
         except Exception as e:
             self.postMessage("ERR: RtpGenerator.killStream() removeFromStreamsDirectory() for stream " + \

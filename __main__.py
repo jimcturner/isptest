@@ -4026,9 +4026,12 @@ class ISPTestHTTPServer(object):
     def kill(self):
         # Kill the http server
         try:
-            self.httpd.shutdown()
+            # self.httpd.shutdown()
+
             Utils.Message.addMessage("DBUG:ISPTestHTTPServer() Closing http server (on port " + \
                                      str(self.tcpListenPort) + ")")
+            # Wrap the call to shutdown() inside another thread
+            threading.Thread(target=self.httpd.shutdown, daemon=True).start()
         except Exception as e:
             Utils.Message.addMessage(
                 "ERR:ISPTestHTTPServer() Closing http server (on port " + str(self.tcpListenPort) + ") " + str(e))
@@ -4399,7 +4402,7 @@ class ISPTestHTTPServer(object):
             post_data_raw = self.rfile.read(content_length)  # <--- Gets the data itself as a string ?foo=bar&x=y etc..
             post_data_dict = parse_qs(post_data_raw) # parse the post data and convert to a dict
 
-            Utils.Message.addMessage("DBUG:do_POST(), Path: " + str(self.path) + ", data: " + str(post_data_dict))
+            # Utils.Message.addMessage("DBUG:do_POST(), Path: " + str(self.path) + ", data: " + str(post_data_dict))
 
             # Parse the path
             # Split the path into a list
@@ -5188,7 +5191,7 @@ def main(argv):
                                         uiInstance=None,
                                         UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME,
                                         controllerTCPPort=isptesttHTTPServerPort)
-            
+
         except Exception as e:
             Utils.Message.addMessage("ERR:main() Create RtpGenerator() " + str(e))
 
