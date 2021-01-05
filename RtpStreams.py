@@ -6587,7 +6587,6 @@ class ResultsReceiver(object):
                                             stats = unPickledMessage["stats"]
                                         if "events" in unPickledMessage:
                                             latestEventsList = unPickledMessage["events"]
-                                            self.postMessage(f"rx'd events {len(latestEventsList)}")
                                         if "control" in unPickledMessage:
                                             controlMessage = unPickledMessage["control"]
                                             self.postMessage(
