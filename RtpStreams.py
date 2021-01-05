@@ -6433,6 +6433,9 @@ class ResultsReceiver(object):
         # Used a signal flag to shut the __resultsReceiverThread down
         self.receiverActiveFlag = True
 
+        # For convenience, map to the logging method of the parent RtpGenerator
+        self.postMessage = self.relatedRtpGenerator.postMessage
+
         # Start the listener thread
         self.resultsReceiverThread = threading.Thread(target=self.__resultsReceiverThread, args=())
         self.resultsReceiverThread.daemon = False
@@ -6440,19 +6443,20 @@ class ResultsReceiver(object):
         self.resultsReceiverThread.start()
 
 
+
     def kill(self):
         # This method will kill the receiver thread by setting the self.receiverActiveFlag to false
         # It is a blocking method - it will nly return once the resultsReceiverThread has ended
         self.receiverActiveFlag = False
-        Utils.Message.addMessage("INFO: ResultsReceiver.kill()")
+        self.postMessage("INFO: ResultsReceiver.kill()")
         # Now wait for ResultsReceiverThread to end
-        Utils.Message.addMessage("DBUG: ResultsReceiver.kill() Waiting for resultsReceiverThread to end")
+        self.postMessage("DBUG: ResultsReceiver.kill() Waiting for resultsReceiverThread to end")
         self.resultsReceiverThread.join()
-        Utils.Message.addMessage("DBUG: ResultsReceiver.kill() resultsReceiverThread has ended")
+        self.postMessage("DBUG: ResultsReceiver.kill() resultsReceiverThread has ended")
 
 
     def __resultsReceiverThread(self):
-        Utils.Message.addMessage("INFO: ResultsReceiver thread starting")
+        self.postMessage("INFO: ResultsReceiver thread starting")
 
         rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
         lastReceivedFragmentIndex = 0  # Tracks the most recently received fragment index (ie. which fragment within the set
@@ -6474,7 +6478,7 @@ class ResultsReceiver(object):
                             ((self.receiveResultsExpectedPacketsCounter - \
                               self.receiveResultsActualReceivedPacketsCounter) / \
                              self.receiveResultsExpectedPacketsCounter) * 100
-                    # Utils.Message.addMessage("DBUG: ResultsReceiver.__receiverThread()" + ", " + str(data))
+                    # self.postMessage("DBUG: ResultsReceiver.__receiverThread()" + ", " + str(data))
                     # attempt to unpickle the received data to yield a stats dictionary
 
                     # Create empty dictionary to hold incoming stats updates
@@ -6491,7 +6495,7 @@ class ResultsReceiver(object):
                     # e is a random integer that serves as unique ID for this set of fragments
                     try:
                         fragment = pickle.loads(data)
-                        # Utils.Message.addMessage("Fragment " + str(fragment[0] + 1) + "/" + str(fragment[1]))
+                        # self.postMessage("Fragment " + str(fragment[0] + 1) + "/" + str(fragment[1]))
                         # detect first fragment
                         if fragment[0] == 0:
                             # If we are receiving a zero index fragment but we've yet to receive all the fragments
@@ -6499,7 +6503,7 @@ class ResultsReceiver(object):
                             # Check to see if we have any outstanding fragments expected. If so, add to the error count
                             if lastReceivedFragmentIndex < (lastKnownExpectedNoOfFragments - 1):
                                 if verboseLogging:
-                                    Utils.Message.addMessage(
+                                    self.postMessage(
                                         "INFO: __resultsReceiverThread.Incomplete set of fragments. Resetting to zero ",
                                             logToDisk=False)
                                 self.receiveResultsFragmentErrorCounter += 1
@@ -6528,18 +6532,18 @@ class ResultsReceiver(object):
                             if fragment[0] > (fragment[1] - 1):
                                 # More fragments than expected
                                 if verboseLogging:
-                                    Utils.Message.addMessage(
+                                    self.postMessage(
                                         "INFO: __resultsReceiverThread. More fragments received than expected " +\
                                         str(fragment[0]) + "/" + str(fragment[1]), logToDisk=False)
                             elif fragment[0] != (lastReceivedFragmentIndex + 1):
                                 # Out of sequence fragment received
                                 if verboseLogging:
-                                    Utils.Message.addMessage(
+                                    self.postMessage(
                                         "INFO: __resultsReceiverThread. Out of sequence fragment. Expected " + \
                                         str(lastReceivedFragmentIndex + 1) + ", got " + str(fragment[0]), logToDisk=False)
                             else:
                                 # Catch anything else
-                                Utils.Message.addMessage(
+                                self.postMessage(
                                     "INFO: __resultsReceiverThread. Unexpected fragment " + \
                                     str(fragment[0]) + "/" + str(fragment[1]), logToDisk=False)
 
@@ -6568,7 +6572,7 @@ class ResultsReceiver(object):
                                         # Attempt to reconstruct the original message sent by ResultsTransmitter
                                         # unPickledMessage = pickle.loads(rxMssage, fix_imports=True)
                                         unPickledMessage = pickle.loads(rxMssage)
-                                        # Utils.Message.addMessage("DBG:" + str(unPickledMessage))
+                                        # self.postMessage("DBG:" + str(unPickledMessage))
 
                                         # Attempt to extract the stats dictionary and eventsList list
                                         if "stats" in unPickledMessage:
@@ -6577,21 +6581,21 @@ class ResultsReceiver(object):
                                             latestEventsList = unPickledMessage["events"]
                                         if "control" in unPickledMessage:
                                             controlMessage = unPickledMessage["control"]
-                                            Utils.Message.addMessage(
+                                            self.postMessage(
                                                 "DBUG:__resultsReceiverThread() Control Message Rx'd: " + \
                                                 str(controlMessage))
                                             # Pass the message to the RtpGenerator Control Message queue
                                             self.relatedRtpGenerator.addControlMessage(controlMessage)
                                     except Exception as e:
-                                        # Utils.Message.addMessage("ERR: __resultsReceiverThread(pickle.loads(all fragments)): " + str(e))
+                                        # self.postMessage("ERR: __resultsReceiverThread(pickle.loads(all fragments)): " + str(e))
                                         # Increment the receive error counter
-                                        Utils.Message.addMessage(
+                                        self.postMessage(
                                             "ERR: __resultsReceiverThread (error unpickling stats/Events/control dicts): " + str(
                                                 e))
                                         self.receiveDecodeErrorCounter += 1
                                 else:
                                     if verboseLogging:
-                                        Utils.Message.addMessage(
+                                        self.postMessage(
                                             "ERR: __resultsReceiverThread. Last fragment received but wrong length. Expt'd: " +\
                                             str(fragment[2]) + ", got " + str(len(rxMssage)) + " bytes")
 
@@ -6608,7 +6612,7 @@ class ResultsReceiver(object):
                             # Update the 'expected' packets counter (we can only do this once, per set of fragments)
                             self.receiveResultsExpectedPacketsCounter += fragment[1]
                     except Exception as e:
-                        Utils.Message.addMessage("ERR: __resultsReceiverThread(single fragment): Unpickling error " + str(e))
+                        self.postMessage("ERR: __resultsReceiverThread(single fragment): Unpickling error " + str(e))
 
                     # Check if we have some new stats data
                     if len(stats) > 0:
@@ -6620,7 +6624,7 @@ class ResultsReceiver(object):
                                 lastValidatedKey = stats[key]
                                 statsValidated = True
                         except Exception as e:
-                            Utils.Message.addMessage(
+                            self.postMessage(
                                 "ERR:__resultsReceiverThread stats validation failed. Last validated key: " + \
                                 str(lastValidatedKey))
                             # Validation failed so clear the flag
@@ -6638,7 +6642,7 @@ class ResultsReceiver(object):
                                 self.relatedRtpGenerator.relatedRtpStreamResults.updateStats(stats)
 
                             except Exception as e:
-                                Utils.Message.addMessage("ERR: __resultsReceiverThread. Invalid stats dict. " + str(e))
+                                self.postMessage("ERR: __resultsReceiverThread. Invalid stats dict. " + str(e))
 
                     # Check to see if the new eventList contains any data and also that there exists a Results object to add the data to
                     if len(latestEventsList) > 0 and self.relatedRtpGenerator.relatedRtpStreamResults is not None:
@@ -6663,7 +6667,7 @@ class ResultsReceiver(object):
                                     # Event validated, so set the flag
                                     eventsValidated = True
                                 except Exception as e:
-                                    Utils.Message.addMessage("ERR:__resultsReceiverThread Event validation failed. Last validated event: " +\
+                                    self.postMessage("ERR:__resultsReceiverThread Event validation failed. Last validated event: " +\
                                                              str(lastValidatedEventNo))
                                     # Validation failed so clear the flag
                                     eventsValidated = False
@@ -6672,7 +6676,7 @@ class ResultsReceiver(object):
 
                             # If all the received events in latestEventsList are valid, update the events list for the specified stream
                             if eventsValidated:
-                                # Utils.Message.addMessage("DBUG: **latestEventsList: " + str(latestEventsList[-1].eventNo))
+                                # self.postMessage("DBUG: **latestEventsList: " + str(latestEventsList[-1].eventNo))
                                 # syncSourceID = stats["stream_syncSource"]
 
                                 # Update (All) Events list
@@ -6690,7 +6694,7 @@ class ResultsReceiver(object):
                                         # event no. This could be because the stats at the Receiver were reset mid test.
                                         # If this is the case, delete the existing stored event list and restart the list
                                         if lastEventNoInNewList < lastKnownEventNo:
-                                            Utils.Message.addMessage("Stats/Event list for stream " + str(syncSourceID) +\
+                                            self.postMessage("Stats/Event list for stream " + str(syncSourceID) +\
                                                                      " has been reset by receiver")
                                             # Remove the old events list and start again
                                             rtpStreamResults.updateEventsList(latestEventsList, replaceExistingList=True)
@@ -6712,26 +6716,26 @@ class ResultsReceiver(object):
                                     else:
                                         # existingEventsList is empty so append the entirety of latestEventsList
                                         rtpStreamResults.updateEventsList(latestEventsList)
-                                    # Utils.Message.addMessage("DBUG:**" + str(rtpStreamResults.getRTPStreamEventList(1)))
+                                    # self.postMessage("DBUG:**" + str(rtpStreamResults.getRTPStreamEventList(1)))
                                 except Exception as e:
-                                    Utils.Message.addMessage(
+                                    self.postMessage(
                                         "ERR:_resultsReceiverThread(). rtpStreamResults.getRTPStreamEventList(1) " + str(e))
                         except Exception as e:
-                            Utils.Message.addMessage("ERR:_resultsReceiverThread(): rtpStreamResults. validate/updateEventsList() " + str(e))
+                            self.postMessage("ERR:_resultsReceiverThread(): rtpStreamResults. validate/updateEventsList() " + str(e))
 
 
                 # socket is set with a timeout, so need to catch timeouts but can ignore them
                 except socket.timeout:
-                    # Utils.Message.addMessage("DBUG: ResultsReceiver socket.recvfrom() timeout")
+                    # self.postMessage("DBUG: ResultsReceiver socket.recvfrom() timeout")
                     pass
 
                 # Catch all other exceptions
                 except Exception as e:
-                    Utils.Message.addMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
+                    self.postMessage("ERR: __resultsReceiverThread sock.recvfrom() "+str(e))
             else:
                 # Wait 1 second before checking to see if self.udpSocket is now valid
                 time.sleep(1)
-        Utils.Message.addMessage("INFO: ResultsReceiver:__resultsReceiverThread ended")
+        self.postMessage("INFO: ResultsReceiver:__resultsReceiverThread ended")
 
 # This class provides a means of comparing the performance stats of multiple Rtp receive streams
 class RtpStreamComparer_old(object):
