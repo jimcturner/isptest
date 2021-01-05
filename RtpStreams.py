@@ -6452,7 +6452,7 @@ class ResultsReceiver(object):
 
 
     def __resultsReceiverThread(self):
-        self.postMessage("INFO: ResultsReceiver thread starting")
+        Utils.Message.addMessage("INFO: ResultsReceiver thread starting")
 
         rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
         lastReceivedFragmentIndex = 0  # Tracks the most recently received fragment index (ie. which fragment within the set
