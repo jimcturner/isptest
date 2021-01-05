@@ -800,6 +800,8 @@ class RtpCommon(object):
         self.httpd = None
 
         self.syncSourceIdentifier = None
+        self.controllerTCPPort = None  # the TCP listener port of the HTTP Server running on the controller process
+                                        # This should be set when a daughter object (eg RtpGenerator) is created
 
     # Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
     # Returns None on failure, otherwise returns an int
@@ -825,7 +827,7 @@ class RtpCommon(object):
     # Blocking method to be run as an HTTP Server
     # Because it actually invokes the HTTP Server, it needs access to the HTTPRequestHandler which will contain the
     # do_GET(), do_POST etc methods
-    # StreasmID is not actually required for the http server, but is useful for logging purposes
+    # StreamID is not actually required for the http server, but is useful for logging purposes
     def httpServerThreadCommon(self, tcpListenPort, streamID, httpRequestHandler, addr="127.0.0.1"):
         # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
         try:
@@ -840,6 +842,29 @@ class RtpCommon(object):
 
         except Exception as e:
             raise Exception(f"ERR: RtpCommon.httpServerThread stream:{streamID}, port:{tcpListenPort}, error:{e}")
+
+    # This method will post debug/error messages to the logger server
+    # It acts as a proxy/shortcut for Utils.Message.postMessage() but avoids the need to specify the tcp dest port each
+    # time (it's taken from the object instance variable self.controllerTCPPort.
+    # If self.controllerTCPPort is not set, it will attempt to write the message to stderror
+    def postMessage(self, newMessage, logToDisk=True):
+        # TCP controller port has not been specified so send message to stderr instead
+        if self.controllerTCPPort is None:
+            try:
+                sys.stderr.write(f"{newMessage}\n")
+            except:
+                pass
+        else:
+            # Otherwise, attempt to POST a message to the logging server
+            try:
+                Utils.Message.postMessage(newMessage, self.controllerTCPPort, logToDisk=logToDisk)
+            except Exception as e:
+                # log POST failed, so attempt to write to stderr instead
+                try:
+                    sys.stderr.write(f"{e}, {newMessage}\n")
+                except:
+                    pass
+
 
 # Define a Super Class for RTP Receive streams. This will contain methods that are common to both
 # RtpReceiveStream and RtpStreamResults
@@ -1498,7 +1523,9 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_transmitter_txRate_bps"] = 0 # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_TimeToLive_sec"] = 0  # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_return_loss_percent"] = 0  # Will be populated by incoming isptest header data
-        Utils.Message.addMessage("INFO: RtpReceiveStream:: Creating RtpReceiveStream with syncSource: " + str(self.__stats["stream_syncSource"]))
+        Utils.Message.addMessage(f"INFO: RtpReceiveStream: Creating RtpReceiveStream with syncSource: "
+                                 f"{self.__stats['stream_syncSource']}, "
+                                 f"src:{self.__stats['stream_srcAddress']}:{self.__stats['stream_srcPort']}")
 
         # A list to contain the *live* traceroute hops as received as part of the isptestheader data
         # Note: This list is liable to be in a state of flux as it's being continuaously updated
