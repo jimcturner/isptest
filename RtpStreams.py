@@ -3633,10 +3633,9 @@ class RtpStreamResults(RtpReceiveCommon):
         # Now create a message for each event added (showing the summary for each event)
         for event in eventsList:
             try:
-                Utils.Message.addMessage(event.getSummary()["summary"])
+                self.postMessage(event.getSummary()["summary"])
             except Exception as e:
-                Utils.Message.addMessage("ERR:RtpStreamresults.updateEventsList(), len " + str(len(eventsList)) +\
-                                         ", " + str(e))
+                self.postMessage("ERR:RtpStreamresults.updateEventsList(), len " + str(len(eventsList)) + ", " + str(e))
 
 
     # This method is currently unused but can be used for cleanups
@@ -5084,8 +5083,8 @@ class RtpGenerator(RtpCommon):
                                 Utils.writeReportToDisk(report, fileName=_filename)
                                 self.postMessage("Autosaved " + str(_filename + " to disk"))
                             except Exception as e:
-                                Utils.Message.addMessage(
-                                    f"ERR: RtpReceiveStream({self.syncSourceIdentifier}) Can't auto save report for stream {e}")
+                                self.postMessage(
+                                    f"ERR: RtpReceiveStream({self.syncSourceIdentifier}) Can't auto-save report for stream {e}")
                         except Exception as e:
                             self.postMessage(
                                 "ERR: RtpGenerator.killStream() rtpTxStreamResults.generateReport(): " + str(e))
