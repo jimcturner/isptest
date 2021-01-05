@@ -3625,7 +3625,7 @@ class RtpStreamResults(RtpReceiveCommon):
             self.__eventList.extend(eventsList)
         else:
             # Completely replace the existing list with the newly supplied list
-            self.__eventList=eventsList
+            self.__eventList = eventsList
         # Release the mutex
         self.__accessRtpStreamEventListMutex.release()
         # update the lastUpdated timestamp
