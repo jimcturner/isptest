@@ -1419,7 +1419,7 @@ class RtpReceiveCommon(RtpCommon):
                             unfilteredEventList))
 
         else:
-            # If no filter spcified, all take all the events
+            # If no filter specified, all take all the events
             filteredEventList = unfilteredEventList
 
         # 'recent' trumps start and end
@@ -1528,7 +1528,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                  f"src:{self.__stats['stream_srcAddress']}:{self.__stats['stream_srcPort']}")
 
         # A list to contain the *live* traceroute hops as received as part of the isptestheader data
-        # Note: This list is liable to be in a state of flux as it's being continuaously updated
+        # Note: This list is liable to be in a state of flux as it's being continuously updated
         self.liveTracerouteHopsList = []  # A list of tuples containing [IP octet1, IP octet2, IP octet3, Ip octet4]
         self.liveTracerouteHopsListMutex = threading.Lock()
         self.liveTracerouteHopsListLastUpdated = None  # Timestamps the last traceroute update
@@ -1702,7 +1702,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             if restoredStreamFlag:
                 # Populate self._stats{}
                 if historicStatsDict is not None:
-                    # Confirm that the inported stats{} contains identical keys to that of self.__stats{}
+                    # Confirm that the imported stats{} contains identical keys to that of self.__stats{}
                     # diff = set(historicStatsDict.keys()) - set(self.__stats.keys())
                     diff = [] # a list to hold any missing keys *for debug purposes)
                     # Iterate over the self.__stats{} keys
@@ -1733,7 +1733,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                  " Aborting import of stats[] dict ")
                         streamsSuccessfullyRecreated = False
                         raise Exception(
-                            f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__init__() failure to recreate stream from snapshot, {e}")
+                            f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__init__() failure to recreate stream from snapshot")
 
 
         except Exception as e:
