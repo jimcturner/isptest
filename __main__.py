@@ -4717,7 +4717,7 @@ def main(argv):
             -1,
         ]
         kwargs = {
-            "controllerTCPPort": 10000
+            "controllerTCPPort": None
         }
         # attempt to create a subprocess
         try:
@@ -4733,7 +4733,7 @@ def main(argv):
             time.sleep(5)
 
     mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs
-    testProcessCreator()
+    # testProcessCreator()
     # testObject = Utils.TestObject()
     #
     # saveStatus = Utils.exportObjectToDisk(testObject)

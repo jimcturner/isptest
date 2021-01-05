@@ -849,10 +849,12 @@ class RtpCommon(object):
     # If self.controllerTCPPort is not set, it will attempt to write the message to stderror
     def postMessage(self, newMessage, logToDisk=True):
         # TCP controller port has not been specified so send message to stderr instead
+        # print(f"RtpCommon.postMessage() self.controllerTCPPort:{self.controllerTCPPort}, {newMessage}")
         if self.controllerTCPPort is None:
             try:
                 sys.stderr.write(f"{newMessage}\n")
-            except:
+            except Exception as e:
+                # print(f"ERR:RtpCommon.postMessage(1) {e}")
                 pass
         else:
             # Otherwise, attempt to POST a message to the logging server
@@ -860,9 +862,11 @@ class RtpCommon(object):
                 Utils.Message.postMessage(newMessage, self.controllerTCPPort, logToDisk=logToDisk)
             except Exception as e:
                 # log POST failed, so attempt to write to stderr instead
+                # print(f"ERR:RtpCommon.postMessage(2) {e}")
                 try:
                     sys.stderr.write(f"{e}, {newMessage}\n")
-                except:
+                except Exception as e:
+                    # print(f"ERR:RtpCommon.postMessage(3) {e}")
                     pass
 
 
@@ -3904,7 +3908,7 @@ class RtpGenerator(RtpCommon):
                     # Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() {e}")
                     pass
             except Exception as e:
-                Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() corrupt endpoint definitions {e}")
+                rtpGen.postMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() corrupt endpoint definitions {e}")
                 getMappings = {}
 
             return getMappings
@@ -3933,7 +3937,7 @@ class RtpGenerator(RtpCommon):
                     "/simulateloss": {"targetMethod": rtpGen.simulatePacketLoss, "reqKeys": [], "optKeys": ["packetsToSkip"]}
                 }
             except Exception as e:
-                Utils.Message.addMessage(
+                rtpGen.postMessage(
                     f"ERR:RtpGenerator.HTTPRequestHandler.apiPOSTEndpoints() corrupt endpoint definitions {e}")
                 postMappings = {}
             return postMappings
@@ -3945,7 +3949,7 @@ class RtpGenerator(RtpCommon):
             try:
                 deleteMappings = {"/delete": {"targetMethod": rtpGen.killStream, "reqKeys": [], "optKeys": []}}
             except Exception as e:
-                Utils.Message.addMessage(
+                rtpGen.postMessage(
                     f"ERR:RtpGenerator.HTTPRequestHandler.apiDELETEEndpoints() corrupt endpoint definitions {e}")
                 deleteMappings = {}
             return deleteMappings
@@ -4065,7 +4069,7 @@ class RtpGenerator(RtpCommon):
 
         # Query the routing table to determine the address of the Ethernet interface that will be used to transmit
         self.SRC_IP_ADDR = Utils.get_ip(self.UDP_TX_IP)
-        Utils.Message.addMessage("Transmitting from " + str(self.SRC_IP_ADDR))
+        self.postMessage("Transmitting from " + str(self.SRC_IP_ADDR))
 
         # Attempt to set the friendly name from the optional supplied kwargs
         try:
@@ -4077,7 +4081,6 @@ class RtpGenerator(RtpCommon):
                 # If the name is empty set friendly name to be the same as the sync source ID
                 self.setFriendlyName(self.syncSourceIdentifier)
         except Exception as e:
-            # Utils.Message.addMessage("RTP Gen: " + str(e))
             # If not, set friendly name to be the same as the sync source ID
             self.setFriendlyName(self.syncSourceIdentifier)
 
@@ -4087,7 +4090,7 @@ class RtpGenerator(RtpCommon):
                 self.UDP_TX_SRC_PORT = int(kwargs["UDP_SRC_PORT"])
             else:
                 self.UDP_TX_SRC_PORT = 0
-                Utils.Message.addMessage("INFO: RtpGenerator.__init__() Invalid source port specified " + str(kwargs["UDP_SRC_PORT"]))
+                self.postMessage("INFO: RtpGenerator.__init__() Invalid source port specified " + str(kwargs["UDP_SRC_PORT"]))
         # Can't extract src port from kwargs
         except Exception as e:
             self.UDP_TX_SRC_PORT = 0
@@ -4135,7 +4138,7 @@ class RtpGenerator(RtpCommon):
         try:
             # Request an unused TCP port for the HTTP server to listen on
             self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
-            Utils.Message.addMessage(f"DBUG: Creating httpServerThread for RtpGenerator:{self.syncSourceIdentifier}, TCP port:{self.tcpListenPort}")
+            self.postMessage(f"DBUG: Creating httpServerThread for RtpGenerator:{self.syncSourceIdentifier}, TCP port:{self.tcpListenPort}")
             self.httpServerThread = threading.Thread(target=self.httpServerThreadCommon,
                                                      args=(self.tcpListenPort,
                                                            self.syncSourceIdentifier,
@@ -4155,18 +4158,18 @@ class RtpGenerator(RtpCommon):
                 except:
                     # Decrement maxConnectionAttempts
                     maxConnectionAttempts -= 1
-                    Utils.Message.addMessage(
+                    self.postMessage(
                         f"INFO:RTPGenerator({self.syncSourceIdentifier}) http server validation, "
                         f"{maxConnectionAttempts} remaining")
                     if maxConnectionAttempts < 1:
                         raise Exception(f"ERR:maxConnectionAttempts exceeded")
                 time.sleep(1)
 
-            Utils.Message.addMessage(
+            self.postMessage(
                 f"INFO:RTPGenerator({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
 
         except Exception as e:
-            Utils.Message.addMessage(f'ERR:RTPGenerator.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
+            self.postMessage(f'ERR:RTPGenerator.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
             raise Exception(f'ERR:RTPGenerator({self.syncSourceIdentifier}).__init__() HTTP Server failed to start. Aborting')
 
         ######## Actual code starts here
@@ -4217,7 +4220,7 @@ class RtpGenerator(RtpCommon):
             # If execution gets this far, we can assume that streams was successfully registered
             self.streamRegisteredFlag = True
         except Exception as e:
-            Utils.Message.addMessage(
+            self.postMessage(
                 f'ERR:RTPGenerator.__init__() Initial stream Registration failed {self.syncSourceIdentifier}, {e}')
 
     def getRtpStreamStats(self):
@@ -4377,7 +4380,7 @@ class RtpGenerator(RtpCommon):
                             # Now grab the hop pointed to by self.tracerouteCarouselIndexNo
                             hopToBeTransmitted = tracerouteHopsList[self.tracerouteCarouselIndexNo]
                         except Exception as e:
-                            Utils.Message.addMessage(
+                            self.postMessage(
                                 "ERR: RtpGenerator.generateIsptestHeader():traceroute_gethopToBeTransmitted index no:" +\
                                 str(self.tracerouteCarouselIndexNo) + ", len(tracerouteHopsList): " + \
                                 str(len(tracerouteHopsList)) + ", " + str(e))
@@ -4396,7 +4399,7 @@ class RtpGenerator(RtpCommon):
                             self.tracerouteCarouselIndexNo += 1
 
                         except Exception as e:
-                            Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader():traceroute_create message " + str(e))
+                            self.postMessage("ERR: RtpGenerator.generateIsptestHeader():traceroute_create message " + str(e))
                     else:
                         # Retrieved tracerouteHopsList was empty
                         # Create a dummy traceroute message
@@ -4444,7 +4447,7 @@ class RtpGenerator(RtpCommon):
                                    0 & 0xFF,  # IP address octet 3
                                    0 & 0xFF,  # IP address octet 4
                                     0 & 0xFF]  # not used
-                    Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx local adapter addr " + str(e))
+                    self.postMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx local adapter addr " + str(e))
 
             elif self.isptestHeaderMessageIndex == 2:
                 # This is a 'destination IP address' message
@@ -4468,7 +4471,7 @@ class RtpGenerator(RtpCommon):
                                    0 & 0xFF,  # IP address octet 3
                                    0 & 0xFF,  # IP address octet 4
                                    0 & 0xFF]  # not used
-                    Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx dest addr " + str(e))
+                    self.postMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx dest addr " + str(e))
 
             elif self.isptestHeaderMessageIndex == 3:
                 # This is 'isptest version'  and also PID message
@@ -4494,7 +4497,7 @@ class RtpGenerator(RtpCommon):
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF]  # not used
-                    Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx version info " + str(e))
+                    self.postMessage("DBUG:RtpGenerator.generateIsptestHeader(): tx version info " + str(e))
 
             elif self.isptestHeaderMessageIndex == 4:
                 # Transmitter tx bitrate message
@@ -4520,7 +4523,7 @@ class RtpGenerator(RtpCommon):
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF]  # not used
-                    Utils.Message.addMessage("DBUG:RtpGenerator.generateIsptestHeader(): Message type 4: Transmit rate " + str(e))
+                    self.postMessage("DBUG:RtpGenerator.generateIsptestHeader(): Message type 4: Transmit rate " + str(e))
 
             elif self.isptestHeaderMessageIndex == 5:
                 # Transmitter tx total packets sent
@@ -4545,7 +4548,7 @@ class RtpGenerator(RtpCommon):
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF]  # not used
-                    Utils.Message.addMessage(
+                    self.postMessage(
                         "DBUG:RtpGenerator.generateIsptestHeader(): Message type 5: Transmit total packets " + str(e))
 
             elif self.isptestHeaderMessageIndex == 6:
@@ -4571,7 +4574,7 @@ class RtpGenerator(RtpCommon):
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF]  # not used
-                    Utils.Message.addMessage(
+                    self.postMessage(
                         "DBUG:RtpGenerator.generateIsptestHeader(): Message type 6: Transmit tx stream time to live " + str(e))
 
             elif self.isptestHeaderMessageIndex == 7:
@@ -4597,7 +4600,7 @@ class RtpGenerator(RtpCommon):
                                    0 & 0xFF,  # not used
                                    0 & 0xFF,  # not used
                                    0 & 0xFF]  # not used
-                    Utils.Message.addMessage(
+                    self.postMessage(
                         "DBUG:RtpGenerator.generateIsptestHeader(): Message type 7: Return loss " + str(e))
 
             # Now That the message data list has been created, increment the message type index
@@ -4621,7 +4624,7 @@ class RtpGenerator(RtpCommon):
             # Check to see that we haven't tried to create a header thats longer than that specified
             # by the class var ISPTEST_HEADER_SIZE
             if headerLength != RtpGenerator.ISPTEST_HEADER_SIZE:
-                Utils.Message.addMessage(
+                self.postMessage(
                     "INFO: RtpGenerator.generatePayload() Mismatch between headerLength and RtpGenerator.ISPTEST_HEADER_SIZE. Setting header to be blank ")
                 # The length of the header we've created doesn't match that specifed by RtpGenerator.ISPTEST_HEADER_SIZE therefore
                 # main() and RtpReceiveStream objects will be expecting the wrong length header and won't be able to
@@ -4629,7 +4632,7 @@ class RtpGenerator(RtpCommon):
                 header = b""
 
         except Exception as e:
-            Utils.Message.addMessage("ERR: RtpGenerator.generateIsptestHeader(). Header err: " + str(e))
+            self.postMessage("ERR: RtpGenerator.generateIsptestHeader(). Header err: " + str(e))
 
         # Return the isptestheader data (as a bytestring)
         return header
@@ -4696,7 +4699,7 @@ class RtpGenerator(RtpCommon):
         if newTxRate_bps < Registry.minimumPermittedTXRate_bps:
             newTxRate_bps = Registry.minimumPermittedTXRate_bps
 
-        Utils.Message.addMessage("Setting new tx rate " + str(Utils.bToMb(newTxRate_bps)) + \
+        self.postMessage("Setting new tx rate " + str(Utils.bToMb(newTxRate_bps)) + \
                                  "bps, for stream " + str(self.syncSourceIdentifier))
 
         # Update instance variable
@@ -4779,7 +4782,7 @@ class RtpGenerator(RtpCommon):
                 newTTL = -1
             # Set the instance variable
             self.timeToLive = newTTL
-            Utils.Message.addMessage("Setting new time to live " + str(datetime.timedelta(seconds=self.timeToLive)) + \
+            self.postMessage("Setting new time to live " + str(datetime.timedelta(seconds=self.timeToLive)) + \
                                      " for stream " + str(self.syncSourceIdentifier))
 
 
@@ -4787,22 +4790,22 @@ class RtpGenerator(RtpCommon):
         # Kills the stream by setting the time to live to zero. This will cause the main thread to exit
         self.setTimeToLive(0)
         # Wait for __rtpGeneratorThread to end
-        Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread to end")
+        self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread to end")
         self.rtpGeneratorThread.join()
-        Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread has ended")
+        self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread has ended")
         try:
             # Check to see if __tracerouteThread exists (it may have been intentionally disabled)
             if self.tracerouteThread.is_alive():
                 # Wait for __tracerouteThread to end
-                Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  Waiting for __tracerouteThread has ended")
+                self.postMessage("DBUG: RtpGenerator.killStream()  Waiting for __tracerouteThread has ended")
                 self.tracerouteThread.join()
-                Utils.Message.addMessage("DBUG: RtpGenerator.killStream()  __tracerouteThread has ended")
+                self.postMessage("DBUG: RtpGenerator.killStream()  __tracerouteThread has ended")
         except Exception as e:
-            Utils.Message.addMessage("ERR:RtpGenerator.killStream() self.tracerouteThread.join() " + str(e))
+            self.postMessage("ERR:RtpGenerator.killStream() self.tracerouteThread.join() " + str(e))
         # Wait for __samplingThread to end
-        Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread to end")
+        self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread to end")
         self.samplingThread.join()
-        Utils.Message.addMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread has ended")
+        self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread has ended")
 
         # Now kill corresponding RtpResultsReceiver object (should be a blocking call)
         try:
@@ -4810,29 +4813,29 @@ class RtpGenerator(RtpCommon):
             # Clear any reference to the relatedRtpStreamResults (to ensure that it will be garbage collected)
             self.relatedRtpStreamResults = None
         except Exception as e:
-            Utils.Message.addMessage("ERR:RtpGenerator.killStream() kill rtpStreamResultsReceiver " + str(e))
+            self.postMessage("ERR:RtpGenerator.killStream() kill rtpStreamResultsReceiver " + str(e))
 
         # Now kill UDP socket
         try:
             self.udpTxSocket.close()
         except Exception as e:
-            Utils.Message.addMessage(
+            self.postMessage(
                 "ERR: RtpGenerator.killStream()::udpTxSocket.close() for stream: " + str(self.syncSourceIdentifier))
 
         # Kill the http server
         try:
             self.httpd.shutdown()
-            Utils.Message.addMessage(
+            self.postMessage(
                 "DBUG:Closing http server for RtpGenerator  " + str(self.syncSourceIdentifier))
         except Exception as e:
-            Utils.Message.addMessage(
+            self.postMessage(
                 "ERR:Closing http server for RtpGenerator " + str(self.syncSourceIdentifier) + str(e))
 
         # Now attempt to remove the stream from the streams directory
         try:
             self.ctrlAPI.removeFromStreamsDirectory("RtpGenerator", self.syncSourceIdentifier)
         except Exception as e:
-            Utils.Message.addMessage("ERR: RtpGenerator.killStream() removeFromStreamsDirectory() for stream " + \
+            self.postMessage("ERR: RtpGenerator.killStream() removeFromStreamsDirectory() for stream " + \
                                          str(self.syncSourceIdentifier) + ", " + str(e))
 
     def disableStream(self):
@@ -4870,9 +4873,9 @@ class RtpGenerator(RtpCommon):
             # Modify the prev calculated txPeriod to manipulate the txRate
             # e.g if burstRatio is '2', the tx rate will be doubled
             self.txPeriod = self.txPeriod / burstRatio
-            Utils.Message.addMessage("Enabling " + str(burstLength_s) + "s burst mode for stream " + str(self.syncSourceIdentifier))
+            self.postMessage("Enabling " + str(burstLength_s) + "s burst mode for stream " + str(self.syncSourceIdentifier))
         else:
-            Utils.Message.addMessage("Burst mode already active for stream " + str(self.syncSourceIdentifier) +\
+            self.postMessage("Burst mode already active for stream " + str(self.syncSourceIdentifier) +\
                     ". " + str(self.burstTimer) + "s remaining")
 
     # Used to simulate packet loss by skipping x packets (whilst incrementing the seq no internally)
@@ -4907,7 +4910,7 @@ class RtpGenerator(RtpCommon):
                 else:
                     # Auto generate minor loss
                     packetsToSkip = 3
-        Utils.Message.addMessage(f"DBUG:RtpGenerator({self.syncSourceIdentifier}).simulatePacketLoss() packetsToSkip: {packetsToSkip}")
+        self.postMessage(f"DBUG:RtpGenerator({self.syncSourceIdentifier}).simulatePacketLoss() packetsToSkip: {packetsToSkip}")
         self.packetsToSkip = packetsToSkip
 
     def enableJitter(self):
@@ -4935,7 +4938,7 @@ class RtpGenerator(RtpCommon):
     def parseControlMessage(self, controlMessage):
         # Messages are a dict of the form
         # {syncSourceID: int, source: String, type: String}
-        Utils.Message.addMessage("INFO:parseControlMessage() " + str(self.syncSourceIdentifier) + ":" + str(controlMessage))
+        self.postMessage("INFO:parseControlMessage() " + str(self.syncSourceIdentifier) + ":" + str(controlMessage))
         # parse the incoming message
         try:
             # Get message type
@@ -4961,20 +4964,20 @@ class RtpGenerator(RtpCommon):
                 elif messageType == "/label" and "name" in controlMessage:
                     self.setFriendlyName(controlMessage["name"])
                 else:
-                    Utils.Message.addMessage(f"RtpGenerator({self.syncSourceIdentifier}).parseControlMessage() unrecognised message {controlMessage}")
+                    self.postMessage(f"RtpGenerator({self.syncSourceIdentifier}).parseControlMessage() unrecognised message {controlMessage}")
 
             else:
-                Utils.Message.addMessage("Misrouted RTPGenerator control message. Dest:" + \
+                self.postMessage("Misrouted RTPGenerator control message. Dest:" + \
                                          str(messageSyncSourceID) + ", Recipient:" + str(self.syncSourceIdentifier))
 
         except Exception as e:
-            Utils.Message.addMessage("ERR:RtpGenerator.parseControlMessage() (stream " + \
+            self.postMessage("ERR:RtpGenerator.parseControlMessage() (stream " + \
                                      str(self.syncSourceIdentifier) + "), " + str(e))
 
 
     # This thread samples the actual transmitter tx rate and also housekeeps
     def __samplingThread(self):
-        Utils.Message.addMessage(
+        self.postMessage(
             "DBUG:RtpGenerator.__samplingThread starting for stream " + str(self.syncSourceIdentifier))
         # Initialise variables to be used within the loop
         loopCounter = 0
@@ -5001,7 +5004,7 @@ class RtpGenerator(RtpCommon):
                     self.parseControlMessage(msg)
                 # If not possible to get message/timeout reached
                 except Empty as e:
-                    Utils.Message.addMessage("ERR:RtpGenerator.__samplingThread. __controlMessageQueue.get() (stream " + \
+                    self.postMessage("ERR:RtpGenerator.__samplingThread. __controlMessageQueue.get() (stream " + \
                                              str(self.syncSourceIdentifier) + "), " + str(e))
 
             # Take snapshot of current tx byte counter
@@ -5032,7 +5035,7 @@ class RtpGenerator(RtpCommon):
                         # Set the flag to cause the txScheduler timer to reset
                         self.resetSleepPeriodFlag = True
                         # Put up a warning
-                        Utils.Message.addMessage("Warning: Stream " + str(self.syncSourceIdentifier) + \
+                        self.postMessage("Warning: Stream " + str(self.syncSourceIdentifier) + \
                                                  " tx rate exceeding " + \
                                                  str(Utils.bToMb(self.txRate)) + "(" + \
                                                  str(Utils.bToMb(self.txActualTxRate_bps)) + ")bps. Resyncing tx timer")
@@ -5041,7 +5044,7 @@ class RtpGenerator(RtpCommon):
                     # If actual Tx rate is > 12.5% higher than the rate specified by txRate put up a warning
                     # For the sake of speed, shift txRate by '3 bits' to divide by 8 rather than using division
                     elif self.txActualTxRate_bps > (self.txRate + (self.txRate >> 3)):
-                        Utils.Message.addMessage("Warning: Stream " + str (self.syncSourceIdentifier) +\
+                        self.postMessage("Warning: Stream " + str (self.syncSourceIdentifier) +\
                                              " tx rate exceeding " +\
                                              str(Utils.bToMb(self.txRate)) + "(" +\
                                              str(Utils.bToMb(self.txActualTxRate_bps)) + ")bps")
@@ -5069,13 +5072,13 @@ class RtpGenerator(RtpCommon):
 
                             # Retrieve the auto-generated filename
                             _filename = self.relatedRtpStreamResults.createFilenameForReportExport()
-                            Utils.Message.addMessage(
+                            self.postMessage(
                                 "Stream " + str(self.syncSourceIdentifier) + " object is expiring. Autosaving report (__samplingThread)")
                             # Write a report to disk
                             Utils.writeReportToDisk(report, fileName=_filename)
-                            Utils.Message.addMessage("Autosaved " + str(_filename + " to disk"))
+                            self.postMessage("Autosaved " + str(_filename + " to disk"))
                         except Exception as e:
-                            Utils.Message.addMessage(
+                            self.postMessage(
                                 "ERR: RtpGenerator.killStream() rtpTxStreamResults.generateReport(): " + str(e))
 
 
@@ -5095,7 +5098,7 @@ class RtpGenerator(RtpCommon):
                     # If we've only got 1 second left, recalculate txPeriod to revert the stream to the original tx rate
                     if self.burstTimer < 2:
                         self.txPeriod = self.calculateTxPeriod(self.txRate)
-                        Utils.Message.addMessage("Burst mode ending for stream " + str(self.syncSourceIdentifier) + \
+                        self.postMessage("Burst mode ending for stream " + str(self.syncSourceIdentifier) + \
                                       ". Reverting to " + str(Utils.bToMb(self.txRate)) + "bps")
 
                 # Increment elapsed time counter - add a second
@@ -5112,7 +5115,7 @@ class RtpGenerator(RtpCommon):
                         # Test to see if response contains an entry for this stream
                         if streamsList[0]["streamID"] == self.syncSourceIdentifier and \
                                 streamsList[0]["streamType"] == "RtpGenerator":
-                            # Utils.Message.addMessage(f"RtpReceiveStream {self.syncSourceIdentifier} exists in streamsList")
+                            # self.postMessage(f"RtpReceiveStream {self.syncSourceIdentifier} exists in streamsList")
                             pass
                     except:
                         # stream doesn't exist, so need to register it
@@ -5125,22 +5128,23 @@ class RtpGenerator(RtpCommon):
                         try:
                             # Register the stream
                             self.ctrlAPI.addToStreamsDirectory(streamDefinition)
-                            Utils.Message.addMessage(f"DBUG:RtpGenerator.__samplingThread({self.syncSourceIdentifier}) " \
+                            self.postMessage(f"DBUG:RtpGenerator.__samplingThread({self.syncSourceIdentifier}) " \
                                                      f"successful stream registration")
                             # If execution gets this far, we can assume that streams was successfully registered
                             # set the flag
                             self.streamRegisteredFlag = True
                         except Exception as e:
-                            Utils.Message.addMessage(f"ERR:RtpGenerator.__samplingThread({self.syncSourceIdentifier})" \
+                            self.postMessage(f"ERR:RtpGenerator.__samplingThread({self.syncSourceIdentifier})" \
                                                      f" registration fail {e}")
 
+                # self.postMessage(f"RtpGenerator {self.timeToLive}")
             ######## 1 second counter end of code ########
 
             # Increment 1 sec loop counter
             loopCounter += 1
             ########### 0.2 sec timed loop ends
 
-        Utils.Message.addMessage(
+        self.postMessage(
             "DBUG:RtpGenerator.__samplingThread ending for stream " + str(self.syncSourceIdentifier))
 
 
@@ -5160,7 +5164,7 @@ class RtpGenerator(RtpCommon):
         if self.regeneratePayloadFlag is True:
             # Clear the flag
             self.regeneratePayloadFlag = False
-            Utils.Message.addMessage("DBUG:prepareNextRtpPacket() self.regeneratePayloadFlag is True. Regenerating packet")
+            self.postMessage("DBUG:prepareNextRtpPacket() self.regeneratePayloadFlag is True. Regenerating packet")
             # Create 12 byte RTP header structure (including sequence no). timestamp will be set to zero (as set later)
             # B: unsigned char, H: unsigned short (2 bytes), L: unsigned long (4 bytes)
             rtpTimestamp = 0 & 0xFFFFFFFF
@@ -5190,14 +5194,14 @@ class RtpGenerator(RtpCommon):
             self.copyIntoByteArray(self.udpTxData, isptestHeaderData, 12)
             pass
         except Exception as e:
-            Utils.Message.addMessage("prepareNextPacket() copy isptestHeader into self.udpTxData " + str(type(self.udpTxData)) + ", " + str(e))
+            self.postMessage("prepareNextPacket() copy isptestHeader into self.udpTxData " + str(type(self.udpTxData)) + ", " + str(e))
 
         # increment sequence no. for next time this method is called
         self.rtpSequenceNo += 1
         # Seq no is only a 16 bit value, so reset at max value (65535)
         if self.rtpSequenceNo > 65535:
             self.rtpSequenceNo = 0
-            Utils.Message.addMessage(
+            self.postMessage(
                 "INFO: rtpGenerator. " + str(self.syncSourceIdentifier) + " Seq no wrapping to zero")
 
     # Exception raised by RtpGenerator.createUDPSocket()
@@ -5215,14 +5219,14 @@ class RtpGenerator(RtpCommon):
             self.udpTxSocket.settimeout(1)
             # Set custom udp ttl value
             self.udpTxSocket.setsockopt(socket.SOL_IP, socket.IP_TTL, Registry.rtpGeneratorUDPTxTTL)
-            # Utils.Message.addMessage(str(self.udpTxSocket.get))
+            # self.postMessage(str(self.udpTxSocket.get))
             # If a UDP source port has been specified, use it
             if self.UDP_TX_SRC_PORT > 1024:
                 # Bind to the socket, allows you to specify the source port
                 try:
                     self.udpTxSocket.bind(('0.0.0.0', int(self.UDP_TX_SRC_PORT)))
                 except Exception as e:
-                    Utils.Message.addMessage(
+                    self.postMessage(
                         "ERR: RtpGenerator.__rtpGeneratorThread. self.udpTxSocket.bind (User supplied source port). " + str(
                             e))
             else:
@@ -5231,7 +5235,7 @@ class RtpGenerator(RtpCommon):
                 self.UDP_TX_SRC_PORT = self.udpTxSocket.getsockname()[1]
         except Exception as e:
             raise RtpGenerator.RtpGeneratorCreateUDPSocketException(str(e))
-            # Utils.Message.addMessage(
+            # self.postMessage(
             #     "ERR:\x1B[31__rtpGeneratorThread() socket.socket(): Cannot create socket. Please quit now\x1B[0m" + self.UDP_TX_IP + ":" + \
             #     str(self.UDP_TX_PORT) + ", " + str(e))
 
@@ -5312,12 +5316,12 @@ class RtpGenerator(RtpCommon):
                     else:
                         # Increment the error counter
                         rtpGeneratorInstance.txErrorCounter += 1
-                        Utils.Message.addMessage("ERR:RtpGenerator.__rtpGeneratorThread incorrect bytes sent. Tx'd: " +\
+                        self.postMessage("ERR:RtpGenerator.__rtpGeneratorThread incorrect bytes sent. Tx'd: " +\
                                             str(sentBytes) + ", Expected: " + str(len(rtpGeneratorInstance.udpTxData)))
 
 
                 except Exception as e:
-                    Utils.Message.addMessage("\x1B[31 RtpGenerator.__newImprovedRtpGeneratorThread() sendto().   \x1B[0m " + str(e))
+                    self.postMessage("\x1B[31 RtpGenerator.__newImprovedRtpGeneratorThread() sendto().   \x1B[0m " + str(e))
                     time.sleep(1)  # Throttle rate of error messages from this thread
             else:
                 # Decrement self.packetsToSkip. Once this var reaches zero, packet generation will resume
@@ -5343,7 +5347,7 @@ class RtpGenerator(RtpCommon):
                     if prevTxPeriod != txPeriod or rtpGeneratorInstance.resetSleepPeriodFlag:
                         # Clear the flag
                         rtpGeneratorInstance.resetSleepPeriodFlag = False
-                        Utils.Message.addMessage("DBUG: RtpGenerator.calculateSleepPeriod() timing reset")
+                        self.postMessage("DBUG: RtpGenerator.calculateSleepPeriod() timing reset")
                         # Reset the initial time reference
                         t = time.time()
                         # Reset the counter
@@ -5362,7 +5366,7 @@ class RtpGenerator(RtpCommon):
                 try:
                     sleepTime = rtpGeneratorInstance.txPeriod + jitter #  - rtpGeneratorInstance.meanCalculationTime
                 except Exception as e:
-                    Utils.Message.addMessage("ERR: jitter sleepTime " + str(sleepTime) + ", " + str(e))
+                    self.postMessage("ERR: jitter sleepTime " + str(sleepTime) + ", " + str(e))
                 if sleepTime < 0:
                     return 0
                 else:
@@ -5403,7 +5407,7 @@ class RtpGenerator(RtpCommon):
                         sleepTime = next(slowStartTxPeriodGenerator)
                         # Now check to see if the sleepTime has decreased to/beyond the target tx Period
                         if sleepTime <= rtpGeneratorInstance.txPeriod:
-                            Utils.Message.addMessage("DBUG:target tx Period reached for stream " +\
+                            self.postMessage("DBUG:target tx Period reached for stream " +\
                                                      str(rtpGeneratorInstance.syncSourceIdentifier) + \
                                                      ". Clearing slowStartActiveFlag")
                             # Clear the slowStartActiveFlag. The Regular calculateSleepPeriod will take over now
@@ -5453,32 +5457,32 @@ class RtpGenerator(RtpCommon):
 
                     # # Deliberately cause a glitch
                     # if rtpGeneratorInstance.rtpSequenceNo == 65530:
-                    #     Utils.Message.addMessage("seq no = 65530, insert 100 packet glitch")
+                    #     self.postMessage("seq no = 65530, insert 100 packet glitch")
                     #     rtpGeneratorInstance.packetsToSkip = 100
 
                     # # Deliberately cause a duplicate seq no every 500 packets
                     # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
-                    #     Utils.Message.addMessage("Cause duplicate sequence no error")
+                    #     self.postMessage("Cause duplicate sequence no error")
                     #     rtpGeneratorInstance.rtpSequenceNo -= 1
 
                     # # Deliberately cause an out of seq packet every 500 packets
                     # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
-                    #     Utils.Message.addMessage("Cause out of sequence error")
+                    #     self.postMessage("Cause out of sequence error")
                     #     rtpGeneratorInstance.rtpSequenceNo -= 2
 
                     # # Deliberately modify the traceroute hops list every 500 packets
                     # if rtpGeneratorInstance.txCounter_packets % 500 == 0:
                     #     newOctet = rtpGeneratorInstance.txCounter_packets % 255
-                    #     # Utils.Message.addMessage("new tr octet " + str(newOctet))
+                    #     # self.postMessage("new tr octet " + str(newOctet))
                     #     try:
                     #         if sum(rtpGeneratorInstance.tracerouteHopsList[0]) == 0:
-                    #             Utils.Message.addMessage("new tr octet 0.0.0." + str(newOctet))
+                    #             self.postMessage("new tr octet 0.0.0." + str(newOctet))
                     #             rtpGeneratorInstance.tracerouteHopsList=[[0,0,0,newOctet]]
                     #         else:
-                    #             Utils.Message.addMessage("new tr octet 0.0.0.0")
+                    #             self.postMessage("new tr octet 0.0.0.0")
                     #             rtpGeneratorInstance.tracerouteHopsList[0] = [0, 0, 0, 0]
                     #     except Exception as e:
-                    #         Utils.Message.addMessage("TR test " + str(e))
+                    #         self.postMessage("TR test " + str(e))
                     #         rtpGeneratorInstance.tracerouteHopsList.append([0, 0, 0, 0])
 
                     # # Deliberately modify the traceroute hops list every 50 packets
@@ -5536,7 +5540,7 @@ class RtpGenerator(RtpCommon):
                 # Update calculation time stats
                 # updateCalculationTimeStats(rtpGeneratorInstance, calculationPeriod)
 
-        Utils.Message.addMessage("DBUG:New RtpGen thread. Thread starting")
+        self.postMessage("DBUG:New RtpGen thread. Thread starting")
         # Prepare the first rtp packet to be sent
         self.prepareNextRtpPacket()
         # Calculate tx period required to provide supplied txRate for a given stringLength
@@ -5563,18 +5567,18 @@ class RtpGenerator(RtpCommon):
 
                     # Retrieve the auto-generated filename
                     _filename = self.relatedRtpStreamResults.createFilenameForReportExport()
-                    Utils.Message.addMessage("Stream " + str(self.syncSourceIdentifier) + " object is ending. Autosaving report (__rtpGeneratorThread)")
+                    self.postMessage("Stream " + str(self.syncSourceIdentifier) + " object is ending. Autosaving report (__rtpGeneratorThread)")
                     # Write a report to disk
                     Utils.writeReportToDisk(report, fileName=_filename)
-                    Utils.Message.addMessage("Written " + str(_filename + " to disk"))
+                    self.postMessage("Written " + str(_filename + " to disk"))
                 except Exception as e:
-                    Utils.Message.addMessage(
+                    self.postMessage(
                         "ERR: RtpGenerator.killStream() rtpTxStreamResults.generateReport(): " + str(e))
 
-            Utils.Message.addMessage("DBUG: __newImprovedRtpGeneratorThread ending for stream " + str(self.syncSourceIdentifier))
+            self.postMessage("DBUG: __newImprovedRtpGeneratorThread ending for stream " + str(self.syncSourceIdentifier))
 
         except Exception as e:
-            Utils.Message.addMessage("ERR:__newImprovedRtpGeneratorThread " + str(e))
+            self.postMessage("ERR:__newImprovedRtpGeneratorThread " + str(e))
 
     # Thread-safe method to return a tuple of the last update timestamp and the list of the traceroute hops
     # Optional allowBlocking argument. If True, the method will block until the data is available
@@ -5590,7 +5594,7 @@ class RtpGenerator(RtpCommon):
             return self.tracerouteHopsListLastUpdated, tracerouteHopsList
         else:
             # Data is currently locked by another process
-            Utils.Message.addMessage("DBUG:RtpGenerator.getTraceRouteHopsList() blocked")
+            self.postMessage("DBUG:RtpGenerator.getTraceRouteHopsList() blocked")
             return None, []
 
     # Thread-safe method to set the traceroute hops list
@@ -5750,7 +5754,7 @@ class RtpGenerator(RtpCommon):
                         # Slice the unwanted elements from the top of the list (keeping only the bottom of the list)
                         destList = srcList[:(len(srcList) - elementsToTrim)]
                     except Exception as e:
-                        Utils.Message.addMessage("ERR:__tracerouteThread.trimHopsList() " + str(e))
+                        self.postMessage("ERR:__tracerouteThread.trimHopsList() " + str(e))
                 else:
                     destList = srcList
             return destList
@@ -5786,7 +5790,7 @@ class RtpGenerator(RtpCommon):
             # Send the UDP message (with a custom ttl and id_field value)
             try:
                 bytesSent = sendUDP(_udpSocket, _ttl, b'tracert',  _destAddr, _destPort, _srcAddr, _srcPort, _id_field)
-                # Utils.Message.addMessage("****TR sendUDP(() _ttl " + str(_ttl) + ", bytesSent " + str(bytesSent))
+                # self.postMessage("****TR sendUDP(() _ttl " + str(_ttl) + ", bytesSent " + str(bytesSent))
 
             except Exception as e:
                 raise UDPTxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.sendUDP " + str(e))
@@ -5807,31 +5811,31 @@ class RtpGenerator(RtpCommon):
                 #   OR If matcher matches an icmp reply with the correct id_field
                 elapsedTime = datetime.datetime.now() - startTime
                 if elapsedTime.total_seconds() > _timeout:
-                    # Utils.Message.addMessage("elapsedTimer exceeded limit " + str(elapsedTime.total_seconds()) + "/" + str(timeOut * 1))
+                    # self.postMessage("elapsedTimer exceeded limit " + str(elapsedTime.total_seconds()) + "/" + str(timeOut * 1))
                     break
                 # Receive ICMP data from socket
                 # Keep waiting until we get a matched packet or the timeout occurs
                 try:
-                    # Utils.Message.addMessage(
+                    # self.postMessage(
                     #     "***TR  recvfrom ICMP wait TTL:" + str(_ttl) + ", " + datetime.datetime.now().strftime("%H:%M:%S"))
                     # data, addr = _icmpSocket.recvfrom(65535)
                     # Use select() to poll the socket, before attempting to read it. This should block for _timeout seconds
-                    # Utils.Message.addMessage("****TR select([_icmpSocket, _udpSocket]) _ttl " + str(_ttl))
+                    # self.postMessage("****TR select([_icmpSocket, _udpSocket]) _ttl " + str(_ttl))
                     r, w, x = select.select([_icmpSocket, _udpSocket], [], [], _timeout)
 
                     if not r:
                         # select () timeout reached so returned list will be empty
-                        # Utils.Message.addMessage("****TR select() timeout reached")
+                        # self.postMessage("****TR select() timeout reached")
                         return None
                     else:
                         # select() reckons there's some data to be read
                         if _udpSocket in r:
                             data, addr = _udpSocket.recvfrom(65535)
-                            # Utils.Message.addMessage("****TR _udpSocket has data (" + str(len(data)) + ") " + \
+                            # self.postMessage("****TR _udpSocket has data (" + str(len(data)) + ") " + \
                             #                          str(addr) + ", " + str(data))
                             pass
                         elif _icmpSocket in r:
-                            # Utils.Message.addMessage("****TR _icmpSocket has data")
+                            # self.postMessage("****TR _icmpSocket has data")
                             # The socket contains data to be read
                             data, addr = _icmpSocket.recvfrom(65535)
 
@@ -5850,7 +5854,7 @@ class RtpGenerator(RtpCommon):
                                     # message and listen again (within the timeout period)
                                     ipHeaderOfOriginalSender = IPHeader(data[28:48])
                                     # # Display the  header fields of the received packet
-                                    # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                    # self.postMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
                                     #                          " RtpGenerator.__tracerouteThread() ICMP packet fields " + \
                                     #                          "src:" + str(addr[0]) + \
                                     #                          ", type:" + str(icmpHeader.type) + \
@@ -5888,7 +5892,7 @@ class RtpGenerator(RtpCommon):
                                                 }
                                     else:
                                         # Display the  header fields of the unexpected packet
-                                        # Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                        # self.postMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
                                         #                          " RtpGenerator.__tracerouteThread() Unexpected ICMP packet fields " + \
                                         #                          "src:" + str(addr[0]) + \
                                         #                          ", type:" + str(icmpHeader.type) + \
@@ -5904,13 +5908,13 @@ class RtpGenerator(RtpCommon):
 
 
                                 except Exception as e:
-                                    Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                    self.postMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
                                                              " RtpGenerator.__tracerouteThread() ICMP decode error, from " + \
                                                              str(addr[0]) + ", " + str(e))
                                     return None
 
                             else:
-                                Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                self.postMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
                                                      " RtpGenerator.__tracerouteThread() Unexpected short length packet from " + \
                                                      str(addr[0]))
                                 pass
@@ -5956,7 +5960,7 @@ class RtpGenerator(RtpCommon):
                 _udpSocket.setsockopt(socket.SOL_IP, socket.IP_TTL, _ttl)
                 # Send the payload
                 bytesSent = _udpSocket.sendto(payload, (_destAddr, _destPort))
-                Utils.Message.addMessage("****TR sendUdpRecvIcmpSimple() _ttl " + str(_ttl) + ", bytesSent " + str(bytesSent))
+                self.postMessage("****TR sendUdpRecvIcmpSimple() _ttl " + str(_ttl) + ", bytesSent " + str(bytesSent))
 
             except Exception as e:
                 raise UDPTxError("ERR: __tracerouteLinuxOSXThread.sendUdpRecvIcmpLinuxOSX.sendUDP " + str(e))
@@ -6011,7 +6015,7 @@ class RtpGenerator(RtpCommon):
                                 "IPinICMP_payload": reply["UDP in ICMP"].payload
                                 }
                     else:
-                        # Utils.Message.addMessage("__tracerouteThread.sendUdpRecvIcmpScapy() Unexpected ICMP packet fields " + \
+                        # self.postMessage("__tracerouteThread.sendUdpRecvIcmpScapy() Unexpected ICMP packet fields " + \
                         #                          "src:" + str(reply.src) + \
                         #                          ", type:" + str(reply.type) + \
                         #                          ", code:" + str(reply.code) + \
@@ -6030,7 +6034,7 @@ class RtpGenerator(RtpCommon):
                     return None
 
             except Exception as e:
-                Utils.Message.addMessage("ERR: RtpGenerator.__tracerouteThread.sendUdpRecvIcmpScapy() " + str(e))
+                self.postMessage("ERR: RtpGenerator.__tracerouteThread.sendUdpRecvIcmpScapy() " + str(e))
                 return None
 
 
@@ -6058,7 +6062,7 @@ class RtpGenerator(RtpCommon):
         sendUdpRecvIcmp = None # Operating system-dependant pointer to the traceroute send/recv function
         setupErrorMessage = None
 
-        Utils.Message.addMessage("DBUG:__tracerouteThread starting for stream " + str(self.syncSourceIdentifier))
+        self.postMessage("DBUG:__tracerouteThread starting for stream " + str(self.syncSourceIdentifier))
 
         # Determine which Operating System is in use, and therefore which udp tx/icmp rx function we will use
         os = Utils.getOperatingSystem()
@@ -6077,13 +6081,13 @@ class RtpGenerator(RtpCommon):
                 pkt = IP(dst="127.0.0.1", ttl=1) / UDP(dport=5000)
                 # Send the packet and wait for a reply
                 reply = sr1(pkt, verbose=0, timeout=0.1)
-                Utils.Message.addMessage(
+                self.postMessage(
                     "DBUG:RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv successful " + str(reply))
                 setupSuccessfulFlag = True
 
             except Exception as e:
                 # Scapy failed
-                Utils.Message.addMessage("DBUG:RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv test failed " +\
+                self.postMessage("DBUG:RtpGeneratorThread.__tracerouteThread() Scapy raw send/recv test failed " +\
                                          str(e))
                 setupSuccessfulFlag = False
                 # Store the error message
@@ -6102,7 +6106,7 @@ class RtpGenerator(RtpCommon):
 
             except Exception as e:
                 # Failed to set up sockets
-                Utils.Message.addMessage(
+                self.postMessage(
                     "DBUG:RtpGeneratorThread.__tracerouteThread() createSockets() failed " + \
                     str(e))
                 setupSuccessfulFlag = False
@@ -6110,12 +6114,12 @@ class RtpGenerator(RtpCommon):
                 setupErrorMessage = str(e)
 
         if setupSuccessfulFlag:
-            Utils.Message.addMessage("DBUG:__tracerouteThread Stream " + str(self.syncSourceIdentifier) + " using " +\
+            self.postMessage("DBUG:__tracerouteThread Stream " + str(self.syncSourceIdentifier) + " using " +\
                           str(self.tracerouteFunctionInUse))
         else:
             # If setup failed
-            Utils.Message.addMessage("ERR: __tracerouteThread setup error: " + str(setupErrorMessage))
-            Utils.Message.addMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
+            self.postMessage("ERR: __tracerouteThread setup error: " + str(setupErrorMessage))
+            self.postMessage("\033[31mHint: Run as sudo to enable traceroute functionality")
             # If a UI instance (user interface) reference was supplied, display an error message on the UI
             maxWidth = 60
             # errorText = textwrap.fill(setupErrorMessage, width=maxWidth) + \
@@ -6131,7 +6135,7 @@ class RtpGenerator(RtpCommon):
                 try:
                     self.uiInstance.showErrorDialogue("Traceroute error", errorText)
                 except Exception as e:
-                    Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
+                    self.postMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
                                              str(e))
 
         # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
@@ -6163,7 +6167,7 @@ class RtpGenerator(RtpCommon):
                 hopsList = []
                 # Counts the no of retries for each hop
                 retryCount = 1
-                # Utils.Message.addMessage("Starting traceroute....ttl = 1")
+                # self.postMessage("Starting traceroute....ttl = 1")
                 while ttl < maxNoOfHops and self.timeToLive != 0 and tracerouteLoopCounter > Registry.tracerouteStartDelay:
                     retryCount = 1
                     # We want to start at ttl = 1. Increment
@@ -6173,7 +6177,7 @@ class RtpGenerator(RtpCommon):
 
                     # This loop counts the attempts for each hop
                     while (retryCount < maxNoOfRetries) and self.timeToLive != 0:
-                        # Utils.Message.addMessage("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(retryCount))
+                        # self.postMessage("Attempts loop starting. Hop: " + str(ttl) + ", Attempt: " + str(retryCount))
                         # Send UDP packet
                         # Determine which UDP destination port to use
                         if fallbackPort is None:
@@ -6210,14 +6214,14 @@ class RtpGenerator(RtpCommon):
                                 _udpSocket=udpTx, _icmpSocket=icmpRx, _srcPort=self.UDP_TX_SRC_PORT, _id_field=tracerouteID)
 
                         except UDPTxError as e:
-                            Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
+                            self.postMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
                                                      "__tracerouteThread UDPTxError. Recreating udp Tx socket" + str(
                                 type(e)) + ", " + str(e))
                             # close existing socket
                             try:
                                 udpTx.close()
                             except:
-                                Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
+                                self.postMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
                                                          "__tracerouteThread UDPTxError.  udpTx.close()" + str(
                                     type(e)) + ", " + str(e))
                             # Recreate the udp tx socket
@@ -6226,11 +6230,11 @@ class RtpGenerator(RtpCommon):
                                 # Scapy handles its own sockets)
                                 # Create tx (udp) and rx (icmp) sockets, specifying the ip address we will be transmitting from
                                 udpTx, icmpRx = createSockets(self.SRC_IP_ADDR)
-                                Utils.Message.addMessage("DBUG:Stream" + str(self.syncSourceIdentifier) + \
+                                self.postMessage("DBUG:Stream" + str(self.syncSourceIdentifier) + \
                                                          "__tracerouteThread UDPTxError.  udpTx socket recreated successfully " + str(
                                     type(e)) + ", " + str(e))
                             except:
-                                Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
+                                self.postMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
                                                          "__tracerouteThread UDPTxError.  udpTx socket recreation failed " + str(
                                     type(e)) + ", " + str(e))
 
@@ -6241,7 +6245,7 @@ class RtpGenerator(RtpCommon):
                             try:
                                 # Extract reply-from addr
                                 icmpSrcAddr = icmpMsg["IP_replyFromAddr"]
-                                # Utils.Message.addMessage("ttl " + str(ttl) + ", " + str(icmpSrcAddr) + ", id: " +\
+                                # self.postMessage("ttl " + str(ttl) + ", " + str(icmpSrcAddr) + ", id: " +\
                                 #                          str(icmpMsg["IPinICMP_id_field"]) + ", len: " +\
                                 #                          str(icmpMsg["length"]))
 
@@ -6252,7 +6256,7 @@ class RtpGenerator(RtpCommon):
                                 # zero. Therefore we can't trust this response
                                 if icmpMsg["IPinICMP_ttlReceived"] != 1:
                                     if enableVerboseLogging:
-                                        Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+                                        self.postMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
                                             " Erroneous ttl=" + str(icmpMsg["IPinICMP_ttlReceived"]) + \
                                                              " ICMP message for traceroute hop " + str(ttl) + \
                                                              " Setting hop value to 0.0.0.0")
@@ -6260,7 +6264,7 @@ class RtpGenerator(RtpCommon):
 
                                 # Detect Destination Host Port unreachable, destination reached
                                 elif icmpMsg["ICMP_Type"] == 3 or icmpMsg["IPinICMP_srcAddr"] == self.UDP_TX_IP:
-                                    # Utils.Message.addMessage("icmpType == 3 or icmpSrcAddr == self.UDP_TX_IP")
+                                    # self.postMessage("icmpType == 3 or icmpSrcAddr == self.UDP_TX_IP")
                                     # Cause the outer-outer hops counter loop to break. The traceroute is complete
                                     ttl = maxNoOfHops
                                 # Detect TTL Expired messages (icmp type 11, code 0) - we're mid-traceroute
@@ -6269,7 +6273,7 @@ class RtpGenerator(RtpCommon):
 
                             except Exception as e:
                                 icmpSrcAddr = "0.0.0.0"
-                                Utils.Message.addMessage("ERR: __tracerouteThread " + str(self.syncSourceIdentifier) +
+                                self.postMessage("ERR: __tracerouteThread " + str(self.syncSourceIdentifier) +
                                                          " Decode icmpMsg{} dict. Setting hop  " + str(ttl) + \
                                                          " to 0.0.0.0. "+ str(e))
 
@@ -6292,7 +6296,7 @@ class RtpGenerator(RtpCommon):
                             retryCount += 1
                             # If this is the final attempt but still no response, append 0.0.0.0 to hopsList
                             if retryCount == maxNoOfRetries:
-                                # Utils.Message.addMessage(
+                                # self.postMessage(
                                 #     "retries exceeded for hop " + str(ttl) + ", retry " + str(retryCount))
                                 hopsList.append([0, 0, 0, 0])
                                 # Increment the 'no response' counter
@@ -6301,24 +6305,24 @@ class RtpGenerator(RtpCommon):
                     # Now check to see if we've received five 'no replies' in a row, if so, give up
                     # Or else, if we've reached the max no of hops, give up
                     if (noResponseCounter > maxNoOfNoResponse) or (ttl >= maxNoOfHops):
-                        # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread:" + str(noResponseCounter) + \
+                        # self.postMessage("DBUG:RtpGenerator.__tracerouteThread:" + str(noResponseCounter) + \
                         #                          " None's in a row or hop limit reached. Aborting")
                         # Cause the outer-outer hops counter loop to break
                         # ttl = maxNoOfHops
                         break
-                    # Utils.Message.addMessage("[TTL:" + str(ttl) + ", Retry:" + str(retryCount) +"]" + str(hopsList[-1]))
+                    # self.postMessage("[TTL:" + str(ttl) + ", Retry:" + str(retryCount) +"]" + str(hopsList[-1]))
 
                 # Traceroute pass completed,
 
                 # Now strip off any trailing 0.0.0.0 (no responses)
                 if len(hopsList) > 0:
                     hopsList = trimHopsList(hopsList)
-                    # Utils.Message.addMessage("hopsList: " + str(hopsList))
+                    # self.postMessage("hopsList: " + str(hopsList))
                     # Traceroute pass completed and hopslist trimmed. Now append to tracerouteResultsList for later validation
                     # Add the latest traceroute result to tracerouteResultsList
 
                     tracerouteResultsList.append(hopsList)
-                    # Utils.Message.addMessage("DBUG: stream " + str(self.syncSourceIdentifier) + \
+                    # self.postMessage("DBUG: stream " + str(self.syncSourceIdentifier) + \
                     #                          " traceroute len:" + str(len(hopsList)) + \
                     #                          ", ttl:" + str(ttl) + ", retry:" + str(retryCount) + ")" + \
                     #                          str(hopsList))
@@ -6344,7 +6348,7 @@ class RtpGenerator(RtpCommon):
                                 ### Copy the traceroute hops list into the object instance var
                                 self.relatedRtpStreamResults.setTraceRouteHopsList(hopsList)
                         except Exception as e:
-                            # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
+                            # self.postMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
                             pass
 
                     else:
@@ -6353,7 +6357,7 @@ class RtpGenerator(RtpCommon):
                         tracerouteHopsListMismatchCounter += 1
                         # Now test to see if we have exceeded the max no of allowed consecutive mismatches
                         if tracerouteHopsListMismatchCounter > tracerouteHopsListMismatchCounterThreshold:
-                            Utils.Message.addMessage(\
+                            self.postMessage(\
                                 "DBUG:Traceroute. Stream (" + str(self.syncSourceIdentifier) +\
                                 ") Exceeded consecutive mismatch Threshold (" +\
                                 str(tracerouteHopsListMismatchCounterThreshold) + \
@@ -6374,7 +6378,7 @@ class RtpGenerator(RtpCommon):
                                     ### Copy the traceroute hops list into the object instance var
                                     self.relatedRtpStreamResults.setTraceRouteHopsList([])
                             except Exception as e:
-                                # Utils.Message.addMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
+                                # self.postMessage("DBUG:RtpGenerator.__tracerouteThread() update RtpStreamResults tracerouteHopList " + str(e))
                                 pass
 
                 # Increment traceroute loop counter
@@ -6383,7 +6387,7 @@ class RtpGenerator(RtpCommon):
                 time.sleep(1)
 
         except Exception as e:
-            Utils.Message.addMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
+            self.postMessage("ERR:Stream" + str(self.syncSourceIdentifier) + \
                                      "__tracerouteThread outer loop error. " + str(type(e)) + ", " + str(e))
 
         finally:
@@ -6395,11 +6399,11 @@ class RtpGenerator(RtpCommon):
                     if icmpRx is not None:
                         icmpRx.close()
             except Exception as e:
-                Utils.Message.addMessage(
+                self.postMessage(
                     "ERR:Stream " + + str(self.syncSourceIdentifier) + \
                     " __tracerouteThread couldn't close sockets. " + str(type(e)) + ", " + str(e))
 
-        Utils.Message.addMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
+        self.postMessage("DBUG:Stream " + str(self.syncSourceIdentifier) + \
                                  " __tracerouteThread ending ")
 
 
@@ -6448,7 +6452,7 @@ class ResultsReceiver(object):
 
 
     def __resultsReceiverThread(self):
-        Utils.Message.addMessage("INFO: ResultsReceiver thread starting")
+        self.postMessage("INFO: ResultsReceiver thread starting")
 
         rxMssage = b""  # Array (string IN BYTE FORMAT) to store the reconstructed message
         lastReceivedFragmentIndex = 0  # Tracks the most recently received fragment index (ie. which fragment within the set
