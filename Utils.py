@@ -161,7 +161,7 @@ def unfragmentString(fragments):
             # The list didn't start with the first fragment
             return -1
     except Exception as e:
-        Message.addMessage("ERR: unfragmentString() "+ str(e))
+        raise Exception("ERR:unfragmentString() "+ str(e))
 
 # Utility function convert a value in bytes to kB or MB with a suffix
 def bToMb(value):
@@ -195,26 +195,6 @@ def uTom(value):
         # Append u to the value
         value = str(math.ceil(value)) + "u"
     return value
-
-# This function will delete the specified streamID from an rtpRxStreamsDict{}
-# It uses mutexes, so should be thread safe
-# def removeRtpStreamFromDict(streamID, rtpStreamsDict, rtpStreamsDictMutex):
-#     rtpStreamsDictMutex.acquire()
-#     try:
-#         # Attempt to remove the rtpStream from the dictionary
-#         del rtpStreamsDict[streamID]
-#     except Exception as e:
-#         Message.addMessage("ERR: deleteRtpStreamObject(): ["+str(streamID)+"], "+str(e))
-#     rtpStreamsDictMutex.release()
-
-# A shortcut function that will create a new entry in the supplied dictionary
-# It is used to (safely) populate rtpTxStreamsDict, rtpRxStreamsDict and rtpStreamResultsDict
-# def addRtpStreamToDict(rtpStreamID, rtpStream, rtpStreamsDict, rtpStreamsDictMutex):
-#     rtpStreamsDictMutex.acquire()
-#     # Add the object to the specified dictionary with using rtpStreamID as the key
-#     rtpStreamsDict[rtpStreamID] = rtpStream
-#     rtpStreamsDictMutex.release()
-
 
 # # Defines a class to measure CPU usage
 # class CPU(object):
@@ -413,15 +393,23 @@ class Message(object):
             if cls.__diskWriteQueue.qsize() > 0:
                 # Test size of existing log file. If larger than the threshold set in Registry, auto archive
                 # This will cause the log file to be recreated
-                ret = archiveLogs(cls.outputFileName, Registry.maximumLogFileSize_bytes)
-                if ret == True:
-                    Message.addMessage("Message.__writeMessagesToDiskThread. " + str(cls.outputFileName) + \
-                                       " auto archived")
-                elif ret == None:
+                try:
+                    ret = archiveLogs(cls.outputFileName, Registry.maximumLogFileSize_bytes)
+                    if ret == True:
+                        Message.addMessage("Message.__writeMessagesToDiskThread. " + str(cls.outputFileName) + \
+                                           " auto archived")
+                except Exception as e:
                     Message.addMessage("ERR:Message.__writeMessagesToDiskThread. " + str(cls.outputFileName) + \
                                        " auto archive error")
-                else:
-                    pass
+
+                # if ret == True:
+                #     Message.addMessage("Message.__writeMessagesToDiskThread. " + str(cls.outputFileName) + \
+                #                        " auto archived")
+                # elif ret == None:
+                #     Message.addMessage("ERR:Message.__writeMessagesToDiskThread. " + str(cls.outputFileName) + \
+                #                        " auto archive error")
+                # else:
+                #     pass
 
 
                 # Create the file object for appending
@@ -1296,7 +1284,8 @@ def writeReportToDisk(report, fileName=None):
 
 # Function to monitor the existing log file size to if they've reached the threshold. If so, rename them
 # to a new file with a date added to the filename. The file extension will be preserved
-# Returns True is archival occurred (i.e source file was larger than the threshold), False if not, or None on error
+# Returns True is archival occurred (i.e source file was larger than the threshold), False if not, or
+# raises an Exception on error
 def archiveLogs(file, maxSize):
     # Determine size of existing log file
     # check to see if the file exists at all
@@ -1309,13 +1298,14 @@ def archiveLogs(file, maxSize):
                 # File is larger than the max threshold so rename it
                 archivedFilenameSuffix = "_ending_at_" + datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S")
                 os.rename(file, nameNoExtension+archivedFilenameSuffix+fileExtension)
-                Message.addMessage("Auto archived " + file)
+                # Message.addMessage("Auto archived " + file)
                 return True
             else:
                 return False
         except Exception as e:
-            Message.addMessage("ERR:Utils.archiveLogs() " + str(e))
-            return None
+            # Message.addMessage("ERR:Utils.archiveLogs() " + str(e))
+            raise Exception("ERR:Utils.archiveLogs() " + str(e))
+            # return None
     else:
         return None
 
@@ -1404,8 +1394,7 @@ def getPeakMemoryUsage():
             # Doesn't currently work on Windows
             return None
     except Exception as e:
-        Message.addMessage("ERR: Utils.sampleMemoryUsage() " + str(e))
-        return None
+        raise Exception("ERR: Utils.sampleMemoryUsage() " + str(e))
 
 # Uses pympler.asizeof() to determine the size of any object or None on error
 def getObjectSize(objectToBeMeasured):
@@ -1413,8 +1402,7 @@ def getObjectSize(objectToBeMeasured):
         from pympler import asizeof
         return asizeof.asizeof(objectToBeMeasured)
     except Exception as e:
-        Message.addMessage("ERR: Utils.getObjectSize() " + str(e))
-        return None
+        raise Exception("ERR: Utils.getObjectSize() " + str(e))
 
 # This Class will yield a forever incrementing int starting at the value set in
 # Registry.httpServerStartingTCPPort

@@ -2967,29 +2967,39 @@ def __diskLoggerThread(operationMode, shutdownFlag, controllerTCPPort):
         if shutdownFlag.is_set():
             # If down, break out of the endless while loop
             break
-        # Check to see if the existing log files (if they exist) are below the max size threshold
-        ret = Utils.archiveLogs(filename_csv, Registry.maximumLogFileSize_bytes)
-        if ret == True:
-            Utils.Message.addMessage("__diskloggerThread. " + str(filename_csv) + \
-                               " auto archived")
-        elif ret == None:
+        try:
+            # Check to see if the existing log files (if they exist) are below the max size threshold
+            ret = Utils.archiveLogs(filename_csv, Registry.maximumLogFileSize_bytes)
+            if ret == True:
+                Utils.Message.addMessage("__diskloggerThread. " + str(filename_csv) + \
+                                   " auto archived")
+        except Exception as e:
             Utils.Message.addMessage("ERR:__diskloggerThread. " + str(filename_csv) + \
-                               " auto archive error")
-        else:
-            pass
+                                     " auto archive error")
+
+        # elif ret == None:
+        #     Utils.Message.addMessage("ERR:__diskloggerThread. " + str(filename_csv) + \
+        #                        " auto archive error")
+        # else:
+        #     pass
 
         # Check to see if exporting of Events as JSON is enabled in Registry
         if Registry.enableJsonEventsLog:
             # If so, check size of existing JSON log file and archive if necessary
-            ret = Utils.archiveLogs(filename_json, Registry.maximumLogFileSize_bytes)
-            if ret == True:
-                Utils.Message.addMessage("__diskloggerThread. " + str(filename_json) + \
-                                   " auto archived")
-            elif ret == None:
+            try:
+                ret = Utils.archiveLogs(filename_json, Registry.maximumLogFileSize_bytes)
+                if ret == True:
+                    Utils.Message.addMessage("__diskloggerThread. " + str(filename_json) + \
+                                       " auto archived")
+            except Exception as e:
                 Utils.Message.addMessage("ERR:__diskloggerThread. " + str(filename_json) + \
-                                   " auto archive error")
-            else:
-                pass
+                                         " auto archive error")
+
+            # elif ret == None:
+            #     Utils.Message.addMessage("ERR:__diskloggerThread. " + str(filename_json) + \
+            #                        " auto archive error")
+            # else:
+            #     pass
 
         # Create a file and write a header (if necessary)
         # For the CSV file

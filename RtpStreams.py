@@ -6763,7 +6763,6 @@ class RtpStreamComparer(object):
                 # Retrieve the stats dict for the current stream
                 self.statsForAllStreams.append(api.getStats())
             except Exception as e:
-                # Utils.Message.addMessage(f"ERR:RtpStreamComparer.__init__(): get stream stats {e}")
                 raise Exception(f"ERR:RtpStreamComparer.__init__(): get stream stats {e}")
 
     # This method iterates over rtpStreamsStatsList and examines the stats[statsKeyToCompare] parameter.
@@ -6837,10 +6836,7 @@ class RtpStreamComparer(object):
             return sorted_list
 
         except Exception as e:
-            # Utils.Message.addMessage("ERR:RtpStreamComparer.compareByKey (" + str(statsKeyToCompare) + ", " + str(e))
             raise Exception("ERR:RtpStreamComparer.compareByKey (" + str(statsKeyToCompare) + ", " + str(e))
-            # Return None
-            # return None
 
     # Provides a comparison of all streams by generating some mean averages
     # Returns a dict of stats
@@ -6898,7 +6894,6 @@ class RtpStreamComparer(object):
                     raise Exception("humanise()")
 
         except Exception as e:
-            # Utils.Message.addMessage("ERR:RtpStreamComparer.compareAll() " + str(e))
             raise Exception("ERR:RtpStreamComparer.compareAll() " + str(e))
 
         return resultsDict
