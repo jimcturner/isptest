@@ -6288,7 +6288,8 @@ class RtpGenerator(RtpCommon):
 
                             # Store the address
                             # Query the WhoisResolver to find the owner of the domain
-                            Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
+######## Inhibited queryWhoisCache()
+                            # Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
                             # If so, break the address up into a list of octets - this is how they're stored in self._tracerouteHopsList
                             icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
                             hopsList.append([int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]),
