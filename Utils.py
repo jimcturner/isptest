@@ -1289,6 +1289,7 @@ def writeReportToDisk(report, fileName=None):
 def archiveLogs(file, maxSize):
     # Determine size of existing log file
     # check to see if the file exists at all
+
     if os.path.isfile(file):
         # File does exist, so check the size
         try:
