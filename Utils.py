@@ -675,9 +675,12 @@ class WhoisResolver(object):
         #     return None
         # There doesn't yet exist an entry, so add to the pending list (and in the mean time, return None
         else:
+            # This address is already being queried
             if ip_address in cls.pendingQueries:
                 Message.addMessage(f"{ip_address} pending")
-            cls.pendingQueries[ip_address] = None
+            # This is an unseen address
+            else:
+                cls.pendingQueries[ip_address] = None
             return None
 
     # Returns the current whoisCache dict
