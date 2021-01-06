@@ -1515,11 +1515,14 @@ class UI(object):
                 apiURL = "/report/traceroute"
 
             elif self.displayPopup == self.__renderCompareStreamsTable:
-                # Create a RtpStreamComparer object. Pass the list of available streams to it
-                rtpStreamComparer = RtpStreamComparer(self.availableRtpStreamList)
-                # Generate a streams comparison report - use the existing criteria list and currently set sort order
-                streamReport = rtpStreamComparer.generateReport(Registry.criteriaListForCompareStreams,
-                                                                listOrder=self.popupSortDescending)
+                try:
+                    # Create a RtpStreamComparer object. Pass the list of available streams to it
+                    rtpStreamComparer = RtpStreamComparer(self.availableRtpStreamList)
+                    # Generate a streams comparison report - use the existing criteria list and currently set sort order
+                    streamReport = rtpStreamComparer.generateReport(Registry.criteriaListForCompareStreams,
+                                                                    listOrder=self.popupSortDescending)
+                except Exception as e:
+                    Utils.Message.addMessage(f"ERR:UI.onCopyReportToClipboard(compareStreamsTable){e}")
             # Query the api with specified url/kwargs
             if apiURL is not None:
                 try:
@@ -1604,11 +1607,14 @@ class UI(object):
                 # Specify filename prefix
                 filenamePrefix = "stream_comparison"
                 apiURL = None # API not used for this, we'll invoke the RtpStreamComparer object directly
-                # Create a RtpStreamComparer object. Pass the list of available streams to it
-                rtpStreamComparer = RtpStreamComparer(self.availableRtpStreamList)
-                # Generate a streams comparison report - use the existing criteria list and currently set sort order
-                streamReport = rtpStreamComparer.generateReport(Registry.criteriaListForCompareStreams,
-                                                                listOrder=self.popupSortDescending)
+                try:
+                    # Create a RtpStreamComparer object. Pass the list of available streams to it
+                    rtpStreamComparer = RtpStreamComparer(self.availableRtpStreamList)
+                    # Generate a streams comparison report - use the existing criteria list and currently set sort order
+                    streamReport = rtpStreamComparer.generateReport(Registry.criteriaListForCompareStreams,
+                                                                    listOrder=self.popupSortDescending)
+                except Exception as e:
+                    Utils.Message.addMessage(f"ERR:UI.onSaveReportToDisk(compareStreamsTable){e}")
 
             # If required, query the api with specified url/kwargs to retrieve the selected report
             if apiURL is not None:
@@ -4262,8 +4268,7 @@ class ISPTestHTTPServer(object):
                                 optionalArgsList = ["listOrder", "includeSyncSourceID"]
                                 unexpectedArgs, kwargs = self.convertKeysToMethodArgs(query, [], optionalArgsList)
                                 # Create a RtpStreamComparer object. Pass the list of available streams to it
-                                rtpStreamComparer = \
-                                    RtpStreamComparer(self.server.parentObject.getStreamByFilter())
+                                rtpStreamComparer = RtpStreamComparer(self.server.parentObject.getStreamByFilter())
 
                                 # Specify the default list of stats keys that will be compared with each other
                                 statsKeysToBeCompared = Registry.criteriaListForCompareStreams
