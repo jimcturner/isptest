@@ -956,31 +956,38 @@ class WhoisResolver(object):
                 # Snapshot the current time
                 dateCreated = datetime.datetime.now()
                 lastAccessed = dateCreated
-                try:
-                    # Retrieve the ip address to be looked up from the queue
-                    address = WhoisResolver.pendingQueries.get(timeout=0.2)
-                    # Query the supplied ip address
-                    whoisDetails = WhoisResolver.whoisLookup(address)
-                    # Add the the ip details and time created entry to whoisCache{}
-                    WhoisResolver.whoisCache[address] = [whoisDetails, dateCreated, lastAccessed]
-                except exceptions.IPDefinedError as e:
-                    # This exception will occur if a non-public address is queried (eg 0.0.0.0, 192.168.0.0, 127.0.0.1 etc)
-                    # Create an entry for each address with a useful description by parsing the error message
-                    # Or by looking at the address itself
-                    desc = ""
-                    if address == "127.0.0.1":
-                        desc = "Loopback"
-                    elif address == "0.0.0.0":
-                        desc = "Router didn't respond"
-                    elif str(e).find('Private') > 0:
-                        desc = "Local address"
-                    else:
-                        desc = str(e)
-                    # Create a new entry for this address (with a locally generated 'asn_description' key)
-                    WhoisResolver.whoisCache[address] = [{'asn_description': desc}, dateCreated, lastAccessed]
-                except (exceptions.WhoisLookupError, exceptions.ASNRegistryError) as e:
-                    # Create an entry for the address with the error message as the description
-                    WhoisResolver.whoisCache[address] = [{'asn_description': str(e)}, dateCreated, lastAccessed]
+
+                # Retrieve the ip address to be looked up from the queue
+                address = WhoisResolver.pendingQueries.get(timeout=0.2)
+                # Create dict of known (non public addresses) and their descriptions
+                # We won't bother querying Whois because these are known to not be public
+                knownAddresses = {"127.0.0.1": "Loopback",
+                                  "0.0.0.0":"Router didn't respond"}
+                # Check to see if the address is already known of in knownAddresses
+                # if str(address).startswith(knownAddresses):
+                if address in knownAddresses:
+                    # Create a 'bogus' entry for this address (with a locally generated 'asn_description' key)
+                    WhoisResolver.whoisCache[address] = [{'asn_description': knownAddresses[address]},
+                                                                dateCreated, lastAccessed]
+
+                else:
+                    try:
+                        whoisDetails = WhoisResolver.whoisLookup(address)
+                        # Add the the ip details and time created entry to whoisCache{}
+                        WhoisResolver.whoisCache[address] = [whoisDetails, dateCreated, lastAccessed]
+                    except exceptions.IPDefinedError as e:
+                        # This exception will occur if a non-public address is queried (eg 192.168.0.0 etc)
+                        # Create an entry for each address with a useful description by parsing the error message
+                        # Or by looking at the address itself
+                        if str(e).find('Private') > 0:
+                            desc = "Local address"
+                        else:
+                            desc = str(e)
+                        # Create a new entry for this address (with a locally generated 'asn_description' key)
+                        WhoisResolver.whoisCache[address] = [{'asn_description': desc}, dateCreated, lastAccessed]
+                    except (exceptions.WhoisLookupError, exceptions.ASNRegistryError) as e:
+                        # Create an entry for the address with the error message as the description
+                        WhoisResolver.whoisCache[address] = [{'asn_description': str(e)}, dateCreated, lastAccessed]
 # #####GOT HERE
 #             if len(WhoisResolver.pendingQueries) > 0:
 #                 # Take a snapshot of the class var WhoisResolver.pendingQueries{}
