@@ -664,15 +664,16 @@ class WhoisResolver(object):
     # by __whoisResolverThread
     @classmethod
     def queryWhoisCache(cls, ip_address):
-        # Is there already an entry for this address in whoisCache?
-        if ip_address in cls.whoisCache:
-            # Update the 'last accessed' timestamp
-            cls.whoisCache[ip_address][2] = datetime.datetime.now()
-            return cls.whoisCache[ip_address]
-        else:
-            # There doesn't yet exist an entry, so add to the pending list (and in the mean time, return None
-            cls.pendingQueries[ip_address] = None
-            return None
+        return None
+        # # Is there already an entry for this address in whoisCache?
+        # if ip_address in cls.whoisCache:
+        #     # Update the 'last accessed' timestamp
+        #     cls.whoisCache[ip_address][2] = datetime.datetime.now()
+        #     return cls.whoisCache[ip_address]
+        # else:
+        #     # There doesn't yet exist an entry, so add to the pending list (and in the mean time, return None
+        #     cls.pendingQueries[ip_address] = None
+        #     return None
 
     # Returns the current whoisCache dict
     @classmethod

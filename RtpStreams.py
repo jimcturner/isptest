@@ -1111,6 +1111,7 @@ class RtpReceiveCommon(RtpCommon):
                         str(tracerouteHopsList[hopNo][2]) + "." + \
                               str(tracerouteHopsList[hopNo][3])
                     tracerouteHopsListAsString += str(hopNo + 1) + "\t" + hopAddr.ljust(16)
+########WHOIS Inhibited here.....
                     # Now query the hop name to see if it's in the whois cache
                     # hopName = Utils.WhoisResolver.queryWhoisCache(hopAddr)
                     hopName = None
