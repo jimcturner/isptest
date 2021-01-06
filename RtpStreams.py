@@ -1112,7 +1112,8 @@ class RtpReceiveCommon(RtpCommon):
                               str(tracerouteHopsList[hopNo][3])
                     tracerouteHopsListAsString += str(hopNo + 1) + "\t" + hopAddr.ljust(16)
                     # Now query the hop name to see if it's in the whois cache
-                    hopName = Utils.WhoisResolver.queryWhoisCache(hopAddr)
+                    # hopName = Utils.WhoisResolver.queryWhoisCache(hopAddr)
+                    hopName = None
                     if hopName is not None:
                         tracerouteHopsListAsString += hopName[0]['asn_description']
                     tracerouteHopsListAsString += "\r\n"

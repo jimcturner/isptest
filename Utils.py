@@ -2272,7 +2272,7 @@ def doubleToPatval14bit(inputVal):
 class ProcessCreator(object):
     def __init__(self, targetObject, *args, processName=None, **kwargs) -> None:
         super().__init__()
-        print ("ProcessCreator called")
+        # print ("ProcessCreator called")
         # Take a copy of the source object type to ber created
         self.targetObject = targetObject
         # Take a copy of the list of args that will be passed to the constructor of the object specified
