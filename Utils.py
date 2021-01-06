@@ -669,11 +669,14 @@ class WhoisResolver(object):
             # Update the 'last accessed' timestamp
             cls.whoisCache[ip_address][2] = datetime.datetime.now()
             return cls.whoisCache[ip_address]
+########HERE IS THE ISSUE....
         # # or else, is this address already in the process of being looked up
         # elif ip_address in cls.pendingQueries:
         #     return None
         # There doesn't yet exist an entry, so add to the pending list (and in the mean time, return None
         else:
+            if ip_address in cls.pendingQueries:
+                Message.addMessage(f"{ip_address} pending")
             cls.pendingQueries[ip_address] = None
             return None
 
