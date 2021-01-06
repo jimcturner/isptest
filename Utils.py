@@ -969,9 +969,9 @@ class WhoisResolver(object):
                     # Create a 'bogus' entry for this address (with a locally generated 'asn_description' key)
                     WhoisResolver.whoisCache[address] = [{'asn_description': knownAddresses[address]},
                                                                 dateCreated, lastAccessed]
-
                 else:
                     try:
+                        Message.addMessage(f"Whois:{address}")
                         whoisDetails = WhoisResolver.whoisLookup(address)
                         # Add the the ip details and time created entry to whoisCache{}
                         WhoisResolver.whoisCache[address] = [whoisDetails, dateCreated, lastAccessed]
