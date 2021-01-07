@@ -966,7 +966,7 @@ class RtpReceiveCommon(RtpCommon):
                     self.tracerouteHopsList = [None] * noOfHops
                 self.tracerouteHopsList[hopNo] = hopAddr
             except Exception as e:
-                Utils.Message.addMessage("ERR:RtpReceiveCommon.updateTraceRouteHopsList() " + str(e))
+                self.postMessage("ERR:RtpReceiveCommon.updateTraceRouteHopsList() " + str(e))
             self.tracerouteHopsListMutex.release()
 
     @abstractmethod
