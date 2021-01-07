@@ -656,6 +656,7 @@ class WhoisResolver(object):
             address = None
             # Empty the queue
             while WhoisResolver.pendingQueries.qsize() > 0:
+                Message.addMessage(f"****WhoisResolver Q size: {WhoisResolver.pendingQueries.qsize()} ")
                 # Check status of thread controller flag (otherwise we'd have to wait for the entire  loop to iterate)
                 if self.whoisLookupThreadActive is False:
                     # Break out of while loop
