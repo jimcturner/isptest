@@ -795,13 +795,14 @@ class RtpCommon(object):
         self.httpRequestTimeout=0.1
         # the TCP listener port of the HTTP Server running on the controller process (used for whois lookups etc via tha API)
         self.controllerTCPPort = None
+        self.ctrlAPI = None
         # Var to store the instance of the HTTP Server created in httpServerThreadCommon.
         # Required in order to be able to access the  HTTPServer.shutdown() method
         self.httpd = None
 
         self.syncSourceIdentifier = None
-        self.controllerTCPPort = None  # the TCP listener port of the HTTP Server running on the controller process
-                                        # This should be set when a daughter object (eg RtpGenerator) is created
+
+
 
     # Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
     # Returns None on failure, otherwise returns an int
@@ -1008,12 +1009,23 @@ class RtpReceiveCommon(RtpCommon):
 
         # Get a copy of the traceroute hops list.
         tracerouteHopsList = []
+        tracerouteHopsListWithWhoisInfo = []    # Holds the traceroute hops including the WhoIs info
         tracerouteLastUpdate = None
         try:
             tracerouteLastUpdate, tracerouteHopsList = self.getTraceRouteHopsList()
+            if tracerouteHopsList is not None and len(tracerouteHopsList) > 0:
+                # Traceroute data is available
+                # Use the API helper to query the WhoisResolver. This will yield a list of lists [[addr, whois_name],...]
+                # We don't actually care about the response, we just want to seed the cache
+                try:
+                    tracerouteHopsListWithWhoisInfo = self.ctrlAPI.whoisLookup(tracerouteHopsList)
+                except Exception as e:
+                    self.postMessage(f"ERR:RtpReceiveCommon.generateReport. self.ctrlAPI.whoisLookup() {self.ctrlAPI}, {e}")
         except Exception as e:
-            Utils.Message.addMessage("ERR: RtpReceiveCommon.generateReport, get traceroute hops list. stream " +\
+            Utils.Message.addMessage("ERR:RtpReceiveCommon.generateReport, get traceroute hops list. stream " +\
                                      str(stats["stream_syncSource"]) + ", " + str(e))
+
+
 
         separator = ("-" * 63) + "\r\n"
         title = "Report for stream " + str(stats["stream_syncSource"]) + ", (" + str(
@@ -1101,31 +1113,72 @@ class RtpReceiveCommon(RtpCommon):
             Utils.Message.addMessage("RtpreceiveCommon.generateReport() route stats " + str(e))
 
 
-        # Create a traceroute list of hops.
+        # # Create a traceroute list of hops.
+        # tracerouteHopsListAsString = "Traceroute:\r\n"
+        # if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
+        #     for hopNo in range(len(tracerouteHopsList)):
+        #         try:
+        #             hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
+        #                 str(tracerouteHopsList[hopNo][1]) + "." + \
+        #                 str(tracerouteHopsList[hopNo][2]) + "." + \
+        #                       str(tracerouteHopsList[hopNo][3])
+        #             tracerouteHopsListAsString += str(hopNo + 1) + "\t" + hopAddr.ljust(16)
+        #
+        #             # Now query the hop name to see if it's in the whois cache
+        #             hopName = Utils.WhoisResolver.queryWhoisCache(hopAddr)
+        #             if hopName is not None:
+        #                 tracerouteHopsListAsString += hopName[0]['asn_description']
+        #             tracerouteHopsListAsString += "\r\n"
+        #
+        #         except Exception as e:
+        #             Utils.Message.addMessage("DBUG: RtpReceiveCommon.generateReport() Create traceroute string: " + str(e))
+        #             tracerouteHopsListAsString += "--Invalid traceroute data--\r\n"
+        #     if tracerouteLastUpdate is not None:
+        #         try:
+        #             tracerouteHopsListAsString += "Last updated: " + tracerouteLastUpdate.strftime("%d/%m %H:%M:%S") + "\r\n"
+        #         except Exception as e:
+        #             Utils.Message.addMessage("ERR: RtpReceiveCommon.generateReport() add traceroute last updated " + str(e))
+        #
+        #
+        # else:
+        #     tracerouteHopsListAsString += "No traceroute info available" + "\r\n"
+                # Create a traceroute list of hops.
         tracerouteHopsListAsString = "Traceroute:\r\n"
-        if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
-            for hopNo in range(len(tracerouteHopsList)):
+        if len(tracerouteHopsListWithWhoisInfo) > 0:
+            # Create a formatted string containing the hop address and Whois name
+            for hopNo in range(len(tracerouteHopsListWithWhoisInfo)):
                 try:
-                    hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
-                        str(tracerouteHopsList[hopNo][1]) + "." + \
-                        str(tracerouteHopsList[hopNo][2]) + "." + \
-                              str(tracerouteHopsList[hopNo][3])
-                    tracerouteHopsListAsString += str(hopNo + 1) + "\t" + hopAddr.ljust(16)
-
-                    # Now query the hop name to see if it's in the whois cache
-                    hopName = Utils.WhoisResolver.queryWhoisCache(hopAddr)
-                    if hopName is not None:
-                        tracerouteHopsListAsString += hopName[0]['asn_description']
-                    tracerouteHopsListAsString += "\r\n"
-
+                    # Construct each line of the table
+                    address = str(tracerouteHopsListWithWhoisInfo[hopNo][0]).ljust(16)
+                    whoisName = tracerouteHopsListWithWhoisInfo[hopNo][1]
+                    tracerouteHopsListAsString += f"{hopNo + 1}\t{address} {whoisName}\r\n"
                 except Exception as e:
-                    Utils.Message.addMessage("DBUG: RtpReceiveCommon.generateReport() Create traceroute string: " + str(e))
+                    self.postMessage(f"ERR: RtpReceiveCommon.generateReport() Create traceroute string: {e}")
                     tracerouteHopsListAsString += "--Invalid traceroute data--\r\n"
+                # try:
+                #     hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
+                #               str(tracerouteHopsList[hopNo][1]) + "." + \
+                #               str(tracerouteHopsList[hopNo][2]) + "." + \
+                #               str(tracerouteHopsList[hopNo][3])
+                #     tracerouteHopsListAsString += str(hopNo + 1) + "\t" + hopAddr.ljust(16)
+                #
+                #     # Now query the hop name to see if it's in the whois cache
+                #     hopName = Utils.WhoisResolver.queryWhoisCache(hopAddr)
+                #     if hopName is not None:
+                #         tracerouteHopsListAsString += hopName[0]['asn_description']
+                #     tracerouteHopsListAsString += "\r\n"
+                #
+                # except Exception as e:
+                #     Utils.Message.addMessage(
+                #         "DBUG: RtpReceiveCommon.generateReport() Create traceroute string: " + str(e))
+                #     tracerouteHopsListAsString += "--Invalid traceroute data--\r\n"
             if tracerouteLastUpdate is not None:
                 try:
-                    tracerouteHopsListAsString += "Last updated: " + tracerouteLastUpdate.strftime("%d/%m %H:%M:%S") + "\r\n"
+                    tracerouteHopsListAsString += "Last updated: " + tracerouteLastUpdate.strftime(
+                        "%d/%m %H:%M:%S") + "\r\n"
                 except Exception as e:
-                    Utils.Message.addMessage("ERR: RtpReceiveCommon.generateReport() add traceroute last updated " + str(e))
+                    Utils.Message.addMessage(
+                        "ERR: RtpReceiveCommon.generateReport() add traceroute last updated " + str(e))
 
 
         else:
@@ -3584,6 +3637,8 @@ class RtpStreamResults(RtpReceiveCommon):
 
         super().__init__()
         self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
+        self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort) # Create am API helper to access the API services running
+                                                                # on the Controller (eg whois lookups etc)
         self.syncSourceID = syncSourceID
         # Create private empty dictionary to hold stats for this RtpStream object. Accessible via a getter method
         self.__stats = {}
