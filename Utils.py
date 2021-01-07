@@ -803,73 +803,73 @@ class WhoisResolver(object):
 
     whoisAuthorities = ["whois.ripe.net", "whois.iana.org"]
 
-    # Self-rolled whois querier based on scapy.utils.whois
-    # It will return a dictionary of the whois information
-    # 'netname' seems to be the most useful parameter to me - this holds
-    # Example usage:
-    # z = WhoisResolver.whoisLookup("212.58.231.0", "whois.ripe.net")
-    # print(z["netname"])
-    # In theory, it should be able to do a reverse lookup (by supplying domain name as an argument, although this doesn't
-    # seem to work terribly well
-    # Note: this is a blocking method
-    # example whoisAuthorities are ["whois.ripe.net", "whois.iana.org"]
-    # Note: Each authority only looks a geographic region. If they don't know about a domain, then they should be
-    # able to redirect you to an authority that does know
-    # In practice, I decided it would just be easier to make use of the IPWhois library becasuse this already takes
-    # redirections (and probably may other things that I haven't thought about)
-    @classmethod
-    def simpleWhoisLookup(cls, ip_address, authorityHostname):
-        """Whois client for Python"""
-        whois_ip = str(ip_address)
-        try:
-            query = socket.gethostbyname(whois_ip)
-            # print ("result from socket.gethostbyname() " + str(query))
-        except Exception:
-            query = whois_ip
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        # s.connect(("whois.ripe.net", 43))
-        s.connect(("whois.iana.org", 43))
-        s.send(query.encode("utf8") + b"\r\n")
-        answer = b""
-        while True:
-            d = s.recv(4096)
-            answer += d
-            if not d:
-                break
-        s.close()
-        ignore_tag = b"remarks:"
-        # ignore all lines starting with the ignore_tag
-        # This will create a list with each new line as an element
-        lines = [line for line in answer.split(b"\n") if
-                 not line or (line and not line.startswith(ignore_tag))]  # noqa: E501
-        # remove empty lines at the bottom
-        for i in range(1, len(lines)):
-            if not lines[-i].strip():
-                del lines[-i]
-            else:
-                break
-        # return lines[3:]
-        # Now convert lines[] into a dictionary (as this is more useful)
-        # Headings are always proceeded with a colon, so use this as the indicator for a heading. This will become the key
-        # The next list entry will be presumed to be the value
-        # The first three lines can be ignored as they contain Ts and Cs text
-        whoisDict = {}
-        try:
-            if len(lines) > 3:
-                for line in range(3, len(lines)):
-                    # isolate individual line as a string. Remove newline char from end
-                    x = str(lines[line],'utf-8').split("\n")[0]
-                    # Does the array element contain a colon? If so, split into a list
-                    splitLine = x.split(":")
-                    if len(splitLine) > 1:
-                        key = splitLine[0]
-                        value = splitLine[1].lstrip()
-                        # Create new dictionary element
-                        whoisDict[key] = value
-        except:
-            whoisDict = None
-        return whoisDict
-        # return b"\n".join(lines[3:])
+    # # Self-rolled whois querier based on scapy.utils.whois
+    # # It will return a dictionary of the whois information
+    # # 'netname' seems to be the most useful parameter to me - this holds
+    # # Example usage:
+    # # z = WhoisResolver.whoisLookup("212.58.231.0", "whois.ripe.net")
+    # # print(z["netname"])
+    # # In theory, it should be able to do a reverse lookup (by supplying domain name as an argument, although this doesn't
+    # # seem to work terribly well
+    # # Note: this is a blocking method
+    # # example whoisAuthorities are ["whois.ripe.net", "whois.iana.org"]
+    # # Note: Each authority only looks a geographic region. If they don't know about a domain, then they should be
+    # # able to redirect you to an authority that does know
+    # # In practice, I decided it would just be easier to make use of the IPWhois library becasuse this already takes
+    # # redirections (and probably may other things that I haven't thought about)
+    # @classmethod
+    # def simpleWhoisLookup(cls, ip_address, authorityHostname):
+    #     """Whois client for Python"""
+    #     whois_ip = str(ip_address)
+    #     try:
+    #         query = socket.gethostbyname(whois_ip)
+    #         # print ("result from socket.gethostbyname() " + str(query))
+    #     except Exception:
+    #         query = whois_ip
+    #     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #     # s.connect(("whois.ripe.net", 43))
+    #     s.connect(("whois.iana.org", 43))
+    #     s.send(query.encode("utf8") + b"\r\n")
+    #     answer = b""
+    #     while True:
+    #         d = s.recv(4096)
+    #         answer += d
+    #         if not d:
+    #             break
+    #     s.close()
+    #     ignore_tag = b"remarks:"
+    #     # ignore all lines starting with the ignore_tag
+    #     # This will create a list with each new line as an element
+    #     lines = [line for line in answer.split(b"\n") if
+    #              not line or (line and not line.startswith(ignore_tag))]  # noqa: E501
+    #     # remove empty lines at the bottom
+    #     for i in range(1, len(lines)):
+    #         if not lines[-i].strip():
+    #             del lines[-i]
+    #         else:
+    #             break
+    #     # return lines[3:]
+    #     # Now convert lines[] into a dictionary (as this is more useful)
+    #     # Headings are always proceeded with a colon, so use this as the indicator for a heading. This will become the key
+    #     # The next list entry will be presumed to be the value
+    #     # The first three lines can be ignored as they contain Ts and Cs text
+    #     whoisDict = {}
+    #     try:
+    #         if len(lines) > 3:
+    #             for line in range(3, len(lines)):
+    #                 # isolate individual line as a string. Remove newline char from end
+    #                 x = str(lines[line],'utf-8').split("\n")[0]
+    #                 # Does the array element contain a colon? If so, split into a list
+    #                 splitLine = x.split(":")
+    #                 if len(splitLine) > 1:
+    #                     key = splitLine[0]
+    #                     value = splitLine[1].lstrip()
+    #                     # Create new dictionary element
+    #                     whoisDict[key] = value
+    #     except:
+    #         whoisDict = None
+    #     return whoisDict
+    #     # return b"\n".join(lines[3:])
 
     # This is non-blocking method to query the cls.whoisCache{} dict.
     # If the entry exists it will return it, otherwise it will add the request to pendingQueries{} to be picked up
@@ -896,10 +896,10 @@ class WhoisResolver(object):
     def getWhoisCache(cls):
         return cls.whoisCache
 
-    # Returns the current pendingQueries dict
-    @classmethod
-    def getPendingQueries(cls):
-        return cls.pendingQueries
+    # # Returns the current pendingQueries dict
+    # @classmethod
+    # def getPendingQueries(cls):
+    #     return cls.pendingQueries
 
 
     # This constructor method sets running a background thread to maintain a cache of the previously queried domains
@@ -912,18 +912,18 @@ class WhoisResolver(object):
         self.whoisLookupThread.setName("__whoisLookupThread")
         self.whoisLookupThread.start()
 
-    # This method queries the internet whois servers to determine thw owner (ASN_Description) of the IP address
-    @classmethod
-    def whoisLookup(cls, addr, retries=1):
-        # See here for docs: https://ipwhois.readthedocs.io/en/latest/index.html
-        # Create an IPWhois object
-        obj = IPWhois(addr)
-        # The function for retrieving and parsing whois information for an IP address via port 43
-        # lookup
-        whoisInfo = obj.lookup_whois(retry_count=retries)
-
-        # return ret['asn_description'] # This is probably the most useful field
-        return whoisInfo
+    # # This method queries the internet whois servers to determine thw owner (ASN_Description) of the IP address
+    # @classmethod
+    # def whoisLookup(cls, addr, retries=1):
+    #     # See here for docs: https://ipwhois.readthedocs.io/en/latest/index.html
+    #     # Create an IPWhois object
+    #     obj = IPWhois(addr)
+    #     # The function for retrieving and parsing whois information for an IP address via port 43
+    #     # lookup
+    #     whoisInfo = obj.lookup_whois(retry_count=retries)
+    #
+    #     # return ret['asn_description'] # This is probably the most useful field
+    #     return whoisInfo
 
     # Blocking method to cause the object to die (by killing the thread)
     def kill(self):
@@ -934,8 +934,9 @@ class WhoisResolver(object):
         self.whoisLookupThread.join()
         Message.addMessage("DBUG:WhoisResolver. whoisLookupThread has ended")
 
-    # This method will examine the lastAccessedTimestamp of the entries in the self.whoIsCache{} dict
+    # This method **will** examine the lastAccessedTimestamp of the entries in the self.whoIsCache{} dict
     # and automatically re-check or purge old entries
+    # ***********NOT IMPLEMENTED YET**********
     def __houseKeep(self):
         pass
 
@@ -977,7 +978,7 @@ class WhoisResolver(object):
                         # Query the WhoIs database - See here for docs: https://ipwhois.readthedocs.io/en/latest/index.html
                         # Create an IPWhois object
                         obj = IPWhois(address)
-                        # Perform the lookup (using rdap (i.e http))
+                        # Perform the lookup (using rdap (via http))
                         whoisDetails = obj.lookup_rdap()
                         # Add the the ip details and time created entry to whoisCache{}
                         WhoisResolver.whoisCache[address] = [whoisDetails, dateCreated, lastAccessed]
