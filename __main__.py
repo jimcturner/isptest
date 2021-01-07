@@ -2231,7 +2231,7 @@ class UI(object):
                         "\n" + "  and event logging".center(maxWidth, " ") + \
                         "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth, " ") + \
                         "\n See https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
-                        "\n\n\nmost recent dev branch: mp3\n\n" + \
+                        "\n\n\nmost recent dev branch: mp3-\n\n" + \
                         "Press the [any] key to continue".center(maxWidth, " ")
 
         # Render the message in a pop-up box
@@ -3913,7 +3913,6 @@ class RtpPacketReceiver(object):
 # Note, this Class also provides a stream directory service
 # externalResourcesDict is a dictionary of external objects that ISPTestHTTPServer would like access to
 class ISPTestHTTPServer(object):
-
     def __init__(self, operationMode=None, tcpListenPort=None, externalResourcesDict=None) -> None:
         super().__init__()
         self.operationMode = operationMode
