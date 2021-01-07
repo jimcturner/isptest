@@ -22,7 +22,7 @@ from collections import deque
 from functools import reduce
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import PurePosixPath
-from queue import SimpleQueue
+from queue import SimpleQueue, Empty
 from urllib.parse import urlparse, unquote, urlencode, parse_qs
 
 from Registry import Registry
@@ -655,18 +655,16 @@ class WhoisResolver(object):
         while self.whoisLookupThreadActive:
             address = None
             # Empty the queue
-            while WhoisResolver.pendingQueries.qsize() > 0:
-                Message.addMessage(f"****WhoisResolver Q size: {WhoisResolver.pendingQueries.qsize()} ")
+            try:
                 # Check status of thread controller flag (otherwise we'd have to wait for the entire  loop to iterate)
                 if self.whoisLookupThreadActive is False:
                     # Break out of while loop
                     break
+                # Retrieve the ip address to be looked up from the queue (will block for timeout seconds)
+                address = WhoisResolver.pendingQueries.get(timeout=0.2)
                 # Snapshot the current time
                 dateCreated = datetime.datetime.now()
                 lastAccessed = dateCreated
-
-                # Retrieve the ip address to be looked up from the queue
-                address = WhoisResolver.pendingQueries.get(timeout=0.2)
 
                 # Check to see if the address is already known of in knownAddresses
                 # if str(address).startswith(knownAddresses):
@@ -698,7 +696,13 @@ class WhoisResolver(object):
                         # Create an entry for the address with the error message as the description
                         WhoisResolver.whoisCache[address] = [{'asn_description': str(e)}, dateCreated, lastAccessed]
 
+            except Empty:
+                # Queue was empty
+                pass
+            except Exception as e:
+                Message.addMessage("ERR:WhoisResolver.__whoisLookupThread()" + str(e))
             time.sleep(0.5)
+
         Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread ending")
 
 # Decodes the supplied IP header (which should be 20 bytes long)
