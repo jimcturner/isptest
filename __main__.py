@@ -5418,7 +5418,7 @@ def main(argv):
                             else:
                                 x = Utils.convertStringToPythonDataType(stats[stat])
                                 if not isinstance(stats[stat], type(x)):
-                                    Utils.Message.addMessage(f"DBUG: Recreating stream. converted {stat} from {type(stats[stat])} to {type(x)}")
+                                    # Utils.Message.addMessage(f"DBUG: Recreating stream. converted {stat} from {type(stats[stat])} to {type(x)}")
                                     # assign the type-converted value back to the value in the dict
                                     stats[stat] = x
 
