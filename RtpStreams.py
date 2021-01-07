@@ -2189,8 +2189,6 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # This allows the receiver to confirm that it has received a complete set of traceroute hops,
                 # rather than just different parts of a traceroute
                 self.tracerouteReceivedChecksum = isptestHeaderData[8]
-                # Now pass the hop address to WhoisResolver.queryWhoisCache
-                # to populate the whois cache for later use
                 hopAddrAsString = str(isptestHeaderData[4]) + "." + str(isptestHeaderData[5]) + "." +\
                                   str(isptestHeaderData[6]) + "." + str(isptestHeaderData[7])
                 Utils.WhoisResolver.queryWhoisCache(hopAddrAsString)
@@ -2848,6 +2846,16 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                         # Update the 'stable' TracerouteHopsList (this will be used for reports/display purposes)
                         self.setTraceRouteHopsList(hopsList)
+
+                        # Pass  the hopsList to the WhoIsResolver to seed it with the current known addresses
+                        # We don't actually care about the response from the api, just that it knows about the addresses
+                        # so that we we come to run a report/display a traceroute table, the whois details already exist
+                        try:
+                            if len(hopsList) > 0:
+                                apiResponse = self.ctrlAPI.whoisLookup(hopsList)
+                        except Exception as e:
+                            self.postMessage(
+                                f"ERR:RtpReceiveStream.__samplingThread. self.ctrlAPI.whoisLookup(), {hopsList}, {e}")
 
                         # Attempt to detect a route change
                         if hopsListChangeExpected is False:
