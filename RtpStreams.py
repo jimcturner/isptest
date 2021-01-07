@@ -5157,7 +5157,6 @@ class RtpGenerator(RtpCommon):
                     # We don't actually care about the response, we just want to seed the cache
                     try:
                         apiResponse = self.ctrlAPI.whoisLookup(tracerouteHopsList)
-                        self.postMessage(f"{apiResponse}")
                     except Exception as e:
                         self.postMessage(f"ERR:RtpGeenrator.__samplingThread. self.ctrlAPI.whoisLookup() {e}")
 

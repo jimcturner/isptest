@@ -2375,6 +2375,7 @@ class UI(object):
 
             # Get the friendly name for the traceroute table title
             # Get the stats dict from the /stats (RECEIVE mode) or txstats (TRANSMIT mode) endpoint -
+            apiURL = ""
             try:
                 if self.selectedStream["streamType"] == "RtpGenerator":
                     apiURL = "/txstats"
