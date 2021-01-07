@@ -4632,7 +4632,6 @@ class ISPTestHTTPServer(object):
     def __httpServerThread(self):
         # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
         try:
-
             # This call will block
             self.httpd = Utils.CustomHTTPServer((self.tcpListernAddr, self.tcpListenPort), ISPTestHTTPServer.HTTPRequestHandler)
             Utils.Message.addMessage("DBUG: Creating ISPTestHTTPServer, listening on TCP port " + str(self.tcpListenPort))
@@ -5157,6 +5156,7 @@ def main(argv):
     # # Register whoIsResolver with the shared objects dict
     # sharedObjects = {"whoIsResolver": whoIsResolver}
     # Create and start the main HTTP Server
+    isptesttHTTPServerPort = None # Default value. Will be specified in Registry
     try:
         # Establish what port the http server should be running on
         # Note, if this port is unavailable, The HTTP server should pick up the next available port
@@ -5172,6 +5172,7 @@ def main(argv):
                                                externalResourcesDict=sharedObjects)
         # Get the actual TCP listener port from the ISPTestHTTPServer object itself
         isptesttHTTPServerPort = isptesttHTTPServer.getTCPPort()
+        Utils.Message.addMessage(f"isptesttHTTPServer successfully started on port {isptesttHTTPServerPort}")
     except Exception as e:
         Utils.Message.addMessage("ERR:isptesttHTTPServer = ISPTestHTTPServer() " + str(e))
         print(f"ERR:Failed to start HTTP Server on port {isptesttHTTPServerPort}: {e}")

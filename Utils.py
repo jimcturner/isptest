@@ -675,7 +675,7 @@ class WhoisResolver(object):
                                                                 dateCreated, lastAccessed]
                 else:
                     try:
-                        Message.addMessage(f"DBUG:WhoisResolver whois lookup address:{address}")
+                        Message.addMessage(f"DBUG:WhoisResolver whois lookup:{address}")
                         # Query the WhoIs database - See here for docs: https://ipwhois.readthedocs.io/en/latest/index.html
                         # Create an IPWhois object
                         obj = IPWhois(address)
