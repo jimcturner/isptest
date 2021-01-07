@@ -661,7 +661,7 @@ class WhoisResolver(object):
                     # Break out of while loop
                     break
                 # Retrieve the ip address to be looked up from the queue (will block for timeout seconds)
-                address = WhoisResolver.pendingQueries.get(timeout=0.2)
+                address = WhoisResolver.pendingQueries.get(timeout=0.5)
                 # Snapshot the current time
                 dateCreated = datetime.datetime.now()
                 lastAccessed = dateCreated
@@ -675,7 +675,6 @@ class WhoisResolver(object):
                 else:
                     try:
                         Message.addMessage(f"DBUG:WhoisResolver whois lookup:{address}")
-                        Message.postMessage(f"DBUG:(posted) WhoisResolver whois lookup:{address}", 10000)
                         # Query the WhoIs database - See here for docs: https://ipwhois.readthedocs.io/en/latest/index.html
                         # Create an IPWhois object
                         obj = IPWhois(address)
