@@ -1022,7 +1022,7 @@ class RtpReceiveCommon(RtpCommon):
                 except Exception as e:
                     self.postMessage(f"ERR:RtpReceiveCommon.generateReport. self.ctrlAPI.whoisLookup() {self.ctrlAPI}, {e}")
         except Exception as e:
-            Utils.Message.addMessage("ERR:RtpReceiveCommon.generateReport, get traceroute hops list. stream " +\
+            self.postMessage("ERR:RtpReceiveCommon.generateReport, get traceroute hops list. stream " +\
                                      str(stats["stream_syncSource"]) + ", " + str(e))
 
 
@@ -1110,39 +1110,9 @@ class RtpReceiveCommon(RtpCommon):
                 routeChangeStats += "No received TTL information available" + "\r\n"
 
         except Exception as e:
-            Utils.Message.addMessage("RtpreceiveCommon.generateReport() route stats " + str(e))
+            self.postMessage("RtpReceiveCommon.generateReport() route stats " + str(e))
 
-
-        # # Create a traceroute list of hops.
-        # tracerouteHopsListAsString = "Traceroute:\r\n"
-        # if len(tracerouteHopsList) > 0 and None not in tracerouteHopsList:
-        #     for hopNo in range(len(tracerouteHopsList)):
-        #         try:
-        #             hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
-        #                 str(tracerouteHopsList[hopNo][1]) + "." + \
-        #                 str(tracerouteHopsList[hopNo][2]) + "." + \
-        #                       str(tracerouteHopsList[hopNo][3])
-        #             tracerouteHopsListAsString += str(hopNo + 1) + "\t" + hopAddr.ljust(16)
-        #
-        #             # Now query the hop name to see if it's in the whois cache
-        #             hopName = Utils.WhoisResolver.queryWhoisCache(hopAddr)
-        #             if hopName is not None:
-        #                 tracerouteHopsListAsString += hopName[0]['asn_description']
-        #             tracerouteHopsListAsString += "\r\n"
-        #
-        #         except Exception as e:
-        #             Utils.Message.addMessage("DBUG: RtpReceiveCommon.generateReport() Create traceroute string: " + str(e))
-        #             tracerouteHopsListAsString += "--Invalid traceroute data--\r\n"
-        #     if tracerouteLastUpdate is not None:
-        #         try:
-        #             tracerouteHopsListAsString += "Last updated: " + tracerouteLastUpdate.strftime("%d/%m %H:%M:%S") + "\r\n"
-        #         except Exception as e:
-        #             Utils.Message.addMessage("ERR: RtpReceiveCommon.generateReport() add traceroute last updated " + str(e))
-        #
-        #
-        # else:
-        #     tracerouteHopsListAsString += "No traceroute info available" + "\r\n"
-                # Create a traceroute list of hops.
+        # Create a traceroute list of hops.
         tracerouteHopsListAsString = "Traceroute:\r\n"
         if len(tracerouteHopsListWithWhoisInfo) > 0:
             # Create a formatted string containing the hop address and Whois name
@@ -1155,32 +1125,13 @@ class RtpReceiveCommon(RtpCommon):
                 except Exception as e:
                     self.postMessage(f"ERR: RtpReceiveCommon.generateReport() Create traceroute string: {e}")
                     tracerouteHopsListAsString += "--Invalid traceroute data--\r\n"
-                # try:
-                #     hopAddr = str(tracerouteHopsList[hopNo][0]) + "." + \
-                #               str(tracerouteHopsList[hopNo][1]) + "." + \
-                #               str(tracerouteHopsList[hopNo][2]) + "." + \
-                #               str(tracerouteHopsList[hopNo][3])
-                #     tracerouteHopsListAsString += str(hopNo + 1) + "\t" + hopAddr.ljust(16)
-                #
-                #     # Now query the hop name to see if it's in the whois cache
-                #     hopName = Utils.WhoisResolver.queryWhoisCache(hopAddr)
-                #     if hopName is not None:
-                #         tracerouteHopsListAsString += hopName[0]['asn_description']
-                #     tracerouteHopsListAsString += "\r\n"
-                #
-                # except Exception as e:
-                #     Utils.Message.addMessage(
-                #         "DBUG: RtpReceiveCommon.generateReport() Create traceroute string: " + str(e))
-                #     tracerouteHopsListAsString += "--Invalid traceroute data--\r\n"
+
             if tracerouteLastUpdate is not None:
                 try:
                     tracerouteHopsListAsString += "Last updated: " + tracerouteLastUpdate.strftime(
                         "%d/%m %H:%M:%S") + "\r\n"
                 except Exception as e:
-                    Utils.Message.addMessage(
-                        "ERR: RtpReceiveCommon.generateReport() add traceroute last updated " + str(e))
-
-
+                    self.postMessage("ERR: RtpReceiveCommon.generateReport() add traceroute last updated " + str(e))
         else:
             tracerouteHopsListAsString += "No traceroute info available" + "\r\n"
 
@@ -1266,66 +1217,67 @@ class RtpReceiveCommon(RtpCommon):
             # Get a copy of the stats dict for this stream
             stats = self.getRtpStreamStats()
 
+            separator = ("-" * 63) + "\r\n"  # Dotted line separator for the report
+            # Format a string containing the IP src/dest address details
+            streamIPDetails = \
+                str(stats["stream_transmitter_local_srcPort"]) + ":" + \
+                str(stats["stream_transmitter_localAddress"]) + \
+                "(" + str(stats["stream_srcAddress"]) + ")" + " ---> " + "(" + \
+                str(stats["stream_srcPort"]) + ":" + \
+                str(stats["stream_transmitter_destAddress"]) + ")" + str(stats["stream_rxAddress"]) + ":" + \
+                str(stats["stream_rxPort"]) + "\r\n"
+
+            # Generate heading text
+            streamReport = f"Traceroute history (last {historyLength} events) for stream " + str(
+                stats["stream_syncSource"]) + \
+                           "(" + str(stats["stream_friendly_name"]).strip() + ")" + "\r\n"
+            subtitle = "Generated by isptest v" + str(Registry.version) + \
+                       " running in " + str(self.getOperationMode()) + " mode at " + \
+                       datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
+
+            streamReport += subtitle + separator + streamIPDetails + separator
+
+            ####### Get a copy of the current traceroute hops list and render a table with whois lookup
+            tracerouteLastUpdate = None
+            tracerouteHopsList = None
+            try:
+                tracerouteLastUpdate, tracerouteHopsList = self.getTraceRouteHopsList()
+                # Use the API helper to query the WhoisResolver
+                apiResponse = self.ctrlAPI.whoisLookup(tracerouteHopsList)
+                # Now create the table contents to be displayed using the data returned from the API
+                currentTraceRoute = renderTracerouteDataAsTable(apiResponse)
+                # Append the *current* traceroute hops table string to streamReport
+                streamReport += f"Current: Last updated {tracerouteLastUpdate.strftime('%d/%m/%Y %H:%M:%S')}\r\n" + \
+                                currentTraceRoute + separator
+            except Exception as e:
+                self.postMessage(
+                    f"ERR: RtpReceiveCommon.generateTracerouteHistoryReport, get current traceroute hops list. stream "
+                    f" {stats['stream_syncSource']}, {e}, tracerouteLastUpdate:{tracerouteLastUpdate}, tracerouteHopsList:{tracerouteHopsList}")
+
+            ####### Create tables containing historic traceroute data with whois lookup
             if len(tracerouteEventsList) > 0:
-                separator = ("-" * 63) + "\r\n"  # Dotted line separator for the report
-                # Format a string containing the IP src/dest address details
-                streamIPDetails = \
-                    str(stats["stream_transmitter_local_srcPort"]) + ":" + \
-                    str(stats["stream_transmitter_localAddress"]) + \
-                    "(" + str(stats["stream_srcAddress"]) + ")" + " ---> " + "(" + \
-                    str(stats["stream_srcPort"]) + ":" + \
-                    str(stats["stream_transmitter_destAddress"]) + ")" + str(stats["stream_rxAddress"]) + ":" + \
-                    str(stats["stream_rxPort"]) + "\r\n"
-
-
-                streamReport = f"Traceroute history (last {historyLength} events) for stream " + str(stats["stream_syncSource"]) + \
-                               "(" + str(stats["stream_friendly_name"]).strip() + ")" + "\r\n"
-                subtitle = "Generated by isptest v" + str(Registry.version) + \
-                           " running in " + str(self.getOperationMode()) + " mode at " + \
-                           datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S") + "\r\n"
-
-                streamReport += subtitle + separator + streamIPDetails + separator
-                # Create an API helper
-                api = Utils.APIHelper(self.controllerTCPPort, addr="127.0.0.1")
-
-                ####### Get a copy of the current traceroute hops list and render a table with whois lookup
-                try:
-                    tracerouteLastUpdate, tracerouteHopsList = self.getTraceRouteHopsList()
-                    currentTraceRoute = f"Current: Last updated {tracerouteLastUpdate.strftime('%d/%m/%Y %H:%M:%S')}\r\n"
-
-                    # Use the API helper to query the WhoisResolver
-                    apiResponse = api.whoisLookup(tracerouteHopsList)
-                    # Now create the table contents to be displayed using the data returned from the API
-                    currentTraceRoute = renderTracerouteDataAsTable(apiResponse)
-                    # Append the *current* traceroute hops table string to streamReport
-                    streamReport += f"Current: Last updated {tracerouteLastUpdate.strftime('%d/%m/%Y %H:%M:%S')}\r\n" +\
-                                     currentTraceRoute + separator
-                except Exception as e:
-                    Utils.Message.addMessage(f"ERR: RtpReceiveCommon.generateTracerouteHistoryReport, get current traceroute hops list. stream "
-                                             f" {stats['stream_syncSource']}, {e}, tracerouteLastUpdate:{tracerouteLastUpdate}, tracerouteHopsList:{tracerouteHopsList}")
-
-
-                ####### Create tables containing historic traceroute data with whois lookup
+                # # # Create an API helper
+                # api = Utils.APIHelper(self.controllerTCPPort, addr="127.0.0.1")
                 try:
                     for event in tracerouteEventsList:
                         # Use the API helper to query the WhoisResolver
-                        apiResponse = api.whoisLookup(event.latestHopsList)
+                        apiResponse = self.ctrlAPI.whoisLookup(event.latestHopsList)
                         # Now create the table contents to be displayed using the data returned from the API
                         trData = renderTracerouteDataAsTable(apiResponse)
                         # Create display string
                         streamReport += "Time of change: " + event.timeCreated.strftime("%d/%m/%Y %H:%M:%S") + "\r\n" + \
                                         trData + separator
                 except Exception as e:
-                    Utils.Message.addMessage(
+                    self.postMessage(
                         "ERR: RtpReceiveCommon.generateTracerouteHistoryReport, get historic traceroute hops list. stream " + \
                         str(stats["stream_syncSource"]) + ", " + str(e))
+            else:
+                streamReport += "No historic traceroute data available"
 
-                return streamReport
-
+            return streamReport
         except Exception as e:
-            Utils.Message.addMessage("ERR:RtpReceiveCommon.generateTracerouteHistoryReport() Render traceroute history " + \
-                                     str(e))
-            return None
+            raise Exception(f"ERR:RtpReceiveCommon.generateTracerouteHistoryReport() Render traceroute history {e}")
+
 
     # This function tests the supplied key against some specified key values, and formats the corresponding value
     # to make it more readable
