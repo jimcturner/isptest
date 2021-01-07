@@ -4303,7 +4303,7 @@ class ISPTestHTTPServer(object):
                                 getQueryList = parse_qsl(urlparse(self.path).query)  # Extract just the query
                                 # Utils.Message.postMessage(f"do_GET/whois {get_query}",
                                 #                           tcpPort=self.server.parentObject.tcpListenPort)
-                                # Itersate over the list of addresses to be looked up
+                                # Iterate over the list of addresses to be looked up
                                 if len (getQueryList) > 0:
                                     outputList = [] # A list of tuples containing [ip addr, whois name]
                                     # Now iterate over the list of ip addresses looking up each one in turn

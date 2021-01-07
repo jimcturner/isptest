@@ -5146,6 +5146,19 @@ class RtpGenerator(RtpCommon):
                             self.postMessage(f"ERR:RtpGenerator.__samplingThread({self.syncSourceIdentifier})" \
                                                      f" registration fail {e}")
 
+                # Seed the WhoisResolver (via the api) with the current hops in the traceroutehopslist
+                # This will mean that once the traceroute table is displayed, or reports are generated, the
+                # Whois lookup will be ready to go
+                # We don't want to hold up the transmission of packets, so instruct getTraceRouteHopsList to not block
+                tracerouteLastUpdate, tracerouteHopsList = self.getTraceRouteHopsList(allowBlocking=False)
+                if tracerouteHopsList is not None and len(tracerouteHopsList) > 0:
+                    # Traceroute data is available
+                    # Use the API helper to query the WhoisResolver. This will yield a list of lists [[addr, whois_name],...]
+                    # Wew don't actually care about the response, we just want to seed the cache
+                    apiResponse = self.ctrlAPI.whoisLookup(tracerouteHopsList)
+                    self.postMessage(f"{apiResponse}")
+
+
                 # self.postMessage(f"RtpGenerator {self.timeToLive}")
             ######## 1 second counter end of code ########
 
