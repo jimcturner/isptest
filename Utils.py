@@ -675,6 +675,7 @@ class WhoisResolver(object):
                 else:
                     try:
                         Message.addMessage(f"DBUG:WhoisResolver whois lookup:{address}")
+                        Message.postMessage(f"DBUG:(posted) WhoisResolver whois lookup:{address}", 10000)
                         # Query the WhoIs database - See here for docs: https://ipwhois.readthedocs.io/en/latest/index.html
                         # Create an IPWhois object
                         obj = IPWhois(address)
