@@ -5154,9 +5154,12 @@ class RtpGenerator(RtpCommon):
                 if tracerouteHopsList is not None and len(tracerouteHopsList) > 0:
                     # Traceroute data is available
                     # Use the API helper to query the WhoisResolver. This will yield a list of lists [[addr, whois_name],...]
-                    # Wew don't actually care about the response, we just want to seed the cache
-                    apiResponse = self.ctrlAPI.whoisLookup(tracerouteHopsList)
-                    self.postMessage(f"{apiResponse}")
+                    # We don't actually care about the response, we just want to seed the cache
+                    try:
+                        apiResponse = self.ctrlAPI.whoisLookup(tracerouteHopsList)
+                        self.postMessage(f"{apiResponse}")
+                    except Exception as e:
+                        self.postMessage(f"ERR:RtpGeenrator.__samplingThread. self.ctrlAPI.whoisLookup() {e}")
 
 
                 # self.postMessage(f"RtpGenerator {self.timeToLive}")
