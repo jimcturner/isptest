@@ -2191,7 +2191,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 self.tracerouteReceivedChecksum = isptestHeaderData[8]
                 hopAddrAsString = str(isptestHeaderData[4]) + "." + str(isptestHeaderData[5]) + "." +\
                                   str(isptestHeaderData[6]) + "." + str(isptestHeaderData[7])
-                Utils.WhoisResolver.queryWhoisCache(hopAddrAsString)
+
 
             elif isptestHeaderData[1] == 1:
                 # This is a message containing the transmitter local address and also the UDP src port of the tx'd packets
@@ -6315,11 +6315,6 @@ class RtpGenerator(RtpCommon):
                                 self.postMessage("ERR: __tracerouteThread " + str(self.syncSourceIdentifier) +
                                                          " Decode icmpMsg{} dict. Setting hop  " + str(ttl) + \
                                                          " to 0.0.0.0. "+ str(e))
-
-                            # Store the address
-                            # Query the WhoisResolver to find the owner of the domain
-######## Inhibited queryWhoisCache()
-                            # Utils.WhoisResolver.queryWhoisCache(icmpSrcAddr)
                             # If so, break the address up into a list of octets - this is how they're stored in self._tracerouteHopsList
                             icmpSrcAddrOctets = str(icmpSrcAddr).split('.')
                             hopsList.append([int(icmpSrcAddrOctets[0]), int(icmpSrcAddrOctets[1]),
