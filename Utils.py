@@ -945,6 +945,11 @@ class WhoisResolver(object):
     # pendingQueries{} dict because it has been dealt with
     def __whoisLookupThread(self):
         Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread started")
+        # Create dict of known (non public addresses) and their descriptions
+        # We won't bother querying Whois because these are known to not be public
+        knownAddresses = {"127.0.0.1": "Loopback",
+                          "0.0.0.0": "Router didn't respond"}
+
         while self.whoisLookupThreadActive:
             address = None
             # Empty the queue
@@ -959,10 +964,7 @@ class WhoisResolver(object):
 
                 # Retrieve the ip address to be looked up from the queue
                 address = WhoisResolver.pendingQueries.get(timeout=0.2)
-                # Create dict of known (non public addresses) and their descriptions
-                # We won't bother querying Whois because these are known to not be public
-                knownAddresses = {"127.0.0.1": "Loopback",
-                                  "0.0.0.0":"Router didn't respond"}
+
                 # Check to see if the address is already known of in knownAddresses
                 # if str(address).startswith(knownAddresses):
                 if address in knownAddresses:
@@ -972,7 +974,11 @@ class WhoisResolver(object):
                 else:
                     try:
                         Message.addMessage(f"Whois:{address}")
-                        whoisDetails = WhoisResolver.whoisLookup(address)
+                        # Query the WhoIs database - See here for docs: https://ipwhois.readthedocs.io/en/latest/index.html
+                        # Create an IPWhois object
+                        obj = IPWhois(address)
+                        # Perform the lookup (using rdap (i.e http))
+                        whoisDetails = obj.lookup_rdap()
                         # Add the the ip details and time created entry to whoisCache{}
                         WhoisResolver.whoisCache[address] = [whoisDetails, dateCreated, lastAccessed]
                     except exceptions.IPDefinedError as e:
