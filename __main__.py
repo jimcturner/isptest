@@ -801,7 +801,7 @@ class UI(object):
         # Stores the most recent message - used to determine whether we need to redraw the message table
         self.lastMessageAdded = ""
 
-        self.latestTxStreamStats = {} # Used to snapshot the stream parameters of the most recenrtly added stream
+        self.latestTxStreamStats = None # Used to snapshot the stream parameters of the most recenrtly added stream
                                         # This is used to prepopulate the 'add new stream' table
         # Get Initial snapshot of current verbosity level
         self.intialVerbosityLevel = Utils.Message.verbosityLevel
@@ -1803,6 +1803,8 @@ class UI(object):
                 packetLength = self.latestTxStreamStats['Packet size']
                 friendlyName = str(syncSourceID)
 
+
+
             except Exception as e:
                 # Otherwise specify some defaults
                 Utils.Message.addMessage(f"ERR:UI.__onAddTxStream prev stream parameters unavailable, using default values {e}")
@@ -2008,6 +2010,16 @@ class UI(object):
                                                     controllerTCPPort=self.controllerTCPPort)
 
                         Utils.Message.addMessage("[a] Added new " + str(Utils.bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
+
+                        # Stream appears to have been successfully created so
+                        # update self.latestTxStreamStats[] with the latest values used
+                        self.latestTxStreamStats['Sync Source ID'] = syncSourceID
+                        self.latestTxStreamStats['Tx Source Port'] = sourcePort
+                        self.latestTxStreamStats['Dest Port'] = destPort
+                        self.latestTxStreamStats['Dest IP'] = destAddr
+                        self.latestTxStreamStats['Packet size'] = packetLength
+
+
                     except Exception as e:
                         Utils.Message.addMessage(f"ERR:UI.__onAddTxStream() failed to create RtpGenerator {syncSourceID}, {e}")
             except Exception as e:
@@ -2785,15 +2797,18 @@ class UI(object):
                 Utils.Message.addMessage(f"ERR:UI.__renderDisplayThread.ctrlAPI.getStreamsList() {e}")
                 self.availableRtpStreamList = []
 
-            # Grab the stats of the latest added tx stream (if present) - this info is used for the 'add stream with defaults' option
-            try:
-                if len(self.availableRtpStreamList) > 0 and self.availableRtpStreamList[-1]["streamType"] == "RtpGenerator":
-                    # Grab the stats of the latest added RtpGenerator object
-                    latestTxStream = self.availableRtpStreamList[-1]
-                    self.latestTxStreamStats = Utils.APIHelper(latestTxStream["httpPort"]).getTxStats()
+            # Grab the stats of the latest added tx stream (if present) - this info is used for the 'add stream with defaults' option,
+            # But only do this at init (when self.latestTxStreamStats is None).
+            # Beyond that, self.latestTxStreamStats will be modified by UI.__onAddTXStream()
+            if self.latestTxStreamStats is None:
+                try:
+                    if len(self.availableRtpStreamList) > 0 and self.availableRtpStreamList[-1]["streamType"] == "RtpGenerator":
+                        # Grab the stats of the latest added RtpGenerator object
+                        latestTxStream = self.availableRtpStreamList[-1]
+                        self.latestTxStreamStats = Utils.APIHelper(latestTxStream["httpPort"]).getTxStats()
 
-            except Exception as e:
-                Utils.Message.addMessage(f"ERR:UI.__renderDisplayThread get latestTxStreamStats: {e}")
+                except Exception as e:
+                    Utils.Message.addMessage(f"ERR:UI.__renderDisplayThread get latestTxStreamStats: {e}")
 
 
             # Get a handle on the currently highlighted stream and corresponding sync source ID
