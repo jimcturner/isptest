@@ -1465,8 +1465,15 @@ class UI(object):
                                footerRow=footer,
                                pageNoDisplayInFooterRow= True, reverseList= True, marginOffset= 7)
 
-    # Displays a pop-up message box
-    def __renderMessageBox(self, messageText, title, textColour=Term.BLACK, bgColour=Term.CYAN):
+
+    # Disables any existing keypress detection
+    def __disableKeyChecking(self):
+        self.enableGetch.clear()
+        # Wait for confirmation that key detection (getch)has been disabled
+        self.getchIsDisabled.wait()
+
+    # Renders a pop-up message box
+    def renderMessageBox(self, messageText, title, textColour=Term.BLACK, bgColour=Term.CYAN):
         # Create a single-celled table
         aboutDialogue = SingleTable([[messageText]])
         aboutDialogue.title = title
@@ -1490,6 +1497,13 @@ class UI(object):
             # Blocking call to self.__getch() with timeout
             ch = self.__getch()
 
+    def displayMessageBox(self, *args, **kwargs):
+        self.__disableKeyChecking()
+        Utils.Message.addMessage(f"UI.displayMessageBox() (BEFORE) enableGetch:{self.enableGetch.is_set()},"
+                                 f"getchIsDisabled:{self.getchIsDisabled.is_set()}")
+        self.renderMessageBox(*args, **kwargs)
+        Utils.Message.addMessage(f"UI.displayMessageBox() (AFTER) enableGetch:{self.enableGetch.is_set()},"
+                                 f"getchIsDisabled:{self.getchIsDisabled.is_set()}")
 
     # If the Event Lists Table is currently displayed, this method will copy the events to the local clipboard
     # Alternatively, if the traceroute table is displayed, it will attempt to render a list of the previous
@@ -1537,7 +1551,7 @@ class UI(object):
                 try:
                     # Utils.displayTextUsingMore(streamReport)
                     pyperclip.copy(streamReport)
-                    self.__renderMessageBox("Success!".center(30) + "\n\n" +\
+                    self.renderMessageBox("Success!".center(30) + "\n\n" +\
                             "<Press a key to continue>".center(30),\
                             "Copy to Clipboard", textColour=Term.WHITE, bgColour=Term.GREEN)
 
@@ -1552,7 +1566,7 @@ class UI(object):
                     os = Utils.getOperatingSystem()
                     if  os != "Windows":
                         # Only attempt to launch 'less' oif we're not running Windows
-                        self.__renderMessageBox("\nUnable to copy to the local clipboard.\n" + \
+                        self.renderMessageBox("\nUnable to copy to the local clipboard.\n" + \
                                                 "\nThis is mostly likely because you are connected to a text-only\n" + \
                                                 "terminal (e.g via an SSH session?)\n" + \
                                                 "\nAttempting to open the report in 'less' instead.\n" + \
@@ -1695,14 +1709,14 @@ class UI(object):
                                     # Query the OS for the the absolute file path (this will be displayed)
 
                                     absoluteSavePath = textwrap.fill(str(os.path.abspath(fullSavePath)), width=maxWidth)
-                                    self.__renderMessageBox("File saved to:-".center(maxWidth + 3) + "\n" +\
+                                    self.renderMessageBox("File saved to:-".center(maxWidth + 3) + "\n" +\
                                                             str(absoluteSavePath).center(maxWidth + 3)+ "\n\n" + \
                                                             "<Press a key to continue>".center(maxWidth + 3), \
                                                             "File save Successful", textColour=Term.WHITE, bgColour=Term.GREEN)
                                 except Exception as e:
                                     # Save failed, so show an error
                                     errorMessage = textwrap.fill(str(e), width=maxWidth)
-                                    self.__renderMessageBox("Error: Unable to save file:-".center(maxWidth + 3) + "\n" + \
+                                    self.renderMessageBox("Error: Unable to save file:-".center(maxWidth + 3) + "\n" + \
                                                             str(errorMessage).center(maxWidth + 3) + "\n\n" + \
                                                             "<Press a key to continue>".center(maxWidth + 3), \
                                                             "File save error", textColour=Term.WHITE,
@@ -2247,7 +2261,7 @@ class UI(object):
                         "Press the [any] key to continue".center(maxWidth, " ")
 
         # Render the message in a pop-up box
-        self.__renderMessageBox(tableContents, "About")
+        self.renderMessageBox(tableContents, "About")
         # Clear the self.displayPopup function pointer now that the popup has been displayed
         self.displayPopup = None
 
@@ -2277,7 +2291,7 @@ class UI(object):
         #                 "Press the [any] key to continue".center(maxWidth, " ")
         #
         # # Render the message in a pop-up box
-        # self.__renderMessageBox(tableContents, "Help")
+        # self.renderMessageBox(tableContents, "Help")
 
     # Renders the Help page table
     def __renderHelpTable(self):
@@ -2874,7 +2888,7 @@ class UI(object):
                 self.displayFatalErrorDialogue = False
 
                 # Put up error message (this is a blocking call)
-                self.__renderMessageBox(self.fatalErrorDialogueMessageText, self.fatalErrorDialogueTitle, \
+                self.renderMessageBox(self.fatalErrorDialogueMessageText, self.fatalErrorDialogueTitle, \
                                         textColour=Term.WHITE, bgColour=Term.RED)
                 Utils.Message.addMessage("DBUG: __renderDisplayThread() displayFatalErrorDialogue..key pressed")
 
@@ -4094,6 +4108,19 @@ class ISPTestHTTPServer(object):
             Utils.Message.addMessage(
                 "ERR:ISPTestHTTPServer() ISPTestHTTPServer() httpServerThread.join() (on port " + str(self.tcpListenPort) + ") " + str(e))
 
+    # Causes a pop-up user message to be displayed via the UI.renderMessageBox() method
+    def displayAlert(self, *args, **kwargs):
+        try:
+            # Get handle on UI instance
+            ui = self.externalResourcesDict["ui"]
+            # Call the UI.renderMessageBox() method
+            # However, this is a blocking call, so in order to not tie up the HTTP Request Handler, we need to
+            # call the method via another thread
+            threading.Thread(target=ui.displayMessageBox, args=(args), daemon=True).start()
+        except Exception as e:
+            raise Exception(f"ISPTestHTTPServer.displayPopupMessage() {e}")
+
+
     # Define a custom BaseHTTPRequestHandler class to handle HTTP GET, POST requests
     # Note: A new instance of this class is created with every HTTP request
     class HTTPRequestHandler(BaseHTTPRequestHandler):
@@ -4123,88 +4150,15 @@ class ISPTestHTTPServer(object):
             output = (str(input) + "\n").encode('utf-8')
             return output
 
-        # # Searches the streamsList for an entry with the specified ID (and type).
-        # # Returns a list containing the dict(s) of the object if found, or None, if not found
-        # # It's possible that more than one stream could exist with the same ID (if they are, say an RtpGenerator and
-        # # an RtpStreamresults)
-        # def getStreamByFilterOld(self, requestedStreamID=None, streamType=None):
-        #     # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
-        #     streamsList = list(self.server.parentObject.streamsList)
-        #     filteredStreamList = []
-        #     try:
-        #         Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) +\
-        #             ", streamType is " + str(streamType))
-        #
-        #         if requestedStreamID is None and streamType is None:
-        #             # No filtering specified, just return the entire list
-        #             filteredStreamList = streamsList
-        #
-        #         elif requestedStreamID is not None and streamType is None:
-        #             # Filter by streamID
-        #             Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
-        #             filteredStreamList = list(
-        #                 filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
-        #
-        #         elif requestedStreamID is None and streamType is not None:
-        #             # Filter by streamType
-        #             filteredStreamList = list(
-        #                 filter(lambda stream: stream["streamType"] == streamType, streamsList))
-        #         else:
-        #             # filter by streamID and streamType
-        #             filteredStreamList = list(
-        #                 filter(lambda stream: stream["streamID"] == int(requestedStreamID) and
-        #                                       stream["streamType"] == streamType, streamsList))
-        #
-        #         return filteredStreamList
-        #     except Exception as e:
-        #         Utils.Message.addMessage("ERR:ISPTestHTTPServer.HTTPRequestHandler.getStreamtByID() " + str(e))
-        #         return []
 
-        # def getStreamByFilter(self, requestedStreamID=None, streamType=None, httpPort = None):
-        #     # Get the currentlist of streams (via shallow copy, so that we can safely iterate over it)
-        #     streamsList = list(self.server.parentObject.streamsList)
-        #     filteredStreamList = []
-        #     try:
-        #         Utils.Message.addMessage("getStreamByID() requestedStreamID is" + str(requestedStreamID) +\
-        #             ", streamType is " + str(streamType))
-        #
-        #         if httpPort is not None:
-        #             # Filter by http port . This *should* only ever return a single result
-        #             filteredStreamList = list(
-        #                 filter(lambda stream: stream["httpPort"] == int(httpPort), streamsList))
-        #
-        #         elif requestedStreamID is None and streamType is None:
-        #             # No filtering specified, just return the entire list
-        #             filteredStreamList = streamsList
-        #
-        #         elif requestedStreamID is not None and streamType is None:
-        #             # Filter by streamID
-        #             # Utils.Message.addMessage("requestedStreamID is " + str(requestedStreamID) + ", streamType is None")
-        #             filteredStreamList = list(
-        #                 filter(lambda stream: stream["streamID"] == int(requestedStreamID), streamsList))
-        #
-        #         elif requestedStreamID is None and streamType is not None:
-        #             # Filter by streamType
-        #             filteredStreamList = list(
-        #                 filter(lambda stream: stream["streamType"] == streamType, streamsList))
-        #         else:
-        #             # filter by streamID and streamType
-        #             filteredStreamList = list(
-        #                 filter(lambda stream: stream["streamID"] == int(requestedStreamID) and
-        #                                       stream["streamType"] == streamType, streamsList))
-        #
-        #         return filteredStreamList
-        #     except Exception as e:
-        #         Utils.Message.addMessage("ERR:ISPTestHTTPServer.HTTPRequestHandler.getStreamtByID() " + str(e))
-        #         return []
-            # Shortcut method to take raw POST or GET Query data (*as unicode*, of the form key1=value1&key2=value2...
-            # (TIP use .decode('UTF-8') to convert an ASCII string to unicode)
-            # It will then return two items a list of args and a dict of kwargs that can be passed straight to a function/method.
-            # Required args are contained within a list, and optional args as a dict
-            # The parameters should be passed to the target method as follows reVal = myFunc(*requiredArgs, **optionalArgs)
-            # The '*' and '**' will expand out the requiredArgsList and optionalArgsDict respectively
-            # Additionally, it will check to see that all the keys in rawKeysValuesString have been used.
-            # If not, it will raise an Exception
+        # Shortcut method to take raw POST or GET Query data (*as unicode*, of the form key1=value1&key2=value2...
+        # (TIP use .decode('UTF-8') to convert an ASCII string to unicode)
+        # It will then return two items a list of args and a dict of kwargs that can be passed straight to a function/method.
+        # Required args are contained within a list, and optional args as a dict
+        # The parameters should be passed to the target method as follows reVal = myFunc(*requiredArgs, **optionalArgs)
+        # The '*' and '**' will expand out the requiredArgsList and optionalArgsDict respectively
+        # Additionally, it will check to see that all the keys in rawKeysValuesString have been used.
+        # If not, it will raise an Exception
         def convertKeysToMethodArgs(self, rawKeysValuesString, requiredArgKeysList, optionalArgKeysList):
             # parse the rawKeysValuesString and convert to a dict
             post_data_dict = parse_qs(rawKeysValuesString)
@@ -4222,6 +4176,7 @@ class ISPTestHTTPServer(object):
                             f" Permitted optional keys are: {optionalArgKeysList},"\
                             f"mandatory keys are: {requiredArgKeysList}")
             return requiredArgsList, optionalArgsDict
+
 
         def do_GET(self):
             # Split the path into a list
@@ -4273,6 +4228,21 @@ class ISPTestHTTPServer(object):
                         else:
                             # More steps yet to be parsed, let the loop continue
                             pass
+
+                    elif str(currentStep).startswith("alert"):
+                        # Causes a popup message box to be displayed
+                        # GET /alert
+                        try:
+                                messageText = "Hello!"
+                                title = "Test"
+                                # Display the message
+                                self.server.parentObject.displayAlert(messageText, title)
+                                response = messageText.encode('utf-8')
+                                # Create the headers
+                                self._set_response()
+
+                        except Exception as e:
+                                raise Exception(f"do__GET() /alert {str(e)}")
 
                     elif str(currentStep).startswith("log"):
                         # GET /log
@@ -5199,6 +5169,8 @@ def main(argv):
 
     # Create a UI object (that spawns its own thread)
     ui = UI(MODE, specialFeaturesModeFlag, receiversAndSendersList, controllerTCPPort=isptesttHTTPServerPort)
+    # and add it to the shared objects dict (so that HTTP Server will have access to it)
+    sharedObjects["ui"] = ui
 
     # Create a diskLogging Thread - This thread polls the available streams EventsLists and logs then to a file
     diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, shutdownFlag, isptesttHTTPServerPort,))
