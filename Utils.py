@@ -265,6 +265,11 @@ class Message(object):
     def setOutputFileName(cls, fileName):
         cls.outputFileName = fileName
 
+    # Returns the current value of cls.outputFileName
+    @classmethod
+    def getOutputFileName(cls):
+        return cls.outputFileName
+
     # Thread-safe method to append messages to the cls.messages deque
     @classmethod
     def __appendMessageToDeque(cls, newMessage):
@@ -389,7 +394,7 @@ class Message(object):
     def __writeMessagesToDiskThread(cls):
         Message.addMessage("Message.__writeMessagesToDiskThread starting")
         while cls.__writeMessagesToDiskThreadIsActive:
-            # Test the message queue size. If there are messages, write them to disk
+            # Test the message queue size every second. If there are messages, write them to disk
             if cls.__diskWriteQueue.qsize() > 0:
                 # Test size of existing log file. If larger than the threshold set in Registry, auto archive
                 # This will cause the log file to be recreated
@@ -401,16 +406,6 @@ class Message(object):
                 except Exception as e:
                     Message.addMessage("ERR:Message.__writeMessagesToDiskThread. " + str(cls.outputFileName) + \
                                        " auto archive error")
-
-                # if ret == True:
-                #     Message.addMessage("Message.__writeMessagesToDiskThread. " + str(cls.outputFileName) + \
-                #                        " auto archived")
-                # elif ret == None:
-                #     Message.addMessage("ERR:Message.__writeMessagesToDiskThread. " + str(cls.outputFileName) + \
-                #                        " auto archive error")
-                # else:
-                #     pass
-
 
                 # Create the file object for appending
                 # Now log the message to disk
@@ -698,10 +693,9 @@ class WhoisResolver(object):
 
             except Empty:
                 # Queue was empty
-                pass
+               pass
             except Exception as e:
                 Message.addMessage("ERR:WhoisResolver.__whoisLookupThread()" + str(e))
-            time.sleep(0.5)
 
         Message.addMessage("DBUG:WhoisResolver.__whoisLookupThread ending")
 

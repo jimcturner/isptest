@@ -3960,7 +3960,18 @@ class ISPTestHTTPServer(object):
         self.httpServerThread = threading.Thread(target=self.__httpServerThread, args=())
         self.httpServerThread.daemon = False
         self.httpServerThread.setName("ISPTestHTTPServer:" + str(self.tcpListenPort))
-        self.httpServerThread.start()
+        try:
+            self.httpServerThread.start()
+            # Give the thread time to start
+            time.sleep(0.5)
+            if self.httpServerThread.is_alive():
+                # Server thread must have started
+                pass
+            else:
+                raise Exception("ERR:self.httpServerThread.is_alive()=FALSE")
+        except Exception as e:
+            raise Exception(f"ERR:ISPTestHTTPServer.__init__() self.httpServerThread.start(),  {e}")
+
 
     # Gets the TCP listener port of the HTTP Server
     def getTCPPort(self):
@@ -4634,17 +4645,17 @@ class ISPTestHTTPServer(object):
         try:
             # This call will block
             self.httpd = Utils.CustomHTTPServer((self.tcpListernAddr, self.tcpListenPort), ISPTestHTTPServer.HTTPRequestHandler)
-            Utils.Message.addMessage("DBUG: Creating ISPTestHTTPServer, listening on TCP port " + str(self.tcpListenPort))
+            Utils.Message.addMessage(f"DBUG: Creating ISPTestHTTPServer, listening on TCP port " + str(self.tcpListenPort))
             # Pass this object instance to the server
             self.httpd.setParentObjectInstance(self)
             # Start the http server
             self.httpd.serve_forever()
-            Utils.Message.addMessage("DBUG:Stream ISPTestHTTPServer serve_forever() returned")
+            Utils.Message.addMessage(f"DBUG:Stream ISPTestHTTPServer serve_forever() returned")
 
         except Exception as e:
-            Utils.Message.addMessage("ERR:Failed to start ISPTestHTTPServer " + str(e))
-        Utils.Message.addMessage(
-            "DBUG: ISPTestHTTPServer ended")
+            Utils.Message.addMessage(f"ERR:__httpServerThread() Failed to start ISPTestHTTPServer(port {self.tcpListenPort}), {e}")
+
+        Utils.Message.addMessage(f"DBUG: ISPTestHTTPServer(port {self.tcpListenPort}) ended")
 
 
 class RequestShutdown(Exception):
@@ -5110,25 +5121,6 @@ def main(argv):
               ". Check you have write privileges for this folder\r")
         exit()
 
-    # # Create a dictionaries for all streams
-    # rtpTxStreamsDict ={}
-    # # Create a mutex lock for the tx streams dictionary (for deleting objects)
-    # rtpTxStreamsDictMutex = threading.Lock()
-    #
-    # # Create a dictionary to hold the rx Streams
-    # rtpRxStreamsDict = {}
-    #
-    # # # Create a dictionary to initially hold the sync source of a potential rx stream
-    # # rtpRxStreamTempDict = {}
-    #
-    # # Create a mutex lock to be used when writing to the rtpRxStreamsDict (or deleting objects)
-    # rtpRxStreamsDictMutex = threading.Lock()
-    #
-    # # Create a dictionary to hold the server reports/results of the tx streams
-    # rtpTxStreamResultsDict = {}
-    # # Create an associated mutex
-    # rtpTxStreamResultsDictMutex = threading.Lock()
-
     # Create a list to hold the instances of RtpPacketReceiver and associated UDPMessageSender objects
     # (which are the objects resposible for actually receiving and sending the rtp/udp data)
     # This will be a list of tuples [[RtpPacketReceiver, UDPMessageSender]
@@ -5175,7 +5167,8 @@ def main(argv):
         Utils.Message.addMessage(f"isptesttHTTPServer successfully started on port {isptesttHTTPServerPort}")
     except Exception as e:
         Utils.Message.addMessage("ERR:isptesttHTTPServer = ISPTestHTTPServer() " + str(e))
-        print(f"ERR:Failed to start HTTP Server on port {isptesttHTTPServerPort}: {e}")
+        print(f"ERR:Failed to start HTTP Server on port {isptesttHTTPServerPort}. Perhaps the port is already in use? "
+              f"See {Utils.Message.getOutputFileName()} for clues:\n{e}")
         exit(1)
 
     # # Create a UI flag that will allow the UI thread to be woken up (to force a redraw)
