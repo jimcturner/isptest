@@ -654,9 +654,7 @@ class StreamResumed(Event):
             self.durationOfOutage = self.timeCreated - self.streamLostTimestamp + \
                                     datetime.timedelta(seconds=Registry.lossOfStreamAlarmThreshold_s)
         except Exception as e:
-            Utils.Message.addMessage("ERR: StreamResumed calculate outage " + str(e))
-            self.durationOfOutage = None
-
+            raise Exception("ERR: StreamResumed calculate outage " + str(e))
 
     def getSummary(self, includeStreamSyncSourceID=True, includeEventNo=True, includeType=True,
                    includeFriendlyName=True):
@@ -830,7 +828,6 @@ class RtpCommon(object):
     # do_GET(), do_POST etc methods
     # StreamID is not actually required for the http server, but is useful for logging purposes
     def httpServerThreadCommon(self, tcpListenPort, streamID, httpRequestHandler, addr="127.0.0.1"):
-        # Utils.Message.addMessage("DBUG: start " + str(self.__stats["stream_syncSource"]) + ":httpServerThread")
         try:
             # Create an http server
             self.httpd = Utils.CustomHTTPServer((addr, tcpListenPort), httpRequestHandler)
@@ -1386,8 +1383,7 @@ class RtpReceiveCommon(RtpCommon):
             else:
                 return value
         except Exception as e:
-            Utils.Message.addMessage("ERR:RtpReceiveCommon.humanise() value: " + str(value) + ", " + str(e))
-            return value
+            raise Exception("ERR:RtpReceiveCommon.humanise() value: " + str(value) + ", " + str(e))
 
     # Method to return a filtered version of the eventsList
     def filterEventsList(self, unfilteredEventList, filterList=None, reverseOrder=False, requestedEventNo=None,
@@ -1448,7 +1444,7 @@ class RtpReceiveCommon(RtpCommon):
                     start = 1
                 filteredEventList = filteredEventList[start - 1:]
             except Exception as e:
-                Utils.Message.addMessage(f"ERR: RtpStream.getRTPStreamEventList(start={start})"\
+                self.postMessage(f"ERR: RtpStream.getRTPStreamEventList(start={start})"\
                                             f" index out of range: {e}")
 
         # end specified but not start
@@ -1461,7 +1457,7 @@ class RtpReceiveCommon(RtpCommon):
                     end = 1
                 filteredEventList = filteredEventList[:end]
             except Exception as e:
-                Utils.Message.addMessage(f"ERR: RtpStream.getRTPStreamEventList(end={end})"\
+                self.postMessage(f"ERR: RtpStream.getRTPStreamEventList(end={end})"\
                                         f" index out of range: {e}")
 
         elif start is not None and end is not None:
@@ -1474,7 +1470,7 @@ class RtpReceiveCommon(RtpCommon):
                     start = 1
                 filteredEventList = filteredEventList[start - 1:end]
             except Exception as e:
-                Utils.Message.addMessage("ERR: RtpStream.getRTPStreamEventList(" + str(start) + ":" +
+                self.postMessage("ERR: RtpStream.getRTPStreamEventList(" + str(start) + ":" +
                                          str(end) + ") requested start and end indexes out of range: " + str(e))
                 filteredEventList = []
 
@@ -1530,7 +1526,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_transmitter_txRate_bps"] = 0 # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_TimeToLive_sec"] = 0  # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_return_loss_percent"] = 0  # Will be populated by incoming isptest header data
-        Utils.Message.addMessage(f"INFO: RtpReceiveStream: Creating RtpReceiveStream with syncSource: "
+        self.postMessage(f"INFO: RtpReceiveStream: Creating RtpReceiveStream with syncSource: "
                                  f"{self.__stats['stream_syncSource']}, "
                                  f"src:{self.__stats['stream_srcAddress']}:{self.__stats['stream_srcPort']}")
 
@@ -1721,7 +1717,7 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                     if len(diff) == 0:
                         # If diff[] is empty, there are no missing keys in the historicStatsDict
-                        # Utils.Message.addMessage("DBUG:RtpReceiveStream historicStatsDict stats keys match " +\
+                        # self.postMessage("DBUG:RtpReceiveStream historicStatsDict stats keys match " +\
                         #                          str(len(historicStatsDict)) + ":" + str(len(self.__stats)) +\
                         #                          ", diff " + str(diff))
                         # Update stats{} dict
@@ -1734,9 +1730,9 @@ class RtpReceiveStream(RtpReceiveCommon):
                         if historicEventsList is not None:
                             self.updateEventsList(historicEventsList, replaceExistingList=True)
                         streamsSuccessfullyRecreated = True
-                        Utils.Message.addMessage("Historic stream " + str(self.__stats["stream_syncSource"]) + " recreated")
+                        self.postMessage("Historic stream " + str(self.__stats["stream_syncSource"]) + " recreated")
                     else:
-                        Utils.Message.addMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}) historicStatsDict key differences " + str(diff) +\
+                        self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}) historicStatsDict key differences " + str(diff) +\
                                                  " Aborting import of stats[] dict ")
                         streamsSuccessfullyRecreated = False
                         raise Exception(
@@ -1744,7 +1740,7 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
         except Exception as e:
-            Utils.Message.addMessage("ERR:Stream " + str(self.__stats["stream_syncSource"]) +\
+            self.postMessage("ERR:Stream " + str(self.__stats["stream_syncSource"]) +\
                                      "_stats{}, __eventList restoration error " + str(e))
 
         if restoredStreamFlag is False or\
@@ -1756,7 +1752,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
             # Create an HTTP server thread
             try:
-                Utils.Message.addMessage(
+                self.postMessage(
                     f'DBUG: Creating httpServerThread for RtpReceiveStream:{self.__stats["stream_syncSource"]}')
                 self.httpServerThread = threading.Thread(target=self.httpServerThreadCommon,
                                                          args=(self.tcpListenPort,
@@ -1777,17 +1773,17 @@ class RtpReceiveStream(RtpReceiveCommon):
                     except:
                         # Decrement maxConnectionAttempts
                         maxConnectionAttempts -= 1
-                        Utils.Message.addMessage(f"INFO:RTPReceiveStream({self.syncSourceIdentifier}) http server validation, "
+                        self.postMessage(f"INFO:RTPReceiveStream({self.syncSourceIdentifier}) http server validation, "
                                                  f"{maxConnectionAttempts} remaining")
                         if maxConnectionAttempts < 1:
                             raise Exception(f"ERR:maxConnectionAttempts exceeded")
                     time.sleep(1)
 
-                Utils.Message.addMessage(
+                self.postMessage(
                     f"INFO:RTPReceiveStream({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
 
             except Exception as e:
-                Utils.Message.addMessage(
+                self.postMessage(
                     f'ERR:RtpReceiveStream.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
                 raise Exception(
                     f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__init__() failed to start HTTP Server {e}")
@@ -1822,7 +1818,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # If execution gets this far, we can assume that streams was successfully registered
                 self.streamRegisteredFlag = True
             except Exception as e:
-                Utils.Message.addMessage(
+                self.postMessage(
                     f'ERR:RtpReceiveStream.__init__() Initial stream Registration failed {self.syncSourceIdentifier}, {e}')
 
             Utils.Message.postMessage(f"DBUG:RtpReceiveStream.__init__() completed: {self.__stats['stream_syncSource']}", tcpPort=self.controllerTCPPort)
@@ -1844,7 +1840,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.liveTracerouteHopsList = [None] * noOfHops
                 self.liveTracerouteHopsList[hopNo] = hopAddr
             except Exception as e:
-                Utils.Message.addMessage("ERR:RtpReceiveStream.liveTracerouteHopsList() " + str(e))
+                self.postMessage("ERR:RtpReceiveStream.updateLiveTracerouteHopsList() " + str(e))
             self.liveTracerouteHopsListMutex.release()
 
     # Thread-safe method to completely replace the *live* self.liveTracerouteHopsList[] with a new list
@@ -1918,7 +1914,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     "/burst": {"targetMethod": self.remotelyControlTxStream, "args": ["/burst"], "optKeys": []},
                 }
             except Exception as e:
-                Utils.Message.addMessage(f"ERR:RtpReceiveStream.HTTPRequestHandler.apiGETEndpoints() corrupt endpoint definitions {e}")
+                parent.postMessage(f"ERR:RtpReceiveStream.HTTPRequestHandler.apiGETEndpoints() corrupt endpoint definitions {e}")
                 getMappings = {}
             return getMappings
 
@@ -1942,7 +1938,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     "/label": {"targetMethod": parent.setFriendlyName, "reqKeys": ["name"], "optKeys": []}
                 }
             except Exception as e:
-                Utils.Message.addMessage(
+                parent.postMessage(
                     f"ERR:RtpReceiveStream.HTTPRequestHandler.apiPOSTEndpoints() corrupt endpoint definitions {e}")
                 postMappings = {}
             return postMappings
@@ -1954,7 +1950,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             try:
                 deleteMappings = {"/delete": {"targetMethod": parent.killStream, "reqKeys": [], "optKeys": []}}
             except Exception as e:
-                Utils.Message.addMessage(
+                parent.postMessage(
                     f"ERR:RtpReceiveStream.HTTPRequestHandler.apiDELETEEndpoints() corrupt endpoint definitions {e}")
                 deleteMappings = {}
             return deleteMappings
@@ -2095,23 +2091,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                 rtpStream.sendControlMessageToTransmitter({"syncSourceID": syncSourceID,
                                                                   "source": "Receiver",
                                                                   "type": controlMessage})
-                Utils.Message.addMessage(f"DBUG:remotelyControlTxStream:{syncSourceID},  controlMessage: {controlMessage},")
+                rtpStream.postMessage(f"DBUG:remotelyControlTxStream:{syncSourceID},  controlMessage: {controlMessage},")
             except Exception as e:
-                Utils.Message.addMessage(f"ERR:RtpReceiveStream.HTTPRequestHandler.remotelyControlTxStream ({syncSourceID}),"\
+                rtpStream.postMessage(f"ERR:RtpReceiveStream.HTTPRequestHandler.remotelyControlTxStream ({syncSourceID}),"\
                                          f" controlMessage{controlMessage}")
-    # # Getter method for self.resultsTxQueue
-    # def getResultsTxQueue(self):
-    #     return self.resultsTxQueue
-    #
-    # # Setter method for self.resultsTxQueue (tests the incoming type, but doesn't validate it)
-    # def setResultsTxQueue(self, newResultsTxQueue):
-    #     if type(newResultsTxQueue) == SimpleQueue:
-    #         self.resultsTxQueue = newResultsTxQueue
-    #         Utils.Message.addMessage("DBUG:RtpReceiveStream.setResultsTxQueue() (stream " + \
-    #                                  str(self.__stats["stream_syncSource"]) + " updated")
-    #         return True
-    #     else:
-    #         return False
 
     # Method to destroy this object
     # Caller is an optional field to allow the method to check where the call is coming from
@@ -2123,7 +2106,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.queueReceiverThreadActiveFlag = False
 
         self.queueReceiverThread.join()
-        Utils.Message.addMessage("DBUG: self.queueReceiverThread.join() complete for " + str(self.__stats["stream_syncSource"]))
+        self.postMessage("DBUG: self.queueReceiverThread.join() complete for " + str(self.__stats["stream_syncSource"]))
 
         # Kill the __samplingThread associated with this stream
         self.samplingThreadActiveFlag = False
@@ -2132,39 +2115,39 @@ class RtpReceiveStream(RtpReceiveCommon):
             if caller is self:
                 # If the object is killing 'itself' from the same thread we're trying to join()
                 # from it will block indefintely. This is bad!
-                Utils.Message.addMessage("DBUG: ***** thread trying to join() itself ***** "  + str(self.__stats["stream_syncSource"]))
+                self.postMessage("DBUG: ***** thread trying to join() itself ***** "  + str(self.__stats["stream_syncSource"]))
             else:
                 # Otherwise, kill() is being called by another thread/object so we can safely wait on join()
                 # to verify that the thread has ended
                 self.samplingThread.join()
-                Utils.Message.addMessage("DBUG: self.samplingThread.join() complete"  + str(self.__stats["stream_syncSource"]))
+                self.postMessage("DBUG: self.samplingThread.join() complete"  + str(self.__stats["stream_syncSource"]))
         except Exception as e:
-            Utils.Message.addMessage("ERR:self.samplingThread.join() filed " + str(self.__stats["stream_syncSource"]) +\
+            self.postMessage("ERR:self.samplingThread.join() failed " + str(self.__stats["stream_syncSource"]) +\
                                      ", "+ str(e))
 
         # Kill the http server - NOTE: HTTPServer.shutdown() has to be called from another thread
         try:
-            Utils.Message.addMessage("DBUG:RtpReceiveStream.killStream() Closing http server for stream " + str(self.__stats["stream_syncSource"]))
+            self.postMessage("DBUG:RtpReceiveStream.killStream() Closing http server for stream " + str(self.__stats["stream_syncSource"]))
             # Wrap the call to shutdown() inside another thread
             threading.Thread(target=self.httpd.shutdown, daemon=True).start()
-            Utils.Message.addMessage(f"DBUG:RtpReceiveStream.killStream() Http server for stream "
+            self.postMessage(f"DBUG:RtpReceiveStream.killStream() Http server for stream "
                                      f"{self.__stats['stream_syncSource']} ended")
 
         except Exception as e:
-            Utils.Message.addMessage("ERR:Closing http server for stream " + str(self.__stats["stream_syncSource"]) + str(e))
+            self.postMessage("ERR:Closing http server for stream " + str(self.__stats["stream_syncSource"]) + str(e))
 
         # Now attempt to remove the stream from the streams directory
         try:
             self.ctrlAPI.removeFromStreamsDirectory("RtpReceiveStream", self.__stats["stream_syncSource"])
         except Exception as e:
-            Utils.Message.addMessage("ERR: RtpReceiveStream.killStream() removeFromStreamsDirectory() for stream " + \
+            self.postMessage("ERR: RtpReceiveStream.killStream() removeFromStreamsDirectory() for stream " + \
                                      str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
         # Now remove the Receive queue for this stream (from rxQueuesDict)
         try:
             del self.rxQueuesDict[self.syncSourceIdentifier]
         except Exception as e:
-            Utils.Message.addMessage(f"ERR:RtpReceiveStream() del rxQueuesDict[{self.syncSourceIdentifier}], {e}")
+            self.postMessage(f"ERR:RtpReceiveStream() del rxQueuesDict[{self.syncSourceIdentifier}], {e}")
 
 
     # This method will parse the isptest header data (and update the instance variables accordingly)
@@ -2267,7 +2250,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             isptestHeaderDataFriendlyName = str(rtpPayload[numericalHeaderDataLength:].decode('utf-8'))
             # unpack the values from the struct
             isptestHeaderData = struct.unpack("!HBBBBBBBB", isptestHeaderDataStruct)
-            # Utils.Message.addMessage("INFO: Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
+            # self.postMessage("INFO: Decoded header: " + str(isptestHeaderData) + ", " + str(isptestHeaderDataFriendlyName))
             # Check to see if we've managed to unpack the data
             if len(isptestHeaderData) > 0:
                 # Check to see that if this a stream sent by an instance of isptest

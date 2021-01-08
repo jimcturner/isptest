@@ -2410,18 +2410,21 @@ class UI(object):
 
             else:
                 tableContents.append(["", "", "No traceroute data to display yet. Please wait".ljust(maxWidth)])
-            # Now actually display the paged table list
-            # Create a title for the table
-            title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ") " +\
-                    str(len(tracerouteHopsList)) + " hops"
-            # Append the last-updated timestamp of the tracsroute data
-            if lastUpdated is not None:
-                title += ", updated " + str(RtpReceiveCommon.humanise("", lastUpdated))
+            try:
+                # Now actually display the paged table list
+                # Create a title for the table
+                title = "UDP Traceroute for stream " + str(syncSourceID) + " (" + str(friendlyName) + ") " +\
+                        str(len(tracerouteHopsList)) + " hops"
+                # Append the last-updated timestamp of the tracsroute data
+                if lastUpdated is not None:
+                    title += ", updated " + str(RtpReceiveCommon.humanise("", lastUpdated))
 
-            footer = ["", "", "[<][>]page, [^][v] select stream, [t]exit\n[c]opy history to clipboard, [s]ave"]
-            self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15), "Whois".ljust(maxWidth)], tableContents,
-                                   footerRow=footer,
-                                   pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
+                footer = ["", "", "[<][>]page, [^][v] select stream, [t]exit\n[c]opy history to clipboard, [s]ave"]
+                self.__renderPagedList(self.tablePageNo, title, ["Hop".ljust(5), "Address".ljust(15), "Whois".ljust(maxWidth)], tableContents,
+                                       footerRow=footer,
+                                       pageNoDisplayInFooterRow=True, reverseList=False, marginOffset=7)
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:UI.__renderTracerouteTable() generate table {e}")
 
     def __onDisplayEvents(self):
         # Toggle display of Events list dialogue
