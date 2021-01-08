@@ -2223,7 +2223,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Convert the 4 bytes back to an int
                     self.__streamTransmitterTxRateBps = struct.unpack_from("!L", bytes(isptestHeaderData[4:8]))[0]
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 4 " + str(e))
+                    self.postMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 4 " + str(e))
 
             elif isptestHeaderData[1] == 5:
                 # This is a message containing a count of the tx'd packets (as an unsigned long, 4 bytes)
@@ -2231,7 +2231,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Convert the 4 bytes back to an int
                     self.__packetCounterTransmittedTotal = struct.unpack_from("!L", bytes(isptestHeaderData[4:8]))[0]
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 5 " + str(e))
+                    self.postMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 5 " + str(e))
 
             elif isptestHeaderData[1] == 6:
                 # This is a message containing the stream time to live (as an signed long, 4 bytes)
@@ -2239,7 +2239,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Convert the 4 bytes back to a signed int
                     self.__txStreamTimeToLive = struct.unpack_from("!i", bytes(isptestHeaderData[4:8]))[0]
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
+                    self.postMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
 
             elif isptestHeaderData[1] == 7:
                 # This is a message containing the return loss (as a float  , 4 bytes)
@@ -2248,10 +2248,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__stats["stream_transmitter_return_loss_percent"] = \
                         struct.unpack_from("!f", bytes(isptestHeaderData[4:8]))[0]
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
+                    self.postMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
 
         except Exception as e:
-            Utils.Message.addMessage("DBUG:__RtpReceiveStream.__pasrseIsptestHeader " + str(e))
+            self.postMessage("DBUG:__RtpReceiveStream.__pasrseIsptestHeader " + str(e))
 
     # This method examines the payload of the RTP packet to see if it's been sent by an instance of an isptest TRANSMITTER
     # It will then split off the numerical data part and the 'friendly name' string for the stream
@@ -2280,7 +2280,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     pass
         except Exception as e:
             pass
-            # Utils.Message.addMessage("DBUG: Decoded header: " + str(e) + str(self.rtpStream[0].isptestHeaderData))
+            # self.postMessage("DBUG: Decoded header: " + str(e) + str(self.rtpStream[0].isptestHeaderData))
 
     # Puts the current stream stats or events (the results) in a queue to be transmitted back to the transmitter
     # (if the transmitter is an instance of isptest)
@@ -2323,7 +2323,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 resultsTxQueue.put([pickledMessage, destAddr, destPort])
 
             except Exception as e:
-                Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread.addResultsToTxQueue() " + str(e))
+                self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread.addResultsToTxQueue() " + str(e))
 
         # This function attempts to calculate the mean period between events (such as glitch, or jitter)
         # to provide a value of how often, on average, the event has occurred
@@ -2350,11 +2350,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Therefore we ignore the effect of it, as it will only worsen the mean period
                     return actualPeriodBetweenEvents
             except Exception as e:
-                Utils.Message.addMessage("RtpReceiveStream.__samplingThread.calculateMeanPeriodBetweenEvents() " + \
+                self.postMessage(f"RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread.calculateMeanPeriodBetweenEvents() " + \
                                          str(e))
                 return None
 
-        Utils.Message.addMessage("DBUG: __samplingThread started for stream " + str(self.__stats["stream_syncSource"]))
+        self.postMessage("DBUG: __samplingThread started for stream " + str(self.__stats["stream_syncSource"]))
         # Initialise variables to be used within the loop
         loopCounter = 0
         # Initialise variables to hold final calculated values
@@ -2464,7 +2464,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Snapshot latest transmitter stream time to live
                 self.__stats["stream_transmitter_TimeToLive_sec"] = self.__txStreamTimeToLive
             except Exception as e:
-                Utils.Message.addMessage("ERR: RtpReceiveStream.__samplingThread snapshot stats " + str(e))
+                self.postMessage(f"ERR: RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread snapshot stats " + str(e))
 
 
             try:
@@ -2553,7 +2553,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.__stats["jitter_range_uS"] = self.jitter_range_uS
 
             except Exception as e:
-                Utils.Message.addMessage("ERR: RtpReceiveStream.__samplingThread 0.2 sec loop" + str(e))
+                self.postMessage(f"ERR: RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread 0.2 sec loop" + str(e))
 
             if loopCounter % 5 == 0:
                 ######## 1 second counter
@@ -2568,7 +2568,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     sumOfjitter10SecBuffer = sum(jitter10SecBuffer)
                     self.__stats["jitter_mean_10S_uS"] = int(sumOfjitter10SecBuffer / 10)
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread calc 10 sec jitter " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread calc 10 sec jitter " + str(e))
 
 
                 try:
@@ -2586,7 +2586,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                              self.__stats["jitter_time_elapsed_since_last_excess_jitter_event"],
                                                              self.__stats["jitter_excess_jitter_events_total"])
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread Jitter means " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread Jitter means " + str(e))
 
                 try:
                     ########## Calculate Glitch stats
@@ -2612,7 +2612,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                             math.ceil(self.__stats["glitch_packets_lost_total_count"] / self.__stats[
                                 "glitch_counter_total_glitches"])
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread Glitch stats " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread Glitch stats " + str(e))
 
                 try:
                     ######### Calculate % packet loss
@@ -2624,7 +2624,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                             self.__stats["glitch_packets_lost_total_percent"] = \
                                 self.__stats["glitch_packets_lost_total_count"] * 100 / totalExpectedPackets
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread % packet loss " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread % packet loss " + str(e))
 
                 try:
                     ######### Now update moving glitch counters by iterating over the self.movingGlitchCounters array
@@ -2638,13 +2638,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                         self.__stats[name] = movingTotal # This key holds the running total
                         self.__stats[name + "_events"] = events # This key holds a list containing the distribution of events across each sample
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread update moving glitch counters " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread update moving glitch counters " + str(e))
 
                 try:
                     ######## Get latest version of the worst glitches list (as text), and update to the __stats[] dict
                     self.__stats["glitch_worst_glitches_list"] = self.getWorstGlitches(returnSummaries=True)
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread get worst glitches list " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread get worst glitches list " + str(e))
 
                 try:
                     ######## Confirm that some packets have been received this second (used for the loss of signal alarm)
@@ -2663,11 +2663,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                                 # Increment the Event counter
                                 self.__stats["stream_all_events_counter"] += 1
                                 # Display a message
-                                Utils.Message.addMessage(
+                                self.postMessage(
                                     streamResumedEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
                             except Exception as e:
-                                Utils.Message.addMessage(
-                                    "ERR:RtpReceiveStream.__samplingThread add streamResumed Event  " + str(e))
+                                self.postMessage(
+                                    f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread add streamResumed Event  " + str(e))
 
                         # Clear the flag so another StreamLost Event can be generated
                         self.__stats["lossOfStreamFlag"] = False
@@ -2677,7 +2677,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # No packets received this period so increment the timer
                         secondsWithNoBytesRxdTimer += 1
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread check packets per sec " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread check packets per sec " + str(e))
 
                 try:
                     ######## Check to see if we've lost the stream (but only do this once, via the lossOfStreamFlag)
@@ -2689,11 +2689,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                         self.__eventList.append(streamLostEvent)
                         # Increment the all_events counter
                         self.__stats["stream_all_events_counter"] += 1
-                        Utils.Message.addMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
+                        self.postMessage(streamLostEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
                         # Snapshot the time of the latest StreamLost Event (this is consumed by the StreamResumed Event)
                         self.__stats["lossOfStreamEventTimestamp"] = datetime.datetime.now()
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect loss of stream " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread detect loss of stream " + str(e))
 
                 ######## Detect changes in the source address/port
                 try:
@@ -2714,7 +2714,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # # Increment the all_events counter
                         self.__stats["stream_all_events_counter"] += 1
                         # # Post a message
-                        Utils.Message.addMessage(
+                        self.postMessage(
                             srcAddressChange.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                     # Now snapshot latest values
@@ -2722,7 +2722,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     prevSrcPort = self.__stats["stream_srcPort"]
 
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect source address/port changes " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread detect source address/port changes " + str(e))
 
                 ######## Detect changes in the dest address/port
                 try:
@@ -2743,14 +2743,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # # Increment the all_events counter
                         self.__stats["stream_all_events_counter"] += 1
                         # # Post a message
-                        Utils.Message.addMessage(
+                        self.postMessage(
                             destAddressChange.getSummary(includeStreamSyncSourceID=False)['summary'])
                     # Now snapshot latest values
                     prevDestAddr = self.__stats["stream_rxAddress"]
                     prevDestPort = self.__stats["stream_rxPort"]
                 except Exception as e:
-                    Utils.Message.addMessage(
-                        "ERR:RtpReceiveStream.__samplingThread detect dest address/port changes " + str(e))
+                    self.postMessage(
+                        f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread detect dest address/port changes " + str(e))
 
                 ######## Detect changes in the value of rxTTL
                 try:
@@ -2759,7 +2759,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # # Get copy of the current 'live' hopslist
                         # lastUpdate, hopsList =  self.getTraceRouteHopsList()
                         # oldLen = len(hopsList)
-                        # Utils.Message.addMessage("rxTTL change " + str(prevRxTTL) + ">>" + \
+                        # self.postMessage("rxTTL change " + str(prevRxTTL) + ">>" + \
                         #                          str(self.__stats["packet_instantaneous_ttl"]))
                         # RxTTL change detected, create a new IPRoutingTTLChange Event
                         ipRoutingTTLChange = IPRoutingTTLChange(self.__stats, prevRxTTL, self.__stats["packet_instantaneous_ttl"])
@@ -2777,15 +2777,15 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Since the rxTTl has changed, we can expect a subsequent change in the received hopslist
                         hopsListChangeExpected = True
                         # Flush the contents of the current hopsList because it's now been invalidated
-                        # Utils.Message.addMessage("DBUG: hopsListChangeExpected.")
+                        # self.postMessage("DBUG: hopsListChangeExpected.")
                         # self.setTraceRouteHopsList([])
                         # Post a message
-                        Utils.Message.addMessage(ipRoutingTTLChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+                        self.postMessage(ipRoutingTTLChange.getSummary(includeStreamSyncSourceID=False)['summary'])
                         # # Snapshot current rxTTL value
                         # prevRxTTL = self.__stats["packet_instantaneous_ttl"]
 
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect rxTTL changes " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread detect rxTTL changes " + str(e))
 
 
                 ########## Calculate rxTTL change stats
@@ -2806,12 +2806,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                              self.__stats["route_time_elapsed_since_last_TTL_change_event"],
                                                              (self.__stats["route_TTl_change_events_total"] - 1))
 
-                    # Utils.Message.addMessage("ttl  events " + str(self.__stats["route_TTl_change_events_total"]) + \
+                    # self.postMessage("ttl  events " + str(self.__stats["route_TTl_change_events_total"]) + \
                     #         ", elapsed " + str(self.__stats["route_time_elapsed_since_last_TTL_change_event"].total_seconds()) +\
                     #                          ", period " + str(Utils.dtstrft(self.__stats["route_mean_time_between_TTl_change_events"])))
 
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate Rx TTL Change stats " + str(e) + ", " +\
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}). Calculate Rx TTL Change stats " + str(e) + ", " +\
                                              str(self.__stats["sumOfTimeElapsedSinceLastRxTTLChange"]))
 
 
@@ -2824,10 +2824,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                         self.__stats["packet_ttl_decrement_count"] = \
                             Registry.rtpGeneratorUDPTxTTL - self.__stats["packet_instantaneous_ttl"]
                         # Compare
-                        # Utils.Message.addMessage("rxTTL " + str(self.__stats["packet_instantaneous_ttl"]) + "(" +\
+                        # self.postMessage("rxTTL " + str(self.__stats["packet_instantaneous_ttl"]) + "(" +\
                         #                          str(self.__stats["packet_ttl_decrement_count"]) +")")
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate ttl decrements " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}). Calculate ttl decrements " + str(e))
 
                 ######## Detect route changes using traceroute hops list (and rxTTL if available)
                 # Also update the 'stable' self.tracerouteHopsList if the checksum has been validated
@@ -2841,7 +2841,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     localTracerouteChecksum = self.createTracerouteChecksum(hopsList)
                     if localTracerouteChecksum == self.tracerouteReceivedChecksum:
                         # If the checksum's match, we can be reasonably confident our hopsList data is valid
-                        # Utils.Message.addMessage("Checksums match local " +str(localTracerouteChecksum) + ", rx" +\
+                        # self.postMessage("Checksums match local " +str(localTracerouteChecksum) + ", rx" +\
                         #               str(self.tracerouteReceivedChecksum))
 
                         # Update the 'stable' TracerouteHopsList (this will be used for reports/display purposes)
@@ -2868,14 +2868,14 @@ class RtpReceiveStream(RtpReceiveCommon):
                             # Debug code:
                             # if str(self.__stats["stream_friendly_name"]).find("Berlin") >= 0:
                             #     if routeHasChanged is False:
-                            #         Utils.Message.addMessage(
+                            #         self.postMessage(
                             #             "Route debug. " + str(self.__stats["stream_friendly_name"]) + " routeHasChanged: False, prevHopsList:" + str(prevHopsList) + \
                             #             ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
                             #             ", rxTTL:" + str(self.__stats["packet_instantaneous_ttl"]))
                             #
                             #
                             #     else:
-                            #         Utils.Message.addMessage(
+                            #         self.postMessage(
                             #             "Route debug. " + str(self.__stats["stream_friendly_name"]) + " routeHasChanged: True, prevHopsList:" + str(
                             #                 prevHopsList) + \
                             #             ", hopsList:" + str(hopsList) + ", prevRxTTL: " + str(prevRxTTL) + \
@@ -2904,19 +2904,19 @@ class RtpReceiveStream(RtpReceiveCommon):
                                     self.__stats["route_time_elapsed_since_last_route_change_event"]
 
                             # Post a message
-                            Utils.Message.addMessage(iPRoutingTracerouteChange.getSummary(includeStreamSyncSourceID=False)['summary'])
-                            # Utils.Message.addMessage("old tr " + str(prevHopsList))
-                            # Utils.Message.addMessage("new tr " + str(hopsList))
+                            self.postMessage(iPRoutingTracerouteChange.getSummary(includeStreamSyncSourceID=False)['summary'])
+                            # self.postMessage("old tr " + str(prevHopsList))
+                            # self.postMessage("new tr " + str(hopsList))
 
                         # Snapshot latest hopsList (regardless of whether a route change was detected)
                         prevHopsList = hopsList
                     else:
-                        # Utils.Message.addMessage("Traceroute checksums don't match " + str(localTracerouteChecksum) + ":" +\
+                        # self.postMessage("Traceroute checksums don't match " + str(localTracerouteChecksum) + ":" +\
                         #               str(self.tracerouteReceivedChecksum))
                         pass
 
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect route changes " + str(e))
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread detect route changes " + str(e))
 
                 # Snapshot current rxTTL value
                 prevRxTTL = self.__stats["packet_instantaneous_ttl"]
@@ -2940,7 +2940,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                              self.__stats["route_time_elapsed_since_last_route_change_event"],
                                                              (self.__stats["route_change_events_total"] - 1))
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream. Calculate traceroute Change stats " + str(e) + ", " +\
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}). Calculate traceroute Change stats " + str(e) + ", " +\
                                              str(self.__stats["sumOfTimeElapsedSinceLastRouteChange"]))
 
                 ############ Now send results back to transmitter
@@ -2964,7 +2964,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                      self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"])
 
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:RtpReceiveStream. Transmit results for stream " +\
+                    self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}). Transmit results for stream " +\
                                              str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
 
@@ -2979,7 +2979,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Test to see if response contains an entry for this stream
                         if streamsList[0]["streamID"] == self.syncSourceIdentifier and \
                                 streamsList[0]["streamType"] == "RtpReceiveStream":
-                            # Utils.Message.addMessage(f"RtpReceiveStream {self.syncSourceIdentifier} exists in streamsList")
+                            # self.postMessage(f"RtpReceiveStream {self.syncSourceIdentifier} exists in streamsList")
                             pass
                     except:
                         # stream doesn't exist (or server is busy), so need to register it
@@ -2992,28 +2992,28 @@ class RtpReceiveStream(RtpReceiveCommon):
                         try:
                             # Register the stream
                             self.ctrlAPI.addToStreamsDirectory(streamDefinition)
-                            Utils.Message.addMessage(f"DBUG:RtpReceiveStream.__samplingThread({self.syncSourceIdentifier}) "\
+                            self.postMessage(f"DBUG:RtpReceiveStream.__samplingThread({self.syncSourceIdentifier}) "\
                                                      f"successful stream registration")
                             # If execution gets this far, we can assume that streams was successfully registered
                             # set the flag
                             self.streamRegisteredFlag = True
                         except Exception as e:
-                            Utils.Message.addMessage(f"ERR:RtpReceiveStream.__samplingThread({self.syncSourceIdentifier})"\
+                            self.postMessage(f"ERR:RtpReceiveStream.__samplingThread({self.syncSourceIdentifier})"\
                                                      f" registration fail {e}")
 
-                # Utils.Message.addMessage("Tx pid " + str(self.__stats["stream_transmitter_PID"]) )
+                # self.postMessage("Tx pid " + str(self.__stats["stream_transmitter_PID"]) )
 
                 # #Get last glitch by eventNo
                 # try:
                 #     lastGlitchEventList = self.getRTPStreamEventList(requestedEventNo=self.__stats["glitch_most_recent_eventNo"])
                 #     if len(lastGlitchEventList) > 0:
                 #             lastGlitchEventSummary = lastGlitchEventList[0].getSummary()["summary"]
-                #             Utils.Message.addMessage("Last glitch  event no: " + str(self.__stats["glitch_most_recent_eventNo"]) +\
+                #             self.postMessage("Last glitch  event no: " + str(self.__stats["glitch_most_recent_eventNo"]) +\
                 #                                      ", " + lastGlitchEventSummary)
                 # except Exception as e:
-                #     Utils.Message.addMessage("ERR: Last glitch: " + str(e))
+                #     self.postMessage("ERR: Last glitch: " + str(e))
 
-                # Utils.Message.addMessage(f"DBUG:sampling Thread__eventList {self.__eventList}")
+                # self.postMessage(f"DBUG:sampling Thread__eventList {self.__eventList}")
 
                 ######## 1 second counter end of code ########
 
@@ -3023,11 +3023,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                 if secondsWithNoBytesRxdTimer >= Registry.streamIsDeadThreshold_s and self.__stats["lossOfStreamFlag"] and\
                         self.__stats["streamIsDeadFlag"] is False:
                     self.__stats["streamIsDeadFlag"] = True
-                    Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
+                    self.postMessage("Stream " + str(self.__stats["stream_syncSource"]) + \
                                              "(" + str(self.__stats["stream_friendly_name"]).rstrip() + \
                                              ") believed dead")
             except Exception as e:
-                Utils.Message.addMessage("ERR:RtpReceiveStream.__samplingThread detect dead stream " + str(e))
+                self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread detect dead stream " + str(e))
 
             try:
                 ######## If the stream has been declared 'dead' and the autoRemoveDeadRxStreamsThreshold_s
@@ -3046,16 +3046,16 @@ class RtpReceiveStream(RtpReceiveCommon):
                     try:
                         Utils.writeReportToDisk(report, fileName=_filename)
                     except Exception as e:
-                        Utils.Message.addMessage(f"ERR: RtpReceiveStream({self.syncSourceIdentifier}) Can't save report for dead stream {e}")
+                        self.postMessage(f"ERR: RtpReceiveStream({self.syncSourceIdentifier}) Can't save report for dead stream {e}")
                     # Kill itself
                     self.killStream(caller=self)
             except Exception as e:
-                Utils.Message.addMessage(f"ERR:RtpReceiveStream.__samplingThread auto remove stream:"
+                self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread auto remove stream:"
                                          f"lossOfStreamEventTimestamp: {self.__stats['lossOfStreamEventTimestamp']}, err: {e}")
 
             # Increment 1 sec loop counter
             loopCounter += 1
-        Utils.Message.addMessage("DBUG: __samplingThread ended for stream " + str(self.__stats["stream_syncSource"]))
+        self.postMessage("DBUG: __samplingThread ended for stream " + str(self.__stats["stream_syncSource"]))
 
 
     # This is the main receiver thread for the incoming Rtp stream. It employs a 'non-busy wait' for RtpData objects
@@ -3066,7 +3066,7 @@ class RtpReceiveStream(RtpReceiveCommon):
     # The fastest changing vars have their own instance variables and these are copied into the stats
 
     def __queueReceiverThread(self):
-        Utils.Message.addMessage("DBUG: Starting __queueReceiverThread for stream " + \
+        self.postMessage("DBUG: Starting __queueReceiverThread for stream " + \
                                  str(self.__stats["stream_syncSource"]))
 
         def updateGlitchStats(qrtInstance, latestGlitch):
@@ -3128,7 +3128,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     qrtInstance.__stats["stream_time_elapsed_total"].total_seconds() > 5 and\
                     Registry.rtpReceiveStreamEnableExcessiveJitterEventGeneration:
 
-                # Utils.Message.addMessage("Excessive jitter Event Creation. Timeout " + \
+                # self.postMessage("Excessive jitter Event Creation. Timeout " + \
                 #              str(qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds()) + \
                 #              ", threshold " + str(qrtInstance.__stats["jitter_alarm_event_timeout_S"]) + \
                 #              ", no of events: " + str(qrtInstance.__stats["jitter_excess_jitter_events_total"]))
@@ -3144,7 +3144,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     datetime.datetime.now() - excessiveJitterEvent.timeCreated
 
                 # Post a message
-                Utils.Message.addMessage(excessiveJitterEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
+                self.postMessage(excessiveJitterEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                 # Update the event counter for Excess Jitter
                 qrtInstance.__stats["jitter_excess_jitter_events_total"] += 1
@@ -3163,7 +3163,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Take timestamp for this (the most recent) Excess Jitter event
                 qrtInstance.__stats["jitter_time_of_last_excess_jitter_event"] = excessiveJitterEvent.timeCreated
             else:
-                # Utils.Message.addMessage("Excessive jitter Event inhibited. Timeout " +\
+                # self.postMessage("Excessive jitter Event inhibited. Timeout " +\
                 #     str(qrtInstance.__stats["jitter_time_elapsed_since_last_excess_jitter_event"].total_seconds()) +\
                 #                          ", threshold " + str(qrtInstance.__stats["jitter_alarm_event_timeout_S"]) +\
                 #                          ", no of events: " + str(qrtInstance.__stats["jitter_excess_jitter_events_total"]))
@@ -3222,7 +3222,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Increment the Event counter
                         self.__stats["stream_all_events_counter"] += 1
                         # Display a message
-                        Utils.Message.addMessage(streamStartedEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
+                        self.postMessage(streamStartedEvent.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                     # Update 'last seen packet' timestamp.
                     # Note: This is a fast changing variable so is held as an instance variable.
@@ -3259,13 +3259,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                         sequenceNoGap = rtpPackets[-1].rtpSequenceNo - rtpPackets[-2].rtpSequenceNo
 
                         # if sequenceNoGap < 1:
-                        #     Utils.Message.addMessage("PKT: 0 or -ve sequenceNoGap " + str(sequenceNoGap))
+                        #     self.postMessage("PKT: 0 or -ve sequenceNoGap " + str(sequenceNoGap))
                         #
                         # Detect sequence no wrapping around to zero
                         if sequenceNoGap < -32768:
                             # If diff < -32768, add 65536 // Turns diff into a +ve no.
                             modifiedSequenceNoGap = sequenceNoGap + 65536
-                            # Utils.Message.addMessage("PKT:Seq no wrapping to zero. old diff " +\
+                            # self.postMessage("PKT:Seq no wrapping to zero. old diff " +\
                             #                          str(sequenceNoGap) + " new diff " + str(modifiedSequenceNoGap))
                             # Copy new seq no
                             sequenceNoGap = modifiedSequenceNoGap
@@ -3273,7 +3273,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Detect out-of-order packet receipt (i.e received seq numbers going backwards!)
                         # This should manifest itself as a -ve sequenceNoGap between -32768 and 0
                         elif (sequenceNoGap < 0) and (sequenceNoGap > -32768):
-                            # Utils.Message.addMessage("PKT:Out of order packet: current seq " + str(rtpPackets[-1].rtpSequenceNo) +\
+                            # self.postMessage("PKT:Out of order packet: current seq " + str(rtpPackets[-1].rtpSequenceNo) +\
                             #               ", prev " + str(rtpPackets[-2].rtpSequenceNo) + ", diff " +\
                             #                          str(sequenceNoGap))
                             # Create an OutOfOrderPacket Event
@@ -3283,11 +3283,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                             # Increment the all_events counter
                             self.__stats["stream_all_events_counter"] += 1
                             # Post a message
-                            Utils.Message.addMessage(outOfOrderPacket.getSummary(includeStreamSyncSourceID=False)['summary'])
+                            self.postMessage(outOfOrderPacket.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                         # Detect duplicate sequence no. This shouldn't be possible because the sequence no.s should increment
                         elif sequenceNoGap == 0:
-                            # Utils.Message.addMessage("Duplicate seq no received " + str(str(rtpPackets[-1].rtpSequenceNo)))
+                            # self.postMessage("Duplicate seq no received " + str(str(rtpPackets[-1].rtpSequenceNo)))
                             # Create a DuplicateSequenceNo event
                             duplicateSequenceNo = DuplicateSequenceNo(self.__stats, rtpPackets[-2], rtpPackets[-1])
                             # Append the event to the eventList
@@ -3295,7 +3295,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                             # Increment the all_events counter
                             self.__stats["stream_all_events_counter"] += 1
                             # Post a message
-                            Utils.Message.addMessage(duplicateSequenceNo.getSummary(includeStreamSyncSourceID=False)['summary'])
+                            self.postMessage(duplicateSequenceNo.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                         # A seq no gap of > 1 suggests a glitch
                         if sequenceNoGap > 1:
@@ -3320,7 +3320,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                 # Increment the all_events counter
                                 self.__stats["stream_all_events_counter"] += 1
                                 # Post a message
-                                Utils.Message.addMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'])
+                                self.postMessage(glitch.getSummary(includeStreamSyncSourceID=False)['summary'])
 
                             else:
                                 # Glitch is below the threshold. Acknowledge it with a message but don't add an Event
@@ -3328,7 +3328,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                 # Note, this message is not logged to disk, to save the log file being filled
                                 self.__stats["glitch_glitches_ignored_counter"] += 1
                                 # Post a message
-                                Utils.Message.addMessage("Stream " + str(self.__stats["stream_syncSource"]) + ", " +\
+                                self.postMessage("Stream " + str(self.__stats["stream_syncSource"]) + ", " +\
                                                          str(sequenceNoGap) + " packets lost. (<=" +\
                                                          str(self.__stats["glitch_Event_Trigger_Threshold_packets"]) +\
                                                          ", minor loss " + str(rtpPackets[-2].rtpSequenceNo) + ":" +\
@@ -3380,7 +3380,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                 excessiveJitterThreshold = Registry.rtpReceiveStreamJitterExcessiveAlarmThreshold *\
                                                            self.__stats["packet_mean_receive_period_uS"]
                                 if jitter > excessiveJitterThreshold:
-                                    # Utils.Message.addMessage("Excessive jitter " + str(jitter) + ", threshold " + str(excessiveJitterThreshold) +\
+                                    # self.postMessage("Excessive jitter " + str(jitter) + ", threshold " + str(excessiveJitterThreshold) +\
                                     #                          ", packet_mean_receive_period_uS " + str(self.__stats["packet_mean_receive_period_uS"]))
                                     # calculated jitter exceeds threshold, so add event and update the stats
                                     addJitterEvent(self, rtpPacketData, jitter, excessiveJitterThreshold)
@@ -3391,14 +3391,14 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                         # x = rtpPackets[-1].rtpSequenceNo
                         # if x % 20 == 0:
-                        #     # Utils.Message.addMessage("__queueReceiverThread " + str(x) + " Packets Rx'd: " +\
+                        #     # self.postMessage("__queueReceiverThread " + str(x) + " Packets Rx'd: " +\
                         #     #                          str(packet_counter_received_total) +\
                         #     #                          ", bytes rx'd " + str(packet_data_received_total_bytes))
                         #     # seqNos = str(rtpPackets[0].rtpSequenceNo) + ", " + \
                         #     #          str(rtpPackets[1].rtpSequenceNo) + ", " + \
                         #     #          str(rtpPackets[2].rtpSequenceNo) + ", "
-                        #     # Utils.Message.addMessage(seqNos)
-                        #     # Utils.Message.addMessage("jitter " + str(self.jitter_min_uS) +">" + str(self.jitter_range_uS) +\
+                        #     # self.postMessage(seqNos)
+                        #     # self.postMessage("jitter " + str(self.jitter_min_uS) +">" + str(self.jitter_range_uS) +\
                         #     #                          ">" + str(self.jitter_max_uS))
                         #     pass
 
@@ -3407,12 +3407,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # Will be raised if there is a queue timeout (i.e no data in the queue)
                     pass
                 except Exception as e:
-                    Utils.Message.addMessage("ERR:__queueReceiverThread.get() " + str(e))
+                    self.postMessage(f"ERR:__queueReceiverThread({self.syncSourceIdentifier}).get() " + str(e))
             else:
                 # Otherwise, wait a while before checking again
                 time.sleep(0.5)
 
-        Utils.Message.addMessage("DBUG: Ending __queueReceiverThread for stream " + \
+        self.postMessage("DBUG: Ending __queueReceiverThread for stream " + \
                                  str(self.__stats["stream_syncSource"]))
 
 
@@ -3443,7 +3443,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                                                         "type": "/label",
                                                         "name": friendlyName})
             except Exception as e:
-                Utils.Message.addMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).setFriendlyName() "\
+                self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).setFriendlyName() "\
                                          f"{friendlyName}, err:{e}")
         else:
             # Otherwise, this is a stream from an unknown source OR a historic stream and no more data is being received
@@ -3556,7 +3556,7 @@ class RtpReceiveStream(RtpReceiveCommon):
     #         # Increment the counter. Packets out should equal packets in
     #         self.packetsAddedToRxQueueCount += 1
     #     except Exception as e:
-    #         Utils.Message.addMessage("RtpReceiveStream.addData() " + str(e))
+    #         self.postMessage("RtpReceiveStream.addData() " + str(e))
 
     # Sends a control message to the isptest Transmitter associated with this ReceiverStream object
     # by pickling the supplied message and wrapping it up in another dict along with
@@ -3569,7 +3569,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         if self.__stats["stream_transmitterVersion"] > 0:
             # and a valid tx queue exists
             if self.__stats["stream_rxPort"] in self.txQueuesDict:
-                Utils.Message.addMessage("DBUG:sendControlMessageToTransmitter() msg to send: " + str(msg))
+                self.postMessage(f"DBUG:sendControlMessageToTransmitter()({self.syncSourceIdentifier}) msg to send: " + str(msg))
                 try:
                     txQueue = self.txQueuesDict[self.__stats["stream_rxPort"]]
                     destAddr = self.__stats["stream_srcAddress"]
@@ -3923,7 +3923,7 @@ class RtpGenerator(RtpCommon):
                                                       # <<--denotes that this fn returns plain text
                                                       }
                 except Exception as e:
-                    # Utils.Message.addMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() {e}")
+                    # self.postMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() {e}")
                     pass
             except Exception as e:
                 rtpGen.postMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() corrupt endpoint definitions {e}")
@@ -6997,8 +6997,7 @@ class RtpStreamComparer(object):
                                     eventSummary = sortedStreamsList[index]["relatedEvent"]["summary"]
                                     eventSummaryFormattedText = eventCreated + ", " + eventSummary
                                 except Exception as e:
-                                    Utils.Message.addMessage(
-                                        "ERR:RtpStreamComparer.generateReport() - lookup event " + str(e))
+                                    raise Exception("ERR:RtpStreamComparer.generateReport() - lookup event " + str(e))
 
                             if includeSyncSourceID:
                                 # Create the table row (including the syncSourceID)
@@ -7015,8 +7014,8 @@ class RtpStreamComparer(object):
 
             return streamReport
         except Exception as e:
-            Utils.Message.addMessage("ERR:RtpStreamComparer " + str(e))
-            return None
+            raise Exception("ERR:RtpStreamComparer " + str(e))
+
 # # Define a custom HTTPServer. This will allow access to the associated RtpReceiveStream object that created it
 # class RtpStreamHTTPServer(HTTPServer):
 #     def __init__(self, *args, **kwargs):
