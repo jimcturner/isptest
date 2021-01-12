@@ -866,13 +866,13 @@ class UI(object):
 
 
     # This method will cause an error message to be shown by the main __renderDisplayThread
-    # it will wait for a key press, and then cause the app to shut down (without user confirmation) via a SIGTERM
     def showErrorDialogue(self, errorTitle, errorMessageText):
         Utils.Message.addMessage("DBUG: UI.showFatalErrorDialogue() called")
         self.fatalErrorDialogueTitle = errorTitle
         self.fatalErrorDialogueMessageText = errorMessageText
         self.displayFatalErrorDialogue = True
-
+        # Force a redraw
+        self.wakeUpUI.set()
 
     # This method will pause the normal screen rendering/key catching and cause a
     # 'do you want to quit? dialogue to be displayed
@@ -1497,13 +1497,14 @@ class UI(object):
             # Blocking call to self.__getch() with timeout
             ch = self.__getch()
 
-    def displayMessageBox(self, *args, **kwargs):
-        self.__disableKeyChecking()
-        Utils.Message.addMessage(f"UI.displayMessageBox() (BEFORE) enableGetch:{self.enableGetch.is_set()},"
-                                 f"getchIsDisabled:{self.getchIsDisabled.is_set()}")
-        self.renderMessageBox(*args, **kwargs)
-        Utils.Message.addMessage(f"UI.displayMessageBox() (AFTER) enableGetch:{self.enableGetch.is_set()},"
-                                 f"getchIsDisabled:{self.getchIsDisabled.is_set()}")
+    # def displayMessageBox(self, *args, **kwargs):
+    #     # self.__disableKeyChecking()
+    #     # Utils.Message.addMessage(f"UI.displayMessageBox() (BEFORE) enableGetch:{self.enableGetch.is_set()},"
+    #     #                          f"getchIsDisabled:{self.getchIsDisabled.is_set()}")
+    #     # self.renderMessageBox(*args, **kwargs)
+    #     # Utils.Message.addMessage(f"UI.displayMessageBox() (AFTER) enableGetch:{self.enableGetch.is_set()},"
+    #     #                          f"getchIsDisabled:{self.getchIsDisabled.is_set()}")
+    #     self.showErrorDialogue(*args)
 
     # If the Event Lists Table is currently displayed, this method will copy the events to the local clipboard
     # Alternatively, if the traceroute table is displayed, it will attempt to render a list of the previous
@@ -2855,7 +2856,7 @@ class UI(object):
             # Determine which key pressed, and call the appropriate method
             self.__parseKeyPressed()
 
-            ########## Start rendering the screen
+            ########## Start rendering the screen - main screen drawing loop
             if self.redrawScreen:
                 Term.setBackgroundColour(Term.BLUE)
                 self.__renderTopToolbar()
@@ -4113,10 +4114,9 @@ class ISPTestHTTPServer(object):
         try:
             # Get handle on UI instance
             ui = self.externalResourcesDict["ui"]
-            # Call the UI.renderMessageBox() method
-            # However, this is a blocking call, so in order to not tie up the HTTP Request Handler, we need to
-            # call the method via another thread
-            threading.Thread(target=ui.displayMessageBox, args=(args), daemon=True).start()
+            # call the UI.showErrorDialogue() method
+            ui.showErrorDialogue(*args, **kwargs)
+
         except Exception as e:
             raise Exception(f"ISPTestHTTPServer.displayPopupMessage() {e}")
 
@@ -4236,7 +4236,7 @@ class ISPTestHTTPServer(object):
                                 messageText = "Hello!"
                                 title = "Test"
                                 # Display the message
-                                self.server.parentObject.displayAlert(messageText, title)
+                                self.server.parentObject.displayAlert(title, messageText)
                                 response = messageText.encode('utf-8')
                                 # Create the headers
                                 self._set_response()
