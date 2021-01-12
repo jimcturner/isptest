@@ -4000,7 +4000,6 @@ class RtpGenerator(RtpCommon):
                 raise Exception(f"renderDebugPage() {rtpGen.__class__.__name__}, {e}")
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
-                 uiInstance=None,
                  controllerTCPPort=None, **kwargs):
         # The last arguments (**kwargs) are optional. it allows you to specify a source port or friendly name on creation
         # kwargs are "friendlyName" and "UDP_SRC_PORT"
@@ -4060,7 +4059,6 @@ class RtpGenerator(RtpCommon):
                                     # 6 The stream time to live (in seconds)
                                     # 7 The return loss (as measured by the ResultsReceiver)
 
-        self.uiInstance = uiInstance   # This allows access to the methods of the UI class
         # self.minSleepTime = None
         # self.maxSleepTime = None
         self.meanSleepTime = 0
@@ -6153,12 +6151,13 @@ class RtpGenerator(RtpCommon):
                         "\n" + "To enable this function, exit the app and run as sudo ".center(maxWidth) + \
                         "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
                         "\n\n" + "<Press any key to continue>".center(maxWidth)
-            if self.uiInstance is not None:
-                try:
-                    self.uiInstance.showErrorDialogue("Traceroute error", errorText)
-                except Exception as e:
-                    self.postMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
-                                             str(e))
+
+            try:
+                # self.ctrlAPI.postByURL("/alert", title="Traceroute error", body=errorText)
+                self.ctrlAPI.alertUser(title="Traceroute error", body=errorText)
+            except Exception as e:
+                self.postMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
+                                         str(e))
 
         # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
         # consecutive identical lists have been determined can we say that we have a 'stable' route

@@ -1677,6 +1677,21 @@ class APIHelper(object):
         except Exception as e:
             raise Exception(f"ERR: APIHelper.postByURL() path: {path}, params: {kwargs}, error: {e}")
 
+    # Shortcut function to create a pop-up message on the user interface.
+    # *****NOTE: This will fail silently! so as not to block the caller***
+    # i.e it won't raise an Exceptions
+    # Ultimately it invokes  the UI.showErrorDialogue() method (via the HTTP do__POST() handler)
+    # Currently the required kwargs are title=xxx, body=yyy but see the do__POST() handler for the kwargs
+    def alertUser(self, **kwargs):
+        url = "/alert"
+        try:
+            self.postByURL(url, **kwargs)
+        except:
+            # FAIL SILENTLY
+            pass
+
+
+
     # This is a generic function that will take any url path, and attempt to do an HTTP DELETE using that path
     def deleteByURL(self, path):
         url = f"http://{self.addr}:{self.port}{path}"

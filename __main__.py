@@ -2020,7 +2020,6 @@ class UI(object):
 
                         rtpGenerator = Utils.ProcessCreator(RtpGenerator, destAddr, destPort, txRate_bps,
                                                             packetLength, syncSourceID, timeToLive, \
-                                                    uiInstance=None, \
                                                     friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
                                                     controllerTCPPort=self.controllerTCPPort)
 
@@ -5190,7 +5189,6 @@ def main(argv):
             # processName = f"RtpGenerator"
             rtpGenerator = Utils.ProcessCreator(RtpGenerator, UDP_TX_IP, UDP_TX_PORT, txRate,
                                         payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
-                                        uiInstance=None,
                                         UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME,
                                         controllerTCPPort=isptesttHTTPServerPort)
 
