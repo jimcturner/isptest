@@ -3442,6 +3442,8 @@ class RtpPacketReceiver(object):
         self.glitchEventTriggerThreshold = glitchEventTriggerThreshold
         self.uiInstance = uiInstance
         self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
+        # Create an API helper to allow access to the HTTP API of the Controller
+        self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
 
         # Create and initialise variables used for debugging -tracing lost packets
         self.rawPacketsReceivedByRxThreadCount = 0
@@ -3550,7 +3552,7 @@ class RtpPacketReceiver(object):
                                 "\n" + "Hint: try running as 'sudo' or 'Administrator'".center(maxWidth) + \
                                 "\n\n" + "<Press any key to continue>".center(maxWidth)
 
-                    self.uiInstance.showErrorDialogue("Raw Socket creation error", errorText)
+                    self.ctrlAPI.postByURL("/alert", title="Raw Socket creation error", body=errorText)
 
 
             except RtpPacketReceiver.RawSocketNotPossibleForOSXError as e:
@@ -3573,8 +3575,7 @@ class RtpPacketReceiver(object):
                                 "\n" + "functionality will remain".center(maxWidth) + \
                                 "\n\n" + "<Press any key to continue>".center(maxWidth)
 
-                    self.uiInstance.showErrorDialogue("OSX detected", errorText)
-
+                    self.ctrlAPI.postByURL("/alert", title="OSX detected", body=errorText)
 
             # Catch fatal errors that will stop isptest from receiving packets
             # isptest can live without a raw socket (all that will be missing is the ttl detection),
@@ -3607,7 +3608,8 @@ class RtpPacketReceiver(object):
                             "\n" + "Windows: 'netstat -an | find \"UDP\"'".center(maxWidth) + \
                             "\n\n" + "<Press any key to continue>".center(maxWidth)
 
-                self.uiInstance.showErrorDialogue("Network Error", errorText)
+                self.ctrlAPI.postByURL("/alert", title="Network Error", body=errorText)
+
                 # Cause thread to end by breaking out of while loop
                 break
             Utils.Message.addMessage("Receiving on socket " + str(receiveSocket))
@@ -4527,8 +4529,7 @@ class ISPTestHTTPServer(object):
                         # Causes a popup message box to be displayed (via the UI.showErrorDialogue() method)
                         # POST /alert?title=some_title&body=some_message_text
                         try:
-                                # # Parse query to create a list of optional parameters to be passed to targetMethod()
-                                # # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
+                                # # Parse query to create a list of optional parameters to be passed to displayAlert()
                                 # # This method will raise an exception if any unexpected query args are present
                                 reqArgs, optionalArgs = self.convertKeysToMethodArgs(post_data_raw.decode('UTF-8'), ["title", "body"],[])
                                 response = f"do_POST /alert reqArgs:{reqArgs}".encode('utf-8')
