@@ -6152,12 +6152,8 @@ class RtpGenerator(RtpCommon):
                         "\n" + "(or as Administrator, if running on Windows)".center(maxWidth) + \
                         "\n\n" + "<Press any key to continue>".center(maxWidth)
 
-            try:
-                # self.ctrlAPI.postByURL("/alert", title="Traceroute error", body=errorText)
-                self.ctrlAPI.alertUser(title="Traceroute error", body=errorText)
-            except Exception as e:
-                self.postMessage("DBUG:RtpGenerator.__tracerouteThread: display error message on UI " + \
-                                         str(e))
+            # Create a pop-up error message
+            self.ctrlAPI.alertUser(title="Traceroute error", body=errorText)
 
         # A list to contain two (or more) tracerouteHopsList lists. The lists can then be compared. Only when n
         # consecutive identical lists have been determined can we say that we have a 'stable' route

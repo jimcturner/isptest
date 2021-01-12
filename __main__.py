@@ -3548,7 +3548,7 @@ class RtpPacketReceiver(object):
                                 "\n" + "Hint: try running as 'sudo' or 'Administrator'".center(maxWidth) + \
                                 "\n\n" + "<Press any key to continue>".center(maxWidth)
 
-                    self.ctrlAPI.postByURL("/alert", title="Raw Socket creation error", body=errorText)
+                    self.ctrlAPI.alertUser(title="Raw Socket creation error", body=errorText)
 
 
             except RtpPacketReceiver.RawSocketNotPossibleForOSXError as e:
@@ -3571,7 +3571,7 @@ class RtpPacketReceiver(object):
                                 "\n" + "functionality will remain".center(maxWidth) + \
                                 "\n\n" + "<Press any key to continue>".center(maxWidth)
 
-                    self.ctrlAPI.postByURL("/alert", title="OSX detected", body=errorText)
+                    self.ctrlAPI.alertUser(title="OSX detected", body=errorText)
 
             # Catch fatal errors that will stop isptest from receiving packets
             # isptest can live without a raw socket (all that will be missing is the ttl detection),
@@ -3604,7 +3604,8 @@ class RtpPacketReceiver(object):
                             "\n" + "Windows: 'netstat -an | find \"UDP\"'".center(maxWidth) + \
                             "\n\n" + "<Press any key to continue>".center(maxWidth)
 
-                self.ctrlAPI.postByURL("/alert", title="Network Error", body=errorText)
+                # self.ctrlAPI.postByURL("/alert", title="Network Error", body=errorText)
+                self.ctrlAPI.alertUser(title="Network Error", body=errorText)
 
                 # Cause thread to end by breaking out of while loop
                 break
