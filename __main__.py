@@ -3430,8 +3430,7 @@ class RtpPacketReceiver(object):
 
 
     def __init__(self, rxQueuesDict, txQueuesDict, shutdownFlag,
-                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, uiInstance,
-                       controllerTCPPort=None):
+                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, controllerTCPPort=None):
         self.rxQueuesDict = rxQueuesDict
         self.txQueuesDict = txQueuesDict
         self.shutdownFlag = shutdownFlag
@@ -3439,7 +3438,6 @@ class RtpPacketReceiver(object):
         self.UDP_RX_PORT = UDP_RX_PORT
         self.ISPTEST_HEADER_SIZE = ISPTEST_HEADER_SIZE
         self.glitchEventTriggerThreshold = glitchEventTriggerThreshold
-        # self.uiInstance = uiInstance
         self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
         # Create an API helper to allow access to the HTTP API of the Controller
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
@@ -5370,7 +5368,7 @@ def main(argv):
         # receive stream syncSourceIds and receive queues
         importedSnapshotsList = []
         try:
-            importedSnapshotsList = Utils.importObjectFromDisk(filename=Registry.streamsSnapshotFilename)
+            importedSnapshotsList = Utils.importObjectFromDisk(Registry.streamsSnapshotFilename)
             if len(importedSnapshotsList) > 0:
                 # Initialise stats and eventsList
                 stats = None
@@ -5455,7 +5453,7 @@ def main(argv):
             rtpPacketReceiver = RtpPacketReceiver(rxQueuesDict, txQueuesDict, shutdownFlag,
                        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
                                                   glitchEventTriggerThreshold,
-                                                  ui, controllerTCPPort=isptesttHTTPServer.getTCPPort())
+                                                  controllerTCPPort=isptesttHTTPServer.getTCPPort())
 
             # Wait for socket (Created by rtpPacketReceiver) to become available (this might take some time)
             while rtpPacketReceiver.getSocket() is None:
