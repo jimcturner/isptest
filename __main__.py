@@ -4230,9 +4230,17 @@ class ISPTestHTTPServer(object):
                             pass
 
                     elif str(currentStep).startswith("alert"):
-                        # Causes a popup message box to be displayed
+                        # Causes a popup message box to be displayed (via the UI.showErrorDialogue() method)
                         # GET /alert
                         try:
+                                # Split of the URL and query (?key=value suffixes)
+                                urlDecoded = urlparse(self.path)
+                                path = urlDecoded.path
+                                # query = urlDecoded.query
+                                # # Parse query to create a list of optional parameters to be passed to targetMethod()
+                                # # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
+                                # # This method will raise an exception if any unexpected query args are present
+                                # reqArgs, optionalArgs = self.convertKeysToMethodArgs(query, ["title", "body"],[])
                                 messageText = "Hello!"
                                 title = "Test"
                                 # Display the message
@@ -4514,6 +4522,22 @@ class ISPTestHTTPServer(object):
                         else:
                             # More steps yet to be parsed, let the loop continue
                             pass
+
+                    elif currentStep == "alert":  # Test the path step
+                        # Causes a popup message box to be displayed (via the UI.showErrorDialogue() method)
+                        # POST /alert?title=some_title&body=some_message_text
+                        try:
+                                # # Parse query to create a list of optional parameters to be passed to targetMethod()
+                                # # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
+                                # # This method will raise an exception if any unexpected query args are present
+                                reqArgs, optionalArgs = self.convertKeysToMethodArgs(post_data_raw.decode('UTF-8'), ["title", "body"],[])
+                                response = f"do_POST /alert reqArgs:{reqArgs}".encode('utf-8')
+                                self.server.parentObject.displayAlert(reqArgs[0], reqArgs[1])
+                                # Create the headers
+                                self._set_response()
+
+                        except Exception as e:
+                                raise Exception(f"do__POST() /alert {str(e)}")
                     else:
                         # Catchall
                         raise Exception("Can't POST to this path")
