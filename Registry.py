@@ -18,7 +18,7 @@ class Registry(object):
     messageLogFilenameRx = "isptest_log_rx.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
     streamsSnapshotFilename = "ispTestSnapshot.isp" # This file is created when the isptest Receiver app ends, and is reloaded
                                                     # on startup
-    streamsSnapshotAutoSaveInterval_s = 5       # The frequency of stream snapshot auto saves (when in RECEIVE mode)
+    streamsSnapshotAutoSaveInterval_s = 30       # The frequency of stream snapshot auto saves (when in RECEIVE mode)
 
     httpRequestTimeout = 0.1 # The default timeout for all HTTP requests (GET, POST etc)
     # This string will be added between the UDP header

@@ -3273,7 +3273,6 @@ class RtpPacketReceiver(object):
 
     # Creates a UDP socket and binding
     def createUDPSocket(self, UDP_RX_IP, UDP_RX_PORT, timeout=1, txTTL=128):
-
         try:
             # create UDP socket
             udpSocket = socket.socket(socket.AF_INET,  # Internet
@@ -3440,7 +3439,7 @@ class RtpPacketReceiver(object):
         self.UDP_RX_PORT = UDP_RX_PORT
         self.ISPTEST_HEADER_SIZE = ISPTEST_HEADER_SIZE
         self.glitchEventTriggerThreshold = glitchEventTriggerThreshold
-        self.uiInstance = uiInstance
+        # self.uiInstance = uiInstance
         self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
         # Create an API helper to allow access to the HTTP API of the Controller
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
@@ -4230,29 +4229,6 @@ class ISPTestHTTPServer(object):
                         else:
                             # More steps yet to be parsed, let the loop continue
                             pass
-
-                    elif str(currentStep).startswith("alert"):
-                        # Causes a popup message box to be displayed (via the UI.showErrorDialogue() method)
-                        # GET /alert
-                        try:
-                                # Split of the URL and query (?key=value suffixes)
-                                urlDecoded = urlparse(self.path)
-                                path = urlDecoded.path
-                                # query = urlDecoded.query
-                                # # Parse query to create a list of optional parameters to be passed to targetMethod()
-                                # # Note: Since this is a GET, we don't specify any requiredArgKeys, just optionalArgKeys
-                                # # This method will raise an exception if any unexpected query args are present
-                                # reqArgs, optionalArgs = self.convertKeysToMethodArgs(query, ["title", "body"],[])
-                                messageText = "Hello!"
-                                title = "Test"
-                                # Display the message
-                                self.server.parentObject.displayAlert(title, messageText)
-                                response = messageText.encode('utf-8')
-                                # Create the headers
-                                self._set_response()
-
-                        except Exception as e:
-                                raise Exception(f"do__GET() /alert {str(e)}")
 
                     elif str(currentStep).startswith("log"):
                         # GET /log
@@ -5232,51 +5208,42 @@ def main(argv):
     # Returns True and the number of streams successfuly exported (saved) or False, plus error message on failure
     def createStreamsSnapshot(controllerTCPPort, controllerTCPAddress="127.0.0.1"):
         try:
-
             # Get list of RtpReceiveStream objects from the API
             api = Utils.APIHelper(controllerTCPPort, addr=controllerTCPAddress)
             availableRtpStreamList = api.getStreamsList(streamType="RtpReceiveStream")
 
             rxStreamExportList = []
-            for stream in availableRtpStreamList:
-                try:
+            try:
+                for stream in availableRtpStreamList:
+
                     # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
                     streamApi = Utils.APIHelper(stream["httpPort"])
                     # Get the latest stream stats
                     stats = streamApi.getStats()
 
-                    # Get the pickled Events list
+                    # Get the raw, pickled Events list (as a list of pickled objects)
                     eventsListPickled = streamApi.getByURL('/events/raw', returnAsBytes=True)
                     # Unpickle the events list to regenerate the original Event objects
                     # NOTE: This is **horrifically** inefficient because we're about to re-pickle the events
                     # so that we can save them to disk (via Utils.exportObjectToDisk()
                     eventsList = pickle.loads(eventsListPickled)
                     rxStreamExportList.append([stream["streamID"], stats, eventsList])
-                except Exception as e:
-                    Utils.Message.addMessage(f"main().createStreamsSnapshot() {e}")
+
+            except Exception as e:
+                raise Exception(f"create rxStreamExportList {e}")
 
 
-            # If there are streams to be exported
-            if len(rxStreamExportList) > 0:
+            # Export rxStreamExportList (not if rxStreamExportList is empty, an empty disk will be saved in order
+            # to overwrite the old .isp file (if it exists)
+            try:
                 # Write the rxStreamExportList to a file
-                saveStatus = Utils.exportObjectToDisk(rxStreamExportList)
-                if saveStatus is True:
-                    # Utils.Message.addMessage("Created snapshot for " + str(len(rxStreamExportList)) + \
-                    #                          " streams to file " + str(Registry.streamsSnapshotFilename))
-                    # Return the no of streams exported
-                    return True, len(rxStreamExportList)
-                else:
-                    Utils.Message.addMessage("ERR:createStreamsSnapshot() Export streams save failure " + str(saveStatus))
-                    # Return error message
-                    return False, saveStatus
-            else:
-                return True, 0
+                Utils.exportObjectToDisk(rxStreamExportList)
+                return len(rxStreamExportList)
+            except Exception as e:
+                raise Exception(f"exportObjectToDisk(rxStreamExportList) {e}")
 
         except Exception as e:
-            Utils.Message.addMessage("ERR:createStreamsSnapshot() Export streams snapshot failure " + str(e))
-            # Return error message
-            return False, str(e)
-
+            raise Exception("ERR:createStreamsSnapshot() " + str(e))
 
     # Define a local function that will perform a graceful shutdown of all threads and resources
     def shutdownApplication():
@@ -5305,13 +5272,12 @@ def main(argv):
             except Exception as e:
                 Utils.Message.addMessage("ERR: shutdownApplication Couldn't verify rtpPacketReceiver has ended " + str(e))
 
-
-            status, code = createStreamsSnapshot(isptesttHTTPServerPort)
-            if status == True:
-                Utils.Message.addMessage("Created snapshot for " + str(code) + \
-                                     " streams to file " + str(Registry.streamsSnapshotFilename))
-            else:
-                Utils.Message.addMessage("ERR:Export streams snapshot failure " + str(code))
+            try:
+                streamsExportedCounter = createStreamsSnapshot(isptesttHTTPServerPort)
+                Utils.Message.addMessage(f"Created snapshot for {streamsExportedCounter}"
+                                         f" streams to file {Registry.streamsSnapshotFilename}")
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:Export streams snapshot failure (on shutdown) {e}")
 
 
         # Attempt to remove all rtp stream objects (be they RtpGenrators (which themselves reference RtpStreamresults objects)
@@ -5404,67 +5370,65 @@ def main(argv):
         # receive stream syncSourceIds and receive queues
         importedSnapshotsList = []
         try:
-            status, importedSnapshotsList = Utils.importObjectFromDisk()
-            if status is True:
-                if len(importedSnapshotsList) > 0:
-                    # Initialise stats and eventsList
-                    stats = None
-                    eventsList = None
-                    for stream in importedSnapshotsList:
-                        streamID = stream[0]
-                        # Extract stats dict
-                        stats = stream[1]
-                        # Attempt to validate the keys/Values of the stats dict by reading each key
-                        for stat in stats:  # Iterate over keys
-                            # This should (hopefully) cause an exception if a key/value can't be read
-                            # We also use this opportunity to convert the exported snapshot stats values (that were
-                            # all encoded as strings - on account of being obtained via the api) back to Python data types
-                            # BUT Exclude stats["stream_friendly_name"] key, because that is a string and should remain so,
-                            # even if it's numeric
-                            if stat in ["stream_friendly_name"]: # 'Exclude' list
-                                pass
-                            else:
-                                x = Utils.convertStringToPythonDataType(stats[stat])
-                                if not isinstance(stats[stat], type(x)):
-                                    # Utils.Message.addMessage(f"DBUG: Recreating stream. converted {stat} from {type(stats[stat])} to {type(x)}")
-                                    # assign the type-converted value back to the value in the dict
-                                    stats[stat] = x
+            importedSnapshotsList = Utils.importObjectFromDisk(filename=Registry.streamsSnapshotFilename)
+            if len(importedSnapshotsList) > 0:
+                # Initialise stats and eventsList
+                stats = None
+                eventsList = None
+                for stream in importedSnapshotsList:
+                    streamID = stream[0]
+                    # Extract stats dict
+                    stats = stream[1]
+                    # Attempt to validate the keys/Values of the stats dict by reading each key
+                    for stat in stats:  # Iterate over keys
+                        # This should (hopefully) cause an exception if a key/value can't be read
+                        # We also use this opportunity to convert the exported snapshot stats values (that were
+                        # all encoded as strings - on account of being obtained via the api) back to Python data types
+                        # BUT Exclude stats["stream_friendly_name"] key, because that is a string and should remain so,
+                        # even if it's numeric
+                        if stat in ["stream_friendly_name"]: # 'Exclude' list
+                            pass
+                        else:
+                            x = Utils.convertStringToPythonDataType(stats[stat])
+                            if not isinstance(stats[stat], type(x)):
+                                # Utils.Message.addMessage(f"DBUG: Recreating stream. converted {stat} from {type(stats[stat])} to {type(x)}")
+                                # assign the type-converted value back to the value in the dict
+                                stats[stat] = x
 
-                        eventsList = stream[2]
-                        # Attempt to validate the keys/Values of the events list by reading the event no
-                        for event in eventsList:
-                            # This should (hopefully) cause an exception if the Event.eventNo can't be read
-                            eventNo = event.eventNo
+                    eventsList = stream[2]
+                    # Attempt to validate the keys/Values of the events list by reading the event no
+                    for event in eventsList:
+                        # This should (hopefully) cause an exception if the Event.eventNo can't be read
+                        eventNo = event.eventNo
 
-                        try:
-                            # Utils.Message.addMessage("Recovered Events list " + str(eventsList))
-                            # Create an RtpReceiveStream based on the info retrieved by setting the restoredStreamFlag
-                            # This will preload the RtpReceiveStream._stats{} and eventsList to be preloaded
-                            newRtpStream = RtpReceiveStream(stats["stream_syncSource"],
-                                                            stats["stream_srcAddress"],
-                                                            stats["stream_srcPort"],
-                                                            stats["stream_rxAddress"],
-                                                            stats["stream_rxPort"],
-                                                            stats["glitch_Event_Trigger_Threshold_packets"],
-                                                            rxQueuesDict,
-                                                            txQueuesDict,
-                                                            # Specify None as the txMessageQueue, as we don't know what it is yet
-                                                            # This will have to be determined by RtpPacketReceiver once the
-                                                            # packets start arriving
-                                                            restoredStreamFlag=True,
-                                                            historicStatsDict=stats,
-                                                            historicEventsList=eventsList,
-                                                            controllerTCPPort=isptesttHTTPServerPort
-                                                            )
-                            # Now create a corresponding queue in rxQueuesDict so that this stream
-                            # will be ready to receive new data as soon as RtpPacketReceiver comes into being
-                            rxQueuesDict[stats["stream_syncSource"]] = SimpleQueue()
-                        except Exception as e:
-                            Utils.Message.addMessage(
-                                ("ERR:Recreate RtpReceiveStream from file: create RtpReceiveStream " + \
-                                 " ID: " + str(stats["stream_syncSource"]) + ", " + str(e)))
-            else:
-                Utils.Message.addMessage("ERR:Prev streams import failed " + str(importedSnapshotsList))
+                    try:
+                        # Utils.Message.addMessage("Recovered Events list " + str(eventsList))
+                        # Create an RtpReceiveStream based on the info retrieved by setting the restoredStreamFlag
+                        # This will preload the RtpReceiveStream._stats{} and eventsList to be preloaded
+                        newRtpStream = RtpReceiveStream(stats["stream_syncSource"],
+                                                        stats["stream_srcAddress"],
+                                                        stats["stream_srcPort"],
+                                                        stats["stream_rxAddress"],
+                                                        stats["stream_rxPort"],
+                                                        stats["glitch_Event_Trigger_Threshold_packets"],
+                                                        rxQueuesDict,
+                                                        txQueuesDict,
+                                                        # Specify None as the txMessageQueue, as we don't know what it is yet
+                                                        # This will have to be determined by RtpPacketReceiver once the
+                                                        # packets start arriving
+                                                        restoredStreamFlag=True,
+                                                        historicStatsDict=stats,
+                                                        historicEventsList=eventsList,
+                                                        controllerTCPPort=isptesttHTTPServerPort
+                                                        )
+                        # Now create a corresponding queue in rxQueuesDict so that this stream
+                        # will be ready to receive new data as soon as RtpPacketReceiver comes into being
+                        rxQueuesDict[stats["stream_syncSource"]] = SimpleQueue()
+                    except Exception as e:
+                        raise Exception(
+                            ("ERR:Recreate RtpReceiveStream from file: create RtpReceiveStream " + \
+                             " ID: " + str(stats["stream_syncSource"]) + ", " + str(e)))
+
         except Exception as e:
             Utils.Message.addMessage("ERR:Prev streams import failed " + str(e))
 
@@ -5545,10 +5509,9 @@ def main(argv):
                 try:
                     if MODE == 'RECEIVE' and (loopCounter % Registry.streamsSnapshotAutoSaveInterval_s == 0):
                         # Create snapshot of current receive streams
-                        status, code = createStreamsSnapshot(isptesttHTTPServerPort)
-                        if status == False:
-                            raise Exception(str(code))
-
+                        streamsExportedCounter = createStreamsSnapshot(isptesttHTTPServerPort)
+                        Utils.Message.addMessage(f"Created auto snapshot for {streamsExportedCounter}"
+                                                 f" streams to file {Registry.streamsSnapshotFilename}")
                 except Exception as e:
                     Utils.Message.addMessage("ERR:streamsSnapshotAutoSave " + str(e))
 

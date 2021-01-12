@@ -1253,17 +1253,17 @@ def exportObjectToDisk(objectToExport, filename=Registry.streamsSnapshotFilename
         return True
     # Return an error as a string on failure
     except Exception as e:
-        return str(e)
+        raise Exception(f"Utils.exportObjectToDisk {e}")
 
 # Loads, deserialises and returns an object created by exportObjectToDisk()
-def importObjectFromDisk(filename=Registry.streamsSnapshotFilename):
+def importObjectFromDisk(filename):
     try:
         with open(filename, 'rb') as file: # open for reading in binary mode
             importedObject = pickle.load(file)
-        return True, importedObject
+        return importedObject
     # Return an error as a string on failure
     except Exception as e:
-        return False, str(e)
+        raise Exception(f"Utils.importObjectFromDisk() {e}")
 
 # Modifes the print function in pympler.summary.print_() to return a formatted table as a list strings representing the lines
 def pymplerprintRenderer(muppyObjects, limit=15, sort='size', order='descending'):
