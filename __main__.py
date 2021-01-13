@@ -4133,7 +4133,13 @@ class ISPTestHTTPServer(object):
         # Override log_message() to return *nothing*, otherwise the HTTP server will continually log all HTTP requests
         # See here: https://stackoverflow.com/a/3389505
         def log_message(self, format, *args):
-            return
+            # Utils.Message.addMessage(f"ISPTestHTTPServer: {format%args}")
+            pass
+
+        # Override log_error(), otherwise the HTTP server will continually log all HTTP errors to stderr
+        # See here: https://stackoverflow.com/a/3389505
+        def log_error(self, format, *args):
+            Utils.Message.addMessage(f"ERR:ISPTestHTTPServer.log_error(): {format % args}")
 
         # # Split the url path into its component parts. Ignore the initial '/'
         # Returns a list

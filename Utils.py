@@ -1743,10 +1743,28 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
     # Override log_message() to return *nothing*, otherwise the HTTP server will continually log all HTTP requests
     # See here: https://stackoverflow.com/a/3389505
     def log_message(self, format, *args):
-        return
+        try:
+            # Access parent Rtp Stream object methods via server attribute
+            parent = self.server.parentObject
+            # parent.postMessage(f"DBUG: HTTPRequestHandlerRTP({parent.syncSourceIdentifier}).log_message() {format%args}", logToDisk=False)
+            pass
+        except:
+            # Fail silently
+            pass
 
-    # def log_error(self, format, *args):
-    #     return
+    # Override log_error(), otherwise the HTTP server will continually log all HTTP errors to stderr
+    # See here: https://stackoverflow.com/a/3389505
+    def log_error(self, format, *args):
+        try:
+            # Access parent HTTP Server controllerTCPPort and controllerIPAddress variables
+            # Note: This might not have actually been set. If not, fail silently
+            parent = self.server.parentObject
+            parent.postMessage(
+                f"ERR: HTTPRequestHandlerRTP({parent.syncSourceIdentifier}).log_error() {format % args}",
+                logToDisk=False)
+        except:
+            # Fail silently
+            pass
 
     # Method to retrieve list of Events and return them as a list that is **already json encoded**
     @abstractmethod
