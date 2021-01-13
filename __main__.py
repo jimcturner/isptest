@@ -3205,7 +3205,7 @@ class UDPMessageSender(object):
             # The txMessageQueue is a tuple of the form [byteString, destIPAddr, destport]
 
             # Get current size of self.txMessageQueue
-            self.sendUDPThreadMessageQueueSize = self.txMessageQueue.qsize()
+            # self.sendUDPThreadMessageQueueSize = self.txMessageQueue.qsize()
             try:
                 # Wait for the message queue to be populated (with a 0.2 sec timeout)
                 txData = self.txMessageQueue.get(timeout=0.2)
@@ -3419,7 +3419,7 @@ class RtpPacketReceiver(object):
     def __init__(self, shutdownFlag,
                        UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, controllerTCPPort=None):
         self.rxQueuesDict = {} # A dict of queues, one for each Rtp Stream
-        self.txQueue = Queue() # Used to send data back to the transmitter (only one tx queue per UDP socket)
+        self.txQueue = mp.Queue() # Used to send data back to the transmitter (only one tx queue per UDP socket)
         self.shutdownFlag = shutdownFlag
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
@@ -3807,15 +3807,18 @@ class RtpPacketReceiver(object):
 
                                         try:
                                             # Create a Queue specifically for data with this sync source id
-                                            # and add it to rxQueuesDict {}
-                                            # self.rxQueuesDict[syncSourceID] = SimpleQueue()
-                                            # Create a MultiProcess Queue
-                                            self.rxQueuesDict[syncSourceID] = Queue()
+                                            self.rxQueuesDict[syncSourceID] = mp.Queue()
                                             # Create a new RtpReceiveStream object to accept the data
-                                            newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
+                                            # newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
+                                            #                                 self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
+                                            #                                 self.rxQueuesDict[syncSourceID], self.txQueue,
+                                            #                                 controllerTCPPort=self.controllerTCPPort,)
+
+                                            # Create a new RtpReceiveStream process to accept the data
+                                            newRtpStream = Utils.ProcessCreator(RtpReceiveStream, syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
                                                                             self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
                                                                             self.rxQueuesDict[syncSourceID], self.txQueue,
-                                                                            controllerTCPPort=self.controllerTCPPort,)
+                                                                            controllerTCPPort=self.controllerTCPPort)
                                             # Add the most recent packet to the newly created rx queue (whereby the
                                             # RtpReceieveStream will be able to pick it up)
 
@@ -3956,7 +3959,7 @@ class RtpPacketTransceiver(object):
         #   2) A RtpPacketReceiver to receive udp/rtp packets and create RtpReceiveStream objects
         #   3) A UDPMessageSender to actually do the transmission of udp packets back to the sender
         try:
-            # Create an RtpPacketReceiver to capture incoming rtp packets and create RtpReceiveStreams
+            # Create an RtpPacketReceiver to capture incoming rtp packets, create RtpReceiveStreams and also tx/rx Queues
             self.rtpPacketReceiver = RtpPacketReceiver(self.shutdownFlag,
                                                   self.UDP_RX_IP, self.UDP_RX_PORT, self.ISPTEST_HEADER_SIZE,
                                                   self.glitchEventTriggerThreshold,
@@ -5423,10 +5426,7 @@ def main(argv):
                                                         historicEventsList=eventsList,
                                                         controllerTCPPort=isptesttHTTPServerPort
                                                         )
-                        # Now create a corresponding queue in rxQueuesDict so that this stream
-                        # will be ready to receive new data as soon as RtpPacketReceiver comes into being
-                        # rxQueuesDict[stats["stream_syncSource"]] = SimpleQueue()
-                        # rxQueuesDict[stats["stream_syncSource"]] = mp.SimpleQueue()
+
                     except Exception as e:
                         raise Exception(
                             ("ERR:Recreate RtpReceiveStream from file: create RtpReceiveStream " + \

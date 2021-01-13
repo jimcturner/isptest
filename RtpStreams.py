@@ -3174,9 +3174,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Get a handle on the receive queue
                     rxQueue = self.rxQueue
                     # Wait for a packet to arrive in the receive queue
-                    rtpPacketData = self.rxQueue.get(timeout=1)
-                    # Copy the latest received rtp packet into the instance variable (so it can be referenced elsewhere)
-                    self.__latestReceivedRtpPacket = rtpPacketData
+                    try:
+                        rtpPacketData = self.rxQueue.get(timeout=1)
+                        # Copy the latest received rtp packet into the instance variable (so it can be referenced elsewhere)
+                        self.__latestReceivedRtpPacket = rtpPacketData
+                    except Exception as e:
+                        raise Exception(f"**get() {e}")
+
 
                     # # Take a copy of the latest sequence no.
                     # latestSeqNo = rtpPacketData.rtpSequenceNo
@@ -3184,7 +3188,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Monitor the size of the queue
                     # If the queue size starts creeping up, this suggests the CPU can't can't keep up with the rate
                     # of incoming packets
-                    self.rtpStreamQueueCurrentSize = rxQueue.qsize()
+                    # self.rtpStreamQueueCurrentSize = rxQueue.qsize()
                     if self.rtpStreamQueueCurrentSize > self.rtpStreamQueueMaxSize:
                         # Keep track of the maximum queue size
                         self.rtpStreamQueueMaxSize = self.rtpStreamQueueCurrentSize
