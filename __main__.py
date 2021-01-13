@@ -559,10 +559,10 @@ class InvalidTxRateSpecifier(Exception):
 
 # A class that will be responsible for rendering the display and catching keyboard output
 class UI(object):
-    def __init__(self, operationMode, specialFeaturesModeFlag, receiversAndSendersList, controllerTCPPort=None):
+    def __init__(self, operationMode, specialFeaturesModeFlag, receiveAddrList, controllerTCPPort=None):
         self.operationMode = operationMode
         self.specialFeaturesModeFlag = specialFeaturesModeFlag
-        self.receiversAndSendersList = receiversAndSendersList # This will contain the UDP_RX_IP and  UDP_RX_PORT(s)
+        self.receiveAddrList = receiveAddrList # This will contain the UDP_RX_IP and  UDP_RX_PORT(s)
         self.controllerTCPPort = controllerTCPPort # The TCP listen port for the HTTP server
         # Create an API helper
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort, addr="127.0.0.1")
@@ -1220,27 +1220,16 @@ class UI(object):
             UDP_RX_PORTS = ""
             try:
                 # Extract the receive IP and receive port(s) (if in RECEIVE mode - these are displayed on the top toolbar)
-                if len(self.receiversAndSendersList) > 0:
+                if len(self.receiveAddrList) > 0:
                     # Take the Rx IP address from the first RtpPacketReceiver in the list (we assume that we will only be
                     # listening on a single IP address, but might be listening to multiple ports on that interface)
-                    UDP_RX_IP = self.receiversAndSendersList[0][0].UDP_RX_IP
-                    # Get a list of Rx UDP ports from the RtpPacketReceiver objects and create a string
-                    UDP_RX_PORTS = ""
-                    for n in range(0,len(self.receiversAndSendersList)):
-                        # Extract the port no for the current RtpPacketReceiver object
-                        UDP_RX_PORTS += str(self.receiversAndSendersList[n][0].UDP_RX_PORT)
-                        # For all but the last port, append a "," to divide the port no.s
-                        if n == (len(self.receiversAndSendersList) - 1):
-                            # We're at the last item in the list, don't append a ','
-                            pass
-                        else:
-                            # If we're still in the middle of the list, append a ','
-                            UDP_RX_PORTS += ","
+                    UDP_RX_IP = self.receiveAddrList[0]["addr"]
+                    # Get a list of Rx UDP ports from the receiveAddrList[] and create a comma seperated string
+                    UDP_RX_PORTS = ",".join([str(x["port"]) for x in self.receiveAddrList])
 
             except Exception as e:
                 Utils.Message.addMessage(
-                    "ERR:UI.__init() Couldn't extract UDP_RX_IP and UDP_RX_PORT(s) from receiversAndSendersList " + \
-                    str(e))
+                    f"ERR:UI.__init() Couldn't extract UDP_RX_IP and/or UDP_RX_PORT(s) from receiveAddrList[],  {}e")
             Term.printAt(self.operationMode + " " + str(UDP_RX_IP) + ":" + \
                          str(UDP_RX_PORTS), 1, 1, Term.BLACK, Term.WHITE)
 
@@ -3940,6 +3929,63 @@ class RtpPacketReceiver(object):
 
         Utils.Message.addMessage("DBUG:__receiveRTPThread exiting")
 
+# This class acts a wrapper for the RtpPacketReceiver and UDPMessageSender classes
+# It will attempt to spawn these as a seperate process
+class RtpPacketTransceiver(object):
+    def __init__(self, rxQueuesDict, txQueuesDict, shutdownFlag,
+                 UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, controllerTCPPort=None):
+        # Capture instance variables
+        self.rxQueuesDict = rxQueuesDict
+        self.txQueuesDict = txQueuesDict
+        self.shutdownFlag = shutdownFlag
+        self.UDP_RX_IP = UDP_RX_IP
+        self.UDP_RX_PORT = UDP_RX_PORT
+        self.ISPTEST_HEADER_SIZE = ISPTEST_HEADER_SIZE
+        self.glitchEventTriggerThreshold = glitchEventTriggerThreshold
+        self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
+        # Create an API helper to allow access to the HTTP API of the Controller
+        self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
+
+        self.rtpPacketReceiver = None
+        self.udpMessageSender = None
+
+        socketWaitTimeOut = 2  # In a situation where a valid rx/tx socket isn't (can't be) this will
+        socketWaitTimer = 0  # When this value exceeds socketWaitTimeOut we wil give up waiting for a socket to become available
+        socketWaitPollInterval = 0.5  # How often we poll rtpPacketReceiver.getSocket() to check for a valid socket
+
+        # An RTPReceiver/UDP transmitter pair shares a socket, and is constructed as follows
+        #   1) A txMessageQueue (a Queue.SimpleQueue object to send messages/results back to the source)
+        #   2) A RtpPacketReceiver to receive udp/rtp packets and create RtpReceiveStream objects
+        #   3) A UDPMessageSender to actually do the transmission of udp packets back to the sender
+        try:
+            # Create a queue to hold results data to be sent *back* to the isptest transmitters
+            # and add it to the txQueuesDict which keying it wih the UDP port no
+            self.txQueuesDict[self.UDP_RX_PORT] = SimpleQueue()
+            # Create an RtpPacketReceiver to capture incoming rtp packets and create RtpReceiveStreams
+            self.rtpPacketReceiver = RtpPacketReceiver(self.rxQueuesDict, self.txQueuesDict, self.shutdownFlag,
+                                                  self.UDP_RX_IP, self.UDP_RX_PORT, self.ISPTEST_HEADER_SIZE,
+                                                  self.glitchEventTriggerThreshold,
+                                                  controllerTCPPort=self.controllerTCPPort)
+
+            # Wait for socket (Created by rtpPacketReceiver) to become available (this might take some time)
+            while self.rtpPacketReceiver.getSocket() is None:
+                Utils.Message.addMessage(f"DBUG:Waiting for udp socket (port {self.UDP_RX_PORT}) to be created")
+                socketWaitTimer += socketWaitPollInterval
+                # Check tp see if we've waited so long for a socket that it's better just to abort
+                if socketWaitTimer > socketWaitTimeOut:
+                    raise Exception(f"**Can't receive (on addr {self.UDP_RX_IP}:{self.UDP_RX_PORT} "
+                                             f". Aborting. Please Quit**")
+                time.sleep(socketWaitPollInterval)
+
+            # Once the socket has been created, use it to create a UDPMessageSender
+            if self.rtpPacketReceiver.getSocket() is not None:
+                # Create a UDPMessageSender using to correspond to the RtpPacketReceiver sharing the same socket
+                self.udpMessageSender = UDPMessageSender(self.txQueuesDict[self.UDP_RX_PORT],
+                                                         self.rtpPacketReceiver, self.shutdownFlag)
+
+        except Exception as e:
+            raise Exception(f"ERR:RtpPacketTranceiver() {e}")
+
 
 # Class to provide an HTTP Server/ web API
 # Note, this Class also provides a stream directory service
@@ -5114,12 +5160,10 @@ def main(argv):
               ". Check you have write privileges for this folder\r")
         exit()
 
-    # Create a list to hold the instances of RtpPacketReceiver and associated UDPMessageSender objects
-    # (which are the objects resposible for actually receiving and sending the rtp/udp data)
-    # This will be a list of tuples [[RtpPacketReceiver, UDPMessageSender]
-    # It will be passed to the UI object to allow the UI to access the data counters/port no.s etc within the
-    # RtpPacketReceiver/UDPMessageSender objects themselves
-    receiversAndSendersList = []
+    # Create a list to hold the UDP receive addresses and ports
+    # This will be a list of dicts [{"addr", "port}, {},...]
+    # It will be passed to the UI object to allow the UI to access the port no.s in use
+    receiveAddrList = []
 
     # Register signal handler for SIGINT, SIGTERM and SIGKILL
     signal.signal(signal.SIGINT, requestShutdownSignalHandler) # Ctrl-C
@@ -5173,7 +5217,8 @@ def main(argv):
     sharedObjects["whoIsResolver"] = whoIsResolver
 
     # Create a UI object (that spawns its own thread)
-    ui = UI(MODE, specialFeaturesModeFlag, receiversAndSendersList, controllerTCPPort=isptesttHTTPServerPort)
+    # ui = UI(MODE, specialFeaturesModeFlag, receiversAndSendersList, controllerTCPPort=isptesttHTTPServerPort)
+    ui = UI(MODE, specialFeaturesModeFlag, receiveAddrList, controllerTCPPort=isptesttHTTPServerPort)
     # and add it to the shared objects dict (so that HTTP Server will have access to it)
     sharedObjects["ui"] = ui
 
@@ -5435,8 +5480,7 @@ def main(argv):
         except Exception as e:
             Utils.Message.addMessage("ERR:Prev streams import failed " + str(e))
 
-        # Create list of udp ports to listen on (and send from)
-        # receivePortList = [UDP_RX_PORT]
+
         # Iterate over the list creating
         #   1) A txMessageQueue (a Queue.SimpleQueue object to send messages/results back to the source)
         #   2) A RtpPacketReceiver to receive udp/rtp packets and create RtpReceiveStream objects
@@ -5446,44 +5490,19 @@ def main(argv):
         socketWaitTimer = 0 # When this value exceeds socketWaitTimeOut we wil give up waiting for a socket to become available
         socketWaitPollInterval = 0.5 # How often we poll rtpPacketReceiver.getSocket() to check for a valid socket
         for receivePort in receivePortList:
-            # Create a simple queue to hold results data to be sent back to the isptest transmitters
-            # Each tx message is a tuple containing [txMessage (byteArray), dest ip addr, dest udp port]
-            # txMessageQueue = SimpleQueue()
-
-            # Create a queue to hold results data to be sent back to the isptest transmitters
-            # and add it to the txQueuesDict which keying it wih the UDP port no that will be the
-            txQueuesDict[receivePort] = SimpleQueue()
-
-            # Create an RtpPacketReceiver to capture incoming rtp packets and create RtpReceiveStreams
-            rtpPacketReceiver = RtpPacketReceiver(rxQueuesDict, txQueuesDict, shutdownFlag,
+            try:
+                # Create a Tranceiver for each of the listen ports listed in receivePortList
+                rtpPacketTranceiver = RtpPacketTransceiver(rxQueuesDict, txQueuesDict, shutdownFlag,
                        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
                                                   glitchEventTriggerThreshold,
                                                   controllerTCPPort=isptesttHTTPServer.getTCPPort())
 
-            # Wait for socket (Created by rtpPacketReceiver) to become available (this might take some time)
-            while rtpPacketReceiver.getSocket() is None:
-                Utils.Message.addMessage("DBUG:Waiting for udp socket (port " + str(receivePort) + ") to be created")
-                socketWaitTimer += socketWaitPollInterval
-                # Check tp see if we've waited so long for a socket that it's better just to abort
-                if socketWaitTimer > socketWaitTimeOut:
-                    Utils.Message.addMessage(Term.FG(Term.RED) + \
-                                             "**Can't receive (on addr " +\
-                                  str(UDP_RX_IP) + ":" + str(receivePort) + ". Aborting. Please Quit**")
-                    break
-                time.sleep(socketWaitPollInterval)
+                # RtpPacketTransceiver creation was successful, so add the receive addr/port to receiveAddrList[]
+                receiveAddrList.append({"addr": UDP_RX_IP, "port": receivePort})
 
-            # Once the socket has been created, pass it to the udpSend thread
-            udpMessageSender = None
-            if rtpPacketReceiver.getSocket() is not None:
-                # Create a UDPMessageSender using to correspond to the RtpPacketReceiver sharing the same socket
-                udpMessageSender = UDPMessageSender(txQueuesDict[receivePort], rtpPacketReceiver, shutdownFlag)
-
-            if udpMessageSender is not None:
-                try:
-                    # Add the RtpPacketReceiver/UDPMessageSender pair to the receiversAndSenders[] list
-                    receiversAndSendersList.append([rtpPacketReceiver, udpMessageSender])
-                except Exception as e:
-                    Utils.Message.addMessage("ERR:main() receiversAndSendersList.append() " + str(e))
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR: create RtpPacketTransceiver (port {receivePort}), {e}")
+                # Utils.APIHelper(isptesttHTTPServerPort).alertUser("RtpPacketTransceiver Error", str(e))
 
 
 
@@ -5565,12 +5584,12 @@ def main(argv):
                         # Create a string to store the object sizes
                         summaryString = ""
 
-                        if MODE == "RECEIVE":
-                            try:
-                                objectsToProfile.append({"obj":udpMessageSender, "name":"udpMessageSender"})
-                                objectsToProfile.append({"obj":rtpPacketReceiver, "name":"rtpPacketReceiver"})
-                            except Exception as e:
-                                Utils.Message.addMessage("ERR: MODE==RECEIVE, objectsToProfile.append() " + str(e))
+                        # if MODE == "RECEIVE":
+                        #     try:
+                        #         objectsToProfile.append({"obj":udpMessageSender, "name":"udpMessageSender"})
+                        #         objectsToProfile.append({"obj":rtpPacketReceiver, "name":"rtpPacketReceiver"})
+                        #     except Exception as e:
+                        #         Utils.Message.addMessage("ERR: MODE==RECEIVE, objectsToProfile.append() " + str(e))
 
                         # Iterate over all the objects to be tracked, and report on the size
                         for obj in objectsToProfile:
