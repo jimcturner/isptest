@@ -5367,25 +5367,6 @@ def main(argv):
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
-        # Create a Manager object to manage the multiprocesssor dicts
-        # mpManager = mp.Manager()
-        # Create a dict to hold the queues into which the received stream data will be added
-        # Each stream is keyed by it's RTP sync source ID
-        # These dicts will be shared between the RtpPacketReceiver and the RtpReceiveStream objects
-        # RtpPacketReceiver will create a queue for every syncSourceID and place rtp packets with that syncSourceID
-        # on to that specific queue
-        # Meanwhile, each RtpReceiveStream will be able to 'self-select' the relevant receive queue based on it's sync source ID
-        # (which is used as a dictionary key)
-
-        # rxQueuesDict = {}
-        # rxQueuesDict = mpManager.dict()
-
-        # Create a dict to map the RTP/UDP receive port to a queue. This allows the RtpReceiveStream objects to
-        # self-select the correct TX queue based on the receive UDP port
-        # This a is a dict of Queues keyed by UDP port no
-        txQueuesDict = {}
-        # txQueuesDict = mpManager.dict()
-
         # Attempt to import a previously saved snapshot
         # ########### NOT IMPLEMENTED If it exists, this will prepopulate rxQueuesDict with a list of previously known
         # receive stream syncSourceIds and receive queues
@@ -5433,7 +5414,7 @@ def main(argv):
                                                         stats["stream_rxPort"],
                                                         stats["glitch_Event_Trigger_Threshold_packets"],
                                                         None,
-                                                        txQueuesDict,
+                                                        None,
                                                         # Specify None as the txMessageQueue, as we don't know what it is yet
                                                         # This will have to be determined by RtpPacketReceiver once the
                                                         # packets start arriving
