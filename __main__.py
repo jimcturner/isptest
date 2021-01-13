@@ -3166,15 +3166,15 @@ def __diskLoggerThread(operationMode, shutdownFlag, controllerTCPPort):
 # The receiverInstance arg allows the UDPMessageSender object to access the udp socket created within receiverInstance
 class UDPMessageSender(object):
 
-    def __init__(self, txMessageQueue, receiverInstance, shutdownFlag):
+    def __init__(self, receiverInstance, shutdownFlag):
         # Define some stats counters
         self.sendUDPThreadTxPacketCounter = 0
         self.sendUDPThreadMessageQueueSize = 0
         # Set max safe UDP tx size to 576 (based on this:-
         # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
         self.MAX_UDP_TX_LENGTH = 576
-        self.txMessageQueue = txMessageQueue # of type Queue.Queue
         self.rxInstance = receiverInstance
+        self.txMessageQueue = receiverInstance.txQueue  # Retrieve the tx Queue created by the associated RtpPacketReceiver
         self.shutdownFlag = shutdownFlag
 
 
@@ -3416,10 +3416,10 @@ class RtpPacketReceiver(object):
             return None, None, None, None, None
 
 
-    def __init__(self, txQueuesDict, shutdownFlag,
+    def __init__(self, shutdownFlag,
                        UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, controllerTCPPort=None):
-        self.rxQueuesDict = {}
-        self.txQueuesDict = txQueuesDict
+        self.rxQueuesDict = {} # A dict of queues, one for each Rtp Stream
+        self.txQueue = Queue() # Used to send data back to the transmitter (only one tx queue per UDP socket)
         self.shutdownFlag = shutdownFlag
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
@@ -3814,7 +3814,7 @@ class RtpPacketReceiver(object):
                                             # Create a new RtpReceiveStream object to accept the data
                                             newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
                                                                             self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
-                                                                            self.rxQueuesDict[syncSourceID], self.txQueuesDict,
+                                                                            self.rxQueuesDict[syncSourceID], self.txQueue,
                                                                             controllerTCPPort=self.controllerTCPPort,)
                                             # Add the most recent packet to the newly created rx queue (whereby the
                                             # RtpReceieveStream will be able to pick it up)
@@ -3932,10 +3932,9 @@ class RtpPacketReceiver(object):
 # This class acts a wrapper for the RtpPacketReceiver and UDPMessageSender classes
 # It will attempt to spawn these as a seperate process
 class RtpPacketTransceiver(object):
-    def __init__(self, txQueuesDict, shutdownFlag,
+    def __init__(self, shutdownFlag,
                  UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, controllerTCPPort=None):
         # Capture instance variables
-        self.txQueuesDict = txQueuesDict
         self.shutdownFlag = shutdownFlag
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
@@ -3957,12 +3956,8 @@ class RtpPacketTransceiver(object):
         #   2) A RtpPacketReceiver to receive udp/rtp packets and create RtpReceiveStream objects
         #   3) A UDPMessageSender to actually do the transmission of udp packets back to the sender
         try:
-            # Create a queue to hold results data to be sent *back* to the isptest transmitters
-            # and add it to the txQueuesDict which keying it wih the UDP port no
-            # self.txQueuesDict[self.UDP_RX_PORT] = SimpleQueue()
-            self.txQueuesDict[self.UDP_RX_PORT] = Queue()
             # Create an RtpPacketReceiver to capture incoming rtp packets and create RtpReceiveStreams
-            self.rtpPacketReceiver = RtpPacketReceiver(self.txQueuesDict, self.shutdownFlag,
+            self.rtpPacketReceiver = RtpPacketReceiver(self.shutdownFlag,
                                                   self.UDP_RX_IP, self.UDP_RX_PORT, self.ISPTEST_HEADER_SIZE,
                                                   self.glitchEventTriggerThreshold,
                                                   controllerTCPPort=self.controllerTCPPort)
@@ -3980,8 +3975,7 @@ class RtpPacketTransceiver(object):
             # Once the socket has been created, use it to create a UDPMessageSender
             if self.rtpPacketReceiver.getSocket() is not None:
                 # Create a UDPMessageSender using to correspond to the RtpPacketReceiver sharing the same socket
-                self.udpMessageSender = UDPMessageSender(self.txQueuesDict[self.UDP_RX_PORT],
-                                                         self.rtpPacketReceiver, self.shutdownFlag)
+                self.udpMessageSender = UDPMessageSender(self.rtpPacketReceiver, self.shutdownFlag)
 
         except Exception as e:
             raise Exception(f"ERR:RtpPacketTranceiver() {e}")
@@ -5462,9 +5456,9 @@ def main(argv):
 
 
         # Iterate over the list creating
-        #   1) A txMessageQueue (a Queue.SimpleQueue object to send messages/results back to the source)
-        #   2) A RtpPacketReceiver to receive udp/rtp packets and create RtpReceiveStream objects
-        #   3) A UDPMessageSender to actually do the transmission of udp packets back to the sender
+        #   1) A RtpPacketReceiver to receive udp/rtp packets and create RtpReceiveStream objects
+        #       RtpPacketReceiver will also create a rx and tx Queue
+        #   2) A UDPMessageSender to actually do the transmission of udp packets back to the sender
 
         socketWaitTimeOut = 2 # In a situation where a valid rx/tx socket isn't (can't be) this will
         socketWaitTimer = 0 # When this value exceeds socketWaitTimeOut we wil give up waiting for a socket to become available
@@ -5472,7 +5466,7 @@ def main(argv):
         for receivePort in receivePortList:
             try:
                 # Create a Tranceiver for each of the listen ports listed in receivePortList
-                rtpPacketTranceiver = RtpPacketTransceiver(txQueuesDict, shutdownFlag,
+                rtpPacketTranceiver = RtpPacketTransceiver(shutdownFlag,
                        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
                                                   glitchEventTriggerThreshold,
                                                   controllerTCPPort=isptesttHTTPServer.getTCPPort())

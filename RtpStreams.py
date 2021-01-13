@@ -1489,7 +1489,7 @@ class RtpReceiveStream(RtpReceiveCommon):
     # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold,
-                 rxQueue, txQueuesDict,
+                 rxQueue, txQueue,
                  restoredStreamFlag=False, historicStatsDict=None, historicEventsList=None, controllerTCPPort=None):
         # Call super constructor
         super().__init__()
@@ -1499,10 +1499,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
         # self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
 
-        self.txQueuesDict = txQueuesDict # Shared dict of Queues for sending results back to the transmitter (keyed by
-                                        # udp receive port)
-                                        # So to access the tx queue for this object we would use
-                                        # self.txQueuesDict[self.__stats["stream_rxPort"]]
+        self.txQueue = txQueue # Queue for sending results back to the transmitter
         self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
         # Create an API helper to allow access to the HTTP API of the Controller
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
@@ -2931,10 +2928,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # currently receiving bytes AND only if we have a valid message queue to send through
                     if (self.__stats["stream_transmitterVersion"] > 0) and \
                             self.__stats["packet_data_received_1S_bytes"] > 0 and \
-                                self.__stats["stream_rxPort"] in self.txQueuesDict:
+                                self.txQueue is not None:
 
                             # Send a copy of the stats dict
-                            self.addMessageToTxQueue("stats", dict(self.__stats), self.txQueuesDict[self.__stats["stream_rxPort"]],
+                            self.addMessageToTxQueue("stats", dict(self.__stats), self.txQueue,
                                                 self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"])
 
                             # Get the last 5 events for this stream
@@ -2942,7 +2939,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                             eventsList = self.getRTPStreamEventList(NO_OF_PREV_EVENTS_TO_SEND)
                             # Send the events list
                             self.addMessageToTxQueue("events", eventsList,
-                                                     self.txQueuesDict[self.__stats["stream_rxPort"]],
+                                                     self.txQueue,
                                                      self.__stats["stream_srcAddress"], self.__stats["stream_srcPort"])
 
                 except Exception as e:
@@ -3415,7 +3412,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         # currently receiving bytes AND only if we have a valid tx message queue to send through
         if (self.__stats["stream_transmitterVersion"] > 0) and \
                 self.__stats["packet_data_received_1S_bytes"] > 0 and \
-                    self.__stats["stream_rxPort"] in self.txQueuesDict:
+                    self.txQueue is not None:
 
             try:
                 # Send a 'name change' message back to the TRANSMITTER
@@ -3549,10 +3546,10 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         if self.__stats["stream_transmitterVersion"] > 0:
             # and a valid tx queue exists
-            if self.__stats["stream_rxPort"] in self.txQueuesDict:
+            if self.txQueue is not None:
                 self.postMessage(f"DBUG:sendControlMessageToTransmitter()({self.syncSourceIdentifier}) msg to send: " + str(msg))
                 try:
-                    txQueue = self.txQueuesDict[self.__stats["stream_rxPort"]]
+                    txQueue = self.txQueue
                     destAddr = self.__stats["stream_srcAddress"]
                     destPort = self.__stats["stream_srcPort"]
                     # Send the control message back to the
