@@ -1489,13 +1489,12 @@ class RtpReceiveStream(RtpReceiveCommon):
     # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold,
-                 rxQueuesDict, txQueuesDict,
+                 rxQueue, txQueuesDict,
                  restoredStreamFlag=False, historicStatsDict=None, historicEventsList=None, controllerTCPPort=None):
         # Call super constructor
         super().__init__()
 
-        self.rxQueuesDict = rxQueuesDict    # This dict will contain a key (the syncSourceID) whose value points to the
-                                            # packet receive queue for this stream
+        self.rxQueue = rxQueue    # packet receive queue for this stream
         self.rtpStreamQueueCurrentSize = 0  # Tracks the current size of the receive queue
         self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
         # self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
@@ -2143,11 +2142,11 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.postMessage("ERR: RtpReceiveStream.killStream() removeFromStreamsDirectory() for stream " + \
                                      str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
-        # Now remove the Receive queue for this stream (from rxQueuesDict)
-        try:
-            del self.rxQueuesDict[self.syncSourceIdentifier]
-        except Exception as e:
-            self.postMessage(f"ERR:RtpReceiveStream() del rxQueuesDict[{self.syncSourceIdentifier}], {e}")
+        # # Now remove the Receive queue for this stream (from rxQueuesDict)
+        # try:
+        #     del self.rxQueuesDict[self.syncSourceIdentifier]
+        # except Exception as e:
+        #     self.postMessage(f"ERR:RtpReceiveStream() del rxQueuesDict[{self.syncSourceIdentifier}], {e}")
 
 
     # This method will parse the isptest header data (and update the instance variables accordingly)
@@ -3170,16 +3169,15 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         while self.queueReceiverThreadActiveFlag:
 
-            # Check to see whether this stream is known about in rxQueuesDict (it won't necessarily be, if it was
+            # Check to see whether this stream has a valid rx queue (it won't necessarily have, if it was
             # a historic stream that has been recreated)
-            if self.syncSourceIdentifier in self.rxQueuesDict:
+            if self.rxQueue is not None:
                 # Now wait for items to appear in the queue (with a timeout)
                 try:
-
                     # Get a handle on the receive queue
-                    rxQueue = self.rxQueuesDict[self.syncSourceIdentifier]
+                    rxQueue = self.rxQueue
                     # Wait for a packet to arrive in the receive queue
-                    rtpPacketData = rxQueue.get(timeout=0.2)
+                    rtpPacketData = self.rxQueue.get(timeout=1)
                     # Copy the latest received rtp packet into the instance variable (so it can be referenced elsewhere)
                     self.__latestReceivedRtpPacket = rtpPacketData
 

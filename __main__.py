@@ -63,7 +63,7 @@ import sys
 # from icmplib import ICMPv4Socket, TimeoutExceeded, ICMPRequest
 # from Custom_icmplib import customICMPv4Socket
 from functools import reduce
-from queue import SimpleQueue, Empty
+from queue import SimpleQueue, Empty, Queue
 
 import socket
 import os
@@ -3173,7 +3173,7 @@ class UDPMessageSender(object):
         # Set max safe UDP tx size to 576 (based on this:-
         # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
         self.MAX_UDP_TX_LENGTH = 576
-        self.txMessageQueue = txMessageQueue # of type Queue.SimpleQueue
+        self.txMessageQueue = txMessageQueue # of type Queue.Queue
         self.rxInstance = receiverInstance
         self.shutdownFlag = shutdownFlag
 
@@ -3416,9 +3416,9 @@ class RtpPacketReceiver(object):
             return None, None, None, None, None
 
 
-    def __init__(self, rxQueuesDict, txQueuesDict, shutdownFlag,
+    def __init__(self, txQueuesDict, shutdownFlag,
                        UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, controllerTCPPort=None):
-        self.rxQueuesDict = rxQueuesDict
+        self.rxQueuesDict = {}
         self.txQueuesDict = txQueuesDict
         self.shutdownFlag = shutdownFlag
         self.UDP_RX_IP = UDP_RX_IP
@@ -3808,12 +3808,13 @@ class RtpPacketReceiver(object):
                                         try:
                                             # Create a Queue specifically for data with this sync source id
                                             # and add it to rxQueuesDict {}
-                                            self.rxQueuesDict[syncSourceID] = SimpleQueue()
-
+                                            # self.rxQueuesDict[syncSourceID] = SimpleQueue()
+                                            # Create a MultiProcess Queue
+                                            self.rxQueuesDict[syncSourceID] = Queue()
                                             # Create a new RtpReceiveStream object to accept the data
                                             newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
                                                                             self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
-                                                                            self.rxQueuesDict, self.txQueuesDict,
+                                                                            self.rxQueuesDict[syncSourceID], self.txQueuesDict,
                                                                             controllerTCPPort=self.controllerTCPPort,)
                                             # Add the most recent packet to the newly created rx queue (whereby the
                                             # RtpReceieveStream will be able to pick it up)
@@ -3931,10 +3932,9 @@ class RtpPacketReceiver(object):
 # This class acts a wrapper for the RtpPacketReceiver and UDPMessageSender classes
 # It will attempt to spawn these as a seperate process
 class RtpPacketTransceiver(object):
-    def __init__(self, rxQueuesDict, txQueuesDict, shutdownFlag,
+    def __init__(self, txQueuesDict, shutdownFlag,
                  UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, controllerTCPPort=None):
         # Capture instance variables
-        self.rxQueuesDict = rxQueuesDict
         self.txQueuesDict = txQueuesDict
         self.shutdownFlag = shutdownFlag
         self.UDP_RX_IP = UDP_RX_IP
@@ -3959,9 +3959,10 @@ class RtpPacketTransceiver(object):
         try:
             # Create a queue to hold results data to be sent *back* to the isptest transmitters
             # and add it to the txQueuesDict which keying it wih the UDP port no
-            self.txQueuesDict[self.UDP_RX_PORT] = SimpleQueue()
+            # self.txQueuesDict[self.UDP_RX_PORT] = SimpleQueue()
+            self.txQueuesDict[self.UDP_RX_PORT] = Queue()
             # Create an RtpPacketReceiver to capture incoming rtp packets and create RtpReceiveStreams
-            self.rtpPacketReceiver = RtpPacketReceiver(self.rxQueuesDict, self.txQueuesDict, self.shutdownFlag,
+            self.rtpPacketReceiver = RtpPacketReceiver(self.txQueuesDict, self.shutdownFlag,
                                                   self.UDP_RX_IP, self.UDP_RX_PORT, self.ISPTEST_HEADER_SIZE,
                                                   self.glitchEventTriggerThreshold,
                                                   controllerTCPPort=self.controllerTCPPort)
@@ -4734,47 +4735,6 @@ def shutdownApplicationSignalHandler(signum, frame):
     Utils.Message.addMessage("DBUG: shutdownApplicationSignalHandler() called with signal " + str(signum))
     raise ShutdownApplication
 
-# # Takes a list of octets [[a,b,c,d],[a,b,c,d]....] and XORs all contents to a single byte to create a checksum value
-# def createTracerouteChecksum(hopsList):
-#     if len(hopsList) > 0:
-#         try:
-#             # Create lambda function to xor two values
-#             xor = lambda x, y: x ^ y
-#             # Use reduce() to iterate over a the list of octets in sequence using our lambda function
-#             xorSingleHop = lambda hopOctets:reduce(xor, hopOctets)
-#
-#             output = 0
-#             # Iterate over the all the hops, xor'ing each hop in turn
-#             for hop in hopsList:
-#                 output = output ^ xorSingleHop(hop)
-#             return output
-#         except Exception as e:
-#             return None
-#     else:
-#         return None
-# def calcIPChecksum():
-#     import struct
-#
-#     data = "45 00 00 47 73 88 40 00 40 06 a2 c4 83 9f 0e 85 83 9f 0e a1"
-#
-#     def carry_around_add(a, b):
-#         c = a + b
-#         return (c & 0xffff) + (c >> 16)
-#
-#     def checksum(msg):
-#         s = 0
-#         for i in range(0, len(msg), 2):
-#             w = ord(msg[i]) + (ord(msg[i+1]) << 8)
-#             s = carry_around_add(s, w)
-#         return ~s & 0xffff
-#
-#     data = data.split()
-#     data = map(lambda x: int(x,16), data)
-#     data = struct.pack("%dB" % len(data), *data)
-#     print(str(' '.join('%02X' % ord(x) for x in data)))
-#     print("Checksum: " + str(checksum(data)))
-
-
 def main(argv):
     # Function to test the ProcessCreator class
     def testProcessCreator():
@@ -4802,7 +4762,22 @@ def main(argv):
             print(f"datetime.datetime.now() {pid}, {name}, isAlive:{is_Alive}")
             time.sleep(5)
 
+
+    def mpTest():
+        # Create a multiprocess queue
+        x = mp.Queue()
+        testObj = Utils.TestClass()
+        x.put(testObj)
+        while True:
+            try:
+                print(f"x: {x.get(timeout=2).getValues()}")
+            except Empty:
+                print("Empty")
+                break
+
     mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs
+    # mpTest()
+    # exit()
     # testProcessCreator()
     # testObject = Utils.TestObject()
     #
@@ -5398,6 +5373,8 @@ def main(argv):
 
     if MODE == 'RECEIVE' or MODE == 'LOOPBACK':
 
+        # Create a Manager object to manage the multiprocesssor dicts
+        # mpManager = mp.Manager()
         # Create a dict to hold the queues into which the received stream data will be added
         # Each stream is keyed by it's RTP sync source ID
         # These dicts will be shared between the RtpPacketReceiver and the RtpReceiveStream objects
@@ -5405,15 +5382,18 @@ def main(argv):
         # on to that specific queue
         # Meanwhile, each RtpReceiveStream will be able to 'self-select' the relevant receive queue based on it's sync source ID
         # (which is used as a dictionary key)
-        rxQueuesDict = {}
+
+        # rxQueuesDict = {}
+        # rxQueuesDict = mpManager.dict()
 
         # Create a dict to map the RTP/UDP receive port to a queue. This allows the RtpReceiveStream objects to
         # self-select the correct TX queue based on the receive UDP port
         # This a is a dict of Queues keyed by UDP port no
         txQueuesDict = {}
+        # txQueuesDict = mpManager.dict()
 
         # Attempt to import a previously saved snapshot
-        # If it exists, this will prepopulate rxQueuesDict with a list of previously known
+        # ########### NOT IMPLEMENTED If it exists, this will prepopulate rxQueuesDict with a list of previously known
         # receive stream syncSourceIds and receive queues
         importedSnapshotsList = []
         try:
@@ -5458,7 +5438,7 @@ def main(argv):
                                                         stats["stream_rxAddress"],
                                                         stats["stream_rxPort"],
                                                         stats["glitch_Event_Trigger_Threshold_packets"],
-                                                        rxQueuesDict,
+                                                        None,
                                                         txQueuesDict,
                                                         # Specify None as the txMessageQueue, as we don't know what it is yet
                                                         # This will have to be determined by RtpPacketReceiver once the
@@ -5470,7 +5450,8 @@ def main(argv):
                                                         )
                         # Now create a corresponding queue in rxQueuesDict so that this stream
                         # will be ready to receive new data as soon as RtpPacketReceiver comes into being
-                        rxQueuesDict[stats["stream_syncSource"]] = SimpleQueue()
+                        # rxQueuesDict[stats["stream_syncSource"]] = SimpleQueue()
+                        # rxQueuesDict[stats["stream_syncSource"]] = mp.SimpleQueue()
                     except Exception as e:
                         raise Exception(
                             ("ERR:Recreate RtpReceiveStream from file: create RtpReceiveStream " + \
@@ -5491,7 +5472,7 @@ def main(argv):
         for receivePort in receivePortList:
             try:
                 # Create a Tranceiver for each of the listen ports listed in receivePortList
-                rtpPacketTranceiver = RtpPacketTransceiver(rxQueuesDict, txQueuesDict, shutdownFlag,
+                rtpPacketTranceiver = RtpPacketTransceiver(txQueuesDict, shutdownFlag,
                        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
                                                   glitchEventTriggerThreshold,
                                                   controllerTCPPort=isptesttHTTPServer.getTCPPort())

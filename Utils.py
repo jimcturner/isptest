@@ -2275,3 +2275,11 @@ class ProcessCreator(object):
 #     while True:
 #         print(str(datetime.datetime.now()))
 #         time.sleep(5)
+
+class TestClass(object):
+    def __init__(self):
+        self.a=1
+        self.b="2"
+        self.c=[3,4,5,6]
+    def getValues(self):
+        return self.a, self.b, self.c
