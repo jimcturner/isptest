@@ -1226,10 +1226,9 @@ class UI(object):
                     UDP_RX_IP = self.receiveAddrList[0]["addr"]
                     # Get a list of Rx UDP ports from the receiveAddrList[] and create a comma seperated string
                     UDP_RX_PORTS = ",".join([str(x["port"]) for x in self.receiveAddrList])
-
             except Exception as e:
                 Utils.Message.addMessage(
-                    f"ERR:UI.__init() Couldn't extract UDP_RX_IP and/or UDP_RX_PORT(s) from receiveAddrList[],  {}e")
+                    f"ERR:UI.__init() Couldn't extract UDP_RX_IP and/or UDP_RX_PORT(s) from receiveAddrList[],  {e}")
             Term.printAt(self.operationMode + " " + str(UDP_RX_IP) + ":" + \
                          str(UDP_RX_PORTS), 1, 1, Term.BLACK, Term.WHITE)
 
@@ -5313,12 +5312,12 @@ def main(argv):
         if MODE == 'RECEIVE':
             # Wait for confirmation that RtpPacketReceiver has ended
             # # wait for __receiveRtpStream Thread to end (if it exists)
-            try:
-                Utils.Message.addMessage("DBUG: Attempting to verify rtpPacketReceiver.receiveRtpThread is dead")
-                rtpPacketReceiver.receiveRtpThread.join()
-                Utils.Message.addMessage("DBUG: rtpPacketReceiver.receiveRtpThread confirmed killed")
-            except Exception as e:
-                Utils.Message.addMessage("ERR: shutdownApplication Couldn't verify rtpPacketReceiver has ended " + str(e))
+            # try:
+            #     Utils.Message.addMessage("DBUG: Attempting to verify rtpPacketReceiver.receiveRtpThread is dead")
+            #     rtpPacketReceiver.receiveRtpThread.join()
+            #     Utils.Message.addMessage("DBUG: rtpPacketReceiver.receiveRtpThread confirmed killed")
+            # except Exception as e:
+            #     Utils.Message.addMessage("ERR: shutdownApplication Couldn't verify rtpPacketReceiver has ended " + str(e))
 
             try:
                 streamsExportedCounter = createStreamsSnapshot(isptesttHTTPServerPort)
