@@ -1503,6 +1503,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
         # Create an API helper to allow access to the HTTP API of the Controller
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
+        self.ctrlAPI.addMessage("********** GETS HERE *********")
         # # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
         self.__stats = {}
         # Assign to instance variable
@@ -3174,15 +3175,11 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # Get a handle on the receive queue
                     rxQueue = self.rxQueue
                     # Wait for a packet to arrive in the receive queue
-                    try:
-                        rtpPacketData = self.rxQueue.get(timeout=1)
-                        # Copy the latest received rtp packet into the instance variable (so it can be referenced elsewhere)
-                        self.__latestReceivedRtpPacket = rtpPacketData
-                    except Exception as e:
-                        raise Exception(f"**get() {e}")
+                    rtpPacketData = self.rxQueue.get(timeout=0.2)
+                    # Copy the latest received rtp packet into the instance variable (so it can be referenced elsewhere)
+                    self.__latestReceivedRtpPacket = rtpPacketData
 
-
-                    # # Take a copy of the latest sequence no.
+                        # # Take a copy of the latest sequence no.
                     # latestSeqNo = rtpPacketData.rtpSequenceNo
 
                     # Monitor the size of the queue - note this is not possible on OSX - will return an

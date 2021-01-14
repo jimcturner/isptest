@@ -3514,10 +3514,10 @@ class RtpPacketReceiver(object):
                 # update the shared UDP socket object
                 # This is used as a pointer to the socket and will allow the other threads to make use of it
                 self._sharedUDPSocket = udpSocket
-                Utils.Message.addMessage("DBUG:Created udp socket " + str(udpSocket))
+                self.ctrlAPI.addMessage("DBUG:__rtpPacketReceiverThread() Created udp socket " + str(udpSocket))
                 # Create raw socket
                 rawSocket = self.createRawSocket(self.UDP_RX_IP, self.UDP_RX_PORT)
-                Utils.Message.addMessage("DBUG: Created raw socket " + str(rawSocket))
+                self.ctrlAPI.addMessage("DBUG:__rtpPacketReceiverThread()Created raw socket " + str(rawSocket))
                 # If execution makes it this far without an Exception being thrown, we can safely use the raw socket to receive
                 receiveSocket = rawSocket
 
@@ -3526,7 +3526,7 @@ class RtpPacketReceiver(object):
                 # Set the data source to be the UDP socket
                 receiveSocket = udpSocket
                 # Post a message
-                Utils.Message.addMessage("ERR:CreateRawSocketError " + str(e))
+                self.ctrlAPI.addMessage("ERR:__rtpPacketReceiverThread() CreateRawSocketError " + str(e))
                 # Warn the user, but only once
                 if inhibitRawSocketCreationPopupMessage is False:
                     # Now the message has been displayed, set the flag
@@ -3550,7 +3550,7 @@ class RtpPacketReceiver(object):
                 # Set the data source to be the UDP socket
                 receiveSocket = udpSocket
                 # Post a message
-                Utils.Message.addMessage("ERR:RawSocketNotPossibleForOSXError " + str(e))
+                self.ctrlAPI.addMessage("ERR:__rtpPacketReceiverThread() RawSocketNotPossibleForOSXError " + str(e))
                 if inhibitOSXPopupMessage is False:
                     # Now the message has been displayed, set the flag
                     inhibitOSXPopupMessage = True
@@ -3573,15 +3573,14 @@ class RtpPacketReceiver(object):
             except (RtpPacketReceiver.CreateUDPSocketError, Exception) as e:
                 # Indicate no functioning receive socket
                 receiveSocket = None
-                Utils.Message.addMessage(
-                    Term.FG(Term.RED) + "__receiveRtpThread(): Cannot listen on " + self.UDP_RX_IP + ":" + str(
+                self.ctrlAPI.addMessage(
+                    Term.FG(Term.RED) + "ERR:__rtpPacketReceiverThread(): Cannot listen on " + self.UDP_RX_IP + ":" + str(
                         self.UDP_RX_PORT) + ", " + str(e) + Term.FG(Term.RESET))
-                Utils.Message.addMessage("DBUG:__receiveRtpThread(): " + str(e))
                 # Display a message box with a URL or an error message
 
                 # Now signal to the UI object that there is a problem
                 maxWidth = 70
-                Utils.Message.addMessage("DBUG:__receiveRtpThread(): calling UI.showFatalErrorDialogue()")
+                self.ctrlAPI.addMessage("DBUG:__rtpPacketReceiverThread(): calling UI.showFatalErrorDialogue()")
                 errorText = textwrap.fill(str(e), width=maxWidth) + \
                             "\n\n" + str("This could be due to the UDP Listen port (" + str(self.UDP_RX_PORT) + ")").center(
                     maxWidth) + \
@@ -3603,7 +3602,7 @@ class RtpPacketReceiver(object):
 
                 # Cause thread to end by breaking out of while loop
                 break
-            Utils.Message.addMessage("Receiving on socket " + str(receiveSocket))
+            self.ctrlAPI.addMessage("__rtpPacketReceiverThread() Receiving on socket " + str(receiveSocket))
 
             # Specify a timeout for select()
             selectTimeout = 1
@@ -3669,7 +3668,7 @@ class RtpPacketReceiver(object):
                                 try:
                                     rtpHeader, payload, rxTTL, srcUDPPort, destUDPPort = self.parseRawPacket(rawData)
                                 except Exception as e:
-                                    Utils.Message.addMessage("ERR:__rtpPacketReceiverThread.parseRawPacket() " + str(e))
+                                    self.ctrlAPI.addMessage("ERR:__rtpPacketReceiverThread.parseRawPacket() " + str(e))
                                     rtpHeader = None
                                     payload = None
                                     rxTTL = None
@@ -3687,7 +3686,7 @@ class RtpPacketReceiver(object):
                                         try:
                                             version, type, seqNo, timestamp, syncSourceID = self.parseRTPHeader(rtpHeader)
                                         except Exception as e:
-                                            Utils.Message.addMessage("ERR:__rtpPacketReceiverThread.parseRTPHeader() " + str(e))
+                                            self.ctrlAPI.addMessage("ERR:__rtpPacketReceiverThread.parseRTPHeader() " + str(e))
                                             version = None
                                             type = None
                                             seqNo = None
@@ -3708,7 +3707,7 @@ class RtpPacketReceiver(object):
                                         # packet ignored. Increment the counter
                                         self.rawPacketsDiscardedByRxThreadCount += 1
                             except Exception as e:
-                                Utils.Message.addMessage("DBUG:parse rawSocket data " + str(e))
+                                self.ctrlAPI.addMessage("ERR:__rtpPacketReceiverThread() parse rawSocket data " + str(e))
 
                         elif receiveSocket is udpSocket:
                             try:
@@ -3738,7 +3737,7 @@ class RtpPacketReceiver(object):
                                     # Increment the global counter
                                     self.udpPacketsDiscardedByRxThreadCount += 1
                             except Exception as e:
-                                Utils.Message.addMessage("DBUG:parse udpSocket data " + str(e))
+                                self.ctrlAPI.addMessage("ERR:__rtpPacketReceiverThread() parse udpSocket data " + str(e))
 
                     # Test to see if we have any new data (by testing the syncSourceID field)
                     if syncSourceID is not None:
@@ -3751,7 +3750,7 @@ class RtpPacketReceiver(object):
                                 # Substring the isptest header part of the payload
                                 isptestHeaderData = payload[:self.ISPTEST_HEADER_SIZE]
                         except Exception as e:
-                            Utils.Message.addMessage("payloadLength = len(payload) " + str(e))
+                            self.ctrlAPI.addMessage("ERR:__rtpPacketReceiverThread() payloadLength = len(payload) " + str(e))
                             payloadLength = 0
 
                         # Calculate the udp payload length (rtp header plus data). This is to allow bitrate calculations
@@ -3808,7 +3807,7 @@ class RtpPacketReceiver(object):
                                     if (rtpRxStreamTempDict[syncSourceID][-1] - rtpRxStreamTempDict[syncSourceID][0]) > \
                                             (len(rtpRxStreamTempDict[syncSourceID]) >> 1):
 
-                                        Utils.Message.addMessage(Fore.GREEN + "Rtp stream " + str(syncSourceID) +
+                                        self.ctrlAPI.addMessage(Fore.GREEN + "__rtpPacketReceiverThread() Rtp stream " + str(syncSourceID) +
                                                                  " validated. Creating new RtpReceiveStream")
 
                                         try:
@@ -3820,6 +3819,7 @@ class RtpPacketReceiver(object):
                                             # Add the killFlag as a key into  the rxQueuesKillDict
                                             self.rxQueuesKillDict[killFlag] = syncSourceID
                                             # self.ctrlAPI.addMessage(f"self.rxQueuesKillDict[killFlag] {self.rxQueuesKillDict[killFlag]}")
+         ######### GOT HERE - need to pass killFlag to the new RtpReceiveStream constructor
 
                                             # Create a new RtpReceiveStream object to accept the data
                                             # newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
@@ -3832,6 +3832,8 @@ class RtpPacketReceiver(object):
                                                                             self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
                                                                             self.rxQueuesDict[syncSourceID], self.txQueue,
                                                                             controllerTCPPort=self.controllerTCPPort)
+                                            proc = newRtpStream.getProcess()
+                                            self.ctrlAPI.addMessage(f"DBUG: _rtpPacketReceiverThread. RtpReceiveStream pid:{proc.pid}, {proc.is_alive()}")
                                             # Add the most recent packet to the newly created rx queue (whereby the
                                             # RtpReceieveStream will be able to pick it up)
 
@@ -3841,6 +3843,7 @@ class RtpPacketReceiver(object):
                                                                                         rxTTL, srcAddress, srcPort,
                                                                                         self.UDP_RX_IP, self.UDP_RX_PORT))
                                         except Exception as e:
+                                            self.ctrlAPI.addMessage(f"ERR:__rtpPacketReceiverThread() {e}")
                                             try:
                                                 # Delete the queue associated with this abandoned stream
                                                 del self.rxQueuesDict[syncSourceID]
@@ -3851,7 +3854,7 @@ class RtpPacketReceiver(object):
                                                                      f"Add RtpReceiveStream({syncSourceID}), {e}")
                                     else:
                                         # The sequence numbers don't appear to have incremented
-                                        Utils.Message.addMessage(Fore.RED + "Non-RTP packets received from " + \
+                                        self.ctrlAPI.addMessage(Fore.RED + "__rtpPacketReceiverThread() Non-RTP packets received from " + \
                                                                  str(srcAddress) + ":" + str(srcPort) + \
                                                                  ", (" + str(udpPayloadLength) + " bytes)")
                                         # Now delete the entry from the temporary dict
@@ -3871,23 +3874,23 @@ class RtpPacketReceiver(object):
 
                 # Catch all other exceptions
                 except Exception as e:
-                    Utils.Message.addMessage(Term.WhiRed + "ERR: __main()udpSocket.recvfrom():" + self.UDP_RX_IP + ":" + \
-                                             str(self.UDP_RX_PORT) + ", " + str(id(udpSocket)))
-                    Utils.Message.addMessage("__main() recvfrom: " + str(e))
+                    self.ctrlAPI.addMessage(Term.WhiRed + "ERR:__rtpPacketReceiverThread() udpSocket.recvfrom():" + self.UDP_RX_IP + ":" + \
+                                             str(self.UDP_RX_PORT) + ", " + str(id(udpSocket)) + ", " + str(e))
+
 
                     try:
                         # Close udp socket
                         udpSocket.close()
-                        Utils.Message.addMessage("DBUG: main()__receiveRtpThread udpSocket closed")
+                        self.ctrlAPI.addMessage("DBUG:__rtpPacketReceiverThread() udpSocket closed")
                     except Exception as e:
-                        Utils.Message.addMessage("ERR:main()__receiveRtpThread udpSocket.close() " + str(e))
+                        self.ctrlAPI.addMessage("ERR:__rtpPacketReceiverThread() udpSocket.close() " + str(e))
                     try:
                         # Close raw socket
                         if rawSocket is not None:
                             rawSocket.close()
-                            Utils.Message.addMessage("DBUG: main()__receiveRtpThread rawSocket closed")
+                            self.ctrlAPI.addMessage("DBUG:__rtpPacketReceiverThread() rawSocket closed")
                     except Exception as e:
-                        Utils.Message.addMessage("ERR: main()__receiveRtpThread rawSocket.close() " + str(e))
+                        self.ctrlAPI.addMessage("ERR:__rtpPacketReceiverThread() rawSocket.close() " + str(e))
 
                     # Now try to recreate the socket
                     # break out of this inner while loop to the outer while loop (where the socket is created)
@@ -3923,7 +3926,7 @@ class RtpPacketReceiver(object):
                 break
 
             # If program execution gets here, the udp socket must have been corrupted
-            Utils.Message.addMessage(
+            self.ctrlAPI.addMessage(
                 Term.WhiRed + "WARNING. Recreating receive socket. Glitches might not be genuine          ")
 
             time.sleep(1)
@@ -3931,19 +3934,19 @@ class RtpPacketReceiver(object):
         try:
             # Close the udpSocket socket in
             udpSocket.close()
-            Utils.Message.addMessage("DBUG: main()__receiveRtpThread udpSocket closed")
+            self.ctrlAPI.addMessage("DBUG:__rtpPacketReceiverThread() udpSocket closed")
         except Exception as e:
-            Utils.Message.addMessage("ERR: main()__receiveRtpThread udpSocket.close() " + str(e))
+            self.ctrlAPI.addMessage("ERR:__rtpPacketReceiverThread() udpSocket.close() " + str(e))
 
         try:
             # Close raw socket
             if rawSocket is not None:
                 rawSocket.close()
-                Utils.Message.addMessage("DBUG: main()__receiveRtpThread rawSocket closed")
+                self.ctrlAPI.addMessage("DBUG:__rtpPacketReceiverThread() rawSocket closed")
         except Exception as e:
-            Utils.Message.addMessage("ERR: main()__receiveRtpThread rawSocket.close() " + str(e))
+            self.ctrlAPI.addMessage("ERR:__rtpPacketReceiverThread() rawSocket.close() " + str(e))
 
-        Utils.Message.addMessage("DBUG:__receiveRTPThread exiting")
+        self.ctrlAPI.addMessage("DBUG:__rtpPacketReceiverThread() exiting")
 
 # This class acts a wrapper for the RtpPacketReceiver and UDPMessageSender classes
 # It will attempt to spawn these as a seperate process
@@ -3973,6 +3976,7 @@ class RtpPacketTransceiver(object):
         #   3) A UDPMessageSender to actually do the transmission of udp packets back to the sender
         try:
             # Create an RtpPacketReceiver to capture incoming rtp packets, create RtpReceiveStreams and also tx/rx Queues
+            self.ctrlAPI.addMessage(f"DBUG:RtpPacketReceiver() creating RtpPacketReceiver({self.UDP_RX_PORT})")
             self.rtpPacketReceiver = RtpPacketReceiver(self.shutdownFlag,
                                                   self.UDP_RX_IP, self.UDP_RX_PORT, self.ISPTEST_HEADER_SIZE,
                                                   self.glitchEventTriggerThreshold,
@@ -3980,7 +3984,7 @@ class RtpPacketTransceiver(object):
 
             # Wait for socket (Created by rtpPacketReceiver) to become available (this might take some time)
             while self.rtpPacketReceiver.getSocket() is None:
-                Utils.Message.addMessage(f"DBUG:Waiting for udp socket (port {self.UDP_RX_PORT}) to be created")
+                self.ctrlAPI.addMessage(f"DBUG:Waiting for udp socket (port {self.UDP_RX_PORT}) to be created")
                 socketWaitTimer += socketWaitPollInterval
                 # Check tp see if we've waited so long for a socket that it's better just to abort
                 if socketWaitTimer > socketWaitTimeOut:
@@ -3990,10 +3994,12 @@ class RtpPacketTransceiver(object):
 
             # Once the socket has been created, use it to create a UDPMessageSender
             if self.rtpPacketReceiver.getSocket() is not None:
+                self.ctrlAPI.addMessage(f"DBUG:RtpPacketReceiver() creating UDPMessageSender({self.UDP_RX_PORT})")
                 # Create a UDPMessageSender using to correspond to the RtpPacketReceiver sharing the same socket
                 self.udpMessageSender = UDPMessageSender(self.rtpPacketReceiver, self.shutdownFlag)
 
         except Exception as e:
+            self.ctrlAPI.addMessage(f"ERR:RtpPacketTranceiver() {e}")
             raise Exception(f"ERR:RtpPacketTranceiver() {e}")
 
 
@@ -5156,7 +5162,8 @@ def main(argv):
 
     # Create a UI object (which will spawn a renderDisplay and catchKeyboardPresses thread)
     # Create flag that will be used by UI to signal back to main() that a shutdown has been requested
-    shutdownFlag = threading.Event()
+    # shutdownFlag = threading.Event()
+    shutdownFlag = mp.Event()
     # Make sure flag is initially cleared
     shutdownFlag.clear()
 
@@ -5460,10 +5467,21 @@ def main(argv):
         for receivePort in receivePortList:
             try:
                 # Create a Transceiver for each of the listen ports listed in receivePortList
-                rtpPacketTransceiver = RtpPacketTransceiver(shutdownFlag,
+                # rtpPacketTransceiver = RtpPacketTransceiver(shutdownFlag,
+                #        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
+                #                                   glitchEventTriggerThreshold,
+                #                                   controllerTCPPort=isptesttHTTPServer.getTCPPort())
+
+                # Create a Transceiver (which is an RtpPacketReceiver/UDPMessageSender combination) as
+                # a subprocess
+                rtpPacketTransceiver = Utils.ProcessCreator(RtpPacketTransceiver, shutdownFlag,
                        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
                                                   glitchEventTriggerThreshold,
                                                   controllerTCPPort=isptesttHTTPServer.getTCPPort())
+
+                proc = rtpPacketTransceiver.getProcess()
+                Utils.Message.addMessage(f"rtpPacketTransceiver {proc.pid}:{proc.is_alive()}")
+
 
                 # RtpPacketTransceiver creation was successful, so add the receive addr/port to receiveAddrList[]
                 receiveAddrList.append({"addr": UDP_RX_IP, "port": receivePort})

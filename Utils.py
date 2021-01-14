@@ -2244,6 +2244,7 @@ class ProcessCreator(object):
     def __createProcess(self):
         try:
             p = mp.Process(target=self.createObject, name=self.processName, args=())
+            p.daemon = False # Set to false, otherwise process won't be able to spawn their own child processes
             p.start()
             # If successful, return a reference to the newly created process
             return p
