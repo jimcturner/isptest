@@ -3204,8 +3204,11 @@ class UDPMessageSender(object):
             # Poll the message queue to see if it contains any data to be sent
             # The txMessageQueue is a tuple of the form [byteString, destIPAddr, destport]
 
-            # Get current size of self.txMessageQueue
-            # self.sendUDPThreadMessageQueueSize = self.txMessageQueue.qsize()
+            # Get current size of self.txMessageQueue - note this may not be implemented on OSX
+            try:
+                self.sendUDPThreadMessageQueueSize = self.txMessageQueue.qsize()
+            except:
+                pass
             try:
                 # Wait for the message queue to be populated (with a 0.2 sec timeout)
                 txData = self.txMessageQueue.get(timeout=0.2)
@@ -3419,6 +3422,9 @@ class RtpPacketReceiver(object):
     def __init__(self, shutdownFlag,
                        UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, controllerTCPPort=None):
         self.rxQueuesDict = {} # A dict of queues, one for each Rtp Stream
+        self.rxQueuesKillDict = {} # A dictionary of multiprocess Events - used by RtpReceiveStreams to delete their
+                                    # respective rxQueue from self.rxQueuesDict when they die
+                                    # The dict is keyed by the Event objects themselves
         self.txQueue = mp.Queue() # Used to send data back to the transmitter (only one tx queue per UDP socket)
         self.shutdownFlag = shutdownFlag
         self.UDP_RX_IP = UDP_RX_IP
@@ -3808,6 +3814,13 @@ class RtpPacketReceiver(object):
                                         try:
                                             # Create a Queue specifically for data with this sync source id
                                             self.rxQueuesDict[syncSourceID] = mp.Queue()
+                                            # Create a shutdown flag specific to this syncSourceID/ RtpReceiveStream, and will be used
+                                            # to allow the RtpReceiveStream to delete *itself* from self.rxQueuesDict
+                                            killFlag = mp.Event()
+                                            # Add the killFlag as a key into  the rxQueuesKillDict
+                                            self.rxQueuesKillDict[killFlag] = syncSourceID
+                                            # self.ctrlAPI.addMessage(f"self.rxQueuesKillDict[killFlag] {self.rxQueuesKillDict[killFlag]}")
+
                                             # Create a new RtpReceiveStream object to accept the data
                                             # newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
                                             #                                 self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
@@ -5446,8 +5459,8 @@ def main(argv):
         socketWaitPollInterval = 0.5 # How often we poll rtpPacketReceiver.getSocket() to check for a valid socket
         for receivePort in receivePortList:
             try:
-                # Create a Tranceiver for each of the listen ports listed in receivePortList
-                rtpPacketTranceiver = RtpPacketTransceiver(shutdownFlag,
+                # Create a Transceiver for each of the listen ports listed in receivePortList
+                rtpPacketTransceiver = RtpPacketTransceiver(shutdownFlag,
                        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
                                                   glitchEventTriggerThreshold,
                                                   controllerTCPPort=isptesttHTTPServer.getTCPPort())

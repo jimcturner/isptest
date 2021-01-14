@@ -3185,10 +3185,15 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # # Take a copy of the latest sequence no.
                     # latestSeqNo = rtpPacketData.rtpSequenceNo
 
-                    # Monitor the size of the queue
+                    # Monitor the size of the queue - note this is not possible on OSX - will return an
+                    # 'NotImplementedError' Exception
+
                     # If the queue size starts creeping up, this suggests the CPU can't can't keep up with the rate
                     # of incoming packets
-                    # self.rtpStreamQueueCurrentSize = rxQueue.qsize()
+                    try:
+                        self.rtpStreamQueueCurrentSize = rxQueue.qsize()
+                    except:
+                        pass
                     if self.rtpStreamQueueCurrentSize > self.rtpStreamQueueMaxSize:
                         # Keep track of the maximum queue size
                         self.rtpStreamQueueMaxSize = self.rtpStreamQueueCurrentSize
