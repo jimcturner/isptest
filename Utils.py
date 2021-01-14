@@ -2282,5 +2282,50 @@ class TestClass(object):
         self.a=1
         self.b="2"
         self.c=[3,4,5,6]
+        # Create SecondClass as a child process
+        proc = ProcessCreator(SecondClass, processName="SecondClass")
+        while True:
+            print("TestClass")
+            time.sleep(1)
     def getValues(self):
         return self.a, self.b, self.c
+
+class SecondClass(object):
+    def __init__(self, ctrlPort):
+        self.a=1
+        self.b="2"
+        self.c=[3,4,5,6]
+        x = 0
+        # while True:
+        #     print(f"SecondClass {x}")
+        #     x += 1
+        #     time.sleep(1)
+        self.api = APIHelper(ctrlPort)
+        self.theThread = threading.Thread(target=self.secondClassThread).start()
+    def getValues(self):
+        return self.a, self.b, self.c
+    def secondClassThread(self):
+        x = 0
+        while True:
+            # print(f"SecondClass Thread {x}")
+            try:
+                self.api.addMessage(f"SecondClass Thread {x}")
+                if x > 5:
+                    self.api.addMessage(f"SecondClass Thread Ending")
+                    break
+            except Exception as e:
+                print(f"secondClassThread: {e}")
+            x += 1
+            time.sleep(3)
+
+
+class ChildProcess(object):
+    def __init__(self, ctrlPort):
+        api=APIHelper(ctrlPort)
+        x =0
+        while True:
+            # api.addMessage(f"childprocess alive {x}")
+            print(f"childprocess alive {x}")
+            x +=1
+            time.sleep()
+

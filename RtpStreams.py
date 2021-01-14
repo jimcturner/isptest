@@ -1503,7 +1503,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
         # Create an API helper to allow access to the HTTP API of the Controller
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
-        self.ctrlAPI.addMessage("********** GETS HERE *********")
+        self.ctrlAPI.addMessage("********** GETS HERE--RtpReceiveStream *********")
         # # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
         self.__stats = {}
         # Assign to instance variable

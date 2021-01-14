@@ -85,6 +85,7 @@ from abc import ABCMeta, abstractmethod  # Used for event abstract class
 from copy import deepcopy
 import textwrap
 import pickle
+import logging
 
 # debugging libraries
 import faulthandler
@@ -3813,6 +3814,7 @@ class RtpPacketReceiver(object):
                                         try:
                                             # Create a Queue specifically for data with this sync source id
                                             self.rxQueuesDict[syncSourceID] = mp.Queue()
+
                                             # Create a shutdown flag specific to this syncSourceID/ RtpReceiveStream, and will be used
                                             # to allow the RtpReceiveStream to delete *itself* from self.rxQueuesDict
                                             killFlag = mp.Event()
@@ -3830,12 +3832,22 @@ class RtpPacketReceiver(object):
                                             # Create a new RtpReceiveStream process to accept the data
                                             newRtpStream = Utils.ProcessCreator(RtpReceiveStream, syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
                                                                             self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
-                                                                            self.rxQueuesDict[syncSourceID], self.txQueue,
-                                                                            controllerTCPPort=self.controllerTCPPort)
+                                                                            self.rxQueuesDict[syncSourceID], None,
+                                                                            controllerTCPPort=self.controllerTCPPort, processName="RtpReceiveStream")
+
                                             proc = newRtpStream.getProcess()
-                                            self.ctrlAPI.addMessage(f"DBUG: _rtpPacketReceiverThread. RtpReceiveStream pid:{proc.pid}, {proc.is_alive()}")
-                                            # Add the most recent packet to the newly created rx queue (whereby the
-                                            # RtpReceieveStream will be able to pick it up)
+                                            self.ctrlAPI.addMessage(
+                                                f"DBUG: _rtpPacketReceiverThread. {proc.name} {x}pid:{proc.pid}, {proc.is_alive()},"
+                                                f" {proc.exitcode}")
+
+                                            # testProcess = Utils.ProcessCreator(Utils.SecondClass, self.controllerTCPPort, processName="SecondClass")
+                                            # proc = testProcess.getProcess()
+                                            # self.ctrlAPI.addMessage(
+                                            #     f"DBUG: _rtpPacketReceiverThread. {proc.name} {x}pid:{proc.pid}, {proc.is_alive()},"
+                                            #     f" {proc.exitcode}")
+
+                                            # # Add the most recent packet to the newly created rx queue (whereby the
+                                            # # RtpReceieveStream will be able to pick it up)
 
                                             self.rxQueuesDict[syncSourceID].put(RtpData(seqNo, udpPayloadLength,
                                                                                         packetArrivedTimestamp,
@@ -4791,7 +4803,19 @@ def main(argv):
                 print("Empty")
                 break
 
+
+    def nestedMPTest():
+        # Create TestClass as a child process
+        proc = Utils.ProcessCreator(Utils.TestClass, processName="testClass")
+        while True:
+            print ("main alive")
+            time.sleep(1)
+
     mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs
+    mp.log_to_stderr(logging.DEBUG)
+
+    # nestedMPTest()
+
     # mpTest()
     # exit()
     # testProcessCreator()
@@ -5480,7 +5504,7 @@ def main(argv):
                                                   controllerTCPPort=isptesttHTTPServer.getTCPPort())
 
                 proc = rtpPacketTransceiver.getProcess()
-                Utils.Message.addMessage(f"rtpPacketTransceiver {proc.pid}:{proc.is_alive()}")
+                Utils.Message.addMessage(f"########rtpPacketTransceiver {proc.pid}:{proc.is_alive()}")
 
 
                 # RtpPacketTransceiver creation was successful, so add the receive addr/port to receiveAddrList[]
