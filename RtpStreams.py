@@ -1499,7 +1499,7 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
         # self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
 
-
+        self.pid = os.getpid() # Get pid of this process
 
 
         self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
@@ -1511,7 +1511,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.ctrlAPI.addMessage(f"ERR: RtpReceiveStream - assign txQueue {e}")
             self.txQueue = None
 
-        self.ctrlAPI.addMessage("********** GETS HERE--RtpReceiveStream *********")
+
         # # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
         self.__stats = {}
         # Assign to instance variable
@@ -1531,9 +1531,10 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.__stats["stream_transmitter_txRate_bps"] = 0 # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_TimeToLive_sec"] = 0  # Will be populated by incoming isptest header data
         self.__stats["stream_transmitter_return_loss_percent"] = 0  # Will be populated by incoming isptest header data
-        self.postMessage(f"INFO: RtpReceiveStream: Creating RtpReceiveStream with syncSource: "
+        self.postMessage(f"INFO: RtpReceiveStream: starting. syncSource: "
                                  f"{self.__stats['stream_syncSource']}, "
-                                 f"src:{self.__stats['stream_srcAddress']}:{self.__stats['stream_srcPort']}")
+                                 f"src:{self.__stats['stream_srcAddress']}:{self.__stats['stream_srcPort']}"
+                         f", pid:{self.pid}")
 
         # A list to contain the *live* traceroute hops as received as part of the isptestheader data
         # Note: This list is liable to be in a state of flux as it's being continuously updated
@@ -2076,6 +2077,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     "Rx current queue size": rtpRxStream.rtpStreamQueueCurrentSize,
                     "Rx max queue size": rtpRxStream.rtpStreamQueueMaxSize,
                     "Rx Queue packets extracted": rtpRxStream.packetCounterReceivedTotal,
+                    "Process pid": rtpRxStream.pid,
                     "Active Threads": Utils.listCurrentThreads(asList=True)
                 }
                 return debugInfoDict
