@@ -1489,12 +1489,15 @@ class RtpReceiveStream(RtpReceiveCommon):
     # The RtpReceiveStream object should be created with a unique id no
     # (for instance the rtp sync-source value would be perfect)
     def __init__(self, syncSource, srcAddress, srcPort, rxAddress, rxPort, glitchEventTriggerThreshold,
-                 rxQueue, txQueue,
+                 rxQueue, txQueue, removeStreamQueue,
                  restoredStreamFlag=False, historicStatsDict=None, historicEventsList=None, controllerTCPPort=None):
         # Call super constructor
         super().__init__()
 
         self.rxQueue = rxQueue    # packet receive queue for this stream
+        self.removeStreamQueue = removeStreamQueue # Used to inform the parent RtpPacketReceiver that this stream is to
+                                                    # be removed from it's self.rxQueuesDict
+        self.txQueue = txQueue  # Queue for sending results back to the transmitter
         self.rtpStreamQueueCurrentSize = 0  # Tracks the current size of the receive queue
         self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
         # self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
@@ -1505,12 +1508,11 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
         # Create an API helper to allow access to the HTTP API of the Controller
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
-        try:
-            self.txQueue = txQueue  # Queue for sending results back to the transmitter
-        except Exception as e:
-            self.ctrlAPI.addMessage(f"ERR: RtpReceiveStream - assign txQueue {e}")
-            self.txQueue = None
-
+        # try:
+        #     self.txQueue = txQueue  # Queue for sending results back to the transmitter
+        # except Exception as e:
+        #     self.ctrlAPI.addMessage(f"ERR: RtpReceiveStream - assign txQueue {e}")
+        #     self.txQueue = None
 
         # # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
         self.__stats = {}
@@ -2151,10 +2153,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                                      str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
         # # Now remove the Receive queue for this stream (from rxQueuesDict)
-        # try:
-        #     del self.rxQueuesDict[self.syncSourceIdentifier]
-        # except Exception as e:
-        #     self.postMessage(f"ERR:RtpReceiveStream() del rxQueuesDict[{self.syncSourceIdentifier}], {e}")
+        try:
+            self.removeStreamQueue.put(self.syncSourceIdentifier)
+        except Exception as e:
+            self.postMessage(f"ERR:RtpReceiveStream() removeStreamQueue.put({self.syncSourceIdentifier}), {e}")
 
 
     # This method will parse the isptest header data (and update the instance variables accordingly)
