@@ -2246,6 +2246,7 @@ class ProcessCreator(object):
             p = mp.Process(target=self.createObject, name=self.processName, args=())
             p.daemon = False # Set to false, otherwise process won't be able to spawn their own child processes
             p.start()
+            # p.join(timeout=1)
             # If successful, return a reference to the newly created process
             return p
         except Exception as e:
@@ -2291,10 +2292,12 @@ class TestClass(object):
         return self.a, self.b, self.c
 
 class SecondClass(object):
-    def __init__(self, ctrlPort):
+    def __init__(self, ctrlPort, rxQueue, txQueue):
         self.a=1
         self.b="2"
         self.c=[3,4,5,6]
+        self.rxQueue = rxQueue
+        self.txQueue = txQueue
         x = 0
         # while True:
         #     print(f"SecondClass {x}")
@@ -2309,7 +2312,7 @@ class SecondClass(object):
         while True:
             # print(f"SecondClass Thread {x}")
             try:
-                self.api.addMessage(f"SecondClass Thread {x}")
+                self.api.addMessage(f"SecondClass Thread {x} {type(self.rxQueue)}, {type(self.txQueue)}")
                 if x > 5:
                     self.api.addMessage(f"SecondClass Thread Ending")
                     break

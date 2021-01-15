@@ -1499,10 +1499,18 @@ class RtpReceiveStream(RtpReceiveCommon):
         self.rtpStreamQueueMaxSize = 0     # Tracks the historic maximum size of the receive queue
         # self.packetsAddedToRxQueueCount = 0 # Tracks the packets going into the receive queue
 
-        self.txQueue = txQueue # Queue for sending results back to the transmitter
+
+
+
         self.controllerTCPPort = controllerTCPPort # the TCP listener port of the HTTP Server running on the controller process
         # Create an API helper to allow access to the HTTP API of the Controller
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
+        try:
+            self.txQueue = txQueue  # Queue for sending results back to the transmitter
+        except Exception as e:
+            self.ctrlAPI.addMessage(f"ERR: RtpReceiveStream - assign txQueue {e}")
+            self.txQueue = None
+
         self.ctrlAPI.addMessage("********** GETS HERE--RtpReceiveStream *********")
         # # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
         self.__stats = {}

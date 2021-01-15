@@ -3426,7 +3426,7 @@ class RtpPacketReceiver(object):
         self.rxQueuesKillDict = {} # A dictionary of multiprocess Events - used by RtpReceiveStreams to delete their
                                     # respective rxQueue from self.rxQueuesDict when they die
                                     # The dict is keyed by the Event objects themselves
-        self.txQueue = mp.Queue() # Used to send data back to the transmitter (only one tx queue per UDP socket)
+        self.txQueue = mp.Queue()   # Used to send data back to the transmitter (only one tx queue per UDP socket)
         self.shutdownFlag = shutdownFlag
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
@@ -3832,20 +3832,24 @@ class RtpPacketReceiver(object):
                                             # Create a new RtpReceiveStream process to accept the data
                                             newRtpStream = Utils.ProcessCreator(RtpReceiveStream, syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
                                                                             self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
-                                                                            self.rxQueuesDict[syncSourceID], None,
+                                                                            self.rxQueuesDict[syncSourceID], self.txQueue,
                                                                             controllerTCPPort=self.controllerTCPPort, processName="RtpReceiveStream")
 
-                                            proc = newRtpStream.getProcess()
-                                            self.ctrlAPI.addMessage(
-                                                f"DBUG: _rtpPacketReceiverThread. {proc.name} {x}pid:{proc.pid}, {proc.is_alive()},"
-                                                f" {proc.exitcode}")
+                                            # proc = newRtpStream.getProcess()
+                                            # self.ctrlAPI.addMessage(
+                                            #     f"DBUG: _rtpPacketReceiverThread. {proc.name} {x}pid:{proc.pid}, {proc.is_alive()},"
+                                            #     f" {proc.exitcode}")
 
-                                            # testProcess = Utils.ProcessCreator(Utils.SecondClass, self.controllerTCPPort, processName="SecondClass")
+                                            # # testQueue = mp.SimpleQueue()
+                                            # testProcess = Utils.ProcessCreator(Utils.SecondClass, self.controllerTCPPort,
+                                            #                                    self.rxQueuesDict[syncSourceID], self.txQueue,
+                                            #                                    processName="SecondClass")
                                             # proc = testProcess.getProcess()
                                             # self.ctrlAPI.addMessage(
                                             #     f"DBUG: _rtpPacketReceiverThread. {proc.name} {x}pid:{proc.pid}, {proc.is_alive()},"
                                             #     f" {proc.exitcode}")
 
+                                            # proc.join()
                                             # # Add the most recent packet to the newly created rx queue (whereby the
                                             # # RtpReceieveStream will be able to pick it up)
 
@@ -5419,7 +5423,8 @@ def main(argv):
         # receive stream syncSourceIds and receive queues
         importedSnapshotsList = []
         try:
-            importedSnapshotsList = Utils.importObjectFromDisk(Registry.streamsSnapshotFilename)
+####### Inhibited import
+            # importedSnapshotsList = Utils.importObjectFromDisk(Registry.streamsSnapshotFilename)
             if len(importedSnapshotsList) > 0:
                 # Initialise stats and eventsList
                 stats = None
@@ -5491,20 +5496,21 @@ def main(argv):
         for receivePort in receivePortList:
             try:
                 # Create a Transceiver for each of the listen ports listed in receivePortList
-                # rtpPacketTransceiver = RtpPacketTransceiver(shutdownFlag,
-                #        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
-                #                                   glitchEventTriggerThreshold,
-                #                                   controllerTCPPort=isptesttHTTPServer.getTCPPort())
-
-                # Create a Transceiver (which is an RtpPacketReceiver/UDPMessageSender combination) as
-                # a subprocess
-                rtpPacketTransceiver = Utils.ProcessCreator(RtpPacketTransceiver, shutdownFlag,
+                rtpPacketTransceiver = RtpPacketTransceiver(shutdownFlag,
                        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
                                                   glitchEventTriggerThreshold,
                                                   controllerTCPPort=isptesttHTTPServer.getTCPPort())
 
-                proc = rtpPacketTransceiver.getProcess()
-                Utils.Message.addMessage(f"########rtpPacketTransceiver {proc.pid}:{proc.is_alive()}")
+                # Create a Transceiver (which is an RtpPacketReceiver/UDPMessageSender combination) as
+                # a subprocess
+                # rtpPacketTransceiver = Utils.ProcessCreator(RtpPacketTransceiver, shutdownFlag,
+                #        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
+                #                                   glitchEventTriggerThreshold,
+                #                                   controllerTCPPort=isptesttHTTPServer.getTCPPort(),
+                #                                             processName=f"RtpPacketTransceiver({receivePort})")
+                #
+                # proc = rtpPacketTransceiver.getProcess()
+                # Utils.Message.addMessage(f"########rtpPacketTransceiver {proc.pid}:{proc.is_alive()}")
 
 
                 # RtpPacketTransceiver creation was successful, so add the receive addr/port to receiveAddrList[]
