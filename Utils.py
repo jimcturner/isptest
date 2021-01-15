@@ -2332,3 +2332,7 @@ class ChildProcess(object):
             x +=1
             time.sleep()
 
+# Imports a previous stream snapshot file (*.isp) to allow the stats/event data for multiple streams
+# to be recreated
+def importHistoricStreamsSnapshot(filename):
+    pass
