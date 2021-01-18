@@ -4823,18 +4823,22 @@ def main(argv):
         # define mp queue
         newStreamsPending = mp.Queue()
         obj = Utils.ProcessCreator(Utils.RxStreamDetector, newStreamsPending, processName="Utils.MPQueueTest")
-        x = 20
+        x = 40
         while x > 0:
             # newStreamsPending.put(x)
             try:
-                val = newStreamsPending.get()
-                print(f"main() val:{val} received from newStreamsPending")
+                val = newStreamsPending.get(timeout=1)
+
+                print(f"main() Creating new RxStream object with id {val['id']}")
+                rxStream = Utils.ProcessCreator(Utils.RxStream, val['id'], val['txQueue'], val['rxQueue'])
+
             except Empty:
-                print(f"main() Empty")
+                # print(f"main() newStreamsPending Empty")
+                pass
             except Exception as e:
                 print(f"ERR:main() {e}")
             x -= 1
-            time.sleep(1)
+            time.sleep(0.5)
         print("main() ending")
 
     mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs

@@ -2400,7 +2400,8 @@ class RxStreamDetector(object):
 
 # Test class to replicate an RtpReceiveStream
 class RxStream(object):
-    def __init__(self, txQueue, rxQueue):
+    def __init__(self, id, txQueue, rxQueue):
+        self.id = id
         self.txQueue = txQueue
         self.rxQueue = rxQueue
         # Start the thread
@@ -2412,18 +2413,19 @@ class RxStream(object):
         while True:
             # Read the rxQueue
             try:
-                val = self.self.rxQueue.get(timeout=1)
+                val = self.rxQueue.get(timeout=1)
                 print(f"RxStream rxQueue val {val}")
 
                 # put some dummy data onto the tx Queue
                 try:
-                    self.txQueue.put(f"{datetime.datetime.now()} received {val}")
+                    self.txQueue.put(f"RxStream {id} acknowledged {val}")
                 except Exception as e:
                     print(f"ERR:RxStream txQueue.put {e}")
             except Empty:
                 pass
             except Exception as e:
                 print(f"ERR:RxStream rxQueue.get() {e}")
+                break
 
 
         # time.sleep(1)
