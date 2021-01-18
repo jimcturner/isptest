@@ -2332,6 +2332,104 @@ class ChildProcess(object):
             x +=1
             time.sleep()
 
+# Test Class to replicate an RtpPacketReceiver
+class RxStreamDetector(object):
+    def __init__(self, newStreamsQ):
+        self.newStreamsQ = newStreamsQ  # Queue that will be sent back to main()
+
+        # Start the thread
+        t = threading.Thread(target=self.rxStreamDetectorThread)
+        t.start()
+
+    def rxStreamDetectorThread(self):
+        import multiprocessing as mp
+        mpManager = mp.Manager()  # Multiprocessor Manager object to allow creation of new queues via a proxy
+                                 # Manager.Queue() objects are pickleable and therefore able to be passed between proceses
+        rxQueuesDict = {}       # Create dict to hold all the rxQueues
+        id = 1000
+        txQueue = mpManager.Queue()
+
+        # Create a dict of new Rx Queues  with every iteration, put some dummy data onto it, add to newStreamsQ
+        while id < 1011:
+            try:
+                # Create an rx Queue
+                # rxQueue = mpManager.Queue()
+                rxQueuesDict[id] = mpManager.Queue()
+                # Put some dummy data into the rxQueue()
+                rxQueuesDict[id].put({"dummyData": datetime.datetime.now()})
+
+                # Create a dict to put onto the queue
+                newStream = {
+                    "id": id,
+                    "txQueue": txQueue,
+                    "rxQueue": rxQueuesDict[id]
+                }
+                # Add the newStream to the Q (complete with dummy data)
+                self.newStreamsQ.put(newStream)
+            except Exception as e:
+                print(f"ERR: mpQueueTestThread put({id}) {e}")
+            id += 1
+
+        x = 0
+        # Put some random data (the current time) onto a randomly selected queue
+        # and then read the txQueue to see if any new data has arrived
+        while x < 20:
+            rxQueueSelector = None
+            try:
+                # select a random rxQueue from rxQueuesDict
+                rxQueueSelector = random.randint(1000, 1010)
+                print (f"RxStreamDetector.rxStreamDetectorThread queue {rxQueueSelector} picked")
+                # Put some random data (the current time) into that queue
+                rxQueuesDict[rxQueueSelector].put(datetime.datetime.now())
+            except Exception as e:
+                print(f"ERR:RxStreamDetector.rxStreamDetectorThread rxQueuesDict[{rxQueueSelector}].put() + {e}")
+
+            # NOw try to read the txQueue
+            try:
+                val = txQueue.get(timeout = 0.5)
+                print(f"mpQueueTestThread txQueue val: {val}")
+            except Empty:
+                print(f"mpQueueTestThread txQueue Empty")
+            except Exception as e:
+                print(f"ERR: mpQueueTestThread txQueue.get() {e}")
+
+            x += 1
+            time.sleep(1)
+        print(f"mpQueueTestThread ending {id}")
+
+
+# Test class to replicate an RtpReceiveStream
+class RxStream(object):
+    def __init__(self, txQueue, rxQueue):
+        self.txQueue = txQueue
+        self.rxQueue = rxQueue
+        # Start the thread
+        t = threading.Thread(target=self.rxStreamThread)
+        t.start()
+
+    # Reads the rx Queue associated with this stream and puts on some dummy data into the tx Queue
+    def rxStreamThread(self):
+        while True:
+            # Read the rxQueue
+            try:
+                val = self.self.rxQueue.get(timeout=1)
+                print(f"RxStream rxQueue val {val}")
+
+                # put some dummy data onto the tx Queue
+                try:
+                    self.txQueue.put(f"{datetime.datetime.now()} received {val}")
+                except Exception as e:
+                    print(f"ERR:RxStream txQueue.put {e}")
+            except Empty:
+                pass
+            except Exception as e:
+                print(f"ERR:RxStream rxQueue.get() {e}")
+
+
+        # time.sleep(1)
+
+
+
 # Imports a previous stream snapshot file (*.isp) to allow the stats/event data for multiple streams
 # to be recreated
 def importHistoricStreamsSnapshot(filename):

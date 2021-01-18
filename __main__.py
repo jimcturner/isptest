@@ -4819,13 +4819,32 @@ def main(argv):
             print ("main alive")
             time.sleep(1)
 
+    def RxStreamCreatorTest():
+        # define mp queue
+        newStreamsPending = mp.Queue()
+        obj = Utils.ProcessCreator(Utils.RxStreamDetector, newStreamsPending, processName="Utils.MPQueueTest")
+        x = 20
+        while x > 0:
+            # newStreamsPending.put(x)
+            try:
+                val = newStreamsPending.get()
+                print(f"main() val:{val} received from newStreamsPending")
+            except Empty:
+                print(f"main() Empty")
+            except Exception as e:
+                print(f"ERR:main() {e}")
+            x -= 1
+            time.sleep(1)
+        print("main() ending")
+
     mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs
     # mp.log_to_stderr(logging.DEBUG) ##### <<<<<<- Uncomment to enable multiprocessor debugging to stderr
 
     # nestedMPTest()
 
     # mpTest()
-    # exit()
+    RxStreamCreatorTest()
+    exit()
     # testProcessCreator()
     # testObject = Utils.TestObject()
     #
