@@ -4585,8 +4585,8 @@ class RtpPacketTransceiver(object):
                                                 "syncSourceID": syncSourceID,
                                                 "srcAddress": srcAddress,
                                                 "srcPort": srcPort,
-                                                "UDP_RX_IP": self.UDP_RX_IP,
-                                                "UDP_RX_PORT": self.UDP_RX_PORT,
+                                                "rxAddress": self.UDP_RX_IP,
+                                                "rxPort": self.UDP_RX_PORT,
                                                 "glitchEventTriggerThreshold": self.glitchEventTriggerThreshold,
                                                 "rxQueue": rxQueuesDict[syncSourceID],
                                                 "txQueue": txQueue,
@@ -6250,6 +6250,7 @@ def main(argv):
         # ########### NOT IMPLEMENTED If it exists, this will prepopulate rxQueuesDict with a list of previously known
         # receive stream syncSourceIds and receive queues
         importedSnapshotsList = []
+
         try:
 ####### Inhibited import
             # importedSnapshotsList = Utils.importObjectFromDisk(Registry.streamsSnapshotFilename)
@@ -6312,28 +6313,31 @@ def main(argv):
         except Exception as e:
             Utils.Message.addMessage("ERR:Prev streams import failed " + str(e))
 
-        # define mp queue to contain definitions of new streams to be created
-        # This queue is populated by RtpPacketTransceiver (as it detects the incoming streams) and polled
-        # by main() which will generate new RtpReceiveStream objects to consume those streams according to the contents
-        # of the stream definitions posted to newStreamsPendingQueue
-        newStreamsPendingQueue = mp.Queue()
-        # Create an RtpPacketTransceiver for each of the specified UDP listen addresses/ports
-        # This should run as a child process
-        for receivePort in receivePortList:
-            try:
-                rtpPacketTransceiver = Utils.ProcessCreator(RtpPacketTransceiver, shutdownFlag, newStreamsPendingQueue,
-                                                  UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE,
-                                                  glitchEventTriggerThreshold,
-                                                  controllerTCPPort=isptesttHTTPServer.getTCPPort(),
-                                                                    processName=f"RtpPacketTransceiver{UDP_RX_PORT}")
-                pid = rtpPacketTransceiver.getProcess().pid
-                Utils.Message.addMessage(f"RtpPacketTransceiver created with pid:{pid}")
-            except Exception as e:
-                Utils.Message.addMessage(f"ERR: create RtpPacketTransceiver (port {receivePort}), {e}")
 
+        try:
+            # define mp queue to contain definitions of new streams to be created
+            # This queue is populated by RtpPacketTransceiver (as it detects the incoming streams) and polled
+            # by main() which will generate new RtpReceiveStream objects to consume those streams according to the contents
+            # of the stream definitions posted to newStreamsPendingQueue
+            newStreamsPendingQueue = mp.Queue()
 
+            # Create an RtpPacketTransceiver for each of the specified UDP listen addresses/ports
+            # This should run as a child process
+            for receivePort in receivePortList:
+                try:
+                    rtpPacketTransceiver = Utils.ProcessCreator(RtpPacketTransceiver, shutdownFlag, newStreamsPendingQueue,
+                                                      UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE,
+                                                      glitchEventTriggerThreshold,
+                                                      controllerTCPPort=isptesttHTTPServer.getTCPPort(),
+                                                                        processName=f"RtpPacketTransceiver{UDP_RX_PORT}")
+                    pid = rtpPacketTransceiver.getProcess().pid
+                    Utils.Message.addMessage(f"RtpPacketTransceiver created with pid:{pid}")
+                except Exception as e:
+                    Utils.Message.addMessage(f"ERR: create RtpPacketTransceiver (port {receivePort}), {e}")
 
-
+        except Exception as e:
+            newStreamsPendingQueue = None
+            Utils.Message.addMessage(f"ERR:main() Could not create newStreamsPendingQueue, {e}")
 
 
         # Iterate over the list creating
@@ -6396,6 +6400,28 @@ def main(argv):
                 # Term.printAt(str(listCurrentThreads()),1,2)
                 time.sleep(1)
                 loopCounter += 1
+                # if in RECEIVE mode, poll newStreamsPendingQueue for new incoming stream definitions
+                try:
+                    if MODE =='RECEIVE' and newStreamsPendingQueue is not None:
+                        newStream = newStreamsPendingQueue.get_nowait()
+                        Utils.Message.addMessage(f"DBUG:main() newStream collected {newStream['syncSourceID']} ")
+                        # Attempt to create new RtpReceiveStream object
+                        rtpReceiveStream = Utils.ProcessCreator(RtpReceiveStream,
+                                                                newStream['syncSourceID'],
+                                                                newStream['srcAddress'],
+                                                                newStream['srcPort'],
+                                                                newStream['rxAddress'],
+                                                                newStream['rxPort'],
+                                                                newStream['glitchEventTriggerThreshold'],
+                                                                newStream['rxQueue'],
+                                                                newStream['txQueue'],
+                                                                newStream['streamsPendingDeletionQueue'],
+                                                                controllerTCPPort=isptesttHTTPServer.getTCPPort())
+                except Empty:
+                    pass
+                except Exception as e:
+                    Utils.Message.addMessage(f"ERR:main() newStreamsPendingQueue.get_nowait {e}")
+
                 # If in RECEIVE mode, schedule an auto export of the current streams
                 try:
                     if MODE == 'RECEIVE' and (loopCounter % Registry.streamsSnapshotAutoSaveInterval_s == 0):
