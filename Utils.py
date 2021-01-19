@@ -1328,16 +1328,22 @@ class TCPListenPortCreator(object):
     def getNext(cls, failLimit=1000, address='127.0.0.1'):
         # No of failure attempts (busy ports) before the method gives up
         while failLimit > 0:
-            # Increment the class value
-            cls.tcpPort += 1
+            # Increment the class port value
+            # cls.tcpPort += 1
             # Test to see if the TCP port is free
             try:
-                # Create a TCP/IP socket
+                # # Create a TCP/IP socket
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                # Attempt to bind the socket to the incremented socket value
-                sock.bind((address, cls.tcpPort))
+                # # Attempt to bind the socket to the incremented socket value
+                # sock.bind((address, cls.tcpPort))
+                # sock.close()
+                # # return cls.tcpPort
+                # Let the OS pick a free port by binding to port '0'
+                sock.bind((address, 0))
+                # Query the OS allocated port no from the socket
+                availableTCPPort = sock.getsockname()[1]
                 sock.close()
-                return cls.tcpPort
+                return availableTCPPort
             except Exception as e:
                 # print(f"Can't bind to 127.0.0.1: {cls.tcpPort}, {e}")
                 # Decrement the fail counter
