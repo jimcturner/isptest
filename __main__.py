@@ -4284,7 +4284,8 @@ class RtpPacketTransceiver(object):
                 rawSocket = self.createRawSocket(self.UDP_RX_IP, self.UDP_RX_PORT)
                 self.ctrlAPI.addMessage("DBUG:__rtpPacketTransceiverThread()Created raw socket " + str(rawSocket))
                 # If execution makes it this far without an Exception being thrown, we can safely use the raw socket to receive
-                receiveSocket = rawSocket
+                # receiveSocket = rawSocket
+                receiveSocket = udpSocket
 
             except RtpPacketTransceiver.CreateRawSocketError as e:
                 # Couldn't create raw socket. Most likely because app wasn't run as sudo
