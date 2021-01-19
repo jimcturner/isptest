@@ -1315,13 +1315,12 @@ def getObjectSize(objectToBeMeasured):
     except Exception as e:
         raise Exception("ERR: Utils.getObjectSize() " + str(e))
 
-# This Class will yield a forever incrementing int starting at the value set in
-# Registry.httpServerStartingTCPPort
-# Its is used to ensure that each instance of an http server is created with a unique TCP listen port
-# Each call to this function should yield an ever increasing value
+# This Class will yield an available TCP port number (allocated by the OS)
+# It is used to ensure that each instance of an http server is created with a unique TCP listen port
 class TCPListenPortCreator(object):
     # Get the starting TCP listener port from the Registry
-    tcpPort = Registry.httpServerStartingTCPPort
+    # tcpPort = Registry.httpServerStartingTCPPort
+    lastProvidedTCPPort = 0
 
     # Return the next available TCP port number
     @classmethod
@@ -1334,16 +1333,12 @@ class TCPListenPortCreator(object):
             try:
                 # # Create a TCP/IP socket
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                # # Attempt to bind the socket to the incremented socket value
-                # sock.bind((address, cls.tcpPort))
-                # sock.close()
-                # # return cls.tcpPort
                 # Let the OS pick a free port by binding to port '0'
                 sock.bind((address, 0))
                 # Query the OS allocated port no from the socket
-                availableTCPPort = sock.getsockname()[1]
+                cls.lastProvidedTCPPort = sock.getsockname()[1]
                 sock.close()
-                return availableTCPPort
+                return cls.lastProvidedTCPPort
             except Exception as e:
                 # print(f"Can't bind to 127.0.0.1: {cls.tcpPort}, {e}")
                 # Decrement the fail counter
@@ -1355,7 +1350,7 @@ class TCPListenPortCreator(object):
     # Retrieve the last provided tcpPort value
     @classmethod
     def getLastProvided(cls):
-        return cls.tcpPort
+        return cls.lastProvidedTCPPort
 
 # # Define a custom HTTPServer. This will allow access to the associated object that created it,
 # # from the server (and httpHandler)

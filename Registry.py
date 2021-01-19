@@ -47,7 +47,8 @@ class Registry(object):
     httpServerRtpTransmitterTCPPort = 10001
     # httpServerRtpResultsTCPPort = 10002
 
-    httpServerStartingTCPPort = 10010 # The starting tcp http server port no for adhoc server creation
+    # httpServerStartingTCPPort = 10010 # DEPRECATED 19/1/21 - OS picks a random port no. instead
+    # (Was the starting tcp http server port no for adhoc server creation)
 
     ######### RtpStreamComparer
     # A list of the available criteria by which a stream can be compared (and a display friendly name)
