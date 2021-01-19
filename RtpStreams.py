@@ -1773,10 +1773,19 @@ class RtpReceiveStream(RtpReceiveCommon):
                 time.sleep(0.5)
                 maxConnectionAttempts = 5
                 # Verify that the http server is actually running, by attempting to connect it
+                # and verifying that the response is as expected
                 while maxConnectionAttempts > 0:
                     try:
-                        r = requests.get(f"http://127.0.0.1:{self.tcpListenPort}", timeout=1)
-                        r.raise_for_status()  # Will raise an Exception if there was a problem
+                        # Query the http server for the syncSourceID of the stream
+                        testURL = f"http://127.0.0.1:{self.tcpListenPort}/stats?keyIs=stream_syncSource"
+                        r = requests.get(testURL, timeout=1)
+                        r.raise_for_status()  # Will raise an Exception if there was a problem with requests.get()
+                        # Test that the syncSource ID response matches the syncSourceID of this stream
+                        # If not as expected, raise an Exception
+                        retrievedSyncSourceID = r.json()["stream_syncSource"]
+                        if retrievedSyncSourceID != (self.syncSourceIdentifier + 1):
+                            raise Exception(f"ERR: Unexpected syncSourceID response from HTTP Server {retrievedSyncSourceID}")
+
                         break
                     except:
                         # Decrement maxConnectionAttempts
