@@ -2444,14 +2444,13 @@ class RxStream(object):
                 # Increment the read counter
                 self.rxQueueReceivedCounter += 1
 
-                # If '4' objects retrieved from the rxQueue, send a signal back to RxStreamDetector to cause
+                # If > 2 objects retrieved from the rxQueue, send a signal back to RxStreamDetector to cause
                 # the deletion of the rxQueue associated with this stream
                 if self.rxQueueReceivedCounter > 2:
                     print(f"RxStream.rxStreamThread({self.id}): 3 objects retrieved from rxQueue. Trigger queue deletion")
                     self.streamsPendingDeletionQueue.put(self.id)
                     # Now kill this RxStream object by ending this thread
                     break
-
                 # put some dummy data onto the tx Queue
                 try:
                     self.txQueue.put(f"RxStream {self.id} acknowledged {val}")
@@ -2464,11 +2463,57 @@ class RxStream(object):
                 # break
         print(f"##RxStream {self.id} ended")
 
-        # time.sleep(1)
-
-
-
-# Imports a previous stream snapshot file (*.isp) to allow the stats/event data for multiple streams
-# to be recreated
+# Imports a previous stream snapshot file (*.isp) to allow the stats/event data for multiple streams to be recreated
+# It returns a dict of dicts {syncsourceID:{{stats, events}}, ....} or raises an Exception on failure
 def importHistoricStreamsSnapshot(filename):
+    # Declare dict to hold the results of the import
+    importedStreamsDict = {}
+    try:
+        # Import the snapshot file (which is a list of pickled events and stats dicts)
+        importedSnapshotsList = importObjectFromDisk(filename)
+        if len(importedSnapshotsList) > 0:
+            # Initialise stats and eventsList
+            stats = None
+            eventsList = None
+            for stream in importedSnapshotsList:
+                streamID = stream[0]
+                # Extract stats dict
+                stats = stream[1]
+                # Attempt to validate the keys/Values of the stats dict by reading each key
+                for stat in stats:  # Iterate over keys
+                    # This should (hopefully) cause an exception if a key/value can't be read
+                    # We also use this opportunity to convert the exported snapshot stats values (that were
+                    # all encoded as strings - on account of being obtained via the api) back to Python data types
+                    # BUT Exclude stats["stream_friendly_name"] key, because that is a string and should remain so,
+                    # even if it's numeric
+                    if stat in ["stream_friendly_name"]:  # 'Exclude' list
+                        pass
+                    else:
+                        x = convertStringToPythonDataType(stats[stat])
+                        if not isinstance(stats[stat], type(x)):
+                            # Utils.Message.addMessage(f"DBUG: Recreating stream. converted {stat} from {type(stats[stat])} to {type(x)}")
+                            # assign the type-converted value back to the value in the dict
+                            stats[stat] = x
+
+                eventsList = stream[2]
+                # Attempt to validate the keys/Values of the events list by reading the event no
+                for event in eventsList:
+                    # This should (hopefully) cause an exception if the Event.eventNo can't be read
+                    eventNo = event.eventNo
+
+                # stats{} and eventsList[] for this stream validated, so add to the output dict, keyed with the syncSource ID
+                importedStreamsDict[stats["stream_syncSource"]] = {"statsDict":stats, "eventsList":eventsList}
+        # return the dict contsaining the imported streams
+        return importedStreamsDict
+    except Exception as e:
+        raise Exception(f"Utils.importHistoricStreamsSnapshot() {e}")
+
+# Function to test Utils.importHistoricStreamsSnapshot()
+def testImportHistoricStreamsSnapshot():
+    importedStreamsDict = importHistoricStreamsSnapshot(Registry.streamsSnapshotFilename)
+    print(f"importedStreamsDict {importedStreamsDict.keys()}")
+
+# Creates a snapshot of all the current active streams (via the api) and exports to disk
+# Raises an Exception on error
+def createStreamsSnapshot(exportFilename, controllerTCPPort, controllerTCPAddress="127.0.0.1"):
     pass
