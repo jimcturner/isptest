@@ -1783,17 +1783,17 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Test that the syncSource ID response matches the syncSourceID of this stream
                         # If not as expected, raise an Exception
                         retrievedSyncSourceID = r.json()["stream_syncSource"]
-                        if retrievedSyncSourceID != (self.syncSourceIdentifier + 1):
-                            raise Exception(f"ERR: Unexpected syncSourceID response from HTTP Server {retrievedSyncSourceID}")
+                        if retrievedSyncSourceID != self.syncSourceIdentifier:
+                            raise Exception(f"ERR: Unexpected syncSourceID in response from HTTP Server: {retrievedSyncSourceID}")
 
                         break
-                    except:
+                    except Exception as e:
                         # Decrement maxConnectionAttempts
                         maxConnectionAttempts -= 1
                         self.postMessage(f"INFO:RTPReceiveStream({self.syncSourceIdentifier}) http server validation, "
-                                                 f"{maxConnectionAttempts} remaining")
+                                                 f"{maxConnectionAttempts} remaining, {e}")
                         if maxConnectionAttempts < 1:
-                            raise Exception(f"ERR:maxConnectionAttempts exceeded")
+                            raise Exception(f"ERR:maxConnectionAttempts exceeded, {e}")
                     time.sleep(1)
 
                 self.postMessage(
