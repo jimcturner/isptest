@@ -4830,7 +4830,8 @@ def main(argv):
                 val = newStreamsPending.get(timeout=1)
 
                 print(f"main() Creating new RxStream object with id {val['id']}")
-                rxStream = Utils.ProcessCreator(Utils.RxStream, val['id'], val['txQueue'], val['rxQueue'])
+                rxStream = Utils.ProcessCreator(Utils.RxStream, val['id'], val['txQueue'],
+                                                val['rxQueue'], val['streamsPendingDeletionQueue'])
 
             except Empty:
                 # print(f"main() newStreamsPending Empty")

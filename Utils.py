@@ -2336,36 +2336,45 @@ class ChildProcess(object):
 class RxStreamDetector(object):
     def __init__(self, newStreamsQ):
         self.newStreamsQ = newStreamsQ  # Queue that will be sent back to main()
+        self.mpManager = None # Placeholder - will hold a Multiprocessing.Manager object (to be created in
+                                # the rxStreamDetectorThread
+                                # For some reason, if you create the Manager object within  __init__(), it fails
 
         # Start the thread
         t = threading.Thread(target=self.rxStreamDetectorThread)
         t.start()
 
     def rxStreamDetectorThread(self):
-        import multiprocessing as mp
-        mpManager = mp.Manager()  # Multiprocessor Manager object to allow creation of new queues via a proxy
-                                 # Manager.Queue() objects are pickleable and therefore able to be passed between proceses
+        self.mpManager = mp.Manager()  # Create Multiprocessor Manager object to allow creation of new queues via a proxy
+                                # Manager.Queue() objects are pickleable and therefore able to be passed between proceses
+                                # whereas Multiprocessing.Queue objects only seem to be able to be able to be passed
+                                # 'downwards' from a parent to a child process.
+                                # In this case, I'm dynamically creating rxQueues within a child process (RxStreamDetector)
+                                # and wanting to send them back to another unrelated process (RxStream) via main()
+
         rxQueuesDict = {}       # Create dict to hold all the rxQueues
-        id = 1000
-        txQueue = mpManager.Queue()
+
+        txQueue = self.mpManager.Queue()      # Queue to hold messages *returned* by the RxStream objects
+        streamsPendingDeletionQueue = self.mpManager.Queue()
 
         # Create a dict of new Rx Queues  with every iteration, put some dummy data onto it, add to newStreamsQ
+        id = 1000 # Strating stream id value
         while id < 1011:
             try:
                 # Create an rx Queue
-                # rxQueue = mpManager.Queue()
-                rxQueuesDict[id] = mpManager.Queue()
+                rxQueuesDict[id] = self.mpManager.Queue()
                 # Put some dummy data into the rxQueue()
                 rxQueuesDict[id].put({"dummyData": datetime.datetime.now()})
 
                 # Create a dict to put onto the queue
-                newStream = {
+                newStreamDefinition = {
                     "id": id,
                     "txQueue": txQueue,
-                    "rxQueue": rxQueuesDict[id]
+                    "rxQueue": rxQueuesDict[id],
+                    "streamsPendingDeletionQueue": streamsPendingDeletionQueue
                 }
                 # Add the newStream to the Q (complete with dummy data)
-                self.newStreamsQ.put(newStream)
+                self.newStreamsQ.put(newStreamDefinition)
             except Exception as e:
                 print(f"ERR: mpQueueTestThread put({id}) {e}")
             id += 1
@@ -2377,7 +2386,8 @@ class RxStreamDetector(object):
             rxQueueSelector = None
             try:
                 # select a random rxQueue from rxQueuesDict
-                rxQueueSelector = random.randint(1000, 1010)
+                # rxQueueSelector = random.randint(1000, 1010)
+                rxQueueSelector = random.choice(list(rxQueuesDict))
                 print (f"RxStreamDetector.rxStreamDetectorThread queue {rxQueueSelector} picked")
                 # Put some random data (the current time) into that queue
                 rxQueuesDict[rxQueueSelector].put(datetime.datetime.now())
@@ -2386,24 +2396,40 @@ class RxStreamDetector(object):
 
             # NOw try to read the txQueue
             try:
-                val = txQueue.get(timeout = 0.5)
-                print(f"mpQueueTestThread txQueue val: {val}")
+                val = txQueue.get_nowait()
+                print(f"_rxStreamDetectorThread txQueue val: {val}")
             except Empty:
-                print(f"mpQueueTestThread txQueue Empty")
+                # print(f"_rxStreamDetectorThread txQueue Empty")
+                pass
             except Exception as e:
-                print(f"ERR: mpQueueTestThread txQueue.get() {e}")
+                print(f"ERR: _rxStreamDetectorThread txQueue.get() {e}")
+
+            # Now try to read the streamsPendingDeletionQueue
+            try:
+                rxQueueToBeDeleted = streamsPendingDeletionQueue.get_nowait()
+                print(f"**RxStreamDetector.rxStreamDetectorThread rxQueue {rxQueueToBeDeleted} DELETE request")
+                # Now delete that rxQueue from rxQueuesDict
+                del rxQueuesDict[rxQueueToBeDeleted]
+            except Empty:
+                # print("RxStreamDetector.rxStreamDetectorThread -- No rxQueues to delete")
+                pass
+            except Exception as e:
+                print(f"ERR:RxStreamDetector.rxStreamDetectorThread -- delete rxQueue {e}")
+
 
             x += 1
             time.sleep(1)
-        print(f"mpQueueTestThread ending {id}")
+        print(f"_rxStreamDetectorThread ending {id}")
 
 
 # Test class to replicate an RtpReceiveStream
 class RxStream(object):
-    def __init__(self, id, txQueue, rxQueue):
+    def __init__(self, id, txQueue, rxQueue, streamsPendingDeletionQueue):
         self.id = id
         self.txQueue = txQueue
         self.rxQueue = rxQueue
+        self.rxQueueReceivedCounter = 0 # Counts the no of objects received from self.rxQueue via .get()
+        self.streamsPendingDeletionQueue = streamsPendingDeletionQueue
         # Start the thread
         t = threading.Thread(target=self.rxStreamThread)
         t.start()
@@ -2415,18 +2441,28 @@ class RxStream(object):
             try:
                 val = self.rxQueue.get(timeout=1)
                 print(f"RxStream rxQueue val {val}")
+                # Increment the read counter
+                self.rxQueueReceivedCounter += 1
+
+                # If '4' objects retrieved from the rxQueue, send a signal back to RxStreamDetector to cause
+                # the deletion of the rxQueue associated with this stream
+                if self.rxQueueReceivedCounter > 2:
+                    print(f"RxStream.rxStreamThread({self.id}): 3 objects retrieved from rxQueue. Trigger queue deletion")
+                    self.streamsPendingDeletionQueue.put(self.id)
+                    # Now kill this RxStream object by ending this thread
+                    break
 
                 # put some dummy data onto the tx Queue
                 try:
-                    self.txQueue.put(f"RxStream {id} acknowledged {val}")
+                    self.txQueue.put(f"RxStream {self.id} acknowledged {val}")
                 except Exception as e:
                     print(f"ERR:RxStream txQueue.put {e}")
             except Empty:
                 pass
             except Exception as e:
                 print(f"ERR:RxStream rxQueue.get() {e}")
-                break
-
+                # break
+        print(f"##RxStream {self.id} ended")
 
         # time.sleep(1)
 
