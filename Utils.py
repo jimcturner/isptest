@@ -2341,6 +2341,10 @@ class RxStreamDetector(object):
                                 # the rxStreamDetectorThread
                                 # For some reason, if you create the Manager object within  __init__(), it fails
 
+
+        self.txQueue = None # Placeholder - will hold a Multiprocessing.Manager.Queue()
+
+
         # Start the thread
         t = threading.Thread(target=self.rxStreamDetectorThread)
         t.start()
@@ -2355,7 +2359,7 @@ class RxStreamDetector(object):
 
         rxQueuesDict = {}       # Create dict to hold all the rxQueues
 
-        txQueue = self.mpManager.Queue()      # Queue to hold messages *returned* by the RxStream objects
+        self.txQueue = self.mpManager.Queue()      # Queue to hold messages *returned* by the RxStream objects
         streamsPendingDeletionQueue = self.mpManager.Queue()
 
         # Create a dict of new Rx Queues  with every iteration, put some dummy data onto it, add to newStreamsQ
@@ -2370,7 +2374,7 @@ class RxStreamDetector(object):
                 # Create a dict to put onto the queue
                 newStreamDefinition = {
                     "id": id,
-                    "txQueue": txQueue,
+                    "txQueue": self.txQueue,
                     "rxQueue": rxQueuesDict[id],
                     "streamsPendingDeletionQueue": streamsPendingDeletionQueue
                 }
@@ -2397,7 +2401,7 @@ class RxStreamDetector(object):
 
             # NOw try to read the txQueue
             try:
-                val = txQueue.get_nowait()
+                val = self.txQueue.get_nowait()
                 print(f"_rxStreamDetectorThread txQueue val: {val}")
             except Empty:
                 # print(f"_rxStreamDetectorThread txQueue Empty")
@@ -2463,6 +2467,57 @@ class RxStream(object):
                 print(f"ERR:RxStream rxQueue.get() {e}")
                 # break
         print(f"##RxStream {self.id} ended")
+
+
+class TxSimulator(object):
+    def __init__(self, rxInstance):
+        try:
+            self.txQueue = rxInstance.txQueue
+        except Exception as e:
+            raise Exception(f"ERR: TxSimulator: acquire txQueue, {e}")
+
+        # start the txSimulatorThread
+        txThread = threading.Thread(target=self.txSimulatorThread)
+        txThread.start()
+
+    # Continually polls self.txQueue for new data
+    def txSimulatorThread(self):
+        print("txSimulatorThread starting")
+        while True:
+            # attempt to read the txQueue
+            if self.txQueue is not None:
+                try:
+                    val = self.txQueue.get_nowait()
+                    print(f"txSimulatorThread: txQueue incoming data: {val}")
+                except Empty:
+                    print(f"txSimulatorThread: txQueue EMPTY")
+                    time.sleep(1)
+                except Exception as e:
+                    print(f"ERR:txSimulatorThread {e}")
+                    time.sleep(1)
+            else:
+                print(f"xSimulatorThread: self.txQueue {self.txQueue}")
+                time.sleep(1)
+
+
+# Creates a Rx and TX pair
+class TransceiverSimulator(object):
+    def __init__(self, streamsPendingCreationQueue):
+        self.streamsPendingCreationQueue = streamsPendingCreationQueue # Pass new stream definitions back to main
+
+        try:
+            # Create an Rx/Tx pair
+            # Create the Rx'er (this generates the queues)
+            rx = RxStreamDetector(self.streamsPendingCreationQueue)
+
+            # Create the tx'er
+            tx = TxSimulator(rx)
+        except Exception as e:
+            print(f"ERR:TransceiverSimulator.__init __(), {e}")
+
+
+
+
 
 # Imports a previous stream snapshot file (*.isp) to allow the stats/event data for multiple streams to be recreated
 # It returns a dict of dicts {syncsourceID:{{stats, events}}, ....} or raises an Exception on failure
