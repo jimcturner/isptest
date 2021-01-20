@@ -4567,41 +4567,18 @@ class RtpPacketTransceiver(object):
                             try:
                                 # Test to see whether data flow into this queue has been inhibited
                                 if not rxQueuesDict[syncSourceID]["queueFull"]:
-                                    # If not, put the new data onto the queue
                                     rxQueuesDict[syncSourceID]["rxQueue"].put_nowait(RtpData(seqNo, udpPayloadLength,
-                                                                                packetArrivedTimestamp,
-                                                                                syncSourceID, isptestHeaderData,
-                                                                                rxTTL, srcAddress, srcPort,
-                                                                                self.UDP_RX_IP, self.UDP_RX_PORT))
+                                                                                    packetArrivedTimestamp,
+                                                                                    syncSourceID, isptestHeaderData,
+                                                                                    rxTTL, srcAddress, srcPort,
+                                                                                    self.UDP_RX_IP, self.UDP_RX_PORT))
 
                             except Full:
                                 self.ctrlAPI.addMessage(f"{Fore.RED}ERR:rxQueue({syncSourceID}) "
-                                                        f"is full. UDP({self.UDP_RX_PORT}) data rate too high. Inhibiting ")
+                                                        f"is full. UDP({self.UDP_RX_PORT}) data rate too high. stream inhibited ")
                                 # Set the inhibit flag on this rxQueue to stop any further data being added
                                 rxQueuesDict[syncSourceID]["queueFull"] = True
-                                # # Remove an item from the
-                                # try:
-                                #     val = rxQueuesDict[syncSourceID].get_nowait()
-                                # except Exception as e:
-                                #     pass
-                                # itemsFlushed = 0
-                                # try:
-                                #     # Remove a quarter of the maximum buffer size to create some room
-                                #     for x in range(Registry.rtpPacketTransceiverMaxRxQueueSize>>4):
-                                #         rxQueuesDict[syncSourceID].get_nowait()
-                                #         itemsFlushed += 1
-                                #     self.ctrlAPI.addMessage(f"DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}). "
-                                #                             f"Flushed {itemsFlushed} items")
-                                # except Exception as e:
-                                #     pass
 
-
-                                # try:
-                                #     del rxQueuesDict[syncSourceID]
-                                # except Exception as e:
-                                #     self.ctrlAPI.addMessage(
-                                #         f"{Term.FG(Term.RED)}ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) Failed to delete "
-                                #         f"rxQueue({syncSourceID}) {Term.FG(Term.RESET)}")
                             except Exception as e:
                                 raise Exception(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT})"
                                                          f"rxQueuesDict[{syncSourceID}].put()*existing* {e}")
@@ -4698,23 +4675,6 @@ class RtpPacketTransceiver(object):
                                 #         syncSourceID))
 
                                 rtpRxStreamTempDict[syncSourceID] = [seqNo]
-
-                        # Test to see if the last a previously 'inhibited' rxQueue is now ready to accept data once more
-                        # i.e, was the "queueFull" flag set, and is that queue now 'not full'
-                        try:
-                            self.ctrlAPI.addMessage(f"latest syncSourceID {syncSourceID}")
-                            if rxQueuesDict[syncSourceID]["queueFull"]:
-                                pass
-                                # # This rxQueue has previously been inhbited
-                                # if rxQueuesDict[syncSourceID]["rxQueue"].full() is False:
-                                #     # But the queue is no longer full, so deactivate the inhibit
-                                #     rxQueuesDict[syncSourceID]["rxQueue"] = False
-                                #     self.ctrlAPI.addMessage(
-                                #         f"{Fore.GREEN} rxQueue for stream {syncSourceID} re-enabled")
-                        except Exception as e:
-                            self.ctrlAPI.addMessage(
-                                f"ERR:rtpPacketTransceiverThread({self.UDP_RX_PORT}) test queueFull status for"
-                                f" stream {syncSourceID}, {e}")
 
                     # Reset syncSourceID to None. This will inhibit any more data being added until it is set once more
                     syncSourceID = None

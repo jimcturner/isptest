@@ -103,7 +103,7 @@ class Registry(object):
 
     # Specify the maximum allowable size of the tx and rx queues before an Exception is raised
     rtpPacketTransceiverMaxTxQueueSize = 100
-    rtpPacketTransceiverMaxRxQueueSize = 500
+    rtpPacketTransceiverMaxRxQueueSize = 5000
 
     ### RtpGenerator
     rtpGeneratorRtpParams = 0b10000000 # Was 0b01000000 Perhaps try 0b10000000 to match NTT?
