@@ -4202,8 +4202,29 @@ class RtpPacketTransceiver(object):
     def getSocket(self):
         return self._sharedUDPSocket
 
+
+
     # Main udp/rtp listener thread
     def __rtpPacketTransceiverThread(self):
+
+        # Local function to be run as a thread.
+        # Continually polls txQueue for new messages to be transmitted (until shutdownFlag is set)
+        def _udpTransmitThread(shutdownFlag, udpSocket, txQueue, controllerTCPPort, sendFromPort):
+            api = Utils.APIHelper(controllerTCPPort)
+            api.addMessage(f"Starting _rtpPacketTransceiverThread._udpTransmitThread({sendFromPort})")
+            while True:
+                # End thread if shutdownFlag is set
+                if shutdownFlag.is_set():
+                    break
+                try:
+                    txMesg = txQueue.get(timeout=0.5)
+                    api.addMessage(f"DBUG:_rtpPacketTransceiverThread._udpTransmitThread({sendFromPort}), {txMesg}")
+                except Empty:
+                    pass
+                except Exception as e:
+                    api.addMessage(f"ERR:_rtpPacketTransceiverThread._udpTransmitThread({sendFromPort}), {e}")
+            api.addMessage(f"Ended _udpTransmitThread({sendFromPort})")
+
 
         mpManager = mp.Manager()  # Create Multiprocessor Manager object to allow creation of new queues via a proxy
         # Manager.Queue() objects are pickleable and therefore able to be passed between proceses
@@ -4217,6 +4238,15 @@ class RtpPacketTransceiver(object):
                             # to an RtpReceiveStream object (created in main() that's monitoring this queue)
 
         txQueue = mpManager.Queue()  # Queue to hold messages *returned* by the RxStream objects
+
+        # Create a thread locally, which will poll txQueue
+        try:
+            _udpTransmitThread = threading.Thread(target=_udpTransmitThread, args=(self.shutdownFlag,
+                                                                               self._sharedUDPSocket,
+                                                                               txQueue, self.controllerTCPPort,
+                                                                               self.UDP_RX_PORT)).start()
+        except Exception as e:
+            self.ctrlAPI.addMessage(f"ERR:_rtpPacketTransceiverThread() Couldn't create _udpTransmitThread, {e}")
         streamsPendingDeletionQueue = mpManager.Queue()
 
         rtpRxStreamTempDict = {} # A dict to hold 'possible' incoming streams, before they have been validated
