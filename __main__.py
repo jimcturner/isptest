@@ -4209,7 +4209,10 @@ class RtpPacketTransceiver(object):
 
         # Local function to be run as a thread.
         # Continually polls txQueue for new messages to be transmitted (until shutdownFlag is set)
-        def _udpTransmitThread(shutdownFlag, udpSocket, txQueue, controllerTCPPort, sendFromPort):
+        # def _udpTransmitThread(shutdownFlag, udpSocket, txQueue, controllerTCPPort, sendFromPort):
+        # sendMethod is a callback/pointer to a method that will be used to send the message
+        # pasing in a method makes _udpTransmitThread more generic
+        def _udpTransmitThread(shutdownFlag, sendMethod, txQueue, controllerTCPPort, sendFromPort):
             api = Utils.APIHelper(controllerTCPPort)
             api.addMessage(f"Starting _rtpPacketTransceiverThread._udpTransmitThread({sendFromPort})")
             while True:
@@ -4217,8 +4220,11 @@ class RtpPacketTransceiver(object):
                 if shutdownFlag.is_set():
                     break
                 try:
+                    # Retrieve any messages from the queue (if present)
                     txMesg = txQueue.get(timeout=0.5)
-                    api.addMessage(f"DBUG:_rtpPacketTransceiverThread._udpTransmitThread({sendFromPort}), {txMesg}")
+                    # Send the message (using the method pointed to by sendMethod()
+                    sendMethod(txMesg)
+                    # api.addMessage(f"DBUG:_rtpPacketTransceiverThread._udpTransmitThread({sendFromPort}), {txMesg}")
                 except Empty:
                     pass
                 except Exception as e:
@@ -4242,7 +4248,7 @@ class RtpPacketTransceiver(object):
         # Create a thread locally, which will poll txQueue
         try:
             _udpTransmitThread = threading.Thread(target=_udpTransmitThread, args=(self.shutdownFlag,
-                                                                               self._sharedUDPSocket,
+                                                                               self.sendViaUDP,
                                                                                txQueue, self.controllerTCPPort,
                                                                                self.UDP_RX_PORT)).start()
         except Exception as e:
