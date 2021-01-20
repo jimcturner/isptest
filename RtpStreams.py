@@ -26,7 +26,7 @@ from copy import deepcopy
 import pickle
 from collections import deque   # Used for circular buffers
 from urllib.parse import parse_qs, urlparse, parse_qsl, urlencode
-
+from colorama import init, Fore, Back, Style # Used to allow ansi escape sequences to work on Windows
 import requests
 from pathvalidate import ValidationError, validate_filename, sanitize_filepath
 
@@ -2161,7 +2161,7 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.postMessage("ERR: RtpReceiveStream.killStream() removeFromStreamsDirectory() for stream " + \
                                      str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
-        # # Now remove the Receive queue for this stream (from rxQueuesDict)
+        # # Now signal the removal of the Receive queue for this stream (held in RtpPacketTransceiver.rxQueuesDict[])
         try:
             self.removeStreamQueue.put(self.syncSourceIdentifier)
         except Exception as e:
@@ -2307,25 +2307,6 @@ class RtpReceiveStream(RtpReceiveCommon):
 
     # This thread updates the 1sec averages, moving counters and also housekeeps
     def __samplingThread(self):
-        # Puts the current stream stats and events (the results) in a queue to be transmitted back to the transmitter
-        # (if the transmitter is an instance of isptest)
-        # Rather than sending the entire events list, we only send the last five events.
-        # The correspoinding results receiver is able to ignore any events it has already received
-        def addResultsToTxQueueOld(stats, eventsToBeSent, resultsTxQueue, destAddr, destPort):
-            try:
-                # Create a dictionary containing the stats and eventList data and pickle it (so it can be sent)
-                msg = {"stats": stats, "eventList": eventsToBeSent}
-                # pickledMessage = pickle.dumps(msg, protocol=2)
-                pickledMessage = pickle.dumps(msg)
-                # If compression is enabled, compress the message string before sending
-                if Registry.rtpReceiveStreamCompressResultsBeforeSending:
-                    pickledMessage = bz2.compress(pickledMessage)
-                # add the pickled message to the txMessageQueue
-                resultsTxQueue.put([pickledMessage, destAddr, destPort])
-
-            except Exception as e:
-                self.postMessage(f"ERR:RtpReceiveStream({self.syncSourceIdentifier}).__samplingThread.addResultsToTxQueue() " + str(e))
-
         # This function attempts to calculate the mean period between events (such as glitch, or jitter)
         # to provide a value of how often, on average, the event has occurred
         # To give a glimpse into the future, it will also take into account the time elapsed since the
@@ -3409,10 +3390,16 @@ class RtpReceiveStream(RtpReceiveCommon):
 
 
                 except Empty:
-                # Will be raised if there is a queue timeout (i.e no data in the queue)
+                    # Will be raised if there is a queue timeout (i.e no data in the queue)
                     pass
                 except Exception as e:
-                    self.postMessage(f"ERR:__queueReceiverThread({self.syncSourceIdentifier}).get() " + str(e))
+                    # If there is a problem with the rxQueue for this stream, it is toast - need to kill it!
+                    # If the packets are still arriving, RtpPacketTransceiver should (hopefully) recreate the queue
+                    # which will trigger the recreation of this RtpReceiveStream
+                    self.postMessage(f"{Fore.RED}ERR:__queueReceiverThread({self.syncSourceIdentifier}).get() Corrupted or non"
+                                     f" existent rxQueue. Killing RtpReceiveStream object, {e}")
+                    # Kill the stream
+                    self.killStream(caller=self)
             else:
                 # Otherwise, wait a while before checking again
                 time.sleep(0.5)
@@ -3547,21 +3534,6 @@ class RtpReceiveStream(RtpReceiveCommon):
         filteredEventList = self.filterEventsList(unfilteredEventList, filterList=filterList, reverseOrder=reverseOrder,
                                                   requestedEventNo=requestedEventNo, recent=recent, start=start, end=end)
         return filteredEventList
-
-
-    # Define setter methods
-    #### DEPRECATED  1/12/20 RtpPacketReceiver now places new RtpData objects directly into the queue referenced in
-    # rxQueuesDict{}
-    # def addData(self, rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, rxTTl, srcAddress, srcPort):
-    #     # Create a new rtp data object to hold the rtp packet data and add it to the receive queue
-    #     # newData = RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData)
-    #     try:
-    #         self.rtpStreamQueue.put(RtpData(rtpSequenceNo, payloadSize, timestamp, syncSource, isptestHeaderData, \
-    #                                         rxTTl, srcAddress, srcPort))
-    #         # Increment the counter. Packets out should equal packets in
-    #         self.packetsAddedToRxQueueCount += 1
-    #     except Exception as e:
-    #         self.postMessage("RtpReceiveStream.addData() " + str(e))
 
     # Sends a control message to the isptest Transmitter associated with this ReceiverStream object
     # by pickling the supplied message and wrapping it up in another dict along with
@@ -4954,7 +4926,10 @@ class RtpGenerator(RtpCommon):
 
     # Puts a control message into self.__controlMessageQueue
     def addControlMessage(self, controlMessage):
-        self.__controlMessageQueue.put(controlMessage)
+        try:
+            self.__controlMessageQueue.put(controlMessage)
+        except Exception as e:
+            self.postMessage(f"ERR:RtpGenerator({self.syncSourceIdentifier}).addControlMessage() {e}")
 
     # Takes a control message (as stored in self.__controlMessageQueue) and parses it
     # Each control message is a dict of keys containing at least {syncSourceID, source and type fields}

@@ -63,7 +63,7 @@ import sys
 # from icmplib import ICMPv4Socket, TimeoutExceeded, ICMPRequest
 # from Custom_icmplib import customICMPv4Socket
 from functools import reduce
-from queue import SimpleQueue, Empty, Queue
+from queue import SimpleQueue, Empty, Queue, Full
 
 import socket
 import os
@@ -4243,7 +4243,7 @@ class RtpPacketTransceiver(object):
         rxQueuesDict = {}  # Create dict to hold all the rxQueues (each Rtp stream gets its own rxQueue) and maps
                             # to an RtpReceiveStream object (created in main() that's monitoring this queue)
 
-        txQueue = mpManager.Queue()  # Queue to hold messages *returned* by the RxStream objects
+        txQueue = mpManager.Queue(maxsize=Registry.rtpPacketTransceiverMaxTxQueueSize)  # Queue to hold messages *returned* by the RxStream objects
 
         # Create a thread locally, which will poll txQueue
         try:
@@ -4432,7 +4432,7 @@ class RtpPacketTransceiver(object):
                             # buffer size is 65535 bytes. This is the maximum possible size for UDP We need to set it
                             # to this size for Windows (which is running in promiscuous mode). Otherwise packets received
                             # larger we can accept would kill the socket
-                            rawData, rawAddr = rawSocket.recvfrom(Registry.rtpPacketRecieverRecvFromBufferSize)
+                            rawData, rawAddr = rawSocket.recvfrom(Registry.rtpPacketTransceiverRecvFromBufferSize)
                             rawTimestamp = datetime.datetime.now()
 
                         else:
@@ -4443,7 +4443,7 @@ class RtpPacketTransceiver(object):
 
                         # Next, flush the corresponding UDP port binding (if it contains data, which it should)
                         if udpSocket in r:
-                            udpSocketData, udpSocketAddr = udpSocket.recvfrom(Registry.rtpPacketRecieverRecvFromBufferSize)
+                            udpSocketData, udpSocketAddr = udpSocket.recvfrom(Registry.rtpPacketTransceiverRecvFromBufferSize)
                             udpTimestamp = datetime.datetime.now()
                         else:
                             # If no data to be read, clear the udpSocketData and udpSocketAddr lists
@@ -4565,8 +4565,27 @@ class RtpPacketTransceiver(object):
                                                                             syncSourceID, isptestHeaderData,
                                                                             rxTTL, srcAddress, srcPort,
                                                                             self.UDP_RX_IP, self.UDP_RX_PORT))
+                            except Full:
+                                self.ctrlAPI.addMessage(f"{Term.FG(Term.RED)}ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) "
+                                                        f"rxQueue({syncSourceID}) "
+                                                        f"is full, flushing queue{Term.FG(Term.RESET)}")
+                                itemsFlushed = 0
+                                try:
+                                    while True:
+                                        rxQueuesDict[syncSourceID].get_nowait()
+                                        itemsFlushed +=1
+                                except Empty:
+                                    self.ctrlAPI.addMessage(f"{Fore.MAGENTA}DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}). "
+                                                            f"Flushed {itemsFlushed} items")
+
+                                # try:
+                                #     del rxQueuesDict[syncSourceID]
+                                # except Exception as e:
+                                #     self.ctrlAPI.addMessage(
+                                #         f"{Term.FG(Term.RED)}ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) Failed to delete "
+                                #         f"rxQueue({syncSourceID}) {Term.FG(Term.RESET)}")
                             except Exception as e:
-                                raise Exception(f"ERR:RtpPacketTransceiver.__rtpPacketTransceiverThread()"
+                                raise Exception(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT})"
                                                          f"rxQueuesDict[{syncSourceID}].put()*existing* {e}")
 
                         except:
@@ -4604,7 +4623,7 @@ class RtpPacketTransceiver(object):
 
                                         try:
                                             # Create a managed (proxy) Queue specifically for data with this sync source id
-                                            rxQueuesDict[syncSourceID] = mpManager.Queue()
+                                            rxQueuesDict[syncSourceID] = mpManager.Queue(maxsize=Registry.rtpPacketTransceiverMaxRxQueueSize)
 
                                             # Create a new stream definition and place onto self.newStreamsPendingQueue
                                             newStreamDefinition = {
@@ -4630,42 +4649,6 @@ class RtpPacketTransceiver(object):
                                                                                    rxTTL, srcAddress, srcPort,
                                                                                    self.UDP_RX_IP, self.UDP_RX_PORT))
 
-                                            # Create a new RtpReceiveStream object to accept the data
-                                            # newRtpStream = RtpReceiveStream(syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
-                                            #                                 self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
-                                            #                                 self.rxQueuesDict[syncSourceID], self.txQueue,
-                                            #                                 controllerTCPPort=self.controllerTCPPort,)
-
-                                            # # Create a new RtpReceiveStream process to accept the data
-                                            # newRtpStream = Utils.ProcessCreator(RtpReceiveStream, syncSourceID, srcAddress, srcPort, self.UDP_RX_IP, \
-                                            #                                 self.UDP_RX_PORT, self.glitchEventTriggerThreshold,
-                                            #                                 self.rxQueuesDict[syncSourceID], self.txQueue, self.removeStreamQueue,
-                                            #                                 controllerTCPPort=self.controllerTCPPort, processName="RtpReceiveStream")
-
-                                            # proc = newRtpStream.getProcess()
-                                            # self.ctrlAPI.addMessage(
-                                            #     f"DBUG: _rtpPacketReceiverThread. {proc.name} {x}pid:{proc.pid}, {proc.is_alive()},"
-                                            #     f" {proc.exitcode}")
-
-                                            # # testQueue = mp.SimpleQueue()
-                                            # testProcess = Utils.ProcessCreator(Utils.SecondClass, self.controllerTCPPort,
-                                            #                                    self.rxQueuesDict[syncSourceID], self.txQueue,
-                                            #                                    processName="SecondClass")
-                                            # proc = testProcess.getProcess()
-                                            # self.ctrlAPI.addMessage(
-                                            #     f"DBUG: _rtpPacketReceiverThread. {proc.name} {x}pid:{proc.pid}, {proc.is_alive()},"
-                                            #     f" {proc.exitcode}")
-
-                                            # proc.join()
-
-                                            # # # Add the most recent packet to the newly created rx queue (whereby the
-                                            # # # RtpReceieveStream will be able to pick it up)
-                                            #
-                                            # rxQueuesDict[syncSourceID].put(RtpData(seqNo, udpPayloadLength,
-                                            #                                             packetArrivedTimestamp,
-                                            #                                             syncSourceID, isptestHeaderData,
-                                            #                                             rxTTL, srcAddress, srcPort,
-                                            #                                             self.UDP_RX_IP, self.UDP_RX_PORT))
                                         except Exception as e:
                                             self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread() newStreamsPendingQueue.put(), {e}")
                                             try:

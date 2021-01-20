@@ -95,11 +95,15 @@ class Registry(object):
     rtpReceiveStreamGlitchThreshold = 4 # The default no of packets that have to be lost before a Glitch Event is generated
     rtpReceiveStreamCompressResultsBeforeSending = False # If True, uses bz2 compression. Experimental
 
-    ### RtpPacketReciever
+    ### RtpPacketTransceiver
     # buffer size is 65535 bytes. This is the maximum possible size for UDP We need to set it
     # to this size for Windows (which is running in promiscuous mode). Otherwise packets received
     # larger we can accept would kill the socket
-    rtpPacketRecieverRecvFromBufferSize = 65535
+    rtpPacketTransceiverRecvFromBufferSize = 65535
+
+    # Specify the maximum allowable size of the tx and rx queues before an Exception is raised
+    rtpPacketTransceiverMaxTxQueueSize = 50
+    rtpPacketTransceiverMaxRxQueueSize = 50
 
     ### RtpGenerator
     rtpGeneratorRtpParams = 0b10000000 # Was 0b01000000 Perhaps try 0b10000000 to match NTT?
