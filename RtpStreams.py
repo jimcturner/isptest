@@ -3166,11 +3166,11 @@ class RtpReceiveStream(RtpReceiveCommon):
         # latestRtpSeqNo = 0
         # prevRtpSeqNo = 0 # 'n-1' seq no
         # oldestSeqNo = 0 # the 'n-2' seq
-
         while self.queueReceiverThreadActiveFlag:
 
             # Check to see whether this stream has a valid rx queue (it won't necessarily have, if it was
             # a historic stream that has been recreated)
+
             if self.rxQueue is not None:
                 # Now wait for items to appear in the queue (with a timeout)
                 try:
@@ -3178,6 +3178,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     rxQueue = self.rxQueue
                     # Wait for a packet to arrive in the receive queue
                     rtpPacketData = self.rxQueue.get(timeout=0.2)
+
                     # Copy the latest received rtp packet into the instance variable (so it can be referenced elsewhere)
                     self.__latestReceivedRtpPacket = rtpPacketData
 
@@ -3189,13 +3190,13 @@ class RtpReceiveStream(RtpReceiveCommon):
 
                     # If the queue size starts creeping up, this suggests the CPU can't can't keep up with the rate
                     # of incoming packets
-                    try:
-                        self.rtpStreamQueueCurrentSize = rxQueue.qsize()
-                    except:
-                        pass
-                    if self.rtpStreamQueueCurrentSize > self.rtpStreamQueueMaxSize:
-                        # Keep track of the maximum queue size
-                        self.rtpStreamQueueMaxSize = self.rtpStreamQueueCurrentSize
+                    # try:
+                    #     self.rtpStreamQueueCurrentSize = rxQueue.qsize()
+                    # except:
+                    #     pass
+                    # if self.rtpStreamQueueCurrentSize > self.rtpStreamQueueMaxSize:
+                    #     # Keep track of the maximum queue size
+                    #     self.rtpStreamQueueMaxSize = self.rtpStreamQueueCurrentSize
 
                     # Set initial values
                     if self.packetCounterReceivedTotal == 0:
