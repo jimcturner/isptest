@@ -3992,7 +3992,7 @@ class RtpPacketTransceiver(object):
             udpSocket.bind((UDP_RX_IP, UDP_RX_PORT))
             return udpSocket
         except Exception as e:
-            RtpPacketTransceiver.CreateUDPSocketError(str(e))
+            raise RtpPacketTransceiver.CreateUDPSocketError(str(e))
 
     # Custom Exceptions for createRawSocket()
     class CreateRawSocketError(Exception):
@@ -4003,7 +4003,6 @@ class RtpPacketTransceiver(object):
 
     # Creates a raw socket and initialises it to suit the running OS
     def createRawSocket(self, UDP_RX_IP, UDP_RX_PORT):
-
         try:
             # Create Raw socket
             # The socket initialisation for Windows and Linux is different
@@ -4028,20 +4027,12 @@ class RtpPacketTransceiver(object):
 
             elif current_os == 'Darwin':
                 # The raw socket we want isn't possible for OSX, raise an Exception
-                RtpPacketTransceiver.RawSocketNotPossibleForOSXError("Not supported on OSX (Darwin)")
+                raise RtpPacketTransceiver.RawSocketNotPossibleForOSXError("Not supported on OSX (Darwin)")
 
-        except RtpPacketTransceiver.RawSocketNotPossibleForOSXError as e:
-            # Set rawSocket to None
-            rawSocket = None
-            # Pass the Exception outwards
-            RtpPacketTransceiver.RawSocketNotPossibleForOSXError(str(e))
-
+        # Catch any other Exceptions
         except Exception as e:
-            # Socket creation failed. Raise an Exception
-            # Set rawSocket to None
-            rawSocket = None
-            # print ("createRawSocket() " + str(e))
-            RtpPacketTransceiver.CreateRawSocketError(str(e))
+            # Raw Socket creation failed. Raise an Exception
+            raise RtpPacketTransceiver.CreateRawSocketError(str(e))
 
     def parseRawPacket(self, _rawData):
         # Useful constants
@@ -4284,8 +4275,7 @@ class RtpPacketTransceiver(object):
                 rawSocket = self.createRawSocket(self.UDP_RX_IP, self.UDP_RX_PORT)
                 self.ctrlAPI.addMessage("DBUG:__rtpPacketTransceiverThread()Created raw socket " + str(rawSocket))
                 # If execution makes it this far without an Exception being thrown, we can safely use the raw socket to receive
-                # receiveSocket = rawSocket
-                receiveSocket = udpSocket
+                receiveSocket = rawSocket
 
             except RtpPacketTransceiver.CreateRawSocketError as e:
                 # Couldn't create raw socket. Most likely because app wasn't run as sudo
@@ -6403,6 +6393,7 @@ def main(argv):
                 # if in RECEIVE mode, poll newStreamsPendingQueue for new incoming stream definitions
                 try:
                     if MODE =='RECEIVE' and newStreamsPendingQueue is not None:
+                        # Collect any new incoming stream definitions from the queue
                         newStream = newStreamsPendingQueue.get_nowait()
                         Utils.Message.addMessage(f"DBUG:main() newStream collected {newStream['syncSourceID']} ")
                         # Attempt to create new RtpReceiveStream object
