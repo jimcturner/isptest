@@ -5641,6 +5641,12 @@ def main(argv):
                                                                         processName=f"RtpPacketTransceiver{UDP_RX_PORT}")
                     pid = rtpPacketTransceiver.getProcess().pid
                     Utils.Message.addMessage(f"RtpPacketTransceiver created with pid:{pid}")
+                    # Add the new RtpPacketTransceiver child process to processesCreatedDict so it can be tracked
+                    try:
+                        Utils.addToProcessesCreatedDict(processesCreatedDict, rtpPacketTransceiver.getProcess())
+                    except Exception as e:
+                        Utils.Message.addMessage(
+                            f"ERR:main() add RtpPacketTransceiver({UDP_RX_PORT}) process to processesCreatedDict, {e}")
 
                     # RtpPacketTransceiver creation was successful, so add the receive addr/port to receiveAddrList[]
                     receiveAddrList.append({"addr": UDP_RX_IP, "port": receivePort})
@@ -5698,7 +5704,14 @@ def main(argv):
                                                                 newStream['rxQueue'],
                                                                 newStream['txQueue'],
                                                                 newStream['streamsPendingDeletionQueue'],
-                                                                controllerTCPPort=isptesttHTTPServer.getTCPPort())
+                                                                controllerTCPPort=isptesttHTTPServer.getTCPPort(),
+                                                                processName=f"RtpReceiveStream({newStream['syncSourceID']})")
+                        # Add the new RtpReceiveStream child process to processesCreatedDict so it can be tracked
+                        try:
+                            Utils.addToProcessesCreatedDict(processesCreatedDict, rtpReceiveStream.getProcess())
+                        except Exception as e:
+                            Utils.Message.addMessage(
+                                f"ERR:main() add RtpReceiveStream({newStream['syncSourceID']}) process to processesCreatedDict, {e}")
                 except Empty:
                     pass
                 except Exception as e:
