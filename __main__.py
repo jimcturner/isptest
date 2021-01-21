@@ -560,7 +560,8 @@ class InvalidTxRateSpecifier(Exception):
 
 # A class that will be responsible for rendering the display and catching keyboard output
 class UI(object):
-    def __init__(self, operationMode, specialFeaturesModeFlag, receiveAddrList, controllerTCPPort=None):
+    def __init__(self, operationMode, specialFeaturesModeFlag, receiveAddrList, controllerTCPPort=None,
+                 processesCreatedDict=None):
         self.operationMode = operationMode
         self.specialFeaturesModeFlag = specialFeaturesModeFlag
         self.receiveAddrList = receiveAddrList # This will contain the UDP_RX_IP and  UDP_RX_PORT(s)
@@ -612,6 +613,10 @@ class UI(object):
         self.keysPressedThreadActive = True
         self.renderDisplayThreadActive = True
         self.detectTerminalSizeThreadActive = True
+
+        # A dict of the (multiprocessing) child processes spawned by this object (i.e the RtpGenerators)
+        # keyed by the pid of the process
+        self.processesCreatedDict = processesCreatedDict
 
         # Stores the last pressed keystroke
         self.keyPressed = None
@@ -2010,9 +2015,17 @@ class UI(object):
                         rtpGenerator = Utils.ProcessCreator(RtpGenerator, destAddr, destPort, txRate_bps,
                                                             packetLength, syncSourceID, timeToLive, \
                                                     friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
-                                                    controllerTCPPort=self.controllerTCPPort)
+                                                    controllerTCPPort=self.controllerTCPPort,
+                                                            processName=f"RtpGenerator({syncSourceID})")
 
                         Utils.Message.addMessage("[a] Added new " + str(Utils.bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
+
+                        # Add the process to the processesCreatedDict so we can keep track of it
+                        if self.processesCreatedDict is not None:
+                            try:
+                                Utils.addToProcessesCreatedDict(self.processesCreatedDict, rtpGenerator.getProcess())
+                            except Exception as e:
+                                Utils.Message.addMessage(f"ERR:UI add RtpGenerator({syncSourceID}) process to processesCreatedDict")
 
                         # Stream appears to have been successfully created so
                         # update self.latestTxStreamStats[] with the latest values used
@@ -4875,6 +4888,42 @@ def main(argv):
             time.sleep(0.5)
         print("main() ending")
 
+    # # Iterates over processesDict to verify that all the listed processes are still alive
+    # # If a process is found to be dead, removes it from the dict and returns a list of the pids
+    # # that have been removed from the dict
+    # # Raises an Exception on fail
+    # # It is expecting a dict of dicts {"process":'the Process object, "name":processName}
+    # def updateProcessesCreatedDict(processesDict):
+    #     removedProcesses = {}  # Dict of processes removed keyed by the pid (the value is the process name)
+    #     try:
+    #         # Iterates over processesCreatedDict to verify that all the listed processes are still alive
+    #         processes = dict(processesDict)
+    #         for pid in processes:  # Iterating over a *copy* of the source dict
+    #             proc = processes[pid]["process"]  # Get a handle on the process itself
+    #             name = processes[pid]["name"]
+    #             if proc.is_alive():
+    #                 # process is alive
+    #                 pass
+    #             else:
+    #                 # Process appears to be dead, remove it from the source dict _processesCreatedDict
+    #                 del processesCreatedDict[pid]
+    #                 # Add the removed process to the returned dict
+    #                 removedProcesses[pid] = name
+    #         return removedProcesses
+    #     except Exception as e:
+    #         raise (f"ERR:updateProcessesCreatedDict() {e}")
+    #
+    # # Adds the a child process to the processesCreatedDict
+    # # raises an Exception on failure
+    # def addToProcessesCreatedDict(processesDict, newProcess):
+    #     try:
+    #         pid = newProcess.pid
+    #         name = newProcess.name
+    #         processesDict[pid] = {"process": newProcess, "name": name}
+    #     except Exception as e:
+    #         raise Exception(f"ERR:addToProcessesCreatedDict() {e}")
+
+
     # Check if this is running on OSX. If so, need to use 'spawn' as the multiprocessor start method
     if Utils.getOperatingSystem() == "Darwin":
         print("OSX Detected, using 'spawn' multiprocess start method")
@@ -5266,6 +5315,12 @@ def main(argv):
     # Create dict to hold a list of Object instances that will be shared
     sharedObjects = {}
 
+    # Create a dict to hold a list of child processes spawned (keyed by the pid of the process)
+    # This is a dict of dicts {"process", "name"}
+    processesCreatedDict = {}
+    # Register processesCreatedDict with the sharedObjects dict
+    sharedObjects["processesCreatedDict"] = processesCreatedDict
+
     # # Create new instance of WhoisResolver (which will create a background __whoisLookupThread)
     # whoIsResolver = Utils.WhoisResolver()
     # # Register whoIsResolver with the shared objects dict
@@ -5304,7 +5359,8 @@ def main(argv):
 
     # Create a UI object (that spawns its own thread)
     # ui = UI(MODE, specialFeaturesModeFlag, receiversAndSendersList, controllerTCPPort=isptesttHTTPServerPort)
-    ui = UI(MODE, specialFeaturesModeFlag, receiveAddrList, controllerTCPPort=isptesttHTTPServerPort)
+    ui = UI(MODE, specialFeaturesModeFlag, receiveAddrList,
+            controllerTCPPort=isptesttHTTPServerPort, processesCreatedDict=processesCreatedDict)
     # and add it to the shared objects dict (so that HTTP Server will have access to it)
     sharedObjects["ui"] = ui
 
@@ -5328,7 +5384,14 @@ def main(argv):
             rtpGenerator = Utils.ProcessCreator(RtpGenerator, UDP_TX_IP, UDP_TX_PORT, txRate,
                                         payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
                                         UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME,
-                                        controllerTCPPort=isptesttHTTPServerPort)
+                                        controllerTCPPort=isptesttHTTPServerPort,
+                                                processName=f"RtpGenerator({SYNC_SOURCE_ID})")
+
+            # Add the new RtpGenerator child process to processesCreatedDict so it can be tracked
+            try:
+                Utils.addToProcessesCreatedDict(processesCreatedDict, rtpGenerator.getProcess())
+            except Exception as e:
+                Utils.Message.addMessage(f"ERR:main() add RtpGenerator({SYNC_SOURCE_ID}) process to processesCreatedDict, {e}")
 
         except Exception as e:
             Utils.Message.addMessage("ERR:main() Create RtpGenerator() " + str(e))
@@ -5388,6 +5451,20 @@ def main(argv):
         # newStreamsPendingQueue.join_thread()
         # Utils.Message.addMessage("DBUG:main.shutdownApplication() Waiting for newStreamsPendingQueue flush completed")
         shutdownFlag.set()
+
+        try:
+            # Update the processesCreatedDict
+            Utils.updateProcessesCreatedDict(processesCreatedDict)
+            # Now wait for all the child processes to end (join)
+            for pid in processesCreatedDict:
+                process = processesCreatedDict[pid]
+                Utils.Message.addMessage(f"Waiting for process {pid}:{process['name']} to end")
+                if process["process"].join(timeout=10) == None:
+                    Utils.Message.addMessage(f"Process {pid}:{process['name']} timed out")
+                else:
+                    Utils.Message.addMessage(f"Process {pid}:{process['name']} has ended")
+        except Exception as e:
+            Utils.Message.addMessage(f"ERR:main.shutdownApplication() joining child processes {e}")
 
         try:
             # Wait for diskLogger Thread to end
@@ -5647,6 +5724,15 @@ def main(argv):
                 # Term.printAt(str(listCurrentThreads()),1,2)
                 time.sleep(1)
                 loopCounter += 1
+
+                # Update/Maintain the list of spawned child processes
+                try:
+                    Utils.updateProcessesCreatedDict(processesCreatedDict)
+                    Utils.Message.addMessage(f"child processes: {[processesCreatedDict[x]['name'] for x in processesCreatedDict]}")
+                except Exception as e:
+                    Utils.Message.addMessage(f"main()updateProcessesCreatedDict(), {e}")
+
+
                 # if in RECEIVE mode, poll newStreamsPendingQueue for new incoming stream definitions
                 try:
                     if MODE =='RECEIVE' and newStreamsPendingQueue is not None:
