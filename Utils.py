@@ -79,7 +79,7 @@ def get_ip(ipAddrToTest = '10.255.255.255'):
     return IP
 
 # Attempts to determine what flavour of operating system is running
-# Should return 'Windows' for Windows, or
+# Should return 'Windows' for Windows, or "Darwin" for OSX
 def getOperatingSystem():
     current_os = platform.system()
     return current_os

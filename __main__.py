@@ -4878,7 +4878,11 @@ def main(argv):
             time.sleep(0.5)
         print("main() ending")
 
-    # mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs
+    # Check if this is running on OSX. If so, need to use 'spawn' as the multiprocessor start method
+    if Utils.getOperatingSystem() == "Darwin":
+        print("OSX Detected, using 'spawn' multiprocess start method")
+        mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs
+
     mp.log_to_stderr(logging.DEBUG) ##### <<<<<<- Uncomment to enable multiprocessor debugging to stderr
     # RxStreamCreatorTest()
     # txRxTransceiverTest()
@@ -5382,6 +5386,10 @@ def main(argv):
     def shutdownApplication():
         Utils.Message.addMessage("main.shutdownApplication() called")
         # ############ Stop DiskLogger and __receiveRTP threads (They monitor the status of shutdownFlag)
+        newStreamsPendingQueue.close()
+        Utils.Message.addMessage("DBUG:main.shutdownApplication() Waiting for newStreamsPendingQueue to be flushed")
+        newStreamsPendingQueue.join_thread()
+        Utils.Message.addMessage("DBUG:main.shutdownApplication() Waiting for newStreamsPendingQueue flush completed")
         shutdownFlag.set()
 
         try:
