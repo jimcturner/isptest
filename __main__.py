@@ -5386,7 +5386,7 @@ def main(argv):
     def shutdownApplication():
         Utils.Message.addMessage("main.shutdownApplication() called")
         # ############ Stop DiskLogger and __receiveRTP threads (They monitor the status of shutdownFlag)
-        newStreamsPendingQueue.close()
+        # newStreamsPendingQueue.close()
         # Utils.Message.addMessage("DBUG:main.shutdownApplication() Waiting for newStreamsPendingQueue to be flushed")
         # newStreamsPendingQueue.join_thread()
         # Utils.Message.addMessage("DBUG:main.shutdownApplication() Waiting for newStreamsPendingQueue flush completed")
