@@ -4890,41 +4890,6 @@ def main(argv):
             time.sleep(0.5)
         print("main() ending")
 
-    # # Iterates over processesDict to verify that all the listed processes are still alive
-    # # If a process is found to be dead, removes it from the dict and returns a list of the pids
-    # # that have been removed from the dict
-    # # Raises an Exception on fail
-    # # It is expecting a dict of dicts {"process":'the Process object, "name":processName}
-    # def updateProcessesCreatedDict(processesDict):
-    #     removedProcesses = {}  # Dict of processes removed keyed by the pid (the value is the process name)
-    #     try:
-    #         # Iterates over processesCreatedDict to verify that all the listed processes are still alive
-    #         processes = dict(processesDict)
-    #         for pid in processes:  # Iterating over a *copy* of the source dict
-    #             proc = processes[pid]["process"]  # Get a handle on the process itself
-    #             name = processes[pid]["name"]
-    #             if proc.is_alive():
-    #                 # process is alive
-    #                 pass
-    #             else:
-    #                 # Process appears to be dead, remove it from the source dict _processesCreatedDict
-    #                 del processesCreatedDict[pid]
-    #                 # Add the removed process to the returned dict
-    #                 removedProcesses[pid] = name
-    #         return removedProcesses
-    #     except Exception as e:
-    #         raise (f"ERR:updateProcessesCreatedDict() {e}")
-    #
-    # # Adds the a child process to the processesCreatedDict
-    # # raises an Exception on failure
-    # def addToProcessesCreatedDict(processesDict, newProcess):
-    #     try:
-    #         pid = newProcess.pid
-    #         name = newProcess.name
-    #         processesDict[pid] = {"process": newProcess, "name": name}
-    #     except Exception as e:
-    #         raise Exception(f"ERR:addToProcessesCreatedDict() {e}")
-
 
     # Check if this is running on OSX. If so, need to use 'spawn' as the multiprocessor start method
     if Utils.getOperatingSystem() == "Darwin":
@@ -5682,7 +5647,8 @@ def main(argv):
                 # Update/Maintain the list of spawned child processes
                 try:
                     Utils.updateProcessesCreatedDict(processesCreatedDict)
-                    Utils.Message.addMessage(f"child processes: {[processesCreatedDict[x]['name'] for x in processesCreatedDict]}")
+                    Utils.Message.addMessage(f"child processes: {[processesCreatedDict[x]['name'] for x in processesCreatedDict]}",
+                                             logToDisk=False)
                 except Exception as e:
                     Utils.Message.addMessage(f"main()updateProcessesCreatedDict(), {e}")
 
