@@ -4878,7 +4878,7 @@ def main(argv):
             time.sleep(0.5)
         print("main() ending")
 
-    mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs
+    # mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs
     mp.log_to_stderr(logging.DEBUG) ##### <<<<<<- Uncomment to enable multiprocessor debugging to stderr
     # RxStreamCreatorTest()
     # txRxTransceiverTest()
