@@ -3995,7 +3995,7 @@ class RtpGenerator(RtpCommon):
                 raise Exception(f"renderDebugPage() {rtpGen.__class__.__name__}, {e}")
 
     def __init__(self, UDP_TX_IP, UDP_TX_PORT, txRate, payloadLength, syncSourceID, timeToLive, \
-                 controllerTCPPort=None, **kwargs):
+                 controllerTCPPort=None, shutdownFlag=None, **kwargs):
         # The last arguments (**kwargs) are optional. it allows you to specify a source port or friendly name on creation
         # kwargs are "friendlyName" and "UDP_SRC_PORT"
 

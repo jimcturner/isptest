@@ -3001,6 +3001,7 @@ def __diskLoggerThread(operationMode, shutdownFlag, controllerTCPPort):
         # Check status of shutdownFlag
         if shutdownFlag.is_set():
             # If down, break out of the endless while loop
+            Utils.Message.addMessage("__diskloggerThread() shutdownFlag caught. Ending thread")
             break
         try:
             # Check to see if the existing log files (if they exist) are below the max size threshold
@@ -3165,6 +3166,7 @@ def __diskLoggerThread(operationMode, shutdownFlag, controllerTCPPort):
             file_json.close()
     except Exception as e:
         Utils.Message.addMessage("ERR: __diskloggerThread. Error closing file " + str(e))
+    print("__diskloggerThread")
 
 
 # Autonomous object to send UDP messages. It spawns a thread that will permanently monitor the txMessageQueue
@@ -5306,11 +5308,13 @@ def main(argv):
 
     # Create a UI object (which will spawn a renderDisplay and catchKeyboardPresses thread)
     # Create flag that will be used by UI to signal back to main() that a shutdown has been requested
-    # shutdownFlag = threading.Event()
-    shutdownFlag = mp.Event()
-    # Make sure flag is initially cleared
-    shutdownFlag.clear()
+    # shutdownFlag = mp.Event()
 
+    rtpPacketTransceiverShutdownFlag = mp.Event()
+
+    # diskLogger gets its own shutdownFlag because we want it to be the last thread to end (so we can get error messages
+    # until the very last moment)
+    diskLoggerShutdownFlag = mp.Event()
 
     # Create dict to hold a list of Object instances that will be shared
     sharedObjects = {}
@@ -5365,7 +5369,7 @@ def main(argv):
     sharedObjects["ui"] = ui
 
     # Create a diskLogging Thread - This thread polls the available streams EventsLists and logs then to a file
-    diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, shutdownFlag, isptesttHTTPServerPort,))
+    diskLoggerThread = threading.Thread(target=__diskLoggerThread, args=(MODE, diskLoggerShutdownFlag, isptesttHTTPServerPort,))
     diskLoggerThread.daemon = True  # Thread will auto shutdown when the prog ends
     diskLoggerThread.setName("__diskLoggerThread")
     diskLoggerThread.start()
@@ -5445,48 +5449,14 @@ def main(argv):
     # Define a local function that will perform a graceful shutdown of all threads and resources
     def shutdownApplication():
         Utils.Message.addMessage("main.shutdownApplication() called")
-        # ############ Stop DiskLogger and __receiveRTP threads (They monitor the status of shutdownFlag)
-        # newStreamsPendingQueue.close()
-        # Utils.Message.addMessage("DBUG:main.shutdownApplication() Waiting for newStreamsPendingQueue to be flushed")
-        # newStreamsPendingQueue.join_thread()
-        # Utils.Message.addMessage("DBUG:main.shutdownApplication() Waiting for newStreamsPendingQueue flush completed")
-        shutdownFlag.set()
-
-        try:
-            # Update the processesCreatedDict
-            Utils.updateProcessesCreatedDict(processesCreatedDict)
-            # Now wait for all the child processes to end (join)
-            for pid in processesCreatedDict:
-                process = processesCreatedDict[pid]
-                Utils.Message.addMessage(f"Waiting for process {pid}:{process['name']} to end")
-                if process["process"].join(timeout=10) == None:
-                    Utils.Message.addMessage(f"Process {pid}:{process['name']} timed out")
-                else:
-                    Utils.Message.addMessage(f"Process {pid}:{process['name']} has ended")
-        except Exception as e:
-            Utils.Message.addMessage(f"ERR:main.shutdownApplication() joining child processes {e}")
-
-        try:
-            # Wait for diskLogger Thread to end
-            Utils.Message.addMessage("DBUG: Attempting to verify diskLoggerThread is dead")
-            diskLoggerThread.join()
-            Utils.Message.addMessage("DBUG: diskLoggerThread confirmed killed")
-        except Exception as e:
-            Utils.Message.addMessage("ERR: diskLoggerThread.join() " + str(e))
-
+        # # Cause RtpPacketReceiver(s) to shut down - this will stop the rxQueues being filled
+        # shutdownFlag.set()
 
         # Special case. If in RECEIVE mode, take a snapshot of all the Events lists and stats[] dictionaries, for
         # saving to disk
         if MODE == 'RECEIVE':
-            # Wait for confirmation that RtpPacketReceiver has ended
-            # # wait for __receiveRtpStream Thread to end (if it exists)
-            # try:
-            #     Utils.Message.addMessage("DBUG: Attempting to verify rtpPacketReceiver.receiveRtpThread is dead")
-            #     rtpPacketReceiver.receiveRtpThread.join()
-            #     Utils.Message.addMessage("DBUG: rtpPacketReceiver.receiveRtpThread confirmed killed")
-            # except Exception as e:
-            #     Utils.Message.addMessage("ERR: shutdownApplication Couldn't verify rtpPacketReceiver has ended " + str(e))
-
+            # Signal RtpPacketTransceiver to shut down
+            rtpPacketTransceiverShutdownFlag.set()
             try:
                 streamsExportedCounter = createStreamsSnapshot(isptesttHTTPServerPort)
                 Utils.Message.addMessage(f"Created snapshot for {streamsExportedCounter}"
@@ -5538,6 +5508,21 @@ def main(argv):
             prevStreamsRemainingCounter = streamsRemainingCounter
             time.sleep(1)
 
+        try:
+            # Update the processesCreatedDict
+            Utils.updateProcessesCreatedDict(processesCreatedDict)
+            # Now wait for all the child processes to end (join)
+            Utils.Message.addMessage(f"DBUG:main.shutdownApplication() {len(processesCreatedDict)} child processes to join")
+            for pid in processesCreatedDict:
+                process = processesCreatedDict[pid]
+                Utils.Message.addMessage(f"Waiting for process {pid}:{process['name']} to end")
+                if process["process"].join(timeout=10) == None:
+                    Utils.Message.addMessage(f"Process {pid}:{process['name']} timed out")
+                else:
+                    Utils.Message.addMessage(f"Process {pid}:{process['name']} has ended")
+        except Exception as e:
+            Utils.Message.addMessage(f"ERR:main.shutdownApplication() joining child processes {e}")
+
         # Kill the whoIsResolver object
         whoIsResolver.kill()
 
@@ -5553,14 +5538,17 @@ def main(argv):
 
         time.sleep(0.5)
 
-        ############ Stop DiskLogger and __receiveRTP threads (currently they stop themselves)
-        shutdownFlag.set()
+        ############ Stop DiskLogger as the last item
+        diskLoggerShutdownFlag.set()
         try:
             # Wait for diskLogger Thread to end
+            Utils.Message.addMessage("DBUG: Attempting to verify diskLoggerThread is dead")
             diskLoggerThread.join()
+            Utils.Message.addMessage("DBUG: diskLoggerThread confirmed killed")
+            print("diskLoggerThread ended\r")
         except Exception as e:
             Utils.Message.addMessage("ERR: diskLoggerThread.join() " + str(e))
-
+        print("isptest ended\r")
         exit()
 
 
@@ -5646,7 +5634,7 @@ def main(argv):
             # This should run as a child process
             for receivePort in receivePortList:
                 try:
-                    rtpPacketTransceiver = Utils.ProcessCreator(RtpPacketTransceiver, shutdownFlag, newStreamsPendingQueue,
+                    rtpPacketTransceiver = Utils.ProcessCreator(RtpPacketTransceiver, rtpPacketTransceiverShutdownFlag, newStreamsPendingQueue,
                                                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE,
                                                       glitchEventTriggerThreshold,
                                                       controllerTCPPort=isptesttHTTPServer.getTCPPort(),
@@ -5662,46 +5650,6 @@ def main(argv):
         except Exception as e:
             newStreamsPendingQueue = None
             Utils.Message.addMessage(f"ERR:main() Could not create newStreamsPendingQueue, {e}")
-
-
-        # Iterate over the list creating
-        #   1) A RtpPacketReceiver to receive udp/rtp packets and create RtpReceiveStream objects
-        #       RtpPacketReceiver will also create a rx and tx Queue
-        #   2) A UDPMessageSender to actually do the transmission of udp packets back to the sender
-
-        # socketWaitTimeOut = 2 # In a situation where a valid rx/tx socket isn't (can't be) this will
-        # socketWaitTimer = 0 # When this value exceeds socketWaitTimeOut we wil give up waiting for a socket to become available
-        # socketWaitPollInterval = 0.5 # How often we poll rtpPacketReceiver.getSocket() to check for a valid socket
-        # for receivePort in receivePortList:
-        #     try:
-        #
-        #
-        #         # Create a Transceiver for each of the listen ports listed in receivePortList
-        #         rtpPacketTransceiver = RtpPacketTransceiver(shutdownFlag,
-        #                UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
-        #                                           glitchEventTriggerThreshold,
-        #                                           controllerTCPPort=isptesttHTTPServer.getTCPPort())
-        #
-        #         # Create a Transceiver (which is an RtpPacketReceiver/UDPMessageSender combination) as
-        #         # a subprocess
-        #         # rtpPacketTransceiver = Utils.ProcessCreator(RtpPacketTransceiver, shutdownFlag,
-        #         #        UDP_RX_IP, receivePort, ISPTEST_HEADER_SIZE,
-        #         #                                   glitchEventTriggerThreshold,
-        #         #                                   controllerTCPPort=isptesttHTTPServer.getTCPPort(),
-        #         #                                             processName=f"RtpPacketTransceiver({receivePort})")
-        #         #
-        #         # proc = rtpPacketTransceiver.getProcess()
-        #         # Utils.Message.addMessage(f"########rtpPacketTransceiver {proc.pid}:{proc.is_alive()}")
-        #
-        #
-        #         # RtpPacketTransceiver creation was successful, so add the receive addr/port to receiveAddrList[]
-        #         receiveAddrList.append({"addr": UDP_RX_IP, "port": receivePort})
-        #
-        #     except Exception as e:
-        #         Utils.Message.addMessage(f"ERR: create RtpPacketTransceiver (port {receivePort}), {e}")
-        #         # Utils.APIHelper(isptesttHTTPServerPort).alertUser("RtpPacketTransceiver Error", str(e))
-
-
 
     enable_faulthandler_debugging = True
 
