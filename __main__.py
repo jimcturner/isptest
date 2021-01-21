@@ -3476,13 +3476,10 @@ class RtpPacketTransceiver(object):
         # https://www.corvil.com/kb/what-is-the-largest-safe-udp-packet-size-on-the-internet
         self.MAX_UDP_TX_LENGTH = 576
 
-        self.ctrlAPI.addMessage("############GETS HERE1")
         # Create a thread to receive the RTP streams / send UDP responses
         self.receiveRtpThread = threading.Thread(target=self.__rtpPacketTransceiverThread, args=())
         self.receiveRtpThread.setName("__rtpPacketTransceiverThread(" + str(self.UDP_RX_PORT) + ")")
         self.receiveRtpThread.start()
-
-        self.ctrlAPI.addMessage("############GETS HERE2")
 
     # returns a udp socket to be used as a channel to send data back to the source
     def getSocket(self):
@@ -5565,7 +5562,8 @@ def main(argv):
             # This queue is populated by RtpPacketTransceiver (as it detects the incoming streams) and polled
             # by main() which will generate new RtpReceiveStream objects to consume those streams according to the contents
             # of the stream definitions posted to newStreamsPendingQueue
-            newStreamsPendingQueue = mp.Queue()
+            manager = mp.Manager()
+            newStreamsPendingQueue = manager.Queue()
 
             # Create an RtpPacketTransceiver for each of the specified UDP listen addresses/ports
             # This should run as a child process
