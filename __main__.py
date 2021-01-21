@@ -6340,6 +6340,9 @@ def main(argv):
                                                                         processName=f"RtpPacketTransceiver{UDP_RX_PORT}")
                     pid = rtpPacketTransceiver.getProcess().pid
                     Utils.Message.addMessage(f"RtpPacketTransceiver created with pid:{pid}")
+
+                    # RtpPacketTransceiver creation was successful, so add the receive addr/port to receiveAddrList[]
+                    receiveAddrList.append({"addr": UDP_RX_IP, "port": receivePort})
                 except Exception as e:
                     Utils.Message.addMessage(f"ERR: create RtpPacketTransceiver (port {receivePort}), {e}")
 
