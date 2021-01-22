@@ -3400,7 +3400,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     self.postMessage(f"{Fore.RED}ERR:__queueReceiverThread({self.syncSourceIdentifier}).get() Corrupted or non"
                                      f" existent rxQueue. Killing RtpReceiveStream object, {e}")
                     # Kill the stream
-                    self.killStream(caller=self)
+                    # self.killStream(caller=self)
             else:
                 # Otherwise, wait a while before checking again
                 time.sleep(0.5)
