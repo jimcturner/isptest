@@ -3460,10 +3460,6 @@ class RtpPacketTransceiver(object):
                        UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, controllerTCPPort=None):
         self.newStreamsPendingQueue = newStreamsPendingQueue # Maintained by this Class, polled by main(). Populated
                                                                 # with newly detected stream definitions
-        # self.rxQueuesDict = {} # A dict of queues, one for each Rtp Stream
-        # self.txQueue = mp.Queue()   # Used to send data back to the transmitter (only one tx queue per UDP socket)
-        # self.removeStreamQueue = mp.Queue() # Used to initiate removals from self.rxQueuesDict
-
         self.shutdownFlag = shutdownFlag
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
@@ -3495,6 +3491,8 @@ class RtpPacketTransceiver(object):
         self.receiveRtpThread = threading.Thread(target=self.__rtpPacketTransceiverThread, args=())
         self.receiveRtpThread.setName("__rtpPacketTransceiverThread(" + str(self.UDP_RX_PORT) + ")")
         self.receiveRtpThread.start()
+
+        # self.ctrlAPI.addMessage("---------GETS HERE")
 
     # returns a udp socket to be used as a channel to send data back to the source
     def getSocket(self):
@@ -4005,7 +4003,7 @@ class RtpPacketTransceiver(object):
                     # Check to see if there are any streams in the queue that have pending delete requests
                     streamToDelete = streamsPendingDeletionQueue.get(block=False)
                     self.ctrlAPI.addMessage(f"DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) "
-                                            f"removed {streamToDelete} from rxQueuesDict")
+                                            f"removed stream {streamToDelete} from rxQueuesDict")
                     del rxQueuesDict[streamToDelete]
                 except Empty:
                     pass
@@ -4047,7 +4045,43 @@ class RtpPacketTransceiver(object):
         except Exception as e:
             self.ctrlAPI.addMessage("ERR:__rtpPacketTransceiverThread() rawSocket.close() " + str(e))
 
-        self.ctrlAPI.addMessage("DBUG:__rtpPacketTransceiverThread() exiting")
+        # As a final measure before the thread ends, flush all the queues created by this thread
+        # If data remains in the queues, it's possible that the parent Process will deadlock
+        try:
+            queuesToBeFlushed = [txQueue, streamsPendingDeletionQueue, *[q["rxQueue"] for q in rxQueuesDict]]
+            self.ctrlAPI.addMessage(f"DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}), "
+                                    f"{len(queuesToBeFlushed)} queues to be flushed")
+            # Flush all queues with a repeated .get() until they're empty
+            qItemsFlushed = 0 # Counter
+            for q in queuesToBeFlushed:
+                while True:
+                    try:
+                        val = q.get_nowait()
+                        qItemsFlushed += 1
+                    except Empty:
+                        # Queue is empty, break out of the while loop, move onto the next queue
+                        break
+                    except Exception as e:
+                        self.ctrlAPI.addMessage(
+                            f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) flush queue {q} , {e}")
+            self.ctrlAPI.addMessage(
+                f"DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}), {qItemsFlushed} flushed from queue")
+        except Exception as e:
+            self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) flush queues {e}")
+
+        # try:
+        #     self.newStreamsPendingQueue.cancel_join_thread()
+        # except Exception as e:
+        #     self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) "
+        #                             f"newStreamsPendingQueue.cancel_join_thread() {e}")
+
+        try:
+            mpManager.shutdown()
+        except Exception as e:
+            self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) "
+                                    f"mpManager.shutdown() {e}")
+
+        self.ctrlAPI.addMessage(f"DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) exiting")
 
 # Class to provide an HTTP Server/ web API
 # Note, this Class also provides a stream directory service
