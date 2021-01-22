@@ -3399,7 +3399,7 @@ class RtpReceiveStream(RtpReceiveCommon):
                     # which will trigger the recreation of this RtpReceiveStream
                     self.postMessage(f"{Fore.RED}ERR:__queueReceiverThread({self.syncSourceIdentifier}).get() Corrupted or non"
                                      f" existent rxQueue, {e}")
-                    # Clear the reference to the rxQueue to stop it being queued any more
+                    # Clear the reference to the rxQueue to stop it being polled any more
                     self.rxQueue is None
                     # Kill the stream
                     # self.killStream(caller=self)

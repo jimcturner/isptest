@@ -5628,17 +5628,40 @@ def main(argv):
             # Create an RtpPacketTransceiver for each of the specified UDP listen addresses/ports
             # This should run as a child process
             for receivePort in receivePortList:
+                # try:
+                #     rtpPacketTransceiver = Utils.ProcessCreator(RtpPacketTransceiver, rtpPacketTransceiverShutdownFlag, newStreamsPendingQueue,
+                #                                       UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE,
+                #                                       glitchEventTriggerThreshold,
+                #                                       controllerTCPPort=isptesttHTTPServer.getTCPPort(),
+                #                                                         processName=f"RtpPacketTransceiver{UDP_RX_PORT}")
+                #     pid = rtpPacketTransceiver.getProcess().pid
+                #     Utils.Message.addMessage(f"RtpPacketTransceiver created with pid:{pid}")
+                #     # Add the new RtpPacketTransceiver child process to processesCreatedDict so it can be tracked
+                #     try:
+                #         Utils.addToProcessesCreatedDict(processesCreatedDict, rtpPacketTransceiver.getProcess())
+                #     except Exception as e:
+                #         Utils.Message.addMessage(
+                #             f"ERR:main() add RtpPacketTransceiver({UDP_RX_PORT}) process to processesCreatedDict, {e}")
+                #
+                #     # RtpPacketTransceiver creation was successful, so add the receive addr/port to receiveAddrList[]
+                #     receiveAddrList.append({"addr": UDP_RX_IP, "port": receivePort})
+                # except Exception as e:
+                #     Utils.Message.addMessage(f"ERR: create RtpPacketTransceiver (port {receivePort}), {e}")
+
                 try:
-                    rtpPacketTransceiver = Utils.ProcessCreator(RtpPacketTransceiver, rtpPacketTransceiverShutdownFlag, newStreamsPendingQueue,
-                                                      UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE,
-                                                      glitchEventTriggerThreshold,
-                                                      controllerTCPPort=isptesttHTTPServer.getTCPPort(),
-                                                                        processName=f"RtpPacketTransceiver{UDP_RX_PORT}")
-                    pid = rtpPacketTransceiver.getProcess().pid
-                    Utils.Message.addMessage(f"RtpPacketTransceiver created with pid:{pid}")
+                    rtpPacketTransceiver = mp.Process(target=RtpPacketTransceiver,
+                                                      args=(rtpPacketTransceiverShutdownFlag,
+                                                            newStreamsPendingQueue,
+                                                            UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE,
+                                                            glitchEventTriggerThreshold,),
+                                                      kwargs={"controllerTCPPort":isptesttHTTPServer.getTCPPort()},
+                                                      name=f"RtpPacketTransceiver{UDP_RX_PORT}",
+                                                      daemon=False)
+                    rtpPacketTransceiver.start()
+                    Utils.Message.addMessage(f"RtpPacketTransceiver created with pid:{rtpPacketTransceiver.pid}")
                     # Add the new RtpPacketTransceiver child process to processesCreatedDict so it can be tracked
                     try:
-                        Utils.addToProcessesCreatedDict(processesCreatedDict, rtpPacketTransceiver.getProcess())
+                        Utils.addToProcessesCreatedDict(processesCreatedDict, rtpPacketTransceiver)
                     except Exception as e:
                         Utils.Message.addMessage(
                             f"ERR:main() add RtpPacketTransceiver({UDP_RX_PORT}) process to processesCreatedDict, {e}")
