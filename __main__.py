@@ -3044,115 +3044,119 @@ def __diskLoggerThread(operationMode, shutdownFlag, controllerTCPPort):
         createLogFile(filename_json, "Event Log json file")
 
         # Query the API for the current streams list
-        rtpStreamsList = ctrlAPI.getStreamsList()
-        # Utils.Message.addMessage(f"diskloggerThread.rtpStreamsList{rtpStreamsList}")
-        if len(rtpStreamsList) > 0:
-            # Iterate over availableRtpRxStreamList looking for new events
-            for streamDefinition in rtpStreamsList:
-                # Attempt to access rtpStream events list
-                # and create a sublist of the just the latest elements
-                try:
-                    # Extract the streamID for the current stream definition
-                    streamID = streamDefinition["streamID"]
-
-                    # Check to see if this is a new stream
-                    if streamID not in lastWrittenEventNoDict:
-                        # The stream is not yet known, so add to lastWrittenEventNoDict and assign value 0, as we've
-                        # not yet written any events to disk that correspond to this stream
-                        lastWrittenEventNoDict[streamID] = 0
-                    # Recall the lastWrittenEventNo for this streamID
-                    lastWrittenEventNo = lastWrittenEventNoDict[streamID]
-
-                    # Create API helper for the stream
-                    streamAPI = Utils.APIHelper(port=streamDefinition["httpPort"])
-                    # Get the most recent event no for the current stream
-                    # If in TRANSMIT mode, this will fail if the RtpStreamResults object doesn't exist yet (because this
-                    # api endpoint is only created once the TRANSMIT end has started receiving data back from the RECEIVE end
-                    # Therefore, if this fails, fail silently
+        try:
+            rtpStreamsList = ctrlAPI.getStreamsList()
+            # Utils.Message.addMessage(f"diskloggerThread.rtpStreamsList{rtpStreamsList}")
+            if len(rtpStreamsList) > 0:
+                # Iterate over availableRtpRxStreamList looking for new events
+                for streamDefinition in rtpStreamsList:
+                    # Attempt to access rtpStream events list
+                    # and create a sublist of the just the latest elements
                     try:
-                        latestEventNo = streamAPI.getRTPStreamEventListAsJson(recent=1)[0]["eventNo"]
+                        # Extract the streamID for the current stream definition
+                        streamID = streamDefinition["streamID"]
 
-                        # Now test latestEventNo to see if any new Events have appeared since we last checked
-                        # Also check to see if the eventsList has been reset in the mean time. This could happen if the
-                        # Receiver resets its stats/deletes a receive stream. In which case the event no's would restart
-                        if latestEventNo < lastWrittenEventNo:
-                            Utils.Message.addMessage(
-                                f"DBUG:__diskLoggerThread()Stats/Events for stream {streamID} reset by Receiver")
-                            # If so, we'll need to re-add all the events from the events list.
-                            # Signify this by setting unwrittenEventsCount to 'latestEventNo' for which the api will interpret as 'all events'
-                            unwrittenEventsCount = latestEventNo
+                        # Check to see if this is a new stream
+                        if streamID not in lastWrittenEventNoDict:
+                            # The stream is not yet known, so add to lastWrittenEventNoDict and assign value 0, as we've
+                            # not yet written any events to disk that correspond to this stream
+                            lastWrittenEventNoDict[streamID] = 0
+                        # Recall the lastWrittenEventNo for this streamID
+                        lastWrittenEventNo = lastWrittenEventNoDict[streamID]
 
-                        else:
-                            # This is the default case, where the most recent events in allEvents are likely to have
-                            # not been written to disk yet
-                            # Calculate how many new (i.e not yet written to disk) events there in are in this
-                            # RtpStream object
-                            unwrittenEventsCount = latestEventNo - lastWrittenEventNo
+                        # Create API helper for the stream
+                        streamAPI = Utils.APIHelper(port=streamDefinition["httpPort"])
+                        # Get the most recent event no for the current stream
+                        # If in TRANSMIT mode, this will fail if the RtpStreamResults object doesn't exist yet (because this
+                        # api endpoint is only created once the TRANSMIT end has started receiving data back from the RECEIVE end
+                        # Therefore, if this fails, fail silently
+                        try:
+                            latestEventNo = streamAPI.getRTPStreamEventListAsJson(recent=1)[0]["eventNo"]
 
-                        # Now retrieve the unwritten events (if any) from the API to be written to disk
-                        if unwrittenEventsCount > 0:
-                            # If the feature is enabled, retrieve a list of the most recent Events as json
-                            if Registry.enableJsonEventsLog:
+                            # Now test latestEventNo to see if any new Events have appeared since we last checked
+                            # Also check to see if the eventsList has been reset in the mean time. This could happen if the
+                            # Receiver resets its stats/deletes a receive stream. In which case the event no's would restart
+                            if latestEventNo < lastWrittenEventNo:
+                                Utils.Message.addMessage(
+                                    f"DBUG:__diskLoggerThread()Stats/Events for stream {streamID} reset by Receiver")
+                                # If so, we'll need to re-add all the events from the events list.
+                                # Signify this by setting unwrittenEventsCount to 'latestEventNo' for which the api will interpret as 'all events'
+                                unwrittenEventsCount = latestEventNo
+
+                            else:
+                                # This is the default case, where the most recent events in allEvents are likely to have
+                                # not been written to disk yet
+                                # Calculate how many new (i.e not yet written to disk) events there in are in this
+                                # RtpStream object
+                                unwrittenEventsCount = latestEventNo - lastWrittenEventNo
+
+                            # Now retrieve the unwritten events (if any) from the API to be written to disk
+                            if unwrittenEventsCount > 0:
+                                # If the feature is enabled, retrieve a list of the most recent Events as json
+                                if Registry.enableJsonEventsLog:
+                                    try:
+                                        unwrittenEventsJson = streamAPI.getRTPStreamEventListAsJson(recent=unwrittenEventsCount)
+                                        # Write the batch of Json Events to disk
+                                        if len(unwrittenEventsJson) > 0:
+                                            # Utils.Message.addMessage(f"Writing {len(unwrittenEventsJson)} Json Events")
+                                            # unpack each json-encoded event (basically, a dict) back to a string and put in a list
+                                            serialisedJson = [json.dumps(event) for event in unwrittenEventsJson]
+                                            Utils.Message.addMessage(f"serialisedJson({len(serialisedJson)}){serialisedJson}")
+                                            # Create a string of Json with the events separated by a newline
+                                            eventsJsonString = "\n".join(serialisedJson) + "\n"
+                                            # Open the file for writing
+                                            file_json = open(filename_json, "a+")
+                                            file_json.write(eventsJsonString)
+                                            # Close the files
+                                            file_json.close()
+                                    except Exception as e:
+                                        Utils.Message.addMessage(f"ERR:Corrupted Json EventsList?: unwrittenEventsCount:{unwrittenEventsCount}, "\
+                                                    f"latestEventNo:{latestEventNo}, err: {e}")
+
                                 try:
-                                    unwrittenEventsJson = streamAPI.getRTPStreamEventListAsJson(recent=unwrittenEventsCount)
-                                    # Write the batch of Json Events to disk
-                                    if len(unwrittenEventsJson) > 0:
-                                        # Utils.Message.addMessage(f"Writing {len(unwrittenEventsJson)} Json Events")
-                                        # unpack each json-encoded event (basically, a dict) back to a string and put in a list
-                                        serialisedJson = [json.dumps(event) for event in unwrittenEventsJson]
-                                        Utils.Message.addMessage(f"serialisedJson({len(serialisedJson)}){serialisedJson}")
-                                        # Create a string of Json with the events separated by a newline
-                                        eventsJsonString = "\n".join(serialisedJson) + "\n"
+                                    # Retrieve a list of the most recent Events as CSV
+                                    unwrittenEventsCSV = streamAPI.getRTPStreamEventListAsCSV(recent=unwrittenEventsCount)
+                                    # Utils.Message.addMessage(f"unwrittenEventsCount: {unwrittenEventsCount}, lastWrittenEventNo:{lastWrittenEventNo}")
+
+                                    # Write the batch of CSV Events to disk
+                                    if len(unwrittenEventsCSV) > 0:
+                                        # Utils.Message.addMessage(f"Writing {len(unwrittenEventsCSV)} CSV Events")
+                                        # Create a string of CSV with the events separated by a newline
+                                        eventsCSVString = "\n".join(unwrittenEventsCSV) + "\n"
                                         # Open the file for writing
-                                        file_json = open(filename_json, "a+")
-                                        file_json.write(eventsJsonString)
+                                        file_csv = open(filename_csv, "a+")
+                                        file_csv.write(eventsCSVString)
+                                        # Make a note of the last written event no against this stream id key
+                                        lastWrittenEventNoDict[streamID] = latestEventNo
                                         # Close the files
-                                        file_json.close()
+                                        file_csv.close()
                                 except Exception as e:
-                                    Utils.Message.addMessage(f"ERR:Corrupted Json EventsList?: unwrittenEventsCount:{unwrittenEventsCount}, "\
-                                                f"latestEventNo:{latestEventNo}, err: {e}")
+                                    # Possibly corrupted Eventlist, so skip this batch
+                                    lastWrittenEventNoDict[streamID] = latestEventNo + 1
+                                    Utils.Message.addMessage(f"ERR:Corrupted CSV EventsList? : unwrittenEventsCount:{unwrittenEventsCount}, "\
+                                                    f"latestEventNo:{latestEventNo},  err: {e}")
+                        except Exception as e:
+                            # No response from API
+                            # Utils.Message.addMessage(f"DBUG:EventsList unavailable (no response from RECEIVER? {e}", logToDisk=False)
+                            pass
 
-                            try:
-                                # Retrieve a list of the most recent Events as CSV
-                                unwrittenEventsCSV = streamAPI.getRTPStreamEventListAsCSV(recent=unwrittenEventsCount)
-                                # Utils.Message.addMessage(f"unwrittenEventsCount: {unwrittenEventsCount}, lastWrittenEventNo:{lastWrittenEventNo}")
-
-                                # Write the batch of CSV Events to disk
-                                if len(unwrittenEventsCSV) > 0:
-                                    # Utils.Message.addMessage(f"Writing {len(unwrittenEventsCSV)} CSV Events")
-                                    # Create a string of CSV with the events separated by a newline
-                                    eventsCSVString = "\n".join(unwrittenEventsCSV) + "\n"
-                                    # Open the file for writing
-                                    file_csv = open(filename_csv, "a+")
-                                    file_csv.write(eventsCSVString)
-                                    # Make a note of the last written event no against this stream id key
-                                    lastWrittenEventNoDict[streamID] = latestEventNo
-                                    # Close the files
-                                    file_csv.close()
-                            except Exception as e:
-                                # Possibly corrupted Eventlist, so skip this batch
-                                lastWrittenEventNoDict[streamID] = latestEventNo + 1
-                                Utils.Message.addMessage(f"ERR:Corrupted CSV EventsList? : unwrittenEventsCount:{unwrittenEventsCount}, "\
-                                                f"latestEventNo:{latestEventNo},  err: {e}")
                     except Exception as e:
-                        # No response from API
-                        # Utils.Message.addMessage(f"DBUG:EventsList unavailable (no response from RECEIVER? {e}", logToDisk=False)
-                        pass
+                        Utils.Message.addMessage(f"ERR: __diskLoggerThread: {e}")
 
-                except Exception as e:
-                    Utils.Message.addMessage(f"ERR: __diskLoggerThread: {e}")
+            # Finally, compare the list of streams in lastWrittenEventNoDict with those in rtpStreamsList
+            # If they are present in lastWrittenEventNoDict{} but not in rtpStreamsList[] thi probably means that
+            # they have been unregistered from the streams directory (i.e deleted) therefore we should housekeep
+            # lastWrittenEventNoDict{} and remove them
 
-        # Finally, compare the list of streams in lastWrittenEventNoDict with those in rtpStreamsList
-        # If they are present in lastWrittenEventNoDict{} but not in rtpStreamsList[] thi probably means that
-        # they have been unregistered from the streams directory (i.e deleted) therefore we should housekeep
-        # lastWrittenEventNoDict{} and remove them
+            # Create list of streamIDs from rtpStreamsList
+            streamIDList = [stream["streamID"] for stream in rtpStreamsList]
+            # Keep only the streamIDs from rtpStreamsList and diccard any other keys that might be in lastWrittenEventNoDict
+            lastWrittenEventNoDict = {wantedKey: lastWrittenEventNoDict[wantedKey] for wantedKey in streamIDList}
+        except Exception as e:
+            Utils.Message.addMessage(f"ERR: __diskloggerThread. getStreamsList(): {e}")
 
-        # Create list of streamIDs from rtpStreamsList
-        streamIDList = [stream["streamID"] for stream in rtpStreamsList]
-        # Keep only the streamIDs from rtpStreamsList and diccard any other keys that might be in lastWrittenEventNoDict
-        lastWrittenEventNoDict = {wantedKey: lastWrittenEventNoDict[wantedKey] for wantedKey in streamIDList}
 
-        time.sleep(1)
+            time.sleep(1)
 
     # If execution gets here, the thread is ending....
     try:
@@ -5468,18 +5472,22 @@ def main(argv):
                 Utils.Message.addMessage(f"ERR:Export streams snapshot failure (on shutdown) {e}")
 
 
-        # Attempt to remove all rtp stream objects (be they RtpGenrators (which themselves reference RtpStreamresults objects)
+        # Attempt to remove all rtp stream objects (be they RtpGenerators (which themselves reference RtpStreamresults objects)
         # Get a list of streams and send the delete method to each in turn
-        streamsList = Utils.APIHelper(isptesttHTTPServerPort).getStreamsList()
+        try:
+            streamsList = Utils.APIHelper(isptesttHTTPServerPort).getStreamsList()
 
 
-        # Iterate over streamsList to send an HTTP DELETE via the api
-        for stream in streamsList:
-            try:
-                # send an HTTP DELETE to each object, to cause it to die
-                Utils.APIHelper(stream["httpPort"]).deleteByURL("/delete")
-            except Exception as e:
-                Utils.Message.addMessage(f"main.shutdownApplication() HTTP DELETE streams {e}")
+            # Iterate over streamsList to send an HTTP DELETE via the api
+            for stream in streamsList:
+                try:
+                    # send an HTTP DELETE to each object, to cause it to die
+                    Utils.APIHelper(stream["httpPort"]).deleteByURL("/delete")
+                except Exception as e:
+                    pass
+                    # Utils.Message.addMessage(f"main.shutdownApplication() HTTP DELETE streams {e}")
+        except Exception as e:
+            Utils.Message.addMessage(f"ERR:main.shutdownApplication() HTTP DELETE streams {e}")
 
         # Now wait for the streamsList to be empty (i.e have all the stream objects de-registered themselves),
         # before continuing with the shutdown process
