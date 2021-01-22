@@ -5641,8 +5641,9 @@ def main(argv):
             # This queue is populated by RtpPacketTransceiver (as it detects the incoming streams) and polled
             # by main() which will generate new RtpReceiveStream objects to consume those streams according to the contents
             # of the stream definitions posted to newStreamsPendingQueue
-            manager = mp.Manager()
-            newStreamsPendingQueue = manager.Queue()
+            # manager = mp.Manager()
+            # newStreamsPendingQueue = manager.Queue()
+            newStreamsPendingQueue = mp.Queue()
 
             # Create an RtpPacketTransceiver for each of the specified UDP listen addresses/ports
             # This should run as a child process
