@@ -5667,7 +5667,7 @@ def main(argv):
                                                             glitchEventTriggerThreshold,),
                                                       kwargs={"controllerTCPPort":isptesttHTTPServer.getTCPPort()},
                                                       name=f"RtpPacketTransceiver{UDP_RX_PORT}",
-                                                      daemon=True)
+                                                      daemon=False)
                     rtpPacketTransceiver.start()
                     # Now confirm that the process actually started (and remained running)
                     # attempt to join() If this blocks, then the Process must be running
