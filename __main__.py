@@ -5514,12 +5514,13 @@ def main(argv):
             for pid in processesCreatedDict:
                 process = processesCreatedDict[pid]
                 # Check to see if Process has already exited (in the mean time)
-                if process["process"].exitcode is not None:
+                exitCode = process["process"].exitcode
+                if  exitCode is not None:
                     Utils.Message.addMessage(f"Waiting for process {pid}:{process['name']} to end")
                     if process["process"].join(timeout=10) == None:
                         Utils.Message.addMessage(f"Process.join() {pid}:{process['name']} timed out")
                 else:
-                    Utils.Message.addMessage(f"Process {pid}:{process['name']} has already ended")
+                    Utils.Message.addMessage(f"Process {pid}:{process['name']} has already ended with exit code {exitCode}")
         except Exception as e:
             Utils.Message.addMessage(f"ERR:main.shutdownApplication() joining child processes {e}")
 
