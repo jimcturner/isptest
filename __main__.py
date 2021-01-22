@@ -5508,11 +5508,13 @@ def main(argv):
             Utils.Message.addMessage(f"DBUG:main.shutdownApplication() {len(processesCreatedDict)} child processes to join")
             for pid in processesCreatedDict:
                 process = processesCreatedDict[pid]
-                Utils.Message.addMessage(f"Waiting for process {pid}:{process['name']} to end")
-                if process["process"].join(timeout=10) == None:
-                    Utils.Message.addMessage(f"Process {pid}:{process['name']} timed out")
+                # Check to see if Process has already exited (in the mean time)
+                if process["process"].exitcode is not None:
+                    Utils.Message.addMessage(f"Waiting for process {pid}:{process['name']} to end")
+                    if process["process"].join(timeout=10) == None:
+                        Utils.Message.addMessage(f"Process.join() {pid}:{process['name']} timed out")
                 else:
-                    Utils.Message.addMessage(f"Process {pid}:{process['name']} has ended")
+                    Utils.Message.addMessage(f"Process {pid}:{process['name']} has already ended")
         except Exception as e:
             Utils.Message.addMessage(f"ERR:main.shutdownApplication() joining child processes {e}")
 
