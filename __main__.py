@@ -4078,8 +4078,13 @@ class RtpPacketTransceiver(object):
 
             self.ctrlAPI.addMessage(f"DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) exiting")
         except Exception as e:
-            self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) "
-                                    f" failed to start {e}")
+            # self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) "
+            #                         f" failed to start {e}")
+            x = 10
+            while x > 0:
+                print(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) failed to start {e}\n")
+                x -= 1
+                time.sleep(0.1)
 
 
 # Class to provide an HTTP Server/ web API
@@ -5662,7 +5667,7 @@ def main(argv):
                                                             glitchEventTriggerThreshold,),
                                                       kwargs={"controllerTCPPort":isptesttHTTPServer.getTCPPort()},
                                                       name=f"RtpPacketTransceiver{UDP_RX_PORT}",
-                                                      daemon=False)
+                                                      daemon=True)
                     rtpPacketTransceiver.start()
                     # Now confirm that the process actually started (and remained running)
                     # attempt to join() If this blocks, then the Process must be running
