@@ -4069,12 +4069,6 @@ class RtpPacketTransceiver(object):
         except Exception as e:
             self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) flush queues {e}")
 
-        # try:
-        #     self.newStreamsPendingQueue.cancel_join_thread()
-        # except Exception as e:
-        #     self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) "
-        #                             f"newStreamsPendingQueue.cancel_join_thread() {e}")
-
         try:
             mpManager.shutdown()
         except Exception as e:
