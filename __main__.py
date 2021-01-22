@@ -2259,7 +2259,8 @@ class UI(object):
                         "\n" + "  and event logging".center(maxWidth, " ") + \
                         "\n\n\n" + "Comments/feedback to: james.c.turner@bbc.co.uk".center(maxWidth, " ") + \
                         "\n See https://confluence.dev.bbc.co.uk/x/ioKKD for support" + \
-                        "\n\n\nmost recent dev branch: rxmp4-\n\n" + \
+                        "\n\n\nmost recent dev branch: rxmp7"+\
+                        "\nfinal multiprocessing RtpPacketTransceiver and RtpReceiver version\n\n" + \
                         "Press the [any] key to continue".center(maxWidth, " ")
 
         # Render the message in a pop-up box
@@ -5489,10 +5490,13 @@ def main(argv):
         except Exception as e:
             Utils.Message.addMessage(f"ERR:main.shutdownApplication() HTTP DELETE streams {e}")
 
+        # Allow time for the streams to deregister themselves
+        time.sleep(0.5)
         # Now wait for the streamsList to be empty (i.e have all the stream objects de-registered themselves),
         # before continuing with the shutdown process
         prevStreamsRemainingCounter = 0
         stalledStreamsThreshold = 5 # The no of loops to tolerate if streamsRemainingCounter is not decrementing - used as a timeout
+        streamsList = []
         while stalledStreamsThreshold > 0:
             # update streamsList
             try:
