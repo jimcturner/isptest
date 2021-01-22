@@ -5674,13 +5674,13 @@ def main(argv):
                 time.sleep(1)
                 loopCounter += 1
 
-                # Update/Maintain the list of spawned child processes
-                try:
-                    Utils.updateProcessesCreatedDict(processesCreatedDict)
-                    Utils.Message.addMessage(f"child processes: {[processesCreatedDict[x]['name'] for x in processesCreatedDict]}",
-                                             logToDisk=False)
-                except Exception as e:
-                    Utils.Message.addMessage(f"main()updateProcessesCreatedDict(), {e}")
+                # # Update/Maintain the list of spawned child processes
+                # try:
+                #     Utils.updateProcessesCreatedDict(processesCreatedDict)
+                #     Utils.Message.addMessage(f"child processes: {[processesCreatedDict[x]['name'] for x in processesCreatedDict]}",
+                #                              logToDisk=False)
+                # except Exception as e:
+                #     Utils.Message.addMessage(f"main()updateProcessesCreatedDict(), {e}")
 
 
                 # if in RECEIVE mode, poll newStreamsPendingQueue for new incoming stream definitions
