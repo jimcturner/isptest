@@ -3157,7 +3157,7 @@ def __diskLoggerThread(operationMode, shutdownFlag, controllerTCPPort):
             Utils.Message.addMessage(f"ERR: __diskloggerThread. getStreamsList(): {e}")
 
 
-            time.sleep(1)
+        time.sleep(1)
 
     # If execution gets here, the thread is ending....
     try:
@@ -4096,8 +4096,8 @@ class UDPMessageSender(object):
 # A threaded class that will listen for UDP/RTP packets specified UDP port and reply with responses using UDP
 # Based on the OS, and sudo/admin rights it will decide whether to listen on a raw or udp socket
 # As it detects an incoming rtp stream, it will create a definition of that stream and put it on a queue
-# streamsPendingCreationQueue which is polled by main(). This will spawn a new RtpReceiveStream object
-# using the definition found in the queue
+# streamsPendingCreationQueue which is polled by the thread _receiveStreamCreatorThread
+# This will spawn a new RtpReceiveStream object using the definition found in the queue
 # Each RtpStream definition also contains a txQueue (created by this Class) which allows the RtpReceiveStream objects
 # to send data back to the transmitter.
 # RtpPacketTransceiver will monitor this queue and send the data using the existing socket created for receiving data
@@ -5170,6 +5170,7 @@ class ISPTestHTTPServer(object):
         # See here: https://stackoverflow.com/a/3389505
         def log_error(self, format, *args):
             Utils.Message.addMessage(f"ERR:ISPTestHTTPServer.log_error(): {format % args}")
+            # print(f"{format % args}")
 
         # # Split the url path into its component parts. Ignore the initial '/'
         # Returns a list
@@ -6262,7 +6263,7 @@ def main(argv):
     diskLoggerThread.start()
 
 #################### <<<<< Mode override
-    # MODE = ""
+    MODE = ""
     # Start traffic generator thread
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Attempt to create an RtpGenerator based on the supplied parameters
