@@ -1513,7 +1513,6 @@ class RtpReceiveStream(RtpReceiveCommon):
         # except Exception as e:
         #     self.ctrlAPI.addMessage(f"ERR: RtpReceiveStream - assign txQueue {e}")
         #     self.txQueue = None
-
         # # Create private empty dictionary to hold stats for this RtpReceiveStream object. Accessible via a getter method
         self.__stats = {}
         # Assign to instance variable

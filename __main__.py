@@ -4351,16 +4351,16 @@ class RtpPacketTransceiver(object):
                 newStream = self.newStreamsPendingQueue.get(timeout=0.5)
                 self.ctrlAPI.addMessage(f"DBUG:_receiveStreamCreatorThread newStream collected {newStream['syncSourceID']} ")
                 # Attempt to create new RtpReceiveStream object
-                # rtpReceiveStream = RtpReceiveStream(newStream['syncSourceID'],
-                #                                         newStream['srcAddress'],
-                #                                         newStream['srcPort'],
-                #                                         newStream['rxAddress'],
-                #                                         newStream['rxPort'],
-                #                                         newStream['glitchEventTriggerThreshold'],
-                #                                         newStream['rxQueue'],
-                #                                         newStream['txQueue'],
-                #                                         newStream['streamsPendingDeletionQueue'],
-                #                                         self.controllerTCPPort)
+                rtpReceiveStream = RtpReceiveStream(newStream['syncSourceID'],
+                                                        newStream['srcAddress'],
+                                                        newStream['srcPort'],
+                                                        newStream['rxAddress'],
+                                                        newStream['rxPort'],
+                                                        newStream['glitchEventTriggerThreshold'],
+                                                        newStream['rxQueue'],
+                                                        newStream['txQueue'],
+                                                        newStream['streamsPendingDeletionQueue'],
+                                                        controllerTCPPort = self.controllerTCPPort)
                 self.ctrlAPI.addMessage(
                     f"DBUG:_receiveStreamCreatorThread created new RtpReceiveStream({newStream['syncSourceID']})")
             except Empty:
@@ -6261,7 +6261,8 @@ def main(argv):
     diskLoggerThread.setName("__diskLoggerThread")
     diskLoggerThread.start()
 
-    MODE = ""
+#################### <<<<< Mode override
+    # MODE = ""
     # Start traffic generator thread
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Attempt to create an RtpGenerator based on the supplied parameters
