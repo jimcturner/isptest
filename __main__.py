@@ -6263,7 +6263,6 @@ def main(argv):
     diskLoggerThread.start()
 
 #################### <<<<< Mode override
-    MODE = ""
     # Start traffic generator thread
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
         # Attempt to create an RtpGenerator based on the supplied parameters
