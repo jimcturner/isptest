@@ -2608,3 +2608,356 @@ def addToProcessesCreatedDict(processesDict, newProcess):
         processesDict[pid] = {"process": newProcess, "name": name}
     except Exception as e:
         raise Exception(f"ERR:addToProcessesCreatedDict() {e}")
+
+class Term(object):
+    # Define a function to get the size of the current console terminal.
+    # This should hopefully work on Windows, OSX and Linux
+    # From https://stackoverflow.com/questions/566746/how-to-get-linux-console-window-width-in-python
+    # Returns a tuple contain the no of columns, rows
+    @classmethod
+    def getTerminalSize(cls):
+        import platform
+        current_os = platform.system()
+        tuple_xy = None
+        if current_os == 'Windows':
+            tuple_xy = cls._getTerminalSize_windows()
+            if tuple_xy is None:
+                tuple_xy = cls._getTerminalSize_tput()
+                # needed for window's python in cygwin's xterm!
+        if current_os == 'Linux' or current_os == 'Darwin' or current_os.startswith('CYGWIN'):
+            tuple_xy = cls._getTerminalSize_linux()
+        if tuple_xy is None:
+            tuple_xy = (80, 25)  # default value
+        return tuple_xy
+
+    @classmethod
+    def _getTerminalSize_windows(cls):
+        res = None
+        try:
+            from ctypes import windll, create_string_buffer
+
+            # stdin handle is -10
+            # stdout handle is -11
+            # stderr handle is -12
+
+            h = windll.kernel32.GetStdHandle(-12)
+            csbi = create_string_buffer(22)
+            res = windll.kernel32.GetConsoleScreenBufferInfo(h, csbi)
+        except:
+            return None
+        if res:
+            import struct
+            (bufx, bufy, curx, cury, wattr,
+             left, top, right, bottom, maxx, maxy) = struct.unpack("hhhhHhhhhhh", csbi.raw)
+            sizex = right - left + 1
+            sizey = bottom - top + 1
+            return sizex, sizey
+        else:
+            return None
+
+    @classmethod
+    def _getTerminalSize_tput(cls):
+        # get terminal width
+        # src: http://stackoverflow.com/questions/263890/how-do-i-find-the-width-height-of-a-terminal-window
+        try:
+            import subprocess
+            proc = subprocess.Popen(["tput", "cols"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            output = proc.communicate(input=None)
+            cols = int(output[0])
+            proc = subprocess.Popen(["tput", "lines"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            output = proc.communicate(input=None)
+            rows = int(output[0])
+            return cols, rows
+        except:
+            return None
+
+    @classmethod
+    def _getTerminalSize_linux(cls):
+        def ioctl_GWINSZ(fd):
+            try:
+                import fcntl, termios, struct, os
+                cr = struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ, '1234'))
+            except:
+                return None
+            return cr
+
+        cr = ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
+        if not cr:
+            try:
+                fd = os.open(os.ctermid(), os.O_RDONLY)
+                cr = ioctl_GWINSZ(fd)
+                os.close(fd)
+            except:
+                pass
+        if not cr:
+            try:
+                cr = (env['LINES'], env['COLUMNS'])
+            except:
+                return None
+        return int(cr[1]), int(cr[0])
+
+    @classmethod
+    def getch(cls):
+    # Define a getch() function to catch keystrokes (for control of the RTP Generator thread)
+    # This code has been lifted from https://gist.github.com/jfktrey/8928865
+        if platform.system() == "Windows":
+            import msvcrt
+            return msvcrt.getch()
+
+        else:
+            import tty, termios, sys
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(sys.stdin.fileno())
+                ch = sys.stdin.read(1)
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+            return ch
+
+    # Use the following colour enumerations in place of unfriendly numbers when specifying colours
+    # in calls to Term.printAt() etc
+    BLACK = 0
+    RED = 1
+    GREEN = 2
+    YELLOW = 3
+    BLUE = 4
+    MAGENTA = 5
+    CYAN = 6
+    WHITE = 7
+    RESET = 9
+    # Black on White, normal brightness - shorthand
+    BlaWh = "\033[22m"+"\033[30m"+"\033[47m"
+    # Black on Cyan, dim brightness
+    BlaCy = "\033[2m"+"\033[30m"+"\033[46m"
+    # Cyan on black
+    CyBla = "\033[36m"+"\033[40m"
+    # White on blue
+    WhiBlu = "\033[37m"+"\033[44m"
+    # White on black
+    WhBla = "\033[37m"+"\033[40m"
+    # white on red
+    WhiRed = "\033[37m"+"\033[41m"
+    # Red on White
+    RedWhi = "\033[31m"+"\033[47m"
+
+    DIM = "\033[2m"
+
+    # Ascii seq to move the cursor to 1,1 (the origin)
+    HOME = "\033[0;0H"
+
+    # Utility function to convert a colour index no into the equivalent ASCII foreground colour escape sequence
+    # invoke using y=FG(x)
+    @classmethod
+    def FG (cls,x):
+        return "\033[3"+str(int(x))+"m"
+
+    # Utility function to convert a colour index no into the equivalent ASCII background colour escape sequence
+    # invoke using y=BG(x)
+    @classmethod
+    def BG (cls,x):
+        return "\033[4"+str(int(x))+"m"
+
+    # Utility function to convert x,y (column,row) into an ascii escape sequence to move the cursor
+    # invoke using z=FG(x,y) where x is the column, y is the row
+    @classmethod
+    def XY (cls,x,y):
+        return "\033["+str(int(y))+";"+str(int(x))+"f"
+
+    @classmethod
+    def clearScreen(cls):
+        # Clears the screen and moves cursor to (0,0)
+        # Clear screen
+        print ("\033[2J")
+        # Move cursor to 0,0,
+        print ("\033[0;0H")
+
+    @classmethod
+    def clearLine(cls, yPos):
+        # clears the line specified in yPos
+        # Go to specified line and clear it
+        print ("\033["+str(int(yPos))+";0H"+"\033[2K")
+
+    @classmethod
+    def enterAlternateScreen(cls):
+        # Switch to an alternate screen buffer (may not work predictably in Windows)
+        if platform.system() != "Windows":
+            print ("\033[?1049h")
+
+
+
+    @classmethod
+    def clearTerminalScrollbackBuffer(cls):
+        # Clear scrollback buffer
+        print ("\033[3J")
+
+    @classmethod
+    def exitAlternateScreen(cls):
+
+        # Revert to original terminal screen
+        if platform.system() != "Windows":
+            print ("\033[?1049l")
+
+    @classmethod
+    def printAt(cls,text, xPos, yPos, *args):
+        # Prints text at screen position xPos, yPos (NOTE: 1,1 is top left)
+        # Last argument is an optional colour [foreground],
+        # or [foreground, background]
+        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+
+        try:
+            if len(args) == 1:
+                try:
+
+                    # Foreground Colour parameter supplied
+                    print (Term.FG(args[0]) +
+                           Term.XY(xPos,yPos)+
+                           str(text) + Term.HOME)
+                except:
+                    # invalid colour parameter supplied
+                    print (Term.XY(xPos,yPos) + str(text) + Term.HOME)
+
+            elif len(args) == 2:
+                try:
+                    # Foreground and background colour parameter supplied
+                    print (Term.FG(args[0]) +      # Foreground
+                           Term.BG(args[1]) +    # Background
+                           Term.XY(xPos,yPos)+
+                           str(text) + Term.HOME)
+                except:
+                    # invalid colour parameter supplied
+                    print (Term.XY(xPos) + str(text) + Term.HOME)
+            else:
+                # No colour parameter supplied
+                print (Term.XY(xPos,yPos) + str(text) + Term.HOME)
+
+        except Exception as e:
+            # Failing everything else, do a plain old print with a CR at the end
+            print(str(text)+", "+str(e)+"\r")
+
+    @classmethod
+    def printCentered(cls,text,yPos, *args):
+        # Centres text on the page.
+        # Optional foreground or [foreground,background] options
+        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+        # Get terminal width
+        width,height = cls.getTerminalSize()
+        stringLength=len(text)
+        xPos = (width/2) - (stringLength/2)
+        # cls.printAt(text, xPos, yPos, *args)
+        cls.printAt(text, xPos, 1, *args)
+
+    @classmethod
+    def printRightJustified(cls, text, yPos, *args):
+        # Right justifies text on the page.
+        # Optional foreground or [foreground,background] options
+        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+        # Get terminal width
+        width, height = cls.getTerminalSize()
+        stringLength = len(text)
+        xPos=width - stringLength + 1
+        if xPos < 0:
+            xPos = 0
+        cls.printAt(text, xPos, yPos, *args)
+
+    @classmethod
+    def setBackgroundColourSingleLine(cls, xPos, yPos, colour):
+
+        # Paints the specified line a colour from the starting xPos position
+        # It will then return the cursor to the origin
+        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+        width, height = cls.getTerminalSize()
+        # Create a string of spaces to fill an entire terminal width
+        blankString = ""
+        for x in range (0,(width- xPos+1)):
+            blankString += " "
+        try:
+            print ("\033[4" + str(int(colour)) + "m" +
+                   "\033[" + str(yPos) + ";" + str(xPos)
+                   + "H" + blankString + "\033[" + str(yPos)+";" + str(1)+"H"+"\033[1;1H")
+        except:
+            pass
+
+    @classmethod
+    def setBackgroundColour(cls, colour):
+        # Paints the specified background colour
+        # 0 black, 1 red, 2 green, 3 yellow, 4 blue, 5 magenta, 6 cyan, 7 white, 9 reset
+        # Get terminal width
+        width, height = cls.getTerminalSize()
+        for lineNo in range (1,height):
+            cls.setBackgroundColourSingleLine(1,lineNo,colour)
+
+    @classmethod
+    def printTitleBar(cls,text,row, fgColour, bgColour):
+        # Draws an inverse video bar with a centered title string
+        # Draw inverse video horizontal bar
+        Term.setBackgroundColourSingleLine(1,row,bgColour)
+        # Write text
+        Term.printCentered(text,row,fgColour,bgColour)
+
+    # Prints a table generated by createTable() at position xPos,Ypos
+    @classmethod
+    def printTable(cls,list,xPos,yPos,tableWidth,*colourArgs):
+        # Renders a list (such as table data) at specified xPos, Ypos
+        # Optional colourargs are foreground or [foreground, background]
+        # It will create a pseudo shadow beneath the list (table)
+
+        # Move cursor to start position and set colour
+        print(Term.XY(xPos,yPos))
+        # Test to see if a foreground colour has been specified
+        if len(colourArgs)== 1:
+            colourString = Term.FG(colourArgs[0])
+        # Otherwise test to see if a foreground and background colour has been specified
+        elif len(colourArgs) > 1:
+            colourString = Term.FG(colourArgs[0])+Term.BG(colourArgs[1])
+        shadowRHS = ""
+
+        # Iterate over list
+        for x in range(0,len(list)):
+            if x>0:
+                shadowRHS=Term.BG(Term.BLACK)+" "
+            # Term.printAt(list[x]),xPos,yPos+x)
+            print(Term.XY(xPos,yPos)+colourString + list[x]+shadowRHS)
+            yPos+=1
+        # Create bottom black line as a shadow (consists of a string of blank spaces with black as bg colour)
+        # the same width as the table but offset by 1
+        shadowBottom = Term.BG(Term.BLACK)+(" " * tableWidth)
+
+        print (Term.XY(xPos+1,yPos)+shadowBottom+Term.HOME)
+
+    # This method will take a dictionary and turn it into a two column table using terminaltables.Singletable
+    @classmethod
+    def createTable(self, inputDictionary, title):
+        # This method will take a dictionary and turn it into a two column table using terminaltables.Singletable
+        # it will return the table as a list of strings
+
+        # Create two separate lists, one of the dictionary keys and one of the values
+        keys = []
+        values = []
+        for key, value in inputDictionary:
+            keys.append(key)  # Append key
+            values.append(value)  # Append value
+
+        # iterate over keys list to create a 2D array of the table contents
+        table_data = []
+        for x in range(len(keys)):
+            row = [keys[x], values[x]]  # Create a complete row containing a key and value column
+            table_data.append(row)  # Append the complete row to the table_data list (of lists)
+            del row  # Remove the existing row
+
+        # Create the table
+        table = SingleTable(table_data)
+        table.title = title
+        table.inner_heading_row_border = False  # No headings on this table
+        # Split the table into a list containing separate lines and return (and also the width/height of the table
+
+        # Remove all padding to save space on the screen
+        table.padding_left=0
+        table.padding_right=0
+        width = table.table_width
+        height = len(keys) + 2  # Takes into account the top/bottom border
+        # Note: width parameter doesn't take into account the fact I've disabled cell
+        # padding. Therefore manually deduct '4' from the width as this is by definition
+        # a two column table (because its data is sourced from a dictionary (with keys and values)
+        # return (width-4), height, table.table.splitlines()
+        return width, height, table.table.splitlines()
