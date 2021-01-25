@@ -7450,9 +7450,8 @@ class RtpPacketTransceiver(object):
                     # Indicate no functioning receive socket
                     receiveSocket = None
                     self.ctrlAPI.addMessage(
-                        Term.FG(
-                            Term.RED) + "ERR:__rtpPacketTransceiverThread(): Cannot listen on " + self.UDP_RX_IP + ":" + str(
-                            self.UDP_RX_PORT) + ", " + str(e) + Term.FG(Term.RESET))
+                        Fore.RED + "ERR:__rtpPacketTransceiverThread(): Cannot listen on " + self.UDP_RX_IP + ":" + str(
+                            self.UDP_RX_PORT) + ", " + str(e))
                     # Display a message box with a URL or an error message
 
                     # Now signal to the UI object that there is a problem
@@ -7779,7 +7778,7 @@ class RtpPacketTransceiver(object):
                     # Catch all other exceptions
                     except Exception as e:
                         self.ctrlAPI.addMessage(
-                            Term.WhiRed + "ERR:__rtpPacketTransceiverThread() udpSocket.recvfrom():" + self.UDP_RX_IP + ":" + \
+                            Fore.RED + "ERR:__rtpPacketTransceiverThread() udpSocket.recvfrom():" + self.UDP_RX_IP + ":" + \
                             str(self.UDP_RX_PORT) + ", " + str(id(udpSocket)) + ", " + str(e))
 
                         try:
@@ -7827,7 +7826,7 @@ class RtpPacketTransceiver(object):
 
                 # If program execution gets here, the udp socket must have been corrupted
                 self.ctrlAPI.addMessage(
-                    Term.WhiRed + "WARNING. Recreating receive socket. Glitches might not be genuine          ")
+                    Fore.RED + "WARNING. Recreating receive socket. Glitches might not be genuine          ")
 
                 time.sleep(1)
 
