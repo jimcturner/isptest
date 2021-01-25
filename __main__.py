@@ -3156,7 +3156,6 @@ def __diskLoggerThread(operationMode, shutdownFlag, controllerTCPPort):
         except Exception as e:
             Utils.Message.addMessage(f"ERR: __diskloggerThread. getStreamsList(): {e}")
 
-
         time.sleep(1)
 
     # If execution gets here, the thread is ending....
