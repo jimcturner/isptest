@@ -4119,7 +4119,11 @@ def main(argv):
         print("OSX Detected, using 'spawn' multiprocess start method")
         mp.set_start_method('spawn')  # Specifies how the OS creates sub-processes. Safest option for all OSs
 
-    mp.log_to_stderr(logging.DEBUG) ##### <<<<<<- Uncomment to enable multiprocessor debugging to stderr
+    # Enable multiprocessor debugging to stderr
+    enableMultiProcessorLoggingToStdERR = False
+    if enableMultiProcessorLoggingToStdERR:
+        mp.log_to_stderr(logging.DEBUG)
+
     # RxStreamCreatorTest()
     # txRxTransceiverTest()
     # exit()

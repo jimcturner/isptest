@@ -2027,7 +2027,12 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
             self.wfile.write(response)
 
         except Exception as e:
-            self.send_error(404, f"{parent.__class__.__name__}.HttpRequestHandler.do_DELETE() {syncSourceID}, {e}")
+            try:
+                # This commonly fails on app shutdown because the HTTP Server itself has been shutdown whilst
+                # the do_DELETE() is being processed
+                self.send_error(404, f"{parent.__class__.__name__}.HttpRequestHandler.do_DELETE() {syncSourceID}, {e}")
+            except:
+                pass
 
 # String parser to convert a string reprersentation of a timedelta object (obtained via the api) back into a timedelta
 # Copied from https://stackoverflow.com/a/21074460
