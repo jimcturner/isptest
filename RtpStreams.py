@@ -4169,19 +4169,28 @@ class RtpGenerator(RtpCommon):
             time.sleep(0.5) # Allow time for the HTTP server to start
             maxConnectionAttempts = 5 # Max no of verification attempts
             # Verify that the http server is actually running, by attempting to connect it
+            # and verifying that the response is as expected
             while maxConnectionAttempts > 0:
                 try:
-                    r = requests.get(f"http://127.0.0.1:{self.tcpListenPort}", timeout=1)
+                    # Query the http server for the syncSourceID of the stream
+                    testURL = f"http://127.0.0.1:{self.tcpListenPort}/txstats"
+                    r = requests.get(testURL, timeout=1)
                     r.raise_for_status()  # Will raise an Exception if there was a problem
+                    # Test that the syncSource ID response matches the syncSourceID of this stream
+                    # If not as expected, raise an Exception
+                    retrievedSyncSourceID = r.json()["Sync Source ID"]
+                    if retrievedSyncSourceID != self.syncSourceIdentifier:
+                        raise Exception(
+                            f"ERR: Unexpected syncSourceID in response from HTTP Server: {retrievedSyncSourceID}")
                     break
-                except:
+                except Exception as e:
                     # Decrement maxConnectionAttempts
                     maxConnectionAttempts -= 1
                     self.postMessage(
                         f"INFO:RTPGenerator({self.syncSourceIdentifier}) http server validation, "
-                        f"{maxConnectionAttempts} remaining")
+                        f"{maxConnectionAttempts} remaining, {e}")
                     if maxConnectionAttempts < 1:
-                        raise Exception(f"ERR:maxConnectionAttempts exceeded")
+                        raise Exception(f"ERR:maxConnectionAttempts exceeded, {e}")
                 time.sleep(1)
 
             self.postMessage(
