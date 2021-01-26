@@ -4197,7 +4197,7 @@ class RtpGenerator(RtpCommon):
                 f"INFO:RTPGenerator({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
 
         except Exception as e:
-            self.postMessage(f'ERR:RTPGenerator.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
+            self.postMessage(f'{Fore.RED}ERR:RTPGenerator.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
             raise Exception(f'ERR:RTPGenerator({self.syncSourceIdentifier}).__init__() HTTP Server failed to start. Aborting')
 
         ######## Actual code starts here
@@ -4818,9 +4818,14 @@ class RtpGenerator(RtpCommon):
         # Kills the stream by setting the time to live to zero. This will cause the main thread to exit
         self.setTimeToLive(0)
         # Wait for __rtpGeneratorThread to end
-        self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread to end")
-        self.rtpGeneratorThread.join()
-        self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread has ended")
+        try:
+            if self.rtpGeneratorThread.is_alive():
+                self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread to end")
+                self.rtpGeneratorThread.join()
+                self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __rtpGeneratorThread has ended")
+        except Exception as e:
+            self.postMessage("ERR:RtpGenerator.killStream() self.__rtpGeneratorThread.join() " + str(e))
+
         try:
             # Check to see if __tracerouteThread exists (it may have been intentionally disabled)
             if self.tracerouteThread.is_alive():
@@ -4830,10 +4835,15 @@ class RtpGenerator(RtpCommon):
                 self.postMessage("DBUG: RtpGenerator.killStream()  __tracerouteThread has ended")
         except Exception as e:
             self.postMessage("ERR:RtpGenerator.killStream() self.tracerouteThread.join() " + str(e))
-        # Wait for __samplingThread to end
-        self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread to end")
-        self.samplingThread.join()
-        self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread has ended")
+
+        try:
+            # Wait for __samplingThread to end
+            if self.samplingThread.is_alive():
+                self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread to end")
+                self.samplingThread.join()
+                self.postMessage("DBUG: RtpGenerator.killStream() Waiting for __samplingThread has ended")
+        except Exception as e:
+            self.postMessage("ERR:RtpGenerator.killStream() self.__samplingThread.join() " + str(e))
 
         # Now kill corresponding RtpResultsReceiver object (should be a blocking call)
         try:
