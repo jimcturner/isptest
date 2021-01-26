@@ -2,6 +2,7 @@
 # Defines RtpStream objects for use by isptest
 # James Turner 20/2/20
 import select
+import signal
 import socket
 import os
 import binascii
@@ -7202,7 +7203,6 @@ class RtpPacketTransceiver(object):
                  UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, controllerTCPPort=None):
         # This queue is populated by _rtpPacketTransceiverThread (as it detects the incoming streams) and polled
         # by _rtpPacketTransceiverThread() which will then create the actual RtpReceiveStream objects
-
         self.newStreamsPendingQueue = SimpleQueue()
         # with newly detected stream definitions
         self.shutdownFlag = shutdownFlag
@@ -7213,6 +7213,25 @@ class RtpPacketTransceiver(object):
         self.controllerTCPPort = controllerTCPPort  # the TCP listener port of the HTTP Server running on the controller process
         # Create an API helper to allow access to the HTTP API of the Controller
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
+
+        # This class is expected to be run as a child process so Register signal handler for SIGINT, SIGTERM and SIGKILL
+        def sigintHandler():
+            try:
+                # self.ctrlAPI.addMessage(f"{Fore.BLUE}RtpPacketTransceiver sigintHandler()")
+                sys.stderr.write(f"RtpPacketTransceiver sigintHandler()\n")
+            except:
+                pass
+
+        signal.signal(signal.SIGINT, sigintHandler)  # Ctrl-C (keyboard interrupt)
+
+        def sigtermHandler():
+            try:
+                # self.ctrlAPI.addMessage(f"{Fore.BLUE}RtpPacketTransceiver sigintHandler()")
+                sys.stderr.write(f"RtpPacketTransceiver sigtermHandler()\n")
+            except:
+                pass
+
+        signal.signal(signal.SIGTERM, sigtermHandler)  # Ctrl-C
 
         # Create and initialise variables used for debugging -tracing lost packets
         self.rawPacketsReceivedByRxThreadCount = 0
