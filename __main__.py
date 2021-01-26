@@ -4821,6 +4821,7 @@ def main(argv):
         # Create a multiprocessing Event to indicate whether RtpPacketTransceiver has imported a previous
         # streams snapshot file. This must only happen once
         previousStreamsImportedFlag = mp.Event()
+
         # Create an RtpPacketTransceiver for each of the specified UDP listen addresses/ports
         # This should run as a child process
         for receivePort in receivePortList:

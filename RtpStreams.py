@@ -7446,7 +7446,12 @@ class RtpPacketTransceiver(object):
                     raise Exception(f"ERR:recreatePreviousStreams(), {e}")
             # Import and attempt to recreate the previous streams saved in the *.isp snapshot file
             try:
-                recreatePreviousStreams()
+                # Check to see if the streams have already been imported
+                if not self.previousStreamsImportedFlag.is_set():
+                    # Attempt to import/create the streams
+                    recreatePreviousStreams()
+                    # Set the flag so that the streams can't be imported again
+                    self.previousStreamsImportedFlag.set()
             except Exception as e:
                 self.ctrlAPI.addMessage(f"ERR:_rtpPacketTransceiverThread() Recreate historic streams, {e}")
 
