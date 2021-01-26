@@ -1730,10 +1730,13 @@ class RtpReceiveStream(RtpReceiveCommon):
                         #                          ", diff " + str(diff))
                         # Update stats{} dict
                         self.updateStats(historicStatsDict)
-                        # Preset counters used by self.queueReceiverThread
+                        # Preset counters/values updated by self.queueReceiverThread
+                        # If these values weren't preset with the imported values here, they would be overwritten
+                        # by the default values and therefore the historic data would be lost
                         self.packetCounterReceivedTotal = self.__stats["packet_counter_received_total"]
                         self.__packetDataReceivedTotalBytes = self.__stats["packet_data_received_total_bytes"]
                         self.__packetCounterTransmittedTotal = self.__stats["packet_counter_transmitted_total"]
+                        self.__streamTransmitterTxRateBps = self.__stats["stream_transmitter_txRate_bps"]
 
                         if historicEventsList is not None:
                             self.updateEventsList(historicEventsList, replaceExistingList=True)
