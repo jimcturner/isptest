@@ -1947,7 +1947,10 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
             # Write the response back to the client
             self.wfile.write(response)
         except Exception as e:
-            self.send_error(404,f"{parent.__class__.__name__} HttpRequestHandler.do_GET() " + str(syncSourceID) + ", " + str(e))
+            try:
+                self.send_error(404,f"{parent.__class__.__name__} HttpRequestHandler.do_GET() " + str(syncSourceID) + ", " + str(e))
+            except:
+                pass
 
     @abstractmethod
     def do_POST(self):
@@ -1993,7 +1996,10 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
             self.wfile.write(response)
 
         except Exception as e:
-            self.send_error(404, f"{parent.__class__.__name__}.HttpRequestHandler.do_POST() " + str(syncSourceID) + ", " + str(e))
+            try:
+                self.send_error(404, f"{parent.__class__.__name__}.HttpRequestHandler.do_POST() " + str(syncSourceID) + ", " + str(e))
+            except:
+                pass
 
     @abstractmethod
     def do_DELETE(self):
