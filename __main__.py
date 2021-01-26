@@ -2007,21 +2007,21 @@ class UI(object):
                 if allFieldsValidatedFlag:
 
                     try:
-                        # Create RtpGenerator as a child process
-                        rtpGenerator = Utils.ProcessCreator(RtpGenerator, destAddr, destPort, txRate_bps,
-                                                            packetLength, syncSourceID, timeToLive, \
-                                                    friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
-                                                    controllerTCPPort=self.controllerTCPPort,
-                                                            processName=f"RtpGenerator({syncSourceID})")
-
-
-
+                        rtpGenerator = mp.Process(target=RtpGenerator,
+                                                  args=(destAddr, destPort, txRate_bps,
+                                                        packetLength, syncSourceID, timeToLive),
+                                                  kwargs={"UDP_SRC_PORT": sourcePort,
+                                                          "friendlyName": friendlyName,
+                                                          "controllerTCPPort": self.controllerTCPPort},
+                                                  name=f"RtpGenerator({syncSourceID})",
+                                                  daemon=False)
+                        rtpGenerator.start()
                         Utils.Message.addMessage("[a] Added new " + str(Utils.bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
 
                         # Add the process to the processesCreatedDict so we can keep track of it
                         if self.processesCreatedDict is not None:
                             try:
-                                Utils.addToProcessesCreatedDict(self.processesCreatedDict, rtpGenerator.getProcess())
+                                Utils.addToProcessesCreatedDict(self.processesCreatedDict, rtpGenerator)
                             except Exception as e:
                                 Utils.Message.addMessage(f"ERR:UI add RtpGenerator({syncSourceID}) process to processesCreatedDict")
 
@@ -4576,12 +4576,12 @@ def main(argv):
                                       name=f"RtpGenerator({SYNC_SOURCE_ID})",
                                       daemon=False)
             rtpGenerator.start()
-            Utils.Message.addMessage(f"RtpGenerator({SYNC_SOURCE_ID}) created with pid {rtpGenerator.pid}")
             # Add the new RtpGenerator child process to processesCreatedDict so it can be tracked
             try:
                 Utils.addToProcessesCreatedDict(processesCreatedDict, rtpGenerator)
             except Exception as e:
                 Utils.Message.addMessage(f"ERR:main() add RtpGenerator({SYNC_SOURCE_ID}) process to processesCreatedDict, {e}")
+
 
         except Exception as e:
             Utils.Message.addMessage("ERR:main() Create RtpGenerator() " + str(e))
