@@ -4154,6 +4154,7 @@ class RtpGenerator(RtpCommon):
         self.__controlMessageQueue = SimpleQueue()
 
         # Create an HTTP server thread. If fails, then abort creation of the object
+        httpServerValidated = False # Used to signal successful/failed http server startup
         try:
             # Request an unused TCP port for the HTTP server to listen on
             self.tcpListenPort = Utils.TCPListenPortCreator.getNext()
@@ -4194,62 +4195,66 @@ class RtpGenerator(RtpCommon):
                 time.sleep(1)
 
             self.postMessage(
-                f"INFO:RTPGenerator({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
+                f"{Fore.GREEN}INFO:RTPGenerator({self.syncSourceIdentifier}) http server started on port {self.tcpListenPort}")
+            # Set the 'success' flag
+            httpServerValidated = True
 
         except Exception as e:
             self.postMessage(f'{Fore.RED}ERR:RTPGenerator.__init__() Couldn\'t create httpServerThread {self.syncSourceIdentifier}, {e}')
-            raise Exception(f'ERR:RTPGenerator({self.syncSourceIdentifier}).__init__() HTTP Server failed to start. Aborting')
+            # raise Exception(f'ERR:RTPGenerator({self.syncSourceIdentifier}).__init__() HTTP Server failed to start. Aborting')
 
         ######## Actual code starts here
-        # Start the traffic generator thread
-        self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
-        self.rtpGeneratorThread.daemon = False
-        self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
-        self.rtpGeneratorThread.start()
+        # Confirm that the http server for this stream started successfully
+        if httpServerValidated:
+            # Start the traffic generator thread
+            self.rtpGeneratorThread = threading.Thread(target=self.__rtpGeneratorThread, args=())
+            self.rtpGeneratorThread.daemon = False
+            self.rtpGeneratorThread.setName(str(self.syncSourceIdentifier) + ":RtpGenerator")
+            self.rtpGeneratorThread.start()
 
-        self.tracerouteFunctionInUse = None     # Will be a label set by __traceRouteThread. Indicates which OS-dependant
-                                                # traceroute function is to be used
+            self.tracerouteFunctionInUse = None     # Will be a label set by __traceRouteThread. Indicates which OS-dependant
+                                                    # traceroute function is to be used
 
-        # Test the Registry var. If traceroute is enabled, create and start the thread
-        if Registry.rtpGeneratorEnableTraceroute:
-            self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
-            self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteThread")
-            self.tracerouteThread.daemon = False
-            self.tracerouteThread.start()
+            # Test the Registry var. If traceroute is enabled, create and start the thread
+            if Registry.rtpGeneratorEnableTraceroute:
+                self.tracerouteThread = threading.Thread(target=self.__tracerouteThread, args=())
+                self.tracerouteThread.setName(str(self.syncSourceIdentifier) + ":tracerouteThread")
+                self.tracerouteThread.daemon = False
+                self.tracerouteThread.start()
 
 
-        # create a stream results receiver object for this tx stream
-        self.rtpStreamResultsReceiver = ResultsReceiver(self)
+            # create a stream results receiver object for this tx stream
+            self.rtpStreamResultsReceiver = ResultsReceiver(self)
 
-        # create a placeholder for the related RtpStreamResults object
-        # This will be updated by rtpStreamResultsReceiver once it has successfullly created the RtpStreamResults object
-        # (but only if the reply packets from the Receiver have been received)
-        self.relatedRtpStreamResults = None
+            # create a placeholder for the related RtpStreamResults object
+            # This will be updated by rtpStreamResultsReceiver once it has successfullly created the RtpStreamResults object
+            # (but only if the reply packets from the Receiver have been received)
+            self.relatedRtpStreamResults = None
 
-        # start the 1 second sampling thread
-        self.samplingThread = threading.Thread(target=self.__samplingThread, args=())
-        self.samplingThread.daemon = False
-        self.samplingThread.setName(str(self.syncSourceIdentifier) + ":samplingThread")
-        self.samplingThread.start()
+            # start the 1 second sampling thread
+            self.samplingThread = threading.Thread(target=self.__samplingThread, args=())
+            self.samplingThread.daemon = False
+            self.samplingThread.setName(str(self.syncSourceIdentifier) + ":samplingThread")
+            self.samplingThread.start()
 
-        # Now register the stream with the stream directory service
-        self.streamRegisteredFlag = False  # Records whether the stream has been successfully registered
-        # Note: If this fails, __samplingThread performs a 1 sec check to see if registration was successful,
-        # and if not, attempts to re-add the stream until self.streamRegisteredFlag is set
-        try:
-            # Create a dict to define the stream
-            streamDefinition = {
-                "streamID": self.syncSourceIdentifier,
-                "httpPort": self.tcpListenPort,
-                "streamType": "RtpGenerator"
-            }
-            # Register the stream
-            self.ctrlAPI.addToStreamsDirectory(streamDefinition)
-            # If execution gets this far, we can assume that streams was successfully registered
-            self.streamRegisteredFlag = True
-        except Exception as e:
-            self.postMessage(
-                f'ERR:RTPGenerator.__init__() Initial stream Registration failed {self.syncSourceIdentifier}, {e}')
+            # Now register the stream with the stream directory service
+            self.streamRegisteredFlag = False  # Records whether the stream has been successfully registered
+            # Note: If this fails, __samplingThread performs a 1 sec check to see if registration was successful,
+            # and if not, attempts to re-add the stream until self.streamRegisteredFlag is set
+            try:
+                # Create a dict to define the stream
+                streamDefinition = {
+                    "streamID": self.syncSourceIdentifier,
+                    "httpPort": self.tcpListenPort,
+                    "streamType": "RtpGenerator"
+                }
+                # Register the stream
+                self.ctrlAPI.addToStreamsDirectory(streamDefinition)
+                # If execution gets this far, we can assume that streams was successfully registered
+                self.streamRegisteredFlag = True
+            except Exception as e:
+                self.postMessage(
+                    f'ERR:RTPGenerator.__init__() Initial stream Registration failed {self.syncSourceIdentifier}, {e}')
 
     def getRtpStreamStats(self):
         # Returns a dictionary of useful stats
