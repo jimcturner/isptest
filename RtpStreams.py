@@ -7215,10 +7215,14 @@ class RtpPacketTransceiver(object):
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
 
         # This class is expected to be run as a child process so Register signal handler for SIGINT, SIGTERM and SIGKILL
+        # This is necessary, because by default, any SIGTERM/SIGINT signals picked up by the parent process are
+        # propagated to the child processes.
+        # Since we're controlling the shutdown of this object using shutdownFlag we want to ignore these signals.
+        # If we don't, an Exception is raised
         def sigintHandler(signum, frame):
             try:
-                # self.ctrlAPI.addMessage(f"{Fore.BLUE}RtpPacketTransceiver sigintHandler()")
-                sys.stderr.write(f"RtpPacketTransceiver sigintHandler()\n")
+                self.ctrlAPI.addMessage(f"{Fore.BLUE}DBUG:RtpPacketTransceiver.sigintHandler() called")
+                # sys.stderr.write(f"RtpPacketTransceiver sigintHandler()\n")
             except:
                 pass
 
@@ -7226,8 +7230,8 @@ class RtpPacketTransceiver(object):
 
         def sigtermHandler(signum, frame):
             try:
-                # self.ctrlAPI.addMessage(f"{Fore.BLUE}RtpPacketTransceiver sigintHandler()")
-                sys.stderr.write(f"RtpPacketTransceiver sigtermHandler()\n")
+                self.ctrlAPI.addMessage(f"{Fore.BLUE}DBUG:RtpPacketTransceiver sigtermHandler() called")
+                # sys.stderr.write(f"RtpPacketTransceiver sigtermHandler()\n")
             except:
                 pass
 
