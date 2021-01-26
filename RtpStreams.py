@@ -7215,7 +7215,7 @@ class RtpPacketTransceiver(object):
         self.ctrlAPI = Utils.APIHelper(self.controllerTCPPort)
 
         # This class is expected to be run as a child process so Register signal handler for SIGINT, SIGTERM and SIGKILL
-        def sigintHandler():
+        def sigintHandler(signum, frame):
             try:
                 # self.ctrlAPI.addMessage(f"{Fore.BLUE}RtpPacketTransceiver sigintHandler()")
                 sys.stderr.write(f"RtpPacketTransceiver sigintHandler()\n")
@@ -7224,7 +7224,7 @@ class RtpPacketTransceiver(object):
 
         signal.signal(signal.SIGINT, sigintHandler)  # Ctrl-C (keyboard interrupt)
 
-        def sigtermHandler():
+        def sigtermHandler(signum, frame):
             try:
                 # self.ctrlAPI.addMessage(f"{Fore.BLUE}RtpPacketTransceiver sigintHandler()")
                 sys.stderr.write(f"RtpPacketTransceiver sigtermHandler()\n")
