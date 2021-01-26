@@ -2007,17 +2007,14 @@ class UI(object):
                 if allFieldsValidatedFlag:
 
                     try:
-                        # All tx stream parameters validated so create the new RtpGenerator object
-                        # rtpGenerator = RtpGenerator(destAddr, destPort, txRate_bps, packetLength, syncSourceID, timeToLive, \
-                        #                             uiInstance=self,\
-                        #                             friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
-                        #                             controllerTCPPort=self.controllerTCPPort)
-
+                        # Create RtpGenerator as a child process
                         rtpGenerator = Utils.ProcessCreator(RtpGenerator, destAddr, destPort, txRate_bps,
                                                             packetLength, syncSourceID, timeToLive, \
                                                     friendlyName=friendlyName, UDP_SRC_PORT=sourcePort,
                                                     controllerTCPPort=self.controllerTCPPort,
                                                             processName=f"RtpGenerator({syncSourceID})")
+
+
 
                         Utils.Message.addMessage("[a] Added new " + str(Utils.bToMb(txRate_bps)) + "bps stream with id " + str(syncSourceID))
 
@@ -4569,24 +4566,20 @@ def main(argv):
 #################### <<<<< Mode override
     # Start traffic generator thread
     if MODE == 'LOOPBACK' or MODE == 'TRANSMIT':
-        # Attempt to create an RtpGenerator based on the supplied parameters
+        # Attempt to create an RtpGenerator based on the supplied parameters as a child process
         try:
-            # rtpGenerator = RtpGenerator(UDP_TX_IP, UDP_TX_PORT, txRate,
-            #                         payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
-            #                         uiInstance=ui,
-            #                         UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME,
-            #                             controllerTCPPort=isptesttHTTPServerPort)
-
-            # processName = f"RtpGenerator"
-            rtpGenerator = Utils.ProcessCreator(RtpGenerator, UDP_TX_IP, UDP_TX_PORT, txRate,
-                                        payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec,
-                                        UDP_SRC_PORT=UDP_TX_SRC_PORT, friendlyName=RTP_TX_STREAM_FRIENDLY_NAME,
-                                        controllerTCPPort=isptesttHTTPServerPort,
-                                                processName=f"RtpGenerator({SYNC_SOURCE_ID})")
-
+            rtpGenerator = mp.Process(target=RtpGenerator,
+                                      args=(UDP_TX_IP, UDP_TX_PORT, txRate,
+                                        payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec),
+                                      kwargs={"UDP_SRC_PORT":UDP_TX_SRC_PORT, "friendlyName":RTP_TX_STREAM_FRIENDLY_NAME,
+                                        "controllerTCPPort":isptesttHTTPServerPort},
+                                      name=f"RtpGenerator({SYNC_SOURCE_ID})",
+                                      daemon=False)
+            rtpGenerator.start()
+            Utils.Message.addMessage(f"RtpGenerator({SYNC_SOURCE_ID}) created with pid {rtpGenerator.pid}")
             # Add the new RtpGenerator child process to processesCreatedDict so it can be tracked
             try:
-                Utils.addToProcessesCreatedDict(processesCreatedDict, rtpGenerator.getProcess())
+                Utils.addToProcessesCreatedDict(processesCreatedDict, rtpGenerator)
             except Exception as e:
                 Utils.Message.addMessage(f"ERR:main() add RtpGenerator({SYNC_SOURCE_ID}) process to processesCreatedDict, {e}")
 
@@ -4824,8 +4817,6 @@ def main(argv):
 
         except Exception as e:
             Utils.Message.addMessage("ERR:Prev streams import failed " + str(e))
-
-
 
         # Create an RtpPacketTransceiver for each of the specified UDP listen addresses/ports
         # This should run as a child process
