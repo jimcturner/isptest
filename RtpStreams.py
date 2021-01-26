@@ -2249,8 +2249,12 @@ class RtpReceiveStream(RtpReceiveCommon):
                 # This is a message containing the return loss (as a float  , 4 bytes)
                 try:
                     # Convert the 4 bytes back to a float
-                    self.__stats["stream_transmitter_return_loss_percent"] = \
-                        struct.unpack_from("!f", bytes(isptestHeaderData[4:8]))[0]
+                    returnLoss = struct.unpack_from("!f", bytes(isptestHeaderData[4:8]))[0]
+                    # Guard against -ve value (which is possible)
+                    if returnLoss < 0:
+                        self.__stats["stream_transmitter_return_loss_percent"] = 0
+                    else:
+                        self.__stats["stream_transmitter_return_loss_percent"] = returnLoss
                 except Exception as e:
                     self.postMessage("ERR:RtpReceiveStream.__parseIsptestHeaderData, msg type 6 " + str(e))
 
