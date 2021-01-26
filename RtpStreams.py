@@ -7845,39 +7845,35 @@ class RtpPacketTransceiver(object):
             except Exception as e:
                 self.ctrlAPI.addMessage("ERR:__rtpPacketTransceiverThread() rawSocket.close() " + str(e))
 
-            # As a final measure before the thread ends, flush all the queues created by this thread
-            # If data remains in the queues, it's possible that the parent Process will deadlock
-            try:
-                queuesToBeFlushed = [txQueue, streamsPendingDeletionQueue, *[q["rxQueue"] for q in rxQueuesDict]]
-                self.ctrlAPI.addMessage(f"DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}), "
-                                        f"{len(queuesToBeFlushed)} queues to be flushed")
-                # Flush all queues with a repeated .get() until they're empty
-                qItemsFlushed = 0  # Counter
-                for q in queuesToBeFlushed:
-                    while True:
-                        try:
-                            val = q.get_nowait()
-                            qItemsFlushed += 1
-                        except Empty:
-                            # Queue is empty, break out of the while loop, move onto the next queue
-                            break
-                        except Exception as e:
-                            self.ctrlAPI.addMessage(
-                                f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) flush queue {q} , {e}")
-                self.ctrlAPI.addMessage(
-                    f"DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}), {qItemsFlushed} flushed from queue")
-            except Exception as e:
-                self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) flush queues {e}")
+            # # As a final measure before the thread ends, flush all the queues created by this thread
+            # # If data remains in the queues, it's possible that the parent Process will deadlock
+            # try:
+            #     queuesToBeFlushed = [txQueue, streamsPendingDeletionQueue, *[q["rxQueue"] for q in rxQueuesDict]]
+            #     self.ctrlAPI.addMessage(f"DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}), "
+            #                             f"{len(queuesToBeFlushed)} queues to be flushed")
+            #     # Flush all queues with a repeated .get() until they're empty
+            #     qItemsFlushed = 0  # Counter
+            #     for q in queuesToBeFlushed:
+            #         while True:
+            #             try:
+            #                 val = q.get_nowait()
+            #                 qItemsFlushed += 1
+            #             except Empty:
+            #                 # Queue is empty, break out of the while loop, move onto the next queue
+            #                 break
+            #             except Exception as e:
+            #                 self.ctrlAPI.addMessage(
+            #                     f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) flush queue {q} , {e}")
+            #     self.ctrlAPI.addMessage(
+            #         f"DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}), {qItemsFlushed} flushed from queue")
+            # except Exception as e:
+            #     self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) flush queues {e}")
 
 
 
             self.ctrlAPI.addMessage(f"DBUG:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) exiting")
         except Exception as e:
-            # self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) "
-            #                         f" failed to start {e}")
-            x = 10
-            while x > 0:
-                print(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) failed to start {e}\n")
-                x -= 1
-                time.sleep(0.1)
+            self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) "
+                                    f" failed to start {e}")
+
 
