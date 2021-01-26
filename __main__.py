@@ -4588,50 +4588,6 @@ def main(argv):
 
     # Main program execution loops
 
-
-    # A local function to take a snapshot of the Events lists and stats[] dictionaries for all Receive streams
-    # and save them to disk. This allows the streams and all their stats to be 'restored' when the program restarts
-    # The parameters for *each* stream are saved as a three as a three element list [streamID, stats{}, eventsList[]]
-    # Returns True and the number of streams successfuly exported (saved) or False, plus error message on failure
-    def createStreamsSnapshot(controllerTCPPort, controllerTCPAddress="127.0.0.1"):
-        try:
-            # Get list of RtpReceiveStream objects from the API
-            api = Utils.APIHelper(controllerTCPPort, addr=controllerTCPAddress)
-            availableRtpStreamList = api.getStreamsList(streamType="RtpReceiveStream")
-
-            rxStreamExportList = []
-            try:
-                for stream in availableRtpStreamList:
-
-                    # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
-                    streamApi = Utils.APIHelper(stream["httpPort"])
-                    # Get the latest stream stats
-                    stats = streamApi.getStats()
-
-                    # Get the raw, pickled Events list (as a list of pickled objects)
-                    eventsListPickled = streamApi.getByURL('/events/raw', returnAsBytes=True)
-                    # Unpickle the events list to regenerate the original Event objects
-                    # NOTE: This is **horrifically** inefficient because we're about to re-pickle the events
-                    # so that we can save them to disk (via Utils.exportObjectToDisk()
-                    eventsList = pickle.loads(eventsListPickled)
-                    rxStreamExportList.append([stream["streamID"], stats, eventsList])
-
-            except Exception as e:
-                raise Exception(f"create rxStreamExportList {e}")
-
-
-            # Export rxStreamExportList (not if rxStreamExportList is empty, an empty disk will be saved in order
-            # to overwrite the old .isp file (if it exists)
-            try:
-                # Write the rxStreamExportList to a file
-                Utils.exportObjectToDisk(rxStreamExportList)
-                return len(rxStreamExportList)
-            except Exception as e:
-                raise Exception(f"exportObjectToDisk(rxStreamExportList) {e}")
-
-        except Exception as e:
-            raise Exception("ERR:createStreamsSnapshot() " + str(e))
-
     # Define a local function that will perform a graceful shutdown of all threads and resources
     def shutdownApplication():
         Utils.Message.addMessage("main.shutdownApplication() called")
@@ -4644,7 +4600,8 @@ def main(argv):
             # Signal RtpPacketTransceiver to shut down
             rtpPacketTransceiverShutdownFlag.set()
             try:
-                streamsExportedCounter = createStreamsSnapshot(isptesttHTTPServerPort)
+                streamsExportedCounter = Utils.createStreamsSnapshot(Registry.streamsSnapshotFilename,
+                                                                     isptesttHTTPServerPort)
                 Utils.Message.addMessage(f"Created snapshot for {streamsExportedCounter}"
                                          f" streams to file {Registry.streamsSnapshotFilename}")
             except Exception as e:
@@ -4892,7 +4849,8 @@ def main(argv):
                 try:
                     if MODE == 'RECEIVE' and (loopCounter % Registry.streamsSnapshotAutoSaveInterval_s == 0):
                         # Create snapshot of current receive streams
-                        streamsExportedCounter = createStreamsSnapshot(isptesttHTTPServerPort)
+                        streamsExportedCounter = Utils.createStreamsSnapshot(Registry.streamsSnapshotFilename,
+                                                                             isptesttHTTPServerPort)
                         Utils.Message.addMessage(f"Created auto snapshot for {streamsExportedCounter}"
                                                  f" streams to file {Registry.streamsSnapshotFilename}")
                 except Exception as e:

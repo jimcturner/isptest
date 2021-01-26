@@ -1246,7 +1246,7 @@ class TestSubClass(TestObject):
 #  Takes a python object (likely to be an RTPReceiveStream object and writes it to disk
 # The object is first serialised using Pickle
 # If filename is None, the function will auto genrate one based on thew current date
-def exportObjectToDisk(objectToExport, filename=Registry.streamsSnapshotFilename):
+def exportObjectToDisk(objectToExport, filename):
     try:
         with open(filename, 'wb') as file: #Open for writing in binary mode
             file.write(pickle.dumps(objectToExport))
@@ -2581,9 +2581,45 @@ def testImportHistoricStreamsSnapshot():
     print(f"importedStreamsDict {importedStreamsDict.keys()}")
 
 # Creates a snapshot of all the current active streams (via the api) and exports to disk
-# Raises an Exception on error
+# and save them to disk. This allows the streams and all their stats to be 'restored' when the program restarts
+# The parameters for *each* stream are saved as a three as a three element list [streamID, stats{}, eventsList[]]
+# Returns the number of streams successfuly exported (saved) or raises an Exception on error
 def createStreamsSnapshot(exportFilename, controllerTCPPort, controllerTCPAddress="127.0.0.1"):
-    pass
+    try:
+        # Get list of RtpReceiveStream objects from the API
+        api = APIHelper(controllerTCPPort, addr=controllerTCPAddress)
+        availableRtpStreamList = api.getStreamsList(streamType="RtpReceiveStream")
+
+        rxStreamExportList = []
+        try:
+            for stream in availableRtpStreamList:
+                # create a list of tuples containing [streamID, stats{} snapshot, eventsList[] snapshot]
+                streamApi = APIHelper(stream["httpPort"])
+                # Get the latest stream stats
+                stats = streamApi.getStats()
+
+                # Get the raw, pickled Events list (as a list of pickled objects)
+                eventsListPickled = streamApi.getByURL('/events/raw', returnAsBytes=True)
+                # Unpickle the events list to regenerate the original Event objects
+                # NOTE: This is **horrifically** inefficient because we're about to re-pickle the events
+                # so that we can save them to disk (via Utils.exportObjectToDisk()
+                eventsList = pickle.loads(eventsListPickled)
+                rxStreamExportList.append([stream["streamID"], stats, eventsList])
+
+        except Exception as e:
+            raise Exception(f"create rxStreamExportList {e}")
+
+        # Export rxStreamExportList (not if rxStreamExportList is empty, an empty disk will be saved in order
+        # to overwrite the old .isp file (if it exists)
+        try:
+            # Write the rxStreamExportList to a file
+            exportObjectToDisk(rxStreamExportList, exportFilename)
+            return len(rxStreamExportList)
+        except Exception as e:
+            raise Exception(f"exportObjectToDisk(rxStreamExportList) {e}")
+
+    except Exception as e:
+        raise Exception("ERR:createStreamsSnapshot() " + str(e))
 
 # Iterates over processesDict to verify that all the listed processes are still alive
     # If a process is found to be dead, removes it from the dict and returns a list of the pids
