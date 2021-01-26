@@ -2531,7 +2531,7 @@ class TransceiverSimulator(object):
 
 
 # Imports a previous stream snapshot file (*.isp) to allow the stats/event data for multiple streams to be recreated
-# It returns a dict of dicts {syncsourceID:{{stats, events}}, ....} or raises an Exception on failure
+# It returns a dict of dicts {syncsourceID:{{statsDict, eventsList}}, ....} or raises an Exception on failure
 def importHistoricStreamsSnapshot(filename):
     # Declare dict to hold the results of the import
     importedStreamsDict = {}

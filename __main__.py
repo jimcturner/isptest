@@ -4818,12 +4818,16 @@ def main(argv):
         except Exception as e:
             Utils.Message.addMessage("ERR:Prev streams import failed " + str(e))
 
+        # Create a multiprocessing Event to indicate whether RtpPacketTransceiver has imported a previous
+        # streams snapshot file. This must only happen once
+        previousStreamsImportedFlag = mp.Event()
         # Create an RtpPacketTransceiver for each of the specified UDP listen addresses/ports
         # This should run as a child process
         for receivePort in receivePortList:
             try:
                 rtpPacketTransceiver = mp.Process(target=RtpPacketTransceiver,
                                                   args=(rtpPacketTransceiverShutdownFlag,
+                                                        previousStreamsImportedFlag,
                                                         UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE,
                                                         glitchEventTriggerThreshold,),
                                                   kwargs={"controllerTCPPort":isptesttHTTPServer.getTCPPort()},

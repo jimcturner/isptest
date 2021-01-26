@@ -7245,13 +7245,14 @@ class RtpPacketTransceiver(object):
 
             raise Exception(f"sendUDP() {e}")
 
-    def __init__(self, shutdownFlag,
+    def __init__(self, shutdownFlag, previousStreamsImportedFlag,
                  UDP_RX_IP, UDP_RX_PORT, ISPTEST_HEADER_SIZE, glitchEventTriggerThreshold, controllerTCPPort=None):
         # This queue is populated by _rtpPacketTransceiverThread (as it detects the incoming streams) and polled
         # by _rtpPacketTransceiverThread() which will then create the actual RtpReceiveStream objects
         self.newStreamsPendingQueue = SimpleQueue()
         # with newly detected stream definitions
         self.shutdownFlag = shutdownFlag
+        self.previousStreamsImportedFlag = previousStreamsImportedFlag
         self.UDP_RX_IP = UDP_RX_IP
         self.UDP_RX_PORT = UDP_RX_PORT
         self.ISPTEST_HEADER_SIZE = ISPTEST_HEADER_SIZE
@@ -7407,6 +7408,47 @@ class RtpPacketTransceiver(object):
             streamsPendingDeletionQueue = Queue()
 
             rtpRxStreamTempDict = {}  # A dict to hold 'possible' incoming streams, before they have been validated
+
+            # Local function to import the previously save streams snapshot file
+            def recreatePreviousStreams():
+                try:
+                    importedStreamsDict = Utils.importHistoricStreamsSnapshot(filename=Registry.streamsSnapshotFilename)
+                    # Iterate over the impotrted streams
+                    for syncSourceID, stream in importedStreamsDict.items():
+                        stats = stream["statsDict"]
+                        eventsList = stream["eventsList"]
+                        # For each of the streams, create a new Rx Queue (and populate rxQueuesDict)
+                        # Create a managed (proxy) Queue specifically for data with this sync source id
+                        rxQueuesDict[syncSourceID] = {
+                            "rxQueue": Queue(maxsize=Registry.rtpPacketTransceiverMaxRxQueueSize),
+                            "queueFull": False
+                        }
+
+                        # and create a new RtpReceiveStream object using the imported stats/events
+                        # Create an RtpReceiveStream based on the info retrieved by setting the restoredStreamFlag
+                        # This will preload the RtpReceiveStream._stats{} and eventsList to be preloaded
+                        newRtpStream = RtpReceiveStream(stats["stream_syncSource"],
+                                                        stats["stream_srcAddress"],
+                                                        stats["stream_srcPort"],
+                                                        stats["stream_rxAddress"],
+                                                        stats["stream_rxPort"],
+                                                        stats["glitch_Event_Trigger_Threshold_packets"],
+                                                        rxQueuesDict[syncSourceID]["rxQueue"],
+                                                        txQueue,
+                                                        streamsPendingDeletionQueue,
+                                                        restoredStreamFlag=True,
+                                                        historicStatsDict=stats,
+                                                        historicEventsList=eventsList,
+                                                        controllerTCPPort=self.controllerTCPPort
+                                                        )
+                        self.ctrlAPI.addMessage(f"Recreated historic stream {syncSourceID}")
+                except Exception as e:
+                    raise Exception(f"ERR:recreatePreviousStreams(), {e}")
+            # Import and attempt to recreate the previous streams saved in the *.isp snapshot file
+            try:
+                recreatePreviousStreams()
+            except Exception as e:
+                self.ctrlAPI.addMessage(f"ERR:_rtpPacketTransceiverThread() Recreate historic streams, {e}")
 
             # IP Receive socket placeholders
             udpSocket = None
@@ -7778,7 +7820,7 @@ class RtpPacketTransceiver(object):
                                                 " validated. Adding to newStreamsPendingQueue")
 
                                             try:
-                                                # Create a managed (proxy) Queue specifically for data with this sync source id
+                                                # Create a Queue specifically for rx'd data with this sync source id
                                                 rxQueuesDict[syncSourceID] = {
                                                     "rxQueue": Queue(maxsize=Registry.rtpPacketTransceiverMaxRxQueueSize),
                                                     "queueFull": False
