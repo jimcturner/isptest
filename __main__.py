@@ -2322,24 +2322,33 @@ class UI(object):
         debugInfo.append(["Process ID ", str(os.getpid())])
         debugInfo.append(["Run time ", str(Utils.dtstrft(self.runtime_s))])
         debugInfo.append(["HTTP Server port ", str(self.controllerTCPPort)])
-        if self.operationMode == "RECEIVE":
-            # Display aggregate socket receive stats
-            try:
-                # # NOTE: These are all global vars declared in __receiveRtpThread NOW DEPRECATED.
-                # SEE RtpPacketReceiver and UDPMessageSender objects for these counters instead
-                # debugInfo.append(["\nReceiver ", ""])
-                # debugInfo.append(["raw Rx'd ", str(rawPacketsReceivedByRxThreadCount)])   # Total Rx'd Raw packets
-                # debugInfo.append(["raw ignored ", str(rawPacketsDiscardedByRxThreadCount)]) # Raw packets ignored
-                # debugInfo.append(["raw decoded ", str(rawPacketsDecodedByRxThreadCount)])   # Raw packets with an rtp header
-                # debugInfo.append(["udp Rx'd ", str(udpPacketsReceivedByRxThreadCount)])   # Total Rx'd UDP packets
-                # debugInfo.append(["udp ignored ", str(udpPacketsDiscardedByRxThreadCount)])   # UDP packets ignored
-                # debugInfo.append(["udp decoded ", str(udpPacketsDecodedByRxThreadCount)]) # UDP packets with an rtp header
-                # # Note: These are global vars declared in __sendUDPThread
-                # debugInfo.append(["udp tx ", str(sendUDPThreadTxPacketCounter)])
-                # debugInfo.append(["udp Q ", str(sendUDPThreadMessageQueueSize)])
-                pass
-            except:
-                pass
+        # Display return loss
+        try:
+            # Get the HTTP Server port no of the current stream
+            httpPort = self.selectedStream["httpPort"]
+            # Request only the return loss value (via the api)
+            stats = Utils.APIHelper(httpPort).getStats(keyIs="stream_transmitter_return_loss_percent")
+            debugInfo.append(["Return loss % ", str(stats['stream_transmitter_return_loss_percent'])])
+        except Exception as e:
+            debugInfo.append(["Return loss % ", "please wait"])
+        # if self.operationMode == "TRANSMIT":
+        #     # Display aggregate socket receive stats
+        #     try:
+        #         # # NOTE: These are all global vars declared in __receiveRtpThread NOW DEPRECATED.
+        #         # SEE RtpPacketReceiver and UDPMessageSender objects for these counters instead
+        #         # debugInfo.append(["\nReceiver ", ""])
+        #         # debugInfo.append(["raw Rx'd ", str(rawPacketsReceivedByRxThreadCount)])   # Total Rx'd Raw packets
+        #         # debugInfo.append(["raw ignored ", str(rawPacketsDiscardedByRxThreadCount)]) # Raw packets ignored
+        #         # debugInfo.append(["raw decoded ", str(rawPacketsDecodedByRxThreadCount)])   # Raw packets with an rtp header
+        #         # debugInfo.append(["udp Rx'd ", str(udpPacketsReceivedByRxThreadCount)])   # Total Rx'd UDP packets
+        #         # debugInfo.append(["udp ignored ", str(udpPacketsDiscardedByRxThreadCount)])   # UDP packets ignored
+        #         # debugInfo.append(["udp decoded ", str(udpPacketsDecodedByRxThreadCount)]) # UDP packets with an rtp header
+        #         # # Note: These are global vars declared in __sendUDPThread
+        #         # debugInfo.append(["udp tx ", str(sendUDPThreadTxPacketCounter)])
+        #         # debugInfo.append(["udp Q ", str(sendUDPThreadMessageQueueSize)])
+        #         pass
+        #     except:
+        #         pass
 
         try:
             # Get list of running threads
