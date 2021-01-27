@@ -4240,7 +4240,7 @@ def main(argv):
             print ("No options supplied. Use -h for help")
             exit()
 
-        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:v:zn:o")
+        opts, args = getopt.getopt(argv, "hxt:r:i:t:b:d:s:u:l:v:z:n:o")
 
         # Iterate over opts array and test opt. Then retrieve the corresponding arg
         for opt, arg in opts:
@@ -4480,9 +4480,9 @@ def main(argv):
                 try:
                     # Test for an int
                     arg = int(arg) + 1 - 1
-                    autoGenerateStreams = int(n)
+                    autoGenerateStreams = int(arg)
                     # assign the value
-                    print (f"Auto Generate {n} streams")
+                    print (f"Auto Generate {arg} streams")
                 except:
                     print("Invalid -z autoGenerateStreams value supplied. " + str(arg))
                     exit()
@@ -4633,9 +4633,9 @@ def main(argv):
                                               args=(UDP_TX_IP, UDP_TX_PORT, txRate,
                                                     payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec),
                                               kwargs={"UDP_SRC_PORT": UDP_TX_SRC_PORT,
-                                                      "friendlyName": RTP_TX_STREAM_FRIENDLY_NAME,
+                                                      "friendlyName": friendlyName,
                                                       "controllerTCPPort": isptesttHTTPServerPort},
-                                              name=friendlyName,
+                                              name=f"RtpGenerator({SYNC_SOURCE_ID})",
                                               daemon=False)
                     rtpGenerator.start()
                     # Add the new RtpGenerator child process to processesCreatedDict so it can be tracked
