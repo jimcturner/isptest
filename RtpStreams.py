@@ -5395,6 +5395,8 @@ class RtpGenerator(RtpCommon):
 
                 except Exception as e:
                     self.postMessage("\x1B[31 RtpGenerator.__newImprovedRtpGeneratorThread() sendto().   \x1B[0m " + str(e))
+                    # Increment the error counter
+                    rtpGeneratorInstance.txErrorCounter += 1
                     time.sleep(1)  # Throttle rate of error messages from this thread
             else:
                 # Decrement self.packetsToSkip. Once this var reaches zero, packet generation will resume
@@ -7416,7 +7418,7 @@ class RtpPacketTransceiver(object):
 
             rtpRxStreamTempDict = {}  # A dict to hold 'possible' incoming streams, before they have been validated
 
-            # Local function to import the previously save streams snapshot file
+            # Local function to import the previously save streams snapshot file and queue the creation
             def recreatePreviousStreams():
                 try:
                     importedStreamsDict = Utils.importHistoricStreamsSnapshot(filename=Registry.streamsSnapshotFilename)
@@ -7451,6 +7453,7 @@ class RtpPacketTransceiver(object):
                         self.ctrlAPI.addMessage(f"Recreated historic stream {syncSourceID}")
                 except Exception as e:
                     raise Exception(f"ERR:recreatePreviousStreams(), {e}")
+
             # Import and attempt to recreate the previous streams saved in the *.isp snapshot file
             try:
                 # Check to see if the streams have already been imported
