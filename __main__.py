@@ -4627,7 +4627,7 @@ def main(argv):
                 for n in range(autoGenerateStreams):
                     # Increment the SYNC_SOURCE_ID for the next auto-generated stream
                     SYNC_SOURCE_ID += 1
-                    friendlyName = f"Auto{n+1}of{n}"
+                    friendlyName = f"Auto{n+1}of{autoGenerateStreams}"
 
                     rtpGenerator = mp.Process(target=RtpGenerator,
                                               args=(UDP_TX_IP, UDP_TX_PORT, txRate,
