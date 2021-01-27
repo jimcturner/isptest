@@ -49,4 +49,8 @@ V2.7
 * Adds return loss to isptestheader, report  and add to report, and Transmitter help page
 * Sample memory usage/trigger stack trace - NOTE excess memory detection only works on Linux/OSX but object mem works on all platforms)
 * Compressed pickles for Results Transmission back to Transmitter (a single stream results is about 128kbps) Reduces it to about 30kbps
+V3.0 (27/1/21)
+* RtpGenerator objects now run as child processes to improves tx rate stability
+* RtpPacketReceiver/UDPSender combo is replaced by a single RtpPacketTransceiver which runs as a child process (to improve stability/responsiveness)
+* All program modules now run their on HTTP Server and this is used (via an API) to query the stream performance values and events
 
