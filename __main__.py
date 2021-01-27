@@ -4170,6 +4170,9 @@ def main(argv):
 
     # Additonal Operation Mode flag for 'special features'
     specialFeaturesModeFlag = False
+    # Used to automatically add n TX streams (used for load testing)
+    autoGenerateStreams = 0
+
     # Specify a default txRate of 1Mbps if no rate specified
     txRate = Registry.defaultTXRate_bps
 
@@ -4224,7 +4227,7 @@ def main(argv):
         # -i Glitch event packet loss ignore threshold. Outages below this limit will not generate an event. Default = 4
         # -u sync source ID (for transmit or loopback mode)
         # -v:[int] verbosity
-        # -z Enable special features (like simulate packel loss, jitter etc)
+        # -z [n] Enable special features (like simulate packet loss, jitter, auto add n streams
         # -o obscure (disguise) the Rtp packets by inserting an offset between the UDP and RTP headers. NOTE: Must be
         # set on both the transmitter and receiver
 
@@ -4270,7 +4273,7 @@ def main(argv):
                 print("-o obscure (disguise) the Rtp packets by inserting an offset between the\r")
                 print("UDP and RTP headers. NOTE: Must be set on both the transmitter and receiver\r")
                 print("\r")
-                print ("-z Enable special features (like simulate packet loss, jitter etc)\r")
+                print ("-z [n] Enable special features (like simulate packet loss, jitter etc)\r")
                 exit()
 
             elif opt == '-o':
@@ -4473,6 +4476,16 @@ def main(argv):
             elif opt in ("-z"):
                 # Enable 'special features' mode
                 specialFeaturesModeFlag = True
+                # Specify message verbosity (to hide warning messages)
+                try:
+                    # Test for an int
+                    arg = int(arg) + 1 - 1
+                    autoGenerateStreams = int(n)
+                    # assign the value
+                    print (f"Auto Generate {n} streams")
+                except:
+                    print("Invalid -z autoGenerateStreams value supplied. " + str(arg))
+                    exit()
 
             elif opt in ("-n"):
                 # Friendly name supplied for tx stream
@@ -4603,10 +4616,38 @@ def main(argv):
                 Utils.addToProcessesCreatedDict(processesCreatedDict, rtpGenerator)
             except Exception as e:
                 Utils.Message.addMessage(f"ERR:main() add RtpGenerator({SYNC_SOURCE_ID}) process to processesCreatedDict, {e}")
-
-
         except Exception as e:
             Utils.Message.addMessage("ERR:main() Create RtpGenerator() " + str(e))
+
+        try:
+            # If special features mode is set and a value is specified, automatically add additional streams
+            # based on the initial tx stream specifiers
+            # Special features mode (-z n where n is the number of streams to be auto generated)
+            if specialFeaturesModeFlag and autoGenerateStreams > 0:
+                for n in range(autoGenerateStreams):
+                    # Increment the SYNC_SOURCE_ID for the next auto-generated stream
+                    SYNC_SOURCE_ID += 1
+                    friendlyName = f"Auto{n+1}of{n}"
+
+                    rtpGenerator = mp.Process(target=RtpGenerator,
+                                              args=(UDP_TX_IP, UDP_TX_PORT, txRate,
+                                                    payloadLength, SYNC_SOURCE_ID, txStreamTimeToLive_sec),
+                                              kwargs={"UDP_SRC_PORT": UDP_TX_SRC_PORT,
+                                                      "friendlyName": RTP_TX_STREAM_FRIENDLY_NAME,
+                                                      "controllerTCPPort": isptesttHTTPServerPort},
+                                              name=friendlyName,
+                                              daemon=False)
+                    rtpGenerator.start()
+                    # Add the new RtpGenerator child process to processesCreatedDict so it can be tracked
+                    try:
+                        Utils.addToProcessesCreatedDict(processesCreatedDict, rtpGenerator)
+                    except Exception as e:
+                        Utils.Message.addMessage(
+                            f"ERR:main() add RtpGenerator({SYNC_SOURCE_ID}) process to processesCreatedDict, {e}")
+
+        except Exception as e:
+            Utils.Message.addMessage("ERR:main() Auto generate RtpGenerator() " + str(e))
+
 
     # Main program execution loops
 
