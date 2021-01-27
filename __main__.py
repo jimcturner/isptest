@@ -3730,7 +3730,11 @@ class ISPTestHTTPServer(object):
                 Utils.Message.addMessage(
                     "ERR:ISPTestHTTPServer.do_GET() request: " + ", " + "Path: " + str(self.path) + ", len: " + str(
                         pathLen) + ", Error:" + str(e))
-                self.send_error(404, str("path " + str(self.path) + ", current step: " + str(currentStep) + ", " + str(e)))
+                try:
+                    self.send_error(404, str("path " + str(self.path) + ", current step: " + str(currentStep) + ", " + str(e)))
+                except:
+                    # Fail silently - otherwise the sending of an error message might actual cause another Exception
+                    pass
             
 
         def do_POST(self):
@@ -3858,9 +3862,13 @@ class ISPTestHTTPServer(object):
             except Exception as e:
                 Utils.Message.addMessage("ERR:ISPTestHTTPServer.do_ Post():" + \
                                          ", Error:" + str(e))
-                self.send_error(404,
-                        str("do_POST() path " + str(self.path) + ", current step: " + str(currentStep) + ", " +\
-                             str(self.headers) + ", " + str(e)))
+                try:
+                    self.send_error(404,
+                            str("do_POST() path " + str(self.path) + ", current step: " + str(currentStep) + ", " +\
+                                 str(self.headers) + ", " + str(e)))
+                except:
+                    # Fail silently - otherwise the sending of an error message might actual cause another Exception
+                    pass
 
         def do_DELETE(self):
             Utils.Message.addMessage("DBUG:ISPTestHTTPServer.do_DELETE() " + str(self.path))
@@ -3955,10 +3963,13 @@ class ISPTestHTTPServer(object):
                 self.wfile.write(response)
             except Exception as e:
                 Utils.Message.addMessage("ERR:ISPTestHTTPServer.do_DELETE() " + str(self.path) + ", " + str(e))
-                self.send_error(404,
+                try:
+                    self.send_error(404,
                                 str("do_DELETE() path " + str(self.path) + ", current step: " + str(
                                     currentStep) + ", " + str(e)))
-
+                except:
+                    # Fail silently - otherwise the sending of an error message might actual cause another Exception
+                    pass
 
 
     def __httpServerThread(self):

@@ -3910,8 +3910,51 @@ class RtpGenerator(RtpCommon):
                                                       # <<--denotes that this fn returns plain text
                                                       }
                 except Exception as e:
-                    # self.postMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() {e}")
-                    pass
+                    # Otherwise should just return 'nothing' from these endpoints because they don't exist yet
+                    # dummy function to provide an empty JSON response (instead of causing an error)
+                    def dummyGET_emptyList(*args, **kwargs):
+                        return []
+
+                    # dummy function to provide an empty string response (instead of causing an error)
+                    def dummyGET_emptyString(*args, **kwargs):
+                        return ""
+
+                    getMappings["/stats"] = {"targetMethod": dummyGET_emptyList,
+                                             "args": [],
+                                             "optKeys": ["keyIs", "keyContains", "keyStartsWith", "listKeys"]
+                                             }
+                    getMappings["/events/json"] = {"targetMethod": dummyGET_emptyList,
+                                                   "args": [],
+                                                   "optKeys": ["filterList", "reverseOrder", "requestedEventNo",
+                                                               "recent", "start", "end",
+                                                               ],
+                                                   }
+                    getMappings["/events/csv"] = {"targetMethod": dummyGET_emptyList,
+                                                  "args": [],
+                                                  "optKeys": ["filterList", "reverseOrder", "requestedEventNo",
+                                                              "recent",
+                                                              "start", "end",
+                                                              ],
+                                                  }
+
+                    getMappings["/events/summary"] = {
+                        "targetMethod": dummyGET_emptyList,
+                        "args": [],
+                        "optKeys": ["filterList", "reverseOrder", "requestedEventNo", "recent", "start", "end"] + \
+                                   ["includeStreamSyncSourceID", "includeEventNo", "includeType", "includeFriendlyName"]
+                    }
+                    getMappings["/report/summary"] = {"targetMethod": dummyGET_emptyString,
+                                                      "args": [],
+                                                      "optKeys": ["eventFilterList"],
+                                                      "contentType": 'text/plain' # <<--denotes that this fn returns plain text
+                                                      }
+                    getMappings["/report/traceroute"] = {
+                        "targetMethod": dummyGET_emptyString,
+                        "args": [],
+                        "optKeys": ["historyLength"],
+                        "contentType": 'text/plain' # <<--denotes that this fn returns plain text
+                        }
+
             except Exception as e:
                 rtpGen.postMessage(f"ERR:RtpGenerator.HTTPRequestHandler.apiGETEndpoints() corrupt endpoint definitions {e}")
                 getMappings = {}

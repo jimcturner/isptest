@@ -1948,7 +1948,7 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
             self.wfile.write(response)
         except Exception as e:
             try:
-                self.send_error(404,f"{parent.__class__.__name__} HttpRequestHandler.do_GET() " + str(syncSourceID) + ", " + str(e))
+                self.send_error(404,f"{parent.__class__.__name__}({syncSourceID}) HttpRequestHandler.do_GET() {self.path}, {e}")
             except:
                 pass
 
@@ -1997,7 +1997,7 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
 
         except Exception as e:
             try:
-                self.send_error(404, f"{parent.__class__.__name__}.HttpRequestHandler.do_POST() " + str(syncSourceID) + ", " + str(e))
+                self.send_error(404,f"{parent.__class__.__name__}({syncSourceID}) HttpRequestHandler.do_POST() {self.path}, {e}")
             except:
                 pass
 
@@ -2036,7 +2036,7 @@ class HTTPRequestHandlerRTP(BaseHTTPRequestHandler):
             try:
                 # This commonly fails on app shutdown because the HTTP Server itself has been shutdown whilst
                 # the do_DELETE() is being processed
-                self.send_error(404, f"{parent.__class__.__name__}.HttpRequestHandler.do_DELETE() {syncSourceID}, {e}")
+                self.send_error(404,f"{parent.__class__.__name__}({syncSourceID}) HttpRequestHandler.do_DELETE() {self.path}, {e}")
             except:
                 pass
 
