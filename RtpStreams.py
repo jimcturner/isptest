@@ -2843,8 +2843,10 @@ class RtpReceiveStream(RtpReceiveCommon):
                             if len(hopsList) > 0:
                                 apiResponse = self.ctrlAPI.whoisLookup(hopsList)
                         except Exception as e:
-                            self.postMessage(
-                                f"ERR:RtpReceiveStream.__samplingThread. self.ctrlAPI.whoisLookup(), {hopsList}, {e}")
+                            # self.postMessage(
+                            #     f"ERR:RtpReceiveStream.__samplingThread. self.ctrlAPI.whoisLookup(), {hopsList}, {e}")
+                            # Fail silently
+                            pass
 
                         # Attempt to detect a route change
                         if hopsListChangeExpected is False:
