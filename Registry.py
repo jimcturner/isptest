@@ -18,9 +18,10 @@ class Registry(object):
     messageLogFilenameRx = "isptest_log_rx.txt"  # This file is appended to, every time Utils.Message.addMessage() is called
     streamsSnapshotFilename = "ispTestSnapshot.isp" # This file is created when the isptest Receiver app ends, and is reloaded
                                                     # on startup
-    streamsSnapshotAutoSaveInterval_s = 5       # The frequency of stream snapshot auto saves (when in RECEIVE mode)
+    streamsSnapshotAutoSaveInterval_s = 30       # The frequency of stream snapshot auto saves (when in RECEIVE mode)
 
-     # This string will be added between the UDP header
+    httpRequestTimeout = 0.1 # The default timeout for all HTTP requests (GET, POST etc)
+    # This string will be added between the UDP header
     # and Rtp header of the geenrated RTp traffic. It's purpose is to obscure the generated
     # packets to stop them looking like RTP (to aid investigation of ISPs that
     # block RTP. Note: it is overwritten in main() if the program is started with the '-o' option
@@ -33,12 +34,36 @@ class Registry(object):
                          ["l","Sets the friendly name of the stream (10 chars max)"],
                          ["r", "Show report for the currently stream"],
                          ["t", "Show traceroute for the currently selected stream"],
-                         ["a", "Show 'About' dialogue"]
+                         ["a", "Show 'About' dialogue"],
+                         ["p", "Compare stream performance"],
+                         ["b", "Burst mode - temporary (5s) doubling of Tx bitrate"]
                          ]
 
 
     ######### RtpCommon
     rtpCommonHistoricTracerouteEventsToKeep = 10 # No of previous traceroute results to hold in memory
+    # TCP listen ports for the embedded HTTP servers
+    httpServerRtpReceiverTCPPort = 10000
+    httpServerRtpTransmitterTCPPort = 10001
+    # httpServerRtpResultsTCPPort = 10002
+
+    # httpServerStartingTCPPort = 10010 # DEPRECATED 19/1/21 - OS picks a random port no. instead
+    # (Was the starting tcp http server port no for adhoc server creation)
+
+    ######### RtpStreamComparer
+    # A list of the available criteria by which a stream can be compared (and a display friendly name)
+    # These criteria map to stats{} dictionary keys within RtpReceiveStream and RtpStreamresults objects
+    criteriaListForCompareStreams = [
+        {"keyToCompare": "glitch_packets_lost_total_percent", "friendlyTitle": "Packet loss %"},
+        {"keyToCompare": "glitch_packets_lost_total_count", "friendlyTitle": "Total packets lost"},
+        {"keyToCompare": "glitch_counter_total_glitches", "friendlyTitle": "Total no of glitches"},
+        {"keyToCompare": "glitch_most_recent_timestamp", "friendlyTitle": "Most recent glitch"},
+        {"keyToCompare": "glitch_mean_time_between_glitches", "friendlyTitle": "Glitch period(how often)"},
+        {"keyToCompare": "glitch_packets_lost_per_glitch_max", "friendlyTitle": "Worst loss (packets)"},
+        {"keyToCompare": "glitch_max_glitch_duration", "friendlyTitle": "Worst glitch (duration)"},
+        {"keyToCompare": "glitch_packets_lost_per_glitch_mean", "friendlyTitle": "Mean glitch packet loss"},
+        {"keyToCompare": "glitch_mean_glitch_duration", "friendlyTitle": "Mean glitch duration"}
+    ]
 
     ######### RtpReceiveStream
     receiveStreamAcceptThreshold = 15 # The minimum no of rtp packets for particular sync source ID to be received
@@ -70,11 +95,15 @@ class Registry(object):
     rtpReceiveStreamGlitchThreshold = 4 # The default no of packets that have to be lost before a Glitch Event is generated
     rtpReceiveStreamCompressResultsBeforeSending = False # If True, uses bz2 compression. Experimental
 
-    ### RtpPacketReciever
+    ### RtpPacketTransceiver
     # buffer size is 65535 bytes. This is the maximum possible size for UDP We need to set it
     # to this size for Windows (which is running in promiscuous mode). Otherwise packets received
     # larger we can accept would kill the socket
-    rtpPacketRecieverRecvFromBufferSize = 65535
+    rtpPacketTransceiverRecvFromBufferSize = 65535
+
+    # Specify the maximum allowable size of the tx and rx queues before an Exception is raised
+    rtpPacketTransceiverMaxTxQueueSize = 100
+    rtpPacketTransceiverMaxRxQueueSize = 5000
 
     ### RtpGenerator
     rtpGeneratorRtpParams = 0b10000000 # Was 0b01000000 Perhaps try 0b10000000 to match NTT?
@@ -90,7 +119,7 @@ class Registry(object):
     # until it runs out of attempts. this feature exists because some routers will only reply with ICMP messages
     # if traceroute (ie ttl=1) messages are sent to port 33434. Otherwise they may silently drop them, which isn't
     # much use if you're trying to derive a list of hops taken by the transmitted packets
-    tracerouteStartDelay = 5
+    tracerouteStartDelay = 2
     simulatedJitterPercent = 50 # The amount of 'simulated jitter' to add to the tx packets, if the feature is enabled
     # Specify min/max/default RtpGenerator tx parameters
     minimumPermittedTXRate_bps = 10240 # Specifies the minimum RtpGenerator tx rate as 10kbps
