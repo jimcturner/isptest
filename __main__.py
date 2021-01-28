@@ -3353,7 +3353,7 @@ class ISPTestHTTPServer(object):
         self.streamsList.append(item)
         self.streamsListMutex.release()
 
-    # Threadsafe method to append astream definition to the streamsList
+    # Threadsafe method to append a stream definition to the streamsList
     # Note this method checks first to see if an item in the list with the same streamId is already present.
     # If so, it will raise an Exception
     def appendToStreamsList(self, newItem, uniqueKeyCheck="streamID"):

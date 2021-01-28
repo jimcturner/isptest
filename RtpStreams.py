@@ -2836,17 +2836,21 @@ class RtpReceiveStream(RtpReceiveCommon):
                         # Update the 'stable' TracerouteHopsList (this will be used for reports/display purposes)
                         self.setTraceRouteHopsList(hopsList)
 
-                        # Pass  the hopsList to the WhoIsResolver to seed it with the current known addresses
-                        # We don't actually care about the response from the api, just that it knows about the addresses
-                        # so that we we come to run a report/display a traceroute table, the whois details already exist
-                        try:
-                            if len(hopsList) > 0:
-                                apiResponse = self.ctrlAPI.whoisLookup(hopsList)
-                        except Exception as e:
-                            # self.postMessage(
-                            #     f"ERR:RtpReceiveStream.__samplingThread. self.ctrlAPI.whoisLookup(), {hopsList}, {e}")
-                            # Fail silently
-                            pass
+                        # DISABLED 28/1/21 because this could add 0.1sec delay to the samplingThread loop
+                        # if the whois request to the http server times out - this will upset the bps
+                        # calculations
+
+                        # # Pass  the hopsList to the WhoIsResolver to seed it with the current known addresses
+                        # # We don't actually care about the response from the api, just that it knows about the addresses
+                        # # so that we we come to run a report/display a traceroute table, the whois details already exist
+                        # try:
+                        #     if len(hopsList) > 0:
+                        #         apiResponse = self.ctrlAPI.whoisLookup(hopsList)
+                        # except Exception as e:
+                        #     # self.postMessage(
+                        #     #     f"ERR:RtpReceiveStream.__samplingThread. self.ctrlAPI.whoisLookup(), {hopsList}, {e}")
+                        #     # Fail silently
+                        #     pass
 
                         # Attempt to detect a route change
                         if hopsListChangeExpected is False:
@@ -5245,14 +5249,14 @@ class RtpGenerator(RtpCommon):
                 # Whois lookup will be ready to go
                 # We don't want to hold up the transmission of packets, so instruct getTraceRouteHopsList to not block
                 tracerouteLastUpdate, tracerouteHopsList = self.getTraceRouteHopsList(allowBlocking=False)
-                if tracerouteHopsList is not None and len(tracerouteHopsList) > 0:
-                    # Traceroute data is available
-                    # Use the API helper to query the WhoisResolver. This will yield a list of lists [[addr, whois_name],...]
-                    # We don't actually care about the response, we just want to seed the cache
-                    try:
-                        apiResponse = self.ctrlAPI.whoisLookup(tracerouteHopsList)
-                    except Exception as e:
-                        self.postMessage(f"ERR:RtpGeenrator.__samplingThread. self.ctrlAPI.whoisLookup() {e}")
+                # if tracerouteHopsList is not None and len(tracerouteHopsList) > 0:
+                #     # Traceroute data is available
+                #     # Use the API helper to query the WhoisResolver. This will yield a list of lists [[addr, whois_name],...]
+                #     # We don't actually care about the response, we just want to seed the cache
+                #     try:
+                #         apiResponse = self.ctrlAPI.whoisLookup(tracerouteHopsList)
+                #     except Exception as e:
+                #         self.postMessage(f"ERR:RtpGenerator.__samplingThread. self.ctrlAPI.whoisLookup() {e}")
 
 
                 # self.postMessage(f"RtpGenerator {self.timeToLive}")
@@ -8047,4 +8051,8 @@ class RtpPacketTransceiver(object):
             self.ctrlAPI.addMessage(f"ERR:__rtpPacketTransceiverThread({self.UDP_RX_PORT}) "
                                     f" failed to start {e}")
 
-
+# A class to process concurrent RtpStreams received via a single Rx Queue
+# A development of RtpReceiveStream
+class RtpStreamsProcessor(object):
+    def __init__(self):
+        pass
