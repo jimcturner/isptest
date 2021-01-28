@@ -2146,6 +2146,33 @@ class RtpReceiveStream(RtpReceiveCommon):
             self.postMessage("ERR:self.samplingThread.join() failed " + str(self.__stats["stream_syncSource"]) +\
                                      ", "+ str(e))
 
+        # Now attempt to remove the stream from the streams directory
+        # This might take several attempts if the http server is busy
+        def deRegisterStream(syncSourceIdentifier, tcpControllerPort):
+            maxConnectionAttempts = 5  # Max no of de-registration attempts
+            while True:
+                api = Utils.APIHelper(tcpControllerPort)
+                try:
+                    api.addMessage(f"DBUG: RtpReceiveStream.killStream() unregistering stream. {syncSourceIdentifier}, "
+                                   f"{maxConnectionAttempts} attempts remaining")
+                    api.removeFromStreamsDirectory("RtpReceiveStream", syncSourceIdentifier)
+                    api.addMessage(f"{Fore.GREEN}DBUG:RtpReceiveStream.killStream() stream {syncSourceIdentifier} "
+                                   f" successfully unregistered")
+
+                    break
+
+                except Exception as e:
+                    self.postMessage(
+                        f"{Fore.RED}ERR:RtpReceiveStream.killStream() removeFromStreamsDirectory() for stream "
+                        f"{self.syncSourceIdentifier}, {e}")
+                # Decrement the attempts counter
+                maxConnectionAttempts -= 1
+                if maxConnectionAttempts < 0:
+                    break
+                time.sleep(0.5)
+
+        deRegisterStream(self.syncSourceIdentifier, self.controllerTCPPort)
+
         # Kill the http server - NOTE: HTTPServer.shutdown() has to be called from another thread
         try:
             self.postMessage("DBUG:RtpReceiveStream.killStream() Closing http server for stream " + str(self.__stats["stream_syncSource"]))
@@ -2156,13 +2183,6 @@ class RtpReceiveStream(RtpReceiveCommon):
 
         except Exception as e:
             self.postMessage("ERR:Closing http server for stream " + str(self.__stats["stream_syncSource"]) + str(e))
-
-        # Now attempt to remove the stream from the streams directory
-        try:
-            self.ctrlAPI.removeFromStreamsDirectory("RtpReceiveStream", self.__stats["stream_syncSource"])
-        except Exception as e:
-            self.postMessage("ERR: RtpReceiveStream.killStream() removeFromStreamsDirectory() for stream " + \
-                                     str(self.__stats["stream_syncSource"]) + ", " + str(e))
 
         # # Now signal the removal of the Receive queue for this stream (held in RtpPacketTransceiver.rxQueuesDict[])
         try:
@@ -4921,6 +4941,33 @@ class RtpGenerator(RtpCommon):
             self.postMessage(
                 "ERR: RtpGenerator.killStream()::udpTxSocket.close() for stream: " + str(self.syncSourceIdentifier))
 
+        # Now attempt to remove the stream from the streams directory
+        # This might take several attempts if the http server is busy
+        def deRegisterStream(syncSourceIdentifier, tcpControllerPort):
+            maxConnectionAttempts = 5  # Max no of de-registration attempts
+            while True:
+                api = Utils.APIHelper(tcpControllerPort)
+                try:
+                    api.addMessage(f"DBUG: RtpGenerator.killStream() unregistering stream. {syncSourceIdentifier}, "
+                                   f"{maxConnectionAttempts} attempts remaining")
+                    api.removeFromStreamsDirectory("RtpGenerator", syncSourceIdentifier)
+                    api.addMessage(f"{Fore.GREEN}DBUG:RtpGenerator.killStream() stream {syncSourceIdentifier} "
+                                     f" successfully unregistered")
+
+                    break
+
+                except Exception as e:
+                    self.postMessage(
+                        f"{Fore.RED}ERR:RtpGenerator.killStream() removeFromStreamsDirectory() for stream "
+                        f"{self.syncSourceIdentifier}, {e}")
+                # Decrement the attempts counter
+                maxConnectionAttempts -= 1
+                if maxConnectionAttempts < 0:
+                    break
+                time.sleep(0.5)
+        deRegisterStream(self.syncSourceIdentifier, self.controllerTCPPort)
+
+
         # Kill the http server - NOTE: HTTPServer.shutdown() has to be called from another thread
         try:
             self.postMessage("DBUG:Attempting to end http server for RtpGenerator  " + str(self.syncSourceIdentifier))
@@ -4930,13 +4977,9 @@ class RtpGenerator(RtpCommon):
         except Exception as e:
             self.postMessage("ERR:Closing http server for RtpGenerator " + str(self.syncSourceIdentifier) + str(e))
 
-        # Now attempt to remove the stream from the streams directory
-        try:
-            self.postMessage(f"DBUG: RtpGenerator.killStream() unregistering stream")
-            self.ctrlAPI.removeFromStreamsDirectory("RtpGenerator", self.syncSourceIdentifier)
-        except Exception as e:
-            self.postMessage("ERR: RtpGenerator.killStream() removeFromStreamsDirectory() for stream " + \
-                                         str(self.syncSourceIdentifier) + ", " + str(e))
+
+        self.postMessage(f"{Fore.GREEN}DBUG: RtpGenerator.killStream() complete")
+
 
     def disableStream(self):
         # Disables transmission of packets to simulate packet loss by clearing flag

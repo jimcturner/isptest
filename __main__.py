@@ -3961,7 +3961,7 @@ class ISPTestHTTPServer(object):
                                 requestedStream = filteredList[0]
                         else:
                             # Stream couldn't be found (or invalid path)
-                            raise Exception("do_DELETE()/streams/delete/" + str(filterType) + "/" + str(currentStep))
+                            raise Exception("do_DELETE()/streams/delete/ no such stream could be found " + str(filterType) + "/" + str(currentStep))
 
                     else:
                         # Catchall
@@ -4954,8 +4954,8 @@ def main(argv):
                     except Exception as e:
                         Utils.Message.addMessage("ERR: main.getPeakMemoryUsage() " + str(e))
 
-                # Every 60 seconds, or if the measureObjectMemoryUsageFlag is set, record the object memory usage
-                if loopCounter % 60 == 0 or measureObjectMemoryUsageFlag:
+                # Every 60 seconds, and if the measureObjectMemoryUsageFlag is set, record the object memory usage
+                if loopCounter % 60 == 0 and measureObjectMemoryUsageFlag:
                     try:
                         # Create list of objects to track memory usage and a friendly name
                         # Each object is contained within its own dict which also contains a friendly name.
@@ -4984,7 +4984,7 @@ def main(argv):
                             Utils.Message.addMessage("DBUG:Peak Usage: " + str(Utils.bToMb(peakMemUsage)) + "b")  # in bytes
                         Utils.Message.addMessage("DBUG:object profiler: " + summaryString)
                         # List all current running threads
-                        Utils.Message.addMessage("DBUG:Current threads " + Utils.listCurrentThreads())
+                        # Utils.Message.addMessage("DBUG:Current threads " + Utils.listCurrentThreads())
 
                     except Exception as e:
                         Utils.Message.addMessage("ERR:object profiler " + str(e))
