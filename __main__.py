@@ -4908,6 +4908,27 @@ def main(argv):
                 #     Utils.Message.addMessage(f"main()updateProcessesCreatedDict(), {e}")
 
 
+                # Every 5 seconds, seed the WhoIs resolver with the all know traceroute addresses in use
+                if loopCounter % 5 == 0:
+                    try:
+                        # get the available streams list from the api
+                        api = Utils.APIHelper(isptesttHTTPServerPort)
+                        availableRtpStreamList = api.getStreamsList()
+                        # Iterate over the available streams, querying a current traceroute hopslist
+                        tracerouteHopsList = []
+                        for stream in availableRtpStreamList:
+                            # Get the http server port for this stream
+                            httpPort = stream["httpPort"]
+                            # Get latest stable tracerouteHopsList from selected stream from the api
+                            lastUpdated, tracerouteHopsList = Utils.APIHelper(httpPort).getByURL("/traceroute")
+                            if len(tracerouteHopsList) > 0:
+                                # Pass the hops list to the WhoIs resolver so that it can query the addresses WhoIs info
+                                # in advance of it actually being required
+                                apiResponse = api.whoisLookup(tracerouteHopsList)
+
+                    except Exception as e:
+                        Utils.Message.addMessage(f"ERR:main() seed WhoIs resolver cache {e}")
+
                 # If in RECEIVE mode, schedule an auto export of the current streams
                 try:
                     if MODE == 'RECEIVE' and (loopCounter % Registry.streamsSnapshotAutoSaveInterval_s == 0):
