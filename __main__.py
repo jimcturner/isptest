@@ -4916,15 +4916,26 @@ def main(argv):
                         availableRtpStreamList = api.getStreamsList()
                         # Iterate over the available streams, querying a current traceroute hopslist
                         tracerouteHopsList = []
+                        aggregateHopsList = [] # used to provide a list of all the streams' hopslists concatenated
                         for stream in availableRtpStreamList:
                             # Get the http server port for this stream
                             httpPort = stream["httpPort"]
                             # Get latest stable tracerouteHopsList from selected stream from the api
                             lastUpdated, tracerouteHopsList = Utils.APIHelper(httpPort).getByURL("/traceroute")
                             if len(tracerouteHopsList) > 0:
-                                # Pass the hops list to the WhoIs resolver so that it can query the addresses WhoIs info
-                                # in advance of it actually being required
-                                apiResponse = api.whoisLookup(tracerouteHopsList)
+                                # concatenate this streams' hoplist onto the end of aggregateHopsList
+                                aggregateHopsList += tracerouteHopsList
+
+                            # Now we have a list of all the the addresses picked up by all the current stream traceroutes
+                            # It will inevitibly contain lots of duplicates so we just want to end up with a list of
+                            # unique ip addresses to pass to APIHelper.whoisLookup()
+                            # Create list of unique addresses (from here https://stackoverflow.com/a/3724558)
+                            unique_addresses = [list(x) for x in set(tuple(x) for x in aggregateHopsList)]
+
+                            # # Pass the unique hops list to the WhoIs resolver so that it can query the addresses WhoIs info
+                            # # in advance of it actually being required
+                            if len(unique_addresses) > 0:
+                                apiResponse = api.whoisLookup(unique_addresses)
 
                     except Exception as e:
                         Utils.Message.addMessage(f"ERR:main() seed WhoIs resolver cache {e}")
