@@ -19,7 +19,10 @@
 
 
 # Specify location of the Python Interpreter
-PATH_TO_PYTHON_INTERPRETER="/usr/local/bin/python3.8"
+# NOTE: The latest version of Raspberry Pi OS ships with Python 3.9 so the default system interpreter is fine
+#PATH_TO_PYTHON_INTERPRETER="/usr/local/bin/python3.8" <<< - this is deprecated code. No longer need to specify the ver
+# Get the absolute path of the 'system' python interpreter and store in PATH_TO_PYTHON_INTERPRETER
+PATH_TO_PYTHON_INTERPRETER=`which python`
 
 # Specify the path where the isptest application folder will be created
 PATH_TO_ISPTEST="/opt"
