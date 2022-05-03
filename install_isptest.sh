@@ -75,6 +75,9 @@ wget "$ISPTEST_APPLICATION_FILES_URL/isptest.pyz"
 echo "getting generateInstallScripts.pyz from $ISPTEST_APPLICATION_FILES_URL"
 wget "$ISPTEST_APPLICATION_FILES_URL/generateInstallScripts.pyz"
 
+echo "installing dependencies: Linux screen"
+apt-get install --assume-yes screen || { echo "apt-get install failed" && exit 1; }
+
 # Create an array op options that will be passed to generateInstallScripts.pyz
 opt=(--upgrade-url "$ISPTEST_APPLICATION_FILES_URL/isptest.pyz")
 opt+=(--python-interpreter-path "$PATH_TO_PYTHON_INTERPRETER")
