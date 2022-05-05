@@ -50,7 +50,7 @@ WIZARD_DEFAULT_UDP_DEST_PORT=8001
 ADDITIONAL_ISPTEST_SWITCHES="-c -m"
 
 
-echo "isptest installer script V1.0, James Turner 20/8/21"
+echo "isptest installer script V1.1, James Turner 03/05/22"
 # Test to see if isptest folder already exists (from a previous installation)
 if test -d "$PATH_TO_ISPTEST/$ISPTEST_FOLDER_NAME"; then
     echo "$PATH_TO_ISPTEST/$ISPTEST_FOLDER_NAME already exists, backing up existing contents into $PATH_TO_ISPTEST/$ISPTEST_FOLDER_NAME/old_files"
@@ -74,6 +74,9 @@ wget "$ISPTEST_APPLICATION_FILES_URL/isptest.pyz"
 
 echo "getting generateInstallScripts.pyz from $ISPTEST_APPLICATION_FILES_URL"
 wget "$ISPTEST_APPLICATION_FILES_URL/generateInstallScripts.pyz"
+
+echo "installing dependencies: Linux screen"
+apt-get install --assume-yes screen || { echo "apt-get install failed" && exit 1; }
 
 # Create an array op options that will be passed to generateInstallScripts.pyz
 opt=(--upgrade-url "$ISPTEST_APPLICATION_FILES_URL/isptest.pyz")
