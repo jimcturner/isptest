@@ -41,20 +41,20 @@ GIT_BRANCH="master"
 ISPTEST_APPLICATION_FILES_URL="https://github.com/jimcturner/isptest/raw/$GIT_BRANCH"
 
 # Specify the default stream destination IP address that will pre-populate the user dialog in the config wizard
-WIZARD_DEFAULT_DEST_ADDRESS="212.58.231.102"
+WIZARD_DEFAULT_DEST_ADDRESS="132.185.201.26"
 
 # Specify the range of default stream destination UDP port nos that will pre-populate the user dialog in the config wizard
 # The script will pick one at random, from the supplied range
 # Specify the start and end range
 UDP_DEST_PORT_RANGE_START=8001
-UDP_DEST_PORT_RANGE_END=8011
+UDP_DEST_PORT_RANGE_END=8016
 
 # Specify an additional switches to be passed to isptest (via the isptestlauncher config file)
 # -c disables auto version checking
 # -m specifies 'minimal write mode' to preserve the Raspberry Pi's SD card
 ADDITIONAL_ISPTEST_SWITCHES="-c -m"
 
-echo "STAG installer script V1.2, James Turner 29/07/22"
+echo "STAG installer script V1.3, James Turner 06/04/23"
 echo "----------------------------------------------------"
 # Pick a port no at random from the supplied range
 WIZARD_DEFAULT_UDP_DEST_PORT=$(( $RANDOM % (UDP_DEST_PORT_RANGE_END - UDP_DEST_PORT_RANGE_START + 1) + UDP_DEST_PORT_RANGE_START))
